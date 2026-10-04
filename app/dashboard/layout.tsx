@@ -1,4 +1,4 @@
-// app/admin/layout.tsx
+// app/dashboard/layout.tsx
 import AdminOtpModal from './components/AdminOtpModal';
 import '@/app/globals.css';
 import Script from 'next/script';
