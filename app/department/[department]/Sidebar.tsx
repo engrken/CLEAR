@@ -39,7 +39,7 @@ export default function DepartmentSidebar({ department, currentUser }: { departm
 
   const deptKey = department ? decodeURIComponent(department).toLowerCase().replace(/\s+/g, '') : 'engineering';
   
-  // Clean root-relative asset paths for production
+  // Clean root-relative asset paths mapped directly to public/
   const logoPath = `/${deptKey}_logo.png`;
   const fallbackLogoPath = '/engineering_logo.png';
 

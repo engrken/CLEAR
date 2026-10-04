@@ -46,7 +46,7 @@ export default function TopHeader({ department, currentUser }: { department: str
     }
   }, [currentUser]);
 
-  // Clean absolute path for production/migration
+  // Root-relative path pointing directly to public/fcu.png
   const fcuLogoPath = '/fcu.png';
 
   const toggleTheme = () => {
