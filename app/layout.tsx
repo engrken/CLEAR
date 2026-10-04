@@ -1,0 +1,32 @@
+// app/layout.tsx
+import Script from 'next/script';
+import '@/app/globals.css';
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+        <Script id="theme-initializer" strategy="beforeInteractive">
+          {`
+            try {
+              const theme = localStorage.getItem('fcu_clear_theme') || 'dark';
+              document.documentElement.setAttribute('data-bs-theme', theme);
+            } catch (e) {}
+          `}
+        </Script>
+      </head>
+      <body className="bg-body text-body min-vh-100 d-flex flex-column">
+        {/* Global Content Mount Point */}
+        {children}
+        
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" async />
+      </body>
+    </html>
+  );
+}

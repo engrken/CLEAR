@@ -1,0 +1,372 @@
+.card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
+  color: var(--text-color);
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.table {
+  --bs-table-bg: transparent;
+  --bs-table-border-color: var(--border-color);
+  color: var(--text-color);
+}
+
+.form-control, .form-select {
+  background-color: var(--bg-card);
+  border-color: var(--border-color);
+  color: var(--text-color);
+  font-size: 0.875rem;
+  border-radius: 0.5rem;
+}
+
+.form-control:focus, .form-select:focus {
+  background-color: var(--bg-card);
+  border-color: var(--accent);
+  color: var(--text-color);
+  box-shadow: 0 0 0 0.25rem rgba(var(--accent-rgb), 0.25);
+}
+
+.badge.border {
+  color: var(--text-color);
+}
+
+.text-accent {
+  color: var(--accent) !important;
+}
+
+/* Stats Cards */
+.stat-card {
+  background: var(--stat-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 0.75rem;
+  padding: 1.15rem;
+  height: 100%;
+  position: relative;
+  transition: transform 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(var(--accent-rgb), 0.4);
+}
+
+.stat-card-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  margin-bottom: 0.65rem;
+}
+
+body {
+  background-color: var(--bg-canvas);
+  color: var(--text-color);
+  font-size: 0.875rem;
+  min-height: 100vh;
+  margin: 0;
+  overflow-x: hidden;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* 1. Layout Shell */
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+  width: 100%;
+}
+
+/* 2. Sidebar Navigation */
+.app-sidebar {
+  width: var(--sidebar-width);
+  background-color: var(--bg-surface);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1045;
+  transition: transform 0.25s ease-in-out, background-color 0.2s ease;
+}
+
+.sidebar-brand {
+  padding: 1.15rem 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--bg-surface);
+  transition: background-color 0.2s ease;
+}
+
+.sidebar-brand img {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+}
+
+.sidebar-menu-wrapper {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem 0.75rem;
+}
+
+.sidebar-nav {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.sidebar-nav .nav-link {
+  width: 100%;
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.8125rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 0.5rem;
+  display: flex;
+  align-items: center;
+  border: 1px solid transparent;
+  background: transparent;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.sidebar-nav .nav-link i {
+  font-size: 1.05rem;
+}
+
+.sidebar-nav .nav-link:hover {
+  color: var(--text-color);
+  background-color: rgba(var(--accent-rgb), 0.08);
+  border-color: rgba(var(--accent-rgb), 0.15);
+}
+
+.sidebar-nav .nav-link.active {
+  background: linear-gradient(90deg, rgba(var(--accent-rgb), 0.22) 0%, rgba(var(--accent-rgb), 0.08) 100%);
+  color: var(--accent);
+  border-left: 3px solid var(--accent);
+  font-weight: 700;
+}
+
+/* Main Content Wrapper */
+.app-main {
+  margin-left: var(--sidebar-width);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex-grow: 1;
+  min-height: 100vh;
+  transition: margin-left 0.25s ease-in-out;
+}
+
+/* Top Navbar */
+.app-topbar {
+  height: var(--topbar-height);
+  background-color: var(--bg-surface);
+  border-bottom: 1px solid var(--border-color);
+  position: sticky;
+  top: 0;
+  z-index: 1020;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1.5rem;
+  backdrop-filter: blur(8px);
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.app-content {
+  flex: 1;
+  padding: 1.5rem;
+}
+
+.app-footer {
+  background-color: var(--footer-bg);
+  border-top: 1px solid var(--border-color);
+  padding: 1rem 1.5rem;
+  text-align: center;
+  transition: background-color 0.2s ease;
+}
+
+.sidebar-backdrop {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(11, 19, 41, 0.7);
+  backdrop-filter: blur(2px);
+  z-index: 1040;
+}
+
+@media (max-width: 991.98px) {
+  .app-sidebar {
+    transform: translateX(-100%);
+  }
+  .app-sidebar.show {
+    transform: translateX(0);
+  }
+  .app-main {
+    margin-left: 0;
+  }
+  .sidebar-backdrop.show {
+    display: block;
+  }
+  .app-topbar {
+    padding: 0 1rem;
+  }
+  .app-content {
+    padding: 1rem;
+  }
+}
+
+#loadingOverlay {
+  position: fixed; 
+  top: 0; 
+  left: 0; 
+  width: 100vw; 
+  height: 100vh;
+  background: rgba(11, 19, 41, 0.85); 
+  backdrop-filter: blur(4px);
+  display: none; 
+  flex-direction: column; 
+  align-items: center; 
+  justify-content: center;
+  z-index: 99999;
+}
+
+@keyframes logoPulse {
+  0% { opacity: 0.4; transform: scale(0.95); }
+  50% { opacity: 1; transform: scale(1.05); }
+  100% { opacity: 0.4; transform: scale(0.95); }
+}
+
+#loadingOverlay img {
+  animation: logoPulse 1.5s infinite ease-in-out;
+}
+
+
+:root {
+  --sidebar-width: 270px;
+  --topbar-height: 70px;
+  
+  /* Dark Mode Defaults (Default) */
+  --bg-canvas: #0b1329;
+  --bg-surface: #0f172a;
+  --bg-card: #1e293b;
+  --border-color: #334155;
+  --text-color: #f8fafc;
+  --text-muted: #94a3b8;
+  --accent: #38bdf8;
+  --accent-rgb: 56, 189, 248; /* Dynamic transparency variable */
+  --stat-bg: #111a33;
+  --footer-bg: #080d1d;
+  
+  /* Semantic UI Colors */
+  --success: #10b981; 
+  --danger: #ef4444;  
+  --warning: #f59e0b; 
+  --info: #3b82f6; 
+}
+
+[data-bs-theme="light"] {
+  /* Light Mode Overrides */
+  --bg-canvas: #f1f5f9;
+  --bg-surface: #e2e8f0;    /* Sidebar & topbar background */
+  --bg-card: #ffffff;       /* Clean white cards */
+  --border-color: #cbd5e1;
+  --text-color: #0f172a;    /* High-contrast text */
+  --text-muted: #475569;    /* Muted text for readability */
+  --accent: #0284c7;
+  --accent-rgb: 2, 132, 199; /* Dynamic transparency variable */
+  --stat-bg: #ffffff;       /* Clean white stat cards */
+  --footer-bg: #cbd5e1;
+}
+
+/* Text utilities and headings adapt in light mode */
+[data-bs-theme="light"] .text-secondary,
+[data-bs-theme="light"] .text-muted,
+[data-bs-theme="light"] small {
+  color: var(--text-muted) !important;
+}
+
+[data-bs-theme="light"] .text-light,
+[data-bs-theme="light"] h1, 
+[data-bs-theme="light"] h2, 
+[data-bs-theme="light"] h3, 
+[data-bs-theme="light"] h4, 
+[data-bs-theme="light"] h5, 
+[data-bs-theme="light"] h6 {
+  color: var(--text-color) !important;
+}
+
+
+@media print {
+  /* 1. Hide the Next.js sidebar, top nav, and any scrollbars */
+  aside, 
+  nav, 
+  header, 
+  .sidebar, 
+  .navbar, 
+  .d-print-none {
+    display: none !important;
+  }
+
+  /* 2. Force the main content area to take up the full page */
+  main, 
+  body, 
+  html, 
+  .layout-content, 
+  .container-fluid {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+    background: white !important;
+    color: black !important;
+  }
+
+  /* 3. Strip all dark mode styling from the report card */
+  .card, .print-container, table, th, td, tr {
+    background: transparent !important;
+    border-color: #000 !important;
+    color: #000 !important;
+    box-shadow: none !important;
+  }
+
+  /* 4. Fix table borders for formal printing */
+  .table {
+    border: 1px solid #000 !important;
+    margin-bottom: 2rem !important;
+  }
+  .table th, .table td {
+    border-color: #000 !important;
+    padding: 8px !important;
+  }
+  
+  /* 5. Force the signature block to avoid page breaks */
+  .signature-block {
+    page-break-inside: avoid !important;
+    margin-top: 50px !important;
+  }
+
+  /* Reset any specific text colors to black */
+  .text-info, .text-danger, .text-warning, .text-accent, .text-muted, .text-white {
+    color: #000 !important;
+  }
+  .bg-dark {
+    background: #f1f1f1 !important;
+  }
+}

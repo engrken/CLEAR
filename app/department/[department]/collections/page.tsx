@@ -1,0 +1,80 @@
+import { prisma } from '@/lib/prisma';
+import CollectionsForm from './CollectionsForm';
+
+export default async function CollectionsPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ department: string }>;
+  searchParams?: Promise<{ ay?: string; term?: string; prefillId?: string }>;
+}) {
+  const { department } = await params;
+  const resolvedSearch = searchParams ? await searchParams : {};
+  const ay = resolvedSearch.ay || 'A.Y. 2026 - 2027';
+  const term = resolvedSearch.term || '1st Sem';
+  const prefillId = resolvedSearch.prefillId || '';
+
+  const organization = await prisma.organization.findUnique({
+    where: { subdomain: department },
+  });
+
+  if (!organization) {
+    return (
+      <div className="alert alert-danger p-4 shadow-sm border-secondary">
+        <h4 className="fw-bold mb-2">Department Not Found</h4>
+        <p className="small mb-0">The department '{decodeURIComponent(department)}' does not exist.</p>
+      </div>
+    );
+  }
+
+  // 1. Fetch Students for Datalist
+  const students = await prisma.student.findMany({
+    where: { organizationId: organization.id },
+    select: { studentId: true, fullName: true, email: true }
+  });
+
+  // 2. Fetch Funds for Target Allocation Pool
+  const funds = await prisma.fund.findMany({
+    where: { organizationId: organization.id, academicYear: ay, term }
+  });
+
+  // 3. Compute Next Sequential OR Number (Parity with getNextOrNumber in code.gs)[cite: 12]
+  const lastCollection = await prisma.collection.findFirst({
+    where: { organizationId: organization.id, academicYear: ay },
+    orderBy: { timestamp: 'desc' },
+    select: { orNumber: true, paymentType: true }
+  });
+
+  const match = ay.match(/\d{4}/);
+  const yearPrefix = match ? match[0].slice(-2) : '26';
+  let nextOr = `${yearPrefix}-001`;
+
+  if (lastCollection && lastCollection.orNumber) {
+    const lastOr = lastCollection.orNumber.toUpperCase();
+    if (!lastOr.includes('VOID') && !lastOr.includes('DUE-') && !lastOr.includes('CO-')) {
+      const parts = lastOr.split('-');
+      if (parts.length > 1) {
+        const numPart = parseInt(parts[1].replace(/[^0-9]/g, ''), 10);
+        if (!isNaN(numPart)) {
+          const nextNum = numPart + 1;
+          nextOr = `${parts[0]}-${nextNum < 1000 ? String(nextNum).padStart(3, '0') : nextNum}`;
+        }
+      }
+    }
+  }
+
+  return (
+    <div className="module card p-3 p-md-4 border-secondary shadow-sm">
+      <h5 className="text-accent mb-3"><i className="bi bi-cash-stack me-2"></i>Collection Remittance</h5>
+      <CollectionsForm 
+        department={department}
+        ay={ay}
+        term={term}
+        students={students}
+        funds={funds}
+        nextOr={nextOr}
+        prefillId={prefillId}
+      />
+    </div>
+  );
+}
