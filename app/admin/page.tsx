@@ -14,6 +14,8 @@ export default async function AdminDashboard() {
     return `http://${subdomain}.localhost:3000`;
   };
 
+  const isProduction = Boolean(process.env.NODE_ENV === 'production' || process.env.VERCEL);
+
   return (
     <div className="container py-5">
       <div className="d-flex justify-content-between align-items-center mb-5 border-bottom border-secondary pb-3">
@@ -28,47 +30,38 @@ export default async function AdminDashboard() {
       <div className="row g-4">
         {departments.map((dept) => {
           const deptUrl = getDeptUrl(dept.subdomain);
-          const isProduction = Boolean(process.env.NODE_ENV === 'production' || process.env.VERCEL);
+          const cardContent = (
+            <div className="card h-100 text-center border-secondary shadow-sm app-card-hover p-4 bg-card transition-all">
+              {/* 2" x 2" Logo (192px) - Clean root path without /public/ */}
+              <div className="mx-auto mb-3" style={{ width: '192px', height: '192px' }}>
+                <img
+                  src={`/${dept.subdomain}_logo.png`}
+                  alt={`${dept.name} Logo`}
+                  className="w-100 h-100 object-fit-contain"
+                />
+              </div>
+              <h6 className="fw-bold text-color mb-1">{dept.name}</h6>
+              <small className="text-info">
+                {isProduction ? `/department/${dept.subdomain}` : `${dept.subdomain}.localhost:3000`}
+              </small>
+            </div>
+          );
 
           return (
             <div key={dept.id} className="col-12 col-sm-6 col-md-4 col-lg-3">
               {isProduction ? (
                 <Link href={deptUrl} className="text-decoration-none">
-                  <DepartmentCard dept={dept} isProduction={isProduction} />
+                  {cardContent}
                 </Link>
               ) : (
                 <a href={deptUrl} className="text-decoration-none">
-                  <DepartmentCard dept={dept} isProduction={isProduction} />
+                  {cardContent}
                 </a>
               )}
             </div>
           );
         })}
       </div>
-    </div>
-  );
-}
-
-// Sub-component to keep card markup clean
-function DepartmentCard({ dept, isProduction }: { dept: any; isProduction: boolean }) {
-  return (
-    <div className="card h-100 text-center border-secondary shadow-sm app-card-hover p-4 bg-card transition-all">
-      {/* 2" x 2" Logo (192px) */}
-      <div className="mx-auto mb-3" style={{ width: '192px', height: '192px' }}>
-        <img
-          src={`/${dept.subdomain}_logo.png`}
-          alt={`${dept.name} Logo`}
-          onError={(e) => {
-            e.currentTarget.onerror = null;
-            e.currentTarget.src = '/engineering_logo.png';
-          }}
-          className="w-100 h-100 object-fit-contain"
-        />
-      </div>
-      <h6 className="fw-bold text-color mb-1">{dept.name}</h6>
-      <small className="text-info">
-        {isProduction ? `/department/${dept.subdomain}` : `${dept.subdomain}.localhost:3000`}
-      </small>
     </div>
   );
 }
