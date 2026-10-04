@@ -35,12 +35,12 @@ export default async function AdminDashboard() {
                   {/* 2" x 2" Logo (192px) */}
                   <div className="mx-auto mb-3" style={{ width: '192px', height: '192px' }}>
                     <img
-                      src={`/${dept.subdomain}_logo.png`}
+                      src={`/public/${dept.subdomain}_logo.png`}
                       alt={`${dept.name} Logo`}
                       onError={(e) => {
                         // Fallback to engineering logo if department-specific logo is missing
                         e.currentTarget.onerror = null;
-                        e.currentTarget.src = '/engineering_logo.png';
+                        e.currentTarget.src = '/public/engineering_logo.png';
                       }}
                       className="w-100 h-100 object-fit-contain"
                     />
