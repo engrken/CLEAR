@@ -6,9 +6,8 @@ import { revalidatePath } from "next/cache";
 export async function createDepartment(formData: FormData) {
   const name = formData.get('name') as string;
   const subdomain = formData.get('subdomain') as string;
-  const code = formData.get('code') as string;
-
-  if (!name || !subdomain || !code) {
+  
+  if (!name || !subdomain) {
     throw new Error('All fields are required.');
   }
 

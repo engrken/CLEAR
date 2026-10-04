@@ -67,15 +67,11 @@ export default async function AdminDashboardAndSetup() {
             }}>
               <div className="mb-3">
                 <label className="form-label text-secondary small fw-semibold">Department / College Name</label>
-                <input type="text" name="name" className="form-control bg-body border-secondary" required />
+                <input type="text" name="name" placeholder="College of Engineering" className="form-control bg-body border-secondary" required />
               </div>
               <div className="mb-3">
                 <label className="form-label text-secondary small fw-semibold">Subdomain Prefix</label>
-                <input type="text" name="subdomain" className="form-control bg-body border-secondary" required />
-              </div>
-              <div className="mb-4">
-                <label className="form-label text-secondary small fw-semibold">Department Code / Acronym</label>
-                <input type="text" name="code" className="form-control bg-body border-secondary" required />
+                <input type="text" name="subdomain" placeholder="engineering" className="form-control bg-body border-secondary" required />
               </div>
               <button type="submit" className="btn btn-warning w-100 fw-bold py-2 shadow-sm">
                 <i className="bi bi-plus-circle-fill me-2"></i>Provision Department
