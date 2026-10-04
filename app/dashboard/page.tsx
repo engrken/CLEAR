@@ -8,6 +8,16 @@ import LogoutButton from './components/LogoutButton';
 // Force dynamic rendering to handle live sessions safely on Vercel
 export const dynamic = 'force-dynamic';
 
+export default function DashboardTest() {
+  return (
+    <div className="min-vh-100 d-flex flex-column justify-content-center align-items-center bg-dark text-white">
+      <i className="bi bi-check-circle-fill text-success" style={{ fontSize: '4rem' }}></i>
+      <h1 className="fw-bold mt-3">The Dashboard Route is Alive!</h1>
+      <p className="text-secondary">If you can see this, Vercel routing is perfect and the previous 404 was caused by a Prisma or Auth.js crash.</p>
+    </div>
+  );
+}
+
 export default async function AdminDashboardAndSetup() {
   // 1. Authenticate User (Super Admin Check)
   const session = await auth();
