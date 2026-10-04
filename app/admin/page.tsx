@@ -1,13 +1,16 @@
+// app/admin/page.tsx
 import { auth } from '@/auth'; 
+import { prisma } from '@/lib/prisma';
 import { createDepartment } from './actions';
 import Link from 'next/link';
 import LogoutButton from './components/LogoutButton';
 
-export default async function AdminSetupPage() {
+// Force dynamic rendering to handle live sessions safely on Vercel
+export const dynamic = 'force-dynamic';
+
+export default async function AdminDashboardAndSetup() {
+  // 1. Authenticate User (Super Admin Check)
   const session = await auth();
-  
-  // Define isProduction here to resolve the TypeScript error
-  const isProduction = Boolean(process.env.NODE_ENV === 'production' || process.env.VERCEL);
   
   if (!session || session.user?.email !== 'kent.bsece@gmail.com') {
     return (
@@ -26,56 +29,126 @@ export default async function AdminSetupPage() {
     );
   }
 
-  return (
-    <div className="container py-5" style={{ maxWidth: '600px' }}>
-      <div className="mb-4">
-        <Link href="/admin" className="text-info text-decoration-none small fw-bold">
-          <i className="bi bi-arrow-left me-1"></i>Back to Dashboard
-        </Link>
-      </div>
+  // 2. Fetch Data and Set Environment
+  const departments = await prisma.organization.findMany();
+  const isProduction = Boolean(process.env.NODE_ENV === 'production' || process.env.VERCEL);
 
-      <div className="card p-4 border-secondary shadow-lg bg-card">
-        <div className="d-flex justify-content-between align-items-start mb-3">
-          <h3 className="fw-bold text-accent m-0">
-            <i className="bi bi-building-gear me-2"></i>Department Setup
-          </h3>
+  // Helper for dynamic paths
+  const getDeptUrl = (subdomain: string) => {
+    if (isProduction) {
+      return `/department/${subdomain}`;
+    }
+    return `http://${subdomain}.localhost:3000`;
+  };
+
+  return (
+    <div className="container py-5" style={{ maxWidth: '1200px' }}>
+      
+      {/* Top Header */}
+      <div className="d-flex justify-content-between align-items-center mb-5 border-bottom border-secondary pb-3">
+        <h2 className="fw-bold text-accent m-0">
+          <i className="bi bi-shield-check me-2"></i>CLEAR System Master Admin
+        </h2>
+        <div className="d-flex align-items-center gap-3">
+          <span className="text-success fw-bold small d-none d-md-inline">
+            <i className="bi bi-person-circle me-1"></i>{session.user.email}
+          </span>
           <LogoutButton />
         </div>
+      </div>
+
+      <div className="row g-5">
         
-        <p className="text-secondary small mb-4">
-          Create, modify, or delete College / Department. <br />
-          Authenticated as: <span className="text-success fw-bold">{session.user.email}</span>
-        </p>
+        {/* LEFT COLUMN: Department Setup Form */}
+        <div className="col-12 col-lg-4">
+          <div className="card p-4 border-secondary shadow-lg bg-card sticky-top" style={{ top: '2rem' }}>
+            <h5 className="fw-bold text-accent mb-1">
+              <i className="bi bi-building-gear me-2"></i>Provision Department
+            </h5>
+            <p className="text-secondary small mb-4">Create or modify a College/Department.</p>
 
-        <form action={async (formData) => {
-          'use server';
-          await createDepartment(formData);
-        }}>
-          <div className="mb-3">
-            <label className="form-label text-secondary small fw-semibold">Department / College Name</label>
-            <input type="text" name="name" className="form-control bg-body text-color border-secondary" placeholder="e.g. College of Nursing" required />
+            <form action={async (formData) => {
+              'use server';
+              await createDepartment(formData);
+            }}>
+              <div className="mb-3">
+                <label className="form-label text-secondary small fw-semibold">Department / College Name</label>
+                <input type="text" name="name" className="form-control bg-body text-color border-secondary" placeholder="e.g. College of Nursing" required />
+              </div>
+
+              <div className="mb-3">
+                <label className="form-label text-secondary small fw-semibold">Subdomain Prefix</label>
+                <div className="input-group">
+                  <input type="text" name="subdomain" className="form-control bg-body text-color border-secondary" placeholder="nursing" required />
+                </div>
+                <div className="form-text text-secondary mt-1" style={{ fontSize: '0.75rem' }}>
+                  Suffix: <span className="text-info fw-bold">{isProduction ? '.clearsys.vercel.app' : '.localhost:3000'}</span><br/>
+                  Logo File: <code>[prefix]_logo.png</code>
+                </div>
+              </div>
+
+              <div className="mb-4">
+                <label className="form-label text-secondary small fw-semibold">Department Code / Acronym</label>
+                <input type="text" name="code" className="form-control bg-body text-color border-secondary" placeholder="e.g. CON" required />
+              </div>
+
+              <button type="submit" className="btn btn-warning w-100 fw-bold py-2 shadow-sm">
+                <i className="bi bi-plus-circle-fill me-2"></i>Provision Department
+              </button>
+            </form>
           </div>
+        </div>
 
-          <div className="mb-3">
-            <label className="form-label text-secondary small fw-semibold">Subdomain Prefix</label>
-            <div className="input-group">
-              <input type="text" name="subdomain" className="form-control bg-body text-color border-secondary" placeholder="nursing" required />
-              <span className="input-group-text border-secondary bg-dark text-secondary">
-                {isProduction ? '.clearsys.vercel.app' : '.localhost:3000'}
-              </span>
-            </div>
-            <div className="form-text text-secondary" style={{ fontSize: '0.75rem' }}>Logo file must be named accordingly (e.g., nursing_logo.png).</div>
+        {/* RIGHT COLUMN: Dashboard Grid */}
+        <div className="col-12 col-lg-8">
+          <h5 className="fw-bold text-accent mb-4">
+            <i className="bi bi-grid-fill me-2"></i>Active Departments Matrix
+          </h5>
+          
+          <div className="row g-4">
+            {departments.map((dept) => {
+              const deptUrl = getDeptUrl(dept.subdomain);
+              
+              const cardContent = (
+                <div className="card h-100 text-center border-secondary shadow-sm app-card-hover p-4 bg-card transition-all">
+                  <div className="mx-auto mb-3" style={{ width: '128px', height: '128px' }}>
+                    <img
+                      src={`/${dept.subdomain}_logo.png`}
+                      alt={`${dept.name} Logo`}
+                      className="w-100 h-100 object-fit-contain"
+                    />
+                  </div>
+                  <h6 className="fw-bold text-color mb-1">{dept.name}</h6>
+                  <small className="text-info">
+                    {isProduction ? `/department/${dept.subdomain}` : `${dept.subdomain}.localhost:3000`}
+                  </small>
+                </div>
+              );
+
+              return (
+                <div key={dept.id} className="col-12 col-sm-6 col-md-6">
+                  {isProduction ? (
+                    <Link href={deptUrl} className="text-decoration-none">
+                      {cardContent}
+                    </Link>
+                  ) : (
+                    <a href={deptUrl} className="text-decoration-none">
+                      {cardContent}
+                    </a>
+                  )}
+                </div>
+              );
+            })}
+            
+            {departments.length === 0 && (
+              <div className="col-12 text-center py-5 text-secondary border border-secondary rounded border-dashed">
+                <i className="bi bi-inbox fs-1 d-block mb-2 text-muted"></i>
+                No departments provisioned yet.
+              </div>
+            )}
           </div>
+        </div>
 
-          <div className="mb-4">
-            <label className="form-label text-secondary small fw-semibold">Department Code / Acronym</label>
-            <input type="text" name="code" className="form-control bg-body text-color border-secondary" placeholder="e.g. CON" required />
-          </div>
-
-          <button type="submit" className="btn btn-warning w-100 fw-bold py-2 shadow-sm">
-            Provision New Department
-          </button>
-        </form>
       </div>
     </div>
   );
