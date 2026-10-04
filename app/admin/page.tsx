@@ -7,7 +7,7 @@ export default async function AdminDashboard() {
 
   // Helper to determine whether to use production paths or local subdomains
   const getDeptUrl = (subdomain: string) => {
-    const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL;
+    const isProduction = Boolean(process.env.NODE_ENV === 'production' || process.env.VERCEL);
     if (isProduction) {
       return `/department/${subdomain}`;
     }
@@ -28,11 +28,10 @@ export default async function AdminDashboard() {
       <div className="row g-4">
         {departments.map((dept) => {
           const deptUrl = getDeptUrl(dept.subdomain);
-          const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL;
+          const isProduction = Boolean(process.env.NODE_ENV === 'production' || process.env.VERCEL);
 
           return (
             <div key={dept.id} className="col-12 col-sm-6 col-md-4 col-lg-3">
-              {/* Use Next.js Link for internal production routes, or <a> for local external localhost links */}
               {isProduction ? (
                 <Link href={deptUrl} className="text-decoration-none">
                   <DepartmentCard dept={dept} isProduction={isProduction} />
@@ -60,7 +59,6 @@ function DepartmentCard({ dept, isProduction }: { dept: any; isProduction: boole
           src={`/${dept.subdomain}_logo.png`}
           alt={`${dept.name} Logo`}
           onError={(e) => {
-            // Graceful fallback to engineering logo if department-specific logo is missing
             e.currentTarget.onerror = null;
             e.currentTarget.src = '/engineering_logo.png';
           }}
