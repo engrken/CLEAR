@@ -25,11 +25,9 @@ export default function TopHeader({ department, currentUser }: { department: str
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
-  const [mounted, setMounted] = useState(false);
   const [fcuError, setFcuError] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
     const currentTheme = document.documentElement.getAttribute('data-bs-theme') || 'dark';
     setTheme(currentTheme);
     
@@ -48,14 +46,8 @@ export default function TopHeader({ department, currentUser }: { department: str
     }
   }, [currentUser]);
 
-  const getAssetUrl = (filename: string) => {
-    if (mounted && window.location.hostname.endsWith('.localhost')) {
-      return `http://localhost:${window.location.port}/${filename}`;
-    }
-    return `/${filename}`;
-  };
-
-  const fcuLogoPath = getAssetUrl('fcu.png');
+  // Clean absolute path for production/migration
+  const fcuLogoPath = '/fcu.png';
 
   const toggleTheme = () => {
     const newTheme = theme === 'dark' ? 'light' : 'dark';
@@ -71,14 +63,12 @@ export default function TopHeader({ department, currentUser }: { department: str
     router.push(`${pathname}?${params.toString()}`);
   };
 
-const handleAuthAction = () => {
+  const handleAuthAction = () => {
     if (isLoggedIn) {
       try {
-        // 1. Clear all local storage session items
         localStorage.removeItem('fcu_clear_user');
         localStorage.removeItem('fcu_clear_token');
         
-        // 2. Clear authentication cookies
         document.cookie = "fcu_session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
         document.cookie = "fcu_otp_hash=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
         document.cookie = "fcu_otp_email=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
@@ -91,8 +81,6 @@ const handleAuthAction = () => {
       }
       
       alert("Signed out successfully.");
-      
-      // 3. Force an immediate hard reload to wipe session state and render as guest
       window.location.reload();
     } else {
       setAuthStep('email');
@@ -126,13 +114,8 @@ const handleAuthAction = () => {
     try {
       const res = await verifyOtp(department, authEmail, authOtp);
       if (res.success) {
-        // 1. Save user data to localStorage
         localStorage.setItem('fcu_clear_user', JSON.stringify(res.user));
-        
-        // 2. Close modal immediately
         setShowModal(false);
-        
-        // 3. Perform a clean hard reload without triggering background streams
         setTimeout(() => {
            window.location.reload();
         }, 200);
@@ -199,8 +182,8 @@ const handleAuthAction = () => {
             >
               <option value="A.Y. 2026 - 2027">A.Y. 2026 - 2027</option>
               <option value="A.Y. 2027 - 2028">A.Y. 2027 - 2028</option>
-			  <option value="A.Y. 2028 - 2029">A.Y. 2028 - 2029</option>
-			  <option value="A.Y. 2029 - 2030">A.Y. 2029 - 2030</option>
+              <option value="A.Y. 2028 - 2029">A.Y. 2028 - 2029</option>
+              <option value="A.Y. 2029 - 2030">A.Y. 2029 - 2030</option>
             </select>
 
             <select 

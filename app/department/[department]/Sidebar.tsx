@@ -8,17 +8,12 @@ export default function DepartmentSidebar({ department, currentUser }: { departm
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const [mounted, setMounted] = useState(false);
-  // Default to Viewer access if no session is detected yet
   const [allowedTabs, setAllowedTabs] = useState<string[]>(
     currentUser?.allowedTabs || ['tab-overview', 'tab-clearance']
   );
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
-    
-    // Hydrate permissions from localStorage if currentUser prop wasn't passed down
     if (!currentUser) {
       const stored = localStorage.getItem('fcu_clear_user');
       if (stored) {
@@ -38,20 +33,15 @@ export default function DepartmentSidebar({ department, currentUser }: { departm
     }
   }, [currentUser]);
 
-  const getAssetUrl = (filename: string) => {
-    if (mounted && window.location.hostname.endsWith('.localhost')) {
-      return `http://localhost:${window.location.port}/${filename}`;
-    }
-    return `/${filename}`;
-  };
-
   const ay = searchParams.get('ay') || 'A.Y. 2026 - 2027';
   const term = searchParams.get('term') || '1st Sem';
   const queryString = `?ay=${encodeURIComponent(ay)}&term=${encodeURIComponent(term)}`;
 
   const deptKey = department ? decodeURIComponent(department).toLowerCase().replace(/\s+/g, '') : 'engineering';
-  const logoPath = getAssetUrl(`${deptKey}_logo.png`);
-  const fallbackLogoPath = getAssetUrl('engineering_logo.png');
+  
+  // Clean root-relative asset paths for production
+  const logoPath = `/${deptKey}_logo.png`;
+  const fallbackLogoPath = '/engineering_logo.png';
 
   const isActive = (path: string) => {
     if (path === "/") {
@@ -72,9 +62,8 @@ export default function DepartmentSidebar({ department, currentUser }: { departm
     ${isActive(path) ? 'bg-info bg-opacity-10 text-info fw-bold border-start border-info border-4' : 'text-secondary'}
   `;
 
-  // Authorization helper function
   const canAccess = (tabId: string) => {
-    if (isAdmin) return true; // System Admin override
+    if (isAdmin) return true;
     return allowedTabs.includes(tabId);
   };
 
