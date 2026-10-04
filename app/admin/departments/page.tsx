@@ -45,7 +45,9 @@ export default async function AdminSetupPage() {
           Authenticated as: <span className="text-success fw-bold">{session.user.email}</span>
         </p>
 
-        <form action={createDepartment}>
+        <form action={async (formData) => {
+  await createDepartment(formData);
+}}>
           <div className="mb-3">
             <label className="form-label text-secondary small fw-semibold">Department / College Name</label>
             <input type="text" name="name" className="form-control bg-body text-color border-secondary" placeholder="e.g. College of Nursing" required />

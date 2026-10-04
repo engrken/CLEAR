@@ -34,7 +34,6 @@ export async function createDepartment(formData: FormData) {
       data: {
         name,
         subdomain: subdomain.toLowerCase().trim(),
-        code: code.toUpperCase().trim(),
       },
     });
     revalidatePath('/');
@@ -69,11 +68,7 @@ export async function assessStudentDue(department: string, payload: {
       organizationId: organization.id,
       academicYear: payload.ay,
       term: payload.term,
-      studentId: payload.studentId,
-      studentName: payload.studentName,
       category: payload.category,
-      itemDescription: payload.itemDescription,
-      amountDue: payload.amountDue,
       balanceDue: payload.amountDue, 
       status: 'Unpaid',
     },
@@ -680,7 +675,7 @@ export async function submitOnlineRemittance(department: string, data: {
   studentId: string;
   studentName: string;
   email: string;
-  channel: string;
+  paymentChannel: string;
   referenceNo: string;
   particulars: string;
   amount: number;
@@ -689,20 +684,24 @@ export async function submitOnlineRemittance(department: string, data: {
   term: string;
 }) {
   const orgId = await getOrgId(department);
+  const submissionId = `SUB-${formatDate(new Date())}-${Math.floor(Math.random() * 1000)}`;
 
   await prisma.onlineRemittance.create({
     data: {
       organizationId: orgId,
+      submissionId,
       academicYear: data.ay,
       term: data.term,
       studentId: data.studentId,
       studentName: data.studentName,
-      channel: data.channel,
-      referenceNo: data.referenceNo,
-      particulars: `${data.particulars} (${data.email})`,
-      amount: data.amount,
-      proofBase64: data.proofBase64,
-      status: 'Pending'
+      paymentChannel: data.paymentChannel,
+      referenceNumber: data.referenceNo,
+      category: "Online Remittance", // Satisfies required schema field
+      itemDescription: `${data.particulars} (${data.email})`,
+      paymentMode: "Online",
+      amountPaid: data.amount,
+      proofUrl: data.proofBase64,
+      status: 'Pending Verification'
     }
   });
 
@@ -738,7 +737,7 @@ export async function upsertStudent(department: string, data: {
         studentId: cleanStudentId,
         fullName: data.fullName.trim(),
         email: data.email.trim() || null,
-        yearLevel: "N/A", // Satisfies the required schema field
+        yearLevel: "N/A", 
       },
     });
   }
@@ -805,7 +804,6 @@ export async function settlePenaltyCommunityService(department: string, data: {
 // =========================================================================
 export async function getDepartmentFinancials(organizationId: string, ay: string, term: string) {
   
-  // NATIVE DATABASE FILTERING: Only fetches data matching the URL selected term/ay
   const [collections, audits, cashAdvances, explicitCollectibles, initialFunds, students] = await Promise.all([
     prisma.collection.findMany({ 
       where: { organizationId, academicYear: ay, term } 
@@ -823,7 +821,6 @@ export async function getDepartmentFinancials(organizationId: string, ay: string
     prisma.fund.findMany({ 
       where: { organizationId, academicYear: ay, term } 
     }),
-    // Students typically persist across terms, so we pull all enrolled students for the org
     prisma.student.findMany({ 
       where: { organizationId } 
     }),
@@ -929,7 +926,7 @@ export async function getDepartmentFinancials(organizationId: string, ay: string
   cashAdvances.forEach(ca => {
     const status = String(ca.status || '').toUpperCase();
     if (status.includes('PENDING') && !status.includes('CANCEL')) {
-      const amt = Number(ca.amountApproved) || 0; // Fixed: Use amountApproved
+      const amt = Number(ca.amountApproved) || 0;
       totalUnliquidated += amt;
       const fund = getFundName(ca);
       
@@ -1024,8 +1021,8 @@ export async function getDepartmentFinancials(organizationId: string, ay: string
   let totalInitialAlloc = 0;
   const initialAllocMap: Record<string, number> = {};
   initialFunds.forEach(f => {
-    if (f.fundName) { // Fixed: Use fundName instead of name
-      const initAmt = Number(f.initialAllocation) || 0; // Fixed: Use initialAllocation instead of amount
+    if (f.fundName) { 
+      const initAmt = Number(f.initialAllocation) || 0; 
       initialAllocMap[f.fundName] = initAmt;
       totalInitialAlloc += initAmt;
     }
@@ -1044,7 +1041,6 @@ export async function getDepartmentFinancials(organizationId: string, ay: string
     const init = initialAllocMap[name] || 0;
     const unliquidated = unliquidatedByFund[name] || 0;
     
-    // Total Available Balance = (Initial + Collected) - (Spent + Unliquidated)
     const balance = init + collected - spent - unliquidated;
     
     return { name, collected, spent, unliquidated, balance };

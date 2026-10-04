@@ -30,9 +30,9 @@ export default async function UserManagementPage({ params }: PageProps) {
   const department = resolvedParams?.department || 'engineering';
   const cleanSubdomain = department.toLowerCase();
 
-  let users = [];
+  let users: any[] = []; // Explicitly typed to fix TypeScript TS7034/TS7005 errors[cite: 4]
   try {
-    // 1. Ensure Organization exists (Auto-tenant provisioning)
+    // 1. Ensure Organization exists (Auto-tenant provisioning)[cite: 4]
     let organization = await prisma.organization.findUnique({
       where: { subdomain: cleanSubdomain },
     });
@@ -46,7 +46,7 @@ export default async function UserManagementPage({ params }: PageProps) {
       });
     }
 
-    // 2. Ensure Engr. Kenneth Mark Bulquerin is ALWAYS seeded as Master Admin for this tenant
+    // 2. Ensure Master Admin is ALWAYS seeded for this tenant[cite: 4]
     const masterEmail = 'kent.bsece@gmail.com';
     const existingMaster = await prisma.tenantUser.findFirst({
       where: { 
@@ -69,7 +69,6 @@ export default async function UserManagementPage({ params }: PageProps) {
         },
       }).catch(() => {});
     } else {
-      // Forcefully ensure role and all tabs remain active for your master account
       await prisma.tenantUser.update({
         where: { id: existingMaster.id },
         data: {
@@ -80,7 +79,7 @@ export default async function UserManagementPage({ params }: PageProps) {
       }).catch(() => {});
     }
 
-    // 3. Seed other default officers if the table only has your master account
+    // 3. Seed other default officers if needed[cite: 4]
     let dbUsers = await prisma.tenantUser.findMany({
       where: { organizationId: organization.id },
       orderBy: { fullName: 'asc' },

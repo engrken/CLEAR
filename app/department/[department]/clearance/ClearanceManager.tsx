@@ -78,7 +78,7 @@ export default function ClearanceManager({
         studentId,
         studentName: fullName,
         email: email || "student@example.com",
-        channel,
+        paymentChannel: channel, // Fixed: Matches expected action argument signature
         referenceNo,
         particulars: collectionType,
         amount,
@@ -100,7 +100,6 @@ export default function ClearanceManager({
 
   return (
     <div>
-      {/* Search Bar & Submit Payment Proof Button Toolbar */}
       <div className="card p-3 border-secondary bg-card mb-4 shadow-sm">
         <div className="d-flex justify-content-between align-items-center flex-wrap gap-3">
           <form onSubmit={handleSearch} className="d-flex gap-2 flex-grow-1" style={{ maxWidth: '500px' }}>
@@ -117,14 +116,12 @@ export default function ClearanceManager({
             </button>
           </form>
 
-          {/* Submit Payment Proof Button */}
           <button className="btn btn-success fw-bold d-flex align-items-center gap-2 px-3 py-2" onClick={() => setShowProofModal(true)}>
             <i className="bi bi-upload"></i> Submit Payment Proof
           </button>
         </div>
       </div>
 
-      {/* Clearance Result View */}
       {activeStudent ? (
         <div className="card p-4 border-secondary bg-card shadow-sm">
           <div className="d-flex justify-content-between align-items-center mb-3">
@@ -170,7 +167,6 @@ export default function ClearanceManager({
         </div>
       )}
 
-      {/* SUBMIT GCASH / MAYA PROOF MODAL */}
       {showProofModal && (
         <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.7)' }}>
           <div className="modal-dialog modal-dialog-centered modal-lg">
@@ -234,7 +230,6 @@ export default function ClearanceManager({
                     </div>
                   </div>
 
-                  {/* Privacy Notice Warning Box */}
                   <div className="alert alert-warning py-2 small mb-3 border-warning">
                     <i className="bi bi-shield-exclamation me-2"></i>
                     <strong>Privacy Notice:</strong> Please blur or black out your personal phone number and remaining wallet balance before uploading.

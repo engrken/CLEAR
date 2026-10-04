@@ -26,8 +26,8 @@ export default async function RemittancesPage({
     );
   }
 
-  // Fetch online remittance submissions using correct schema field 'timestamp'
-  const remittances = await prisma.onlineRemittance.findMany({
+  // Fetch online remittance submissions using correct schema field 'timestamp'[cite: 5]
+  const rawRemittances = await prisma.onlineRemittance.findMany({
     where: { 
       organizationId: organization.id, 
       academicYear: ay, 
@@ -36,7 +36,13 @@ export default async function RemittancesPage({
     orderBy: { timestamp: 'desc' }
   });
 
-  // Get next sequential OR number for verification approval
+  // Map and normalize Prisma results to satisfy non-null studentId property expectations
+  const remittances = rawRemittances.map(r => ({
+    ...r,
+    studentId: r.studentId ?? '',
+  }));
+
+  // Get next sequential OR number for verification approval[cite: 5]
   const lastCollection = await prisma.collection.findFirst({
     where: { organizationId: organization.id, academicYear: ay },
     orderBy: { timestamp: 'desc' },

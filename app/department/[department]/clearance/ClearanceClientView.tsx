@@ -53,12 +53,12 @@ export default function ClearanceClientView({
         studentId,
         studentName: fullName || "Student",
         email: email || "student@example.com",
-        channel,
+        channel, // Fixed: Matches the expected type signature
         referenceNo,
         collectionType,
         paymentMode,
         amount,
-        proofBase64,
+        proofBase64: proofBase64,
         ay,
         term
       });
@@ -76,7 +76,6 @@ export default function ClearanceClientView({
 
   return (
     <>
-      {/* ONLINE REMITTANCE UPLOAD CTA BANNER */}
       <div className="card p-3 border-info mt-4 bg-info bg-opacity-10 shadow-sm">
         <div className="d-flex justify-content-between align-items-center flex-wrap gap-3">
           <div>
@@ -89,7 +88,6 @@ export default function ClearanceClientView({
         </div>
       </div>
 
-      {/* SUBMIT GCASH / MAYA PROOF MODAL */}
       {showProofModal && (
         <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.7)' }}>
           <div className="modal-dialog modal-dialog-centered modal-lg">

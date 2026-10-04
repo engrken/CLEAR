@@ -83,8 +83,8 @@ export default async function CashAdvancesPage({
 
   const initialAllocMap: Record<string, number> = {};
   initialFunds.forEach(f => {
-    if (f.name) {
-      initialAllocMap[f.name] = Number((f as any).initialAllocation) || Number((f as any).amount) || 0;
+    if (f.fundName) { // Fixed: schema uses fundName instead of name[cite: 1]
+      initialAllocMap[f.fundName] = Number(f.initialAllocation) || 0; // Fixed: schema uses initialAllocation instead of amount[cite: 1]
     }
   });
 

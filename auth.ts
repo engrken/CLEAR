@@ -21,7 +21,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         code: { label: "Verification Code", type: "text" }, 
       },
       async authorize(credentials) {
-        const email = credentials?.email ? String(credentials.email).trim() : null;
+        const email = credentials?.email ? String(credentials.email).trim().toLowerCase() : null;
         const code = credentials?.code ? String(credentials.code).trim() : null;
 
         if (!email || !code) {
@@ -64,7 +64,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         // =======================================================
         // 3. TENANT USER AUTHORIZATION (Department Officers)
         // =======================================================
-        const user = await prisma.tenantUser.findUnique({
+        const user = await prisma.tenantUser.findFirst({
           where: { email },
         });
 
@@ -80,9 +80,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           throw new CustomAuthError("Verification code has expired.");
         }
 
-        // Clear OTP after successful use
+        // Clear OTP after successful use using the unique record id
         await prisma.tenantUser.update({
-          where: { email },
+          where: { id: user.id },
           data: { otpCode: null, otpExpires: null },
         });
 
