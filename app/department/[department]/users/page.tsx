@@ -25,23 +25,12 @@ interface PageProps {
   params: Promise<{ department: string }>;
 }
 
-interface UserItem {
-  id: string;
-  userId: string;
-  name: string;
-  email: string | null;
-  username: string;
-  role: string;
-  status: string;
-  allowedTabs: string[];
-}
-
 export default async function UserManagementPage({ params }: PageProps) {
   const resolvedParams = await params;
   const department = resolvedParams?.department || 'engineering';
   const cleanSubdomain = department.toLowerCase();
 
-  let users: UserItem[] = [];
+  let users = [];
   try {
     // 1. Ensure Organization exists (Auto-tenant provisioning)
     let organization = await prisma.organization.findUnique({
@@ -57,7 +46,7 @@ export default async function UserManagementPage({ params }: PageProps) {
       });
     }
 
-    // 2. Ensure Master Admin is ALWAYS seeded for this tenant
+    // 2. Ensure Engr. Kenneth Mark Bulquerin is ALWAYS seeded as Master Admin for this tenant
     const masterEmail = 'kent.bsece@gmail.com';
     const existingMaster = await prisma.tenantUser.findFirst({
       where: { 
@@ -71,7 +60,7 @@ export default async function UserManagementPage({ params }: PageProps) {
         data: {
           organizationId: organization.id,
           userId: `USR-${cleanSubdomain.toUpperCase()}-MASTER`,
-          fullName: 'Engr. Kenneth Mark D. Bulquerin',
+          fullName: 'Engr. Kenneth Mark D.C. Bulquerin',
           username: `master_${cleanSubdomain}`,
           email: masterEmail,
           role: 'admin',
@@ -80,6 +69,7 @@ export default async function UserManagementPage({ params }: PageProps) {
         },
       }).catch(() => {});
     } else {
+      // Forcefully ensure role and all tabs remain active for your master account
       await prisma.tenantUser.update({
         where: { id: existingMaster.id },
         data: {
@@ -90,7 +80,7 @@ export default async function UserManagementPage({ params }: PageProps) {
       }).catch(() => {});
     }
 
-    // 3. Seed other default officers if the table only has the master account
+    // 3. Seed other default officers if the table only has your master account
     let dbUsers = await prisma.tenantUser.findMany({
       where: { organizationId: organization.id },
       orderBy: { fullName: 'asc' },

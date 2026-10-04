@@ -64,9 +64,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         // =======================================================
         // 3. TENANT USER AUTHORIZATION (Department Officers)
         // =======================================================
-        const user = await prisma.tenantUser.findFirst({
-  where: { email: cleanEmail },
-});
+        const user = await prisma.tenantUser.findUnique({
+          where: { email },
+        });
 
         if (!user || user.status !== 'Active') {
           throw new CustomAuthError("Email not found in authorized officers roster or account is inactive.");
@@ -81,10 +81,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
 
         // Clear OTP after successful use
-        await prisma.tenantUser.updateMany({
-  where: { email: cleanEmail },
-  data: { ... }
-});
+        await prisma.tenantUser.update({
+          where: { email },
+          data: { otpCode: null, otpExpires: null },
+        });
 
         return {
           id: user.id,

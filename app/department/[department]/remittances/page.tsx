@@ -26,8 +26,8 @@ export default async function RemittancesPage({
     );
   }
 
-  // 1. Fetch online remittance submissions from database
-  const rawRemittances = await prisma.onlineRemittance.findMany({
+  // Fetch online remittance submissions using correct schema field 'timestamp'
+  const remittances = await prisma.onlineRemittance.findMany({
     where: { 
       organizationId: organization.id, 
       academicYear: ay, 
@@ -36,21 +36,7 @@ export default async function RemittancesPage({
     orderBy: { timestamp: 'desc' }
   });
 
-  // 2. Map database fields to match RemittanceVerificationQueue interface props
-  const remittances = rawRemittances.map(r => ({
-    id: r.id,
-    timestamp: r.timestamp,
-    studentId: r.studentId || '',
-    studentName: r.studentName,
-    paymentChannel: r.channel,
-    referenceNumber: r.referenceNo,
-    itemDescription: r.particulars,
-    amountPaid: r.amount,
-    proofUrl: r.proofBase64,
-    status: r.status,
-  }));
-
-  // 3. Get next sequential OR number for verification approval
+  // Get next sequential OR number for verification approval
   const lastCollection = await prisma.collection.findFirst({
     where: { organizationId: organization.id, academicYear: ay },
     orderBy: { timestamp: 'desc' },
@@ -77,7 +63,7 @@ export default async function RemittancesPage({
   return (
     <div className="module card p-3 p-md-4 border-secondary shadow-sm">
       <h5 className="text-accent mb-1"><i className="bi bi-wallet2 me-2"></i>Online Remittance Verification Queue</h5>
-      <p className="text-security small mb-3">Inspect student GCash/Maya transaction screenshots, cross-verify references, and issue official receipts.</p>
+      <p className="text-secondary small mb-3">Inspect student GCash/Maya transaction screenshots, cross-verify references, and issue official receipts.</p>
 
       <RemittanceVerificationQueue 
         department={department}
