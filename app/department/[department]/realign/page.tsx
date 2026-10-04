@@ -76,9 +76,9 @@ export default async function RealignPage({
   });
 
   const initialAllocMap: Record<string, number> = {};
-  initialFunds.forEach(f => {
-    if (f.name) {
-      initialAllocMap[f.name] = Number((f as any).initialAllocation) || Number((f as any).amount) || 0;
+  initialFunds.forEach((f: any) => {
+    if (f.fundName) { // Fixed: Changed f.name to f.fundName
+      initialAllocMap[f.fundName] = Number(f.initialAllocation) || 0; // Fixed: Changed f.name to f.fundName
     }
   });
 
