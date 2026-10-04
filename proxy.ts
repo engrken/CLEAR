@@ -7,35 +7,37 @@ export function proxy(request: NextRequest) {
 
   let subdomain = '';
 
-  // Extract subdomain for local development (e.g., engineering.localhost:3000)
+  // Local development only:
+  // engineering.localhost:3000
   if (hostname.includes('localhost')) {
-    const parts = hostname.split('.');
-    if (parts.length > 1 && parts[0] !== 'localhost') {
-      subdomain = parts[0];
-    }
-  } else {
-    // Production wildcard subdomain support (e.g., engineering.yourdomain.com)
-    const parts = hostname.split('.');
-    if (parts.length > 2) {
+    const hostWithoutPort = hostname.split(':')[0];
+    const parts = hostWithoutPort.split('.');
+
+    if (
+      parts.length > 1 &&
+      parts[0] !== 'localhost' &&
+      parts[0] !== 'www'
+    ) {
       subdomain = parts[0];
     }
   }
 
-  // If a valid department subdomain is present, rewrite the request
-  if (subdomain && subdomain !== 'www') {
+  // Rewrite local department subdomains
+  if (subdomain) {
     return NextResponse.rewrite(
-      new URL(`/department/${subdomain}${url.pathname}${url.search}`, request.url)
+      new URL(
+        `/department/${subdomain}${url.pathname}${url.search}`,
+        request.url
+      )
     );
   }
 
+  // Normal Vercel/production requests
   return NextResponse.next();
 }
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except API routes, static assets, and favicon
-     */
     '/((?!api|_next/static|_next/image|favicon.ico).*)',
   ],
 };
