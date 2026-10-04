@@ -26,7 +26,6 @@ export default async function RealignPage({
     );
   }
 
-  // 1. Fetch raw records for active term balance calculation
   const [collections, audits, cashAdvances, initialFunds, fundTransfers] = await Promise.all([
     prisma.collection.findMany({ where: { organizationId: organization.id, academicYear: ay, term } }),
     prisma.audit.findMany({ where: { organizationId: organization.id, academicYear: ay, term } }),
@@ -77,8 +76,8 @@ export default async function RealignPage({
 
   const initialAllocMap: Record<string, number> = {};
   initialFunds.forEach(f => {
-    if (f.fundName) { // Fixed: schema uses fundName instead of name[cite: 1]
-      initialAllocMap[f.fundName] = Number(f.initialAllocation) || 0; // Fixed: schema uses initialAllocation[cite: 1]
+    if (f.fundName) {
+      initialAllocMap[f.fundName] = Number(f.initialAllocation) || 0;
     }
   });
 
