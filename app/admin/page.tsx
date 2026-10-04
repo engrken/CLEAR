@@ -28,33 +28,49 @@ export default async function AdminDashboard() {
       <div className="row g-4">
         {departments.map((dept) => {
           const deptUrl = getDeptUrl(dept.subdomain);
+          const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL;
+
           return (
             <div key={dept.id} className="col-12 col-sm-6 col-md-4 col-lg-3">
-              <a href={deptUrl} className="text-decoration-none">
-                <div className="card h-100 text-center border-secondary shadow-sm app-card-hover p-4 bg-card transition-all">
-                  {/* 2" x 2" Logo (192px) */}
-                  <div className="mx-auto mb-3" style={{ width: '192px', height: '192px' }}>
-                    <img
-                      src={`/public/${dept.subdomain}_logo.png`}
-                      alt={`${dept.name} Logo`}
-                      onError={(e) => {
-                        // Fallback to engineering logo if department-specific logo is missing
-                        e.currentTarget.onerror = null;
-                        e.currentTarget.src = '/public/engineering_logo.png';
-                      }}
-                      className="w-100 h-100 object-fit-contain"
-                    />
-                  </div>
-                  <h6 className="fw-bold text-color mb-1">{dept.name}</h6>
-                  <small className="text-info">
-                    {process.env.NODE_ENV === 'production' ? `/department/${dept.subdomain}` : `${dept.subdomain}.localhost:3000`}
-                  </small>
-                </div>
-              </a>
+              {/* Use Next.js Link for internal production routes, or <a> for local external localhost links */}
+              {isProduction ? (
+                <Link href={deptUrl} className="text-decoration-none">
+                  <DepartmentCard dept={dept} isProduction={isProduction} />
+                </Link>
+              ) : (
+                <a href={deptUrl} className="text-decoration-none">
+                  <DepartmentCard dept={dept} isProduction={isProduction} />
+                </a>
+              )}
             </div>
           );
         })}
       </div>
+    </div>
+  );
+}
+
+// Sub-component to keep card markup clean
+function DepartmentCard({ dept, isProduction }: { dept: any; isProduction: boolean }) {
+  return (
+    <div className="card h-100 text-center border-secondary shadow-sm app-card-hover p-4 bg-card transition-all">
+      {/* 2" x 2" Logo (192px) */}
+      <div className="mx-auto mb-3" style={{ width: '192px', height: '192px' }}>
+        <img
+          src={`/${dept.subdomain}_logo.png`}
+          alt={`${dept.name} Logo`}
+          onError={(e) => {
+            // Graceful fallback to engineering logo if department-specific logo is missing
+            e.currentTarget.onerror = null;
+            e.currentTarget.src = '/engineering_logo.png';
+          }}
+          className="w-100 h-100 object-fit-contain"
+        />
+      </div>
+      <h6 className="fw-bold text-color mb-1">{dept.name}</h6>
+      <small className="text-info">
+        {isProduction ? `/department/${dept.subdomain}` : `${dept.subdomain}.localhost:3000`}
+      </small>
     </div>
   );
 }
