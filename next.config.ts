@@ -1,7 +1,15 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["@prisma/client"],
+  async redirects() {
+    return [
+      {
+        source: '/',
+        destination: '/admin',
+        permanent: true, // Permanent SEO-friendly redirect
+      },
+    ];
+  },
 };
 
 export default nextConfig;
