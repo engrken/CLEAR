@@ -1,17 +1,6 @@
-import { headers } from 'next/headers';
-
 export default async function DepartmentLoading() {
-  const headersList = await headers();
-  const host = headersList.get('host') || 'localhost:3000';
-  
-  // Extract port and check if running on local subdomain
-  const port = host.includes(':') ? host.split(':')[1] : '3000';
-  const isLocalhostSubdomain = host.includes('.localhost');
-  
-  // Match the exact asset resolution used in TopHeader & Sidebar
-  const fcuLogoPath = isLocalhostSubdomain 
-    ? `http://localhost:${port}/fcu.png` 
-    : '/fcu.png';
+  // Always use a clean root-relative absolute path for Vercel & production
+  const fcuLogoPath = '/fcu.png';
 
   return (
     <div 

@@ -5,6 +5,15 @@ import Link from 'next/link';
 export default async function AdminDashboard() {
   const departments = await prisma.organization.findMany();
 
+  // Helper to determine whether to use production paths or local subdomains
+  const getDeptUrl = (subdomain: string) => {
+    const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL;
+    if (isProduction) {
+      return `/department/${subdomain}`;
+    }
+    return `http://${subdomain}.localhost:3000`;
+  };
+
   return (
     <div className="container py-5">
       <div className="d-flex justify-content-between align-items-center mb-5 border-bottom border-secondary pb-3">
@@ -17,24 +26,34 @@ export default async function AdminDashboard() {
       </div>
 
       <div className="row g-4">
-        {departments.map((dept) => (
-          <div key={dept.id} className="col-12 col-sm-6 col-md-4 col-lg-3">
-            <a href={`http://${dept.subdomain}.localhost:3000`} className="text-decoration-none">
-              <div className="card h-100 text-center border-secondary shadow-sm app-card-hover p-4 bg-card transition-all">
-                {/* 2" x 2" Logo (192px) */}
-                <div className="mx-auto mb-3" style={{ width: '192px', height: '192px' }}>
-                  <img
-                    src={`/${dept.subdomain}_logo.png`}
-                    alt={`${dept.name} Logo`}
-                    className="w-100 h-100 object-fit-contain"
-                  />
+        {departments.map((dept) => {
+          const deptUrl = getDeptUrl(dept.subdomain);
+          return (
+            <div key={dept.id} className="col-12 col-sm-6 col-md-4 col-lg-3">
+              <a href={deptUrl} className="text-decoration-none">
+                <div className="card h-100 text-center border-secondary shadow-sm app-card-hover p-4 bg-card transition-all">
+                  {/* 2" x 2" Logo (192px) */}
+                  <div className="mx-auto mb-3" style={{ width: '192px', height: '192px' }}>
+                    <img
+                      src={`/${dept.subdomain}_logo.png`}
+                      alt={`${dept.name} Logo`}
+                      onError={(e) => {
+                        // Fallback to engineering logo if department-specific logo is missing
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src = '/engineering_logo.png';
+                      }}
+                      className="w-100 h-100 object-fit-contain"
+                    />
+                  </div>
+                  <h6 className="fw-bold text-color mb-1">{dept.name}</h6>
+                  <small className="text-info">
+                    {process.env.NODE_ENV === 'production' ? `/department/${dept.subdomain}` : `${dept.subdomain}.localhost:3000`}
+                  </small>
                 </div>
-                <h6 className="fw-bold text-color mb-1">{dept.name}</h6>
-                <small className="text-info">{dept.subdomain}.localhost:3000</small>
-              </div>
-            </a>
-          </div>
-        ))}
+              </a>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

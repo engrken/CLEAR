@@ -18,22 +18,19 @@ export default async function DepartmentOverviewPage({
   const subtab = resolvedSearch.subtab || 'funds';
   
   const cleanSubdomain = department.toLowerCase();
-  const baseUrl = process.env.NODE_ENV === 'production' 
-    ? `/department/${cleanSubdomain}` 
-    : `http://${cleanSubdomain}.localhost:3000`;
 
-  // Auto-tenant provisioning to prevent "Department Not Found" on root/Vercel domains
+  // Find organization (safely handle lookup without inline mutation during render)
   let organization = await prisma.organization.findUnique({
     where: { subdomain: cleanSubdomain },
   });
 
   if (!organization) {
-    organization = await prisma.organization.create({
-      data: {
-        subdomain: cleanSubdomain,
-        name: `College of ${department.charAt(0).toUpperCase() + department.slice(1)}`,
-      },
-    });
+    return (
+      <div className="alert alert-danger p-4 shadow-sm border-secondary">
+        <h4 className="fw-bold mb-2">Department Not Found</h4>
+        <p className="small mb-0">The department '{decodeURIComponent(department)}' does not exist in the database.</p>
+      </div>
+    );
   }
 
   // CALLS THE EXACT SAME UNIFIED ENGINE AS THE SUMMARY PAGE (Guarantees 100% Parity)
@@ -48,7 +45,7 @@ export default async function DepartmentOverviewPage({
         </div>
       </div>
 
-      {/* 5 KPI STAT CARDS (100% Synchronized with Summary Report) */}
+      {/* 5 KPI STAT CARDS */}
       <div className="row g-3 mb-4">
         <div className="col-6 col-md-4 col-xl">
           <div className="stat-card">
@@ -101,13 +98,13 @@ export default async function DepartmentOverviewPage({
           </h6>
           <div className="btn-group btn-group-sm" role="group">
             <Link 
-              href={`${baseUrl}?ay=${ay}&term=${term}&subtab=advances`} 
+              href={`?ay=${ay}&term=${term}&subtab=advances`} 
               className={`btn ${subtab === 'advances' ? 'btn-outline-info active' : 'btn-outline-secondary'}`}
             >
               Unliquidated Advances
             </Link>
             <Link 
-              href={`${baseUrl}?ay=${ay}&term=${term}&subtab=funds`} 
+              href={`?ay=${ay}&term=${term}&subtab=funds`} 
               className={`btn ${subtab === 'funds' ? 'btn-outline-info active' : 'btn-outline-secondary'}`}
             >
               Fund Account Balances
@@ -173,7 +170,7 @@ export default async function DepartmentOverviewPage({
                       <td className="text-end text-warning fw-bold">{fmt(ca.amount)}</td>
                       <td><span className="badge bg-warning text-dark">{ca.status}</span></td>
                       <td className="text-center">
-                        <Link href={`${baseUrl}/liquidations?caId=${ca.id}`} className="btn btn-outline-info btn-sm py-0">Liquidate</Link>
+                        <Link href={`liquidations?caId=${ca.id}`} className="btn btn-outline-info btn-sm py-0">Liquidate</Link>
                       </td>
                     </tr>
                   ))
