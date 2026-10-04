@@ -3,5 +3,5 @@ import { redirect } from 'next/navigation';
 
 export default function RootPage() {
   // Clean, uncaught redirect
-  redirect('/admin');
+  redirect('/dashboard');
 }
