@@ -1,10 +1,13 @@
 import { auth } from '@/auth'; 
 import { createDepartment } from './actions';
 import Link from 'next/link';
-import LogoutButton from './components/LogoutButton'; // Import the new button
+import LogoutButton from './components/LogoutButton';
 
 export default async function AdminSetupPage() {
   const session = await auth();
+  
+  // Define isProduction here to resolve the TypeScript error
+  const isProduction = Boolean(process.env.NODE_ENV === 'production' || process.env.VERCEL);
   
   if (!session || session.user?.email !== 'kent.bsece@gmail.com') {
     return (
@@ -36,7 +39,6 @@ export default async function AdminSetupPage() {
           <h3 className="fw-bold text-accent m-0">
             <i className="bi bi-building-gear me-2"></i>Department Setup
           </h3>
-          {/* Render Logout Button Here */}
           <LogoutButton />
         </div>
         
@@ -46,8 +48,9 @@ export default async function AdminSetupPage() {
         </p>
 
         <form action={async (formData) => {
-  await createDepartment(formData);
-}}>
+          'use server';
+          await createDepartment(formData);
+        }}>
           <div className="mb-3">
             <label className="form-label text-secondary small fw-semibold">Department / College Name</label>
             <input type="text" name="name" className="form-control bg-body text-color border-secondary" placeholder="e.g. College of Nursing" required />
