@@ -2,6 +2,9 @@
 import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
 
+// Force dynamic rendering so it fetches live from Prisma at request time
+export const dynamic = 'force-dynamic';
+
 export default async function AdminDashboard() {
   const departments = await prisma.organization.findMany();
 
