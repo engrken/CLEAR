@@ -1,7 +1,7 @@
 import { auth } from '@/auth'; 
 import { createDepartment } from './actions';
 import Link from 'next/link';
-import LogoutButton from '../components/LogoutButton'; // Import the new button
+import LogoutButton from '/components/LogoutButton'; // Import the new button
 
 export default async function AdminSetupPage() {
   const session = await auth();
@@ -57,7 +57,9 @@ export default async function AdminSetupPage() {
             <label className="form-label text-secondary small fw-semibold">Subdomain Prefix</label>
             <div className="input-group">
               <input type="text" name="subdomain" className="form-control bg-body text-color border-secondary" placeholder="nursing" required />
-              <span className="input-group-text border-secondary bg-dark text-secondary">.localhost:3000</span>
+              <span className="input-group-text border-secondary bg-dark text-secondary">
+                {isProduction ? '.clearsys.vercel.app' : '.localhost:3000'}
+              </span>
             </div>
             <div className="form-text text-secondary" style={{ fontSize: '0.75rem' }}>Logo file must be named accordingly (e.g., nursing_logo.png).</div>
           </div>
