@@ -32,7 +32,7 @@ export default async function DashboardPage() {
             </h2>
 
             <p className="text-secondary small mb-0 mt-1">
-              College/Department Clearance and Administration System
+              <b>C</b>entralized <b>L</b>iquidation of <b>E</b>xpenses & <b>A</b>udit <b>R</b>ecords System
             </p>
           </div>
 
@@ -61,7 +61,7 @@ export default async function DashboardPage() {
               </h4>
 
               <p className="text-secondary mb-0">
-                Select an active department below to access its CLEAR system.
+                Select an active department below to access the system.
                 Administrative provisioning is available through Login Access.
               </p>
             </div>

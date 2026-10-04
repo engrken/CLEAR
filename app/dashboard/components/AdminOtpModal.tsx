@@ -82,7 +82,7 @@ export default function AdminOtpModal() {
         document.body.style.paddingRight = '';
         document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
 
-        router.push('/dashboard/provision');
+        router.push('/dashboard/provisions');
       }
     } catch (err) {
       console.error(err);
