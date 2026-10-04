@@ -717,25 +717,31 @@ export async function upsertStudent(department: string, data: {
   email: string;
 }) {
   const orgId = await getOrgId(department);
-  
-  await prisma.student.upsert({
-    where: {
-      organizationId_studentId: {
-        organizationId: orgId,
-        studentId: data.studentId
-      }
-    },
-    update: {
-      fullName: data.fullName.trim(),
-      email: data.email.trim() || null,
-    },
-    create: {
-      organizationId: orgId,
-      studentId: data.studentId.trim(),
-      fullName: data.fullName.trim(),
-      email: data.email.trim() || null,
-    }
+  const cleanStudentId = data.studentId.trim();
+
+  const existing = await prisma.student.findFirst({
+    where: { organizationId: orgId, studentId: cleanStudentId }
   });
+
+  if (existing) {
+    await prisma.student.update({
+      where: { id: existing.id },
+      data: {
+        fullName: data.fullName.trim(),
+        email: data.email.trim() || null,
+      },
+    });
+  } else {
+    await prisma.student.create({
+      data: {
+        organizationId: orgId,
+        studentId: cleanStudentId,
+        fullName: data.fullName.trim(),
+        email: data.email.trim() || null,
+        yearLevel: "N/A", // Satisfies the required schema field
+      },
+    });
+  }
 
   revalidatePath(`/department/${department}/students`);
   revalidatePath(`/department/${department}/clearance`);
@@ -745,14 +751,15 @@ export async function upsertStudent(department: string, data: {
 export async function deleteStudent(department: string, studentId: string) {
   const orgId = await getOrgId(department);
   
-  await prisma.student.delete({
-    where: {
-      organizationId_studentId: {
-        organizationId: orgId,
-        studentId: studentId
-      }
-    }
+  const existing = await prisma.student.findFirst({
+    where: { organizationId: orgId, studentId: studentId.trim() }
   });
+
+  if (existing) {
+    await prisma.student.delete({
+      where: { id: existing.id }
+    });
+  }
 
   revalidatePath(`/department/${department}/students`);
   revalidatePath(`/department/${department}/clearance`);
@@ -922,11 +929,10 @@ export async function getDepartmentFinancials(organizationId: string, ay: string
   cashAdvances.forEach(ca => {
     const status = String(ca.status || '').toUpperCase();
     if (status.includes('PENDING') && !status.includes('CANCEL')) {
-      const amt = Number(ca.amountApproved) || Number(ca.amount) || 0;
+      const amt = Number(ca.amountApproved) || 0; // Fixed: Use amountApproved
       totalUnliquidated += amt;
       const fund = getFundName(ca);
       
-      // Track unliquidated advances mapped perfectly to their designated fund
       unliquidatedByFund[fund] = (unliquidatedByFund[fund] || 0) + amt;
       
       unliquidatedAdvances.push({
@@ -1018,9 +1024,9 @@ export async function getDepartmentFinancials(organizationId: string, ay: string
   let totalInitialAlloc = 0;
   const initialAllocMap: Record<string, number> = {};
   initialFunds.forEach(f => {
-    if (f.name) {
-      const initAmt = Number(f.initialAllocation) || Number(f.amount) || 0;
-      initialAllocMap[f.name] = initAmt;
+    if (f.fundName) { // Fixed: Use fundName instead of name
+      const initAmt = Number(f.initialAllocation) || 0; // Fixed: Use initialAllocation instead of amount
+      initialAllocMap[f.fundName] = initAmt;
       totalInitialAlloc += initAmt;
     }
   });
