@@ -6,7 +6,6 @@ import Link from 'next/link';
 import LogoutButton from './components/LogoutButton';
 
 // Force dynamic rendering to handle live sessions safely on Vercel
-export const dynamic = 'force-dynamic';
 
 export default async function AdminDashboardAndSetup() {
   // 1. Authenticate User (Super Admin Check)

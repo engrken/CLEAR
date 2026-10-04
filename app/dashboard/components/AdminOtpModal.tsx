@@ -75,6 +75,13 @@ export default function AdminOtpModal() {
           const modal = (window as any).bootstrap.Modal.getInstance(modalEl);
           modal?.hide();
         }
+        
+        // MANUALLY CLEAN UP BOOTSTRAP BACKDROP AND CLASSES
+        document.body.classList.remove('modal-open');
+        document.body.style.overflow = '';
+        document.body.style.paddingRight = '';
+        document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
+
         router.refresh();
       }
     } catch (err) {
