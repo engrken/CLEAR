@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: '/',
-        destination: '/portal',
+        destination: '/dashboard',
         permanent: true, // Permanent SEO-friendly redirect
       },
     ];
