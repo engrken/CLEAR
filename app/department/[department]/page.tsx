@@ -16,19 +16,24 @@ export default async function DepartmentOverviewPage({
   const ay = resolvedSearch.ay || 'A.Y. 2026 - 2027';
   const term = resolvedSearch.term || '1st Sem';
   const subtab = resolvedSearch.subtab || 'funds';
-  const baseUrl = `http://${department}.localhost:3000`;
+  
+  const cleanSubdomain = department.toLowerCase();
+  const baseUrl = process.env.NODE_ENV === 'production' 
+    ? `/department/${cleanSubdomain}` 
+    : `http://${cleanSubdomain}.localhost:3000`;
 
-  const organization = await prisma.organization.findUnique({
-    where: { subdomain: department },
+  // Auto-tenant provisioning to prevent "Department Not Found" on root/Vercel domains
+  let organization = await prisma.organization.findUnique({
+    where: { subdomain: cleanSubdomain },
   });
 
   if (!organization) {
-    return (
-      <div className="alert alert-danger p-4 shadow-sm border-secondary">
-        <h4 className="fw-bold mb-2">Department Not Found</h4>
-        <p className="small mb-0">The department '{decodeURIComponent(department)}' does not exist.</p>
-      </div>
-    );
+    organization = await prisma.organization.create({
+      data: {
+        subdomain: cleanSubdomain,
+        name: `College of ${department.charAt(0).toUpperCase() + department.slice(1)}`,
+      },
+    });
   }
 
   // CALLS THE EXACT SAME UNIFIED ENGINE AS THE SUMMARY PAGE (Guarantees 100% Parity)
@@ -41,7 +46,6 @@ export default async function DepartmentOverviewPage({
           <h4 className="fw-bold mb-1">Financial Overview Dashboard</h4>
           <p className="text-secondary small mb-0">Here's an overview of department collections, liquidations, and fund allocations ({ay} | {term}).</p>
         </div>
-        
       </div>
 
       {/* 5 KPI STAT CARDS (100% Synchronized with Summary Report) */}
