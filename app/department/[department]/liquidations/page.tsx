@@ -20,7 +20,7 @@ export default async function LiquidationsPage({
   const session = await auth();
 
   if (!session?.user) {
-    redirect('/dashboard');
+    redirect('/department/${subdomain}');
   }
 
   // =========================================================
