@@ -1,7 +1,7 @@
 import { auth } from '@/auth'; 
 import { createDepartment } from './actions';
 import Link from 'next/link';
-import LogoutButton from '/components/LogoutButton'; // Import the new button
+import LogoutButton from './components/LogoutButton'; // Import the new button
 
 export default async function AdminSetupPage() {
   const session = await auth();
