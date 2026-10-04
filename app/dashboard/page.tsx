@@ -37,7 +37,7 @@ export default async function AdminDashboardAndSetup() {
     if (isProduction) {
       return `/department/${subdomain}`;
     }
-    return `http://${subdomain}.localhost:3000`;
+    return `http://localhost:3000/department/${subdomain}`;
   };
 
   return (
@@ -96,7 +96,7 @@ export default async function AdminDashboardAndSetup() {
                 <Link href={getDeptUrl(dept.subdomain)} className="text-decoration-none">
                   <div className="card h-100 text-center border-secondary shadow-sm p-4 bg-card transition-all">
                     <h6 className="fw-bold text-color mb-1">{dept.name}</h6>
-                    <small className="text-info">{isProduction ? `/department/${dept.subdomain}` : `${dept.subdomain}.localhost:3000`}</small>
+                    <small className="text-info">{isProduction ? `/department/${dept.subdomain}` : `http://localhost:3000/department/${dept.subdomain}`}</small>
                   </div>
                 </Link>
               </div>
