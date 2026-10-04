@@ -313,10 +313,10 @@ export async function requestOtp(department: string, email: string) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer re_T6X6vmbh_6RX3g6Bn6ktrkMTxVq2Bx7K3`,
+        'Authorization': `Bearer re_Z9WnXL3o_3b5JFUtB7xeTKDF2fwBse8xS`,
       },
       body: JSON.stringify({
-        from: 'CLEAR System <onboarding@resend.dev>',
+        from: 'CLEAR System <no-reply@coe.site.je>',
         to: [cleanEmail],
         subject: `[CLEAR System] Authorization Code for College of ${department.toUpperCase()}`,
         html: `
