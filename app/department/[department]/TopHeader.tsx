@@ -144,11 +144,8 @@ function TopHeaderContent({ department, currentUser }: { department: string; cur
               )}
 
               <div>
-                <h6 className="fw-bold mb-0 text-accent" style={{ fontSize: '2.7rem', letterSpacing: '0.01em', lineHeight: '1.2' }}>
-                  CLEAR System
-                </h6>
                 <span className="text-secondary d-none d-md-inline" style={{ fontSize: '2.16rem', lineHeight: '1.2' }}>
-                  <b>C</b>entralized <b>L</b>iquidation of <b>E</b>xpenses & <b>A</b>udit <b>R</b>ecords System
+                  <b>C</b>entralized <b>L</b>iquidation of <b>E</b>xpenses & <b>A</b>udit <b>R</b>ecords <b>System</b>
                 </span>
               </div>
             </div>
