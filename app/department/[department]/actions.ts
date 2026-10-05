@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache";
 import crypto from 'node:crypto';
 import { cookies } from 'next/headers';
 import nodemailer from 'nodemailer';
+import { auth } from '@/auth';
+import { logSystemAction } from '@/lib/logger';
 
 // Helper: Format date for ID generation (yyyyMMdd-HHmmss)
 function formatDate(date: Date) {
@@ -108,9 +110,15 @@ export async function recordPenalty(department: string, data: {
   ay: string;
   term: string;
 }) {
+  // 1. Get the current authenticated user for the logs
+  const session = await auth();
+  const userPayload = session?.user as typeof session.user & { fullName?: string };
+  const officerName = userPayload?.fullName || userPayload?.email || "System";
+
   const orgId = await getOrgId(department);
   const penaltyId = `PEN-${formatDate(new Date())}-${Math.floor(Math.random() * 1000)}`;
 
+  // 2. Create the penalty record
   await prisma.penalty.create({
     data: {
       organizationId: orgId,
@@ -124,10 +132,20 @@ export async function recordPenalty(department: string, data: {
       hoursLate: data.hoursLate,
       ratePerHour: data.ratePerHour,
       fineAmount: data.fineAmount,
-      status: "Unsettled"
+      status: "Unsettled",
+      encodedBy: officerName // Optional: if you want to track it on the record itself
     }
   });
 
+  // 3. Write to the System Logs
+  await logSystemAction(
+    orgId,
+    officerName,
+    "RECORD_PENALTY",
+    `Assessed ₱${data.fineAmount} fine (${data.hoursLate} hrs) to ${data.studentName || "Unknown"} for ${data.activity}.`
+  );
+
+  // 4. Revalidate cache
   revalidatePath(`/department/${department}/penalties`);
   revalidatePath(`/department/${department}`);
 }
@@ -143,6 +161,10 @@ export async function issueCashAdvance(department: string, data: {
   ay: string;
   term: string;
 }) {
+  const session = await auth();
+  const userPayload = session?.user as typeof session.user & { fullName?: string };
+  const officerName = userPayload?.fullName || userPayload?.email || "System";
+
   const orgId = await getOrgId(department);
   const advanceId = `CA-${formatDate(new Date())}-${Math.floor(Math.random() * 1000)}`;
 
@@ -158,9 +180,17 @@ export async function issueCashAdvance(department: string, data: {
       amountApproved: data.amount,
       dateIssued: new Date(data.dateIssued),
       expectedReturnDate: new Date(data.expectedReturnDate),
-      status: "Pending Liquidation"
+      status: "Pending Liquidation",
+      encodedBy: officerName // Track the user on the record itself
     }
   });
+
+  await logSystemAction(
+    orgId,
+    officerName,
+    "ISSUE_CASH_ADVANCE",
+    `Issued ₱${data.amount} cash advance [${advanceId}] to ${data.requestor} from ${data.fundSource}.`
+  );
 
   revalidatePath(`/department/${department}/advances`);
   revalidatePath(`/department/${department}`);
@@ -180,6 +210,10 @@ export async function recordCollection(department: string, data: {
   ay: string;
   term: string;
 }) {
+  const session = await auth();
+  const userPayload = session?.user as typeof session.user & { fullName?: string };
+  const officerName = userPayload?.fullName || userPayload?.email || "System";
+
   const orgId = await getOrgId(department);
   const balanceDue = Math.max(0, data.standardRate - data.amountPaid);
 
@@ -198,15 +232,28 @@ export async function recordCollection(department: string, data: {
       amountPaid: data.amountPaid,
       balanceDue,
       fundAllocation: data.fundAllocation,
-      status: "Valid"
+      status: "Valid",
+      encodedBy: officerName
     }
   });
+
+  await logSystemAction(
+    orgId,
+    officerName,
+    "RECORD_PAYMENT",
+    `Collected ₱${data.amountPaid} from ${data.studentName} for ${data.itemDescription} [OR: ${data.orNumber}].`
+  );
 
   revalidatePath(`/department/${department}/collections`);
   revalidatePath(`/department/${department}`);
 }
 
+// 5. Server Action: Invalidate Online Remittance
 export async function invalidateOnlineRemittance(department: string, remittanceId: string) {
+  const session = await auth();
+  const userPayload = session?.user as typeof session.user & { fullName?: string };
+  const officerName = userPayload?.fullName || userPayload?.email || "System";
+
   const organization = await prisma.organization.findUnique({
     where: { subdomain: department.toLowerCase() },
   });
@@ -215,9 +262,23 @@ export async function invalidateOnlineRemittance(department: string, remittanceI
     throw new Error(`Department "${department}" not found.`);
   }
 
+  // Fetch the remittance details before deleting so we can accurately log what was removed
+  const remittance = await prisma.onlineRemittance.findUnique({
+    where: { id: remittanceId, organizationId: organization.id }
+  });
+
   await prisma.onlineRemittance.delete({
     where: { id: remittanceId, organizationId: organization.id },
   });
+
+  if (remittance) {
+    await logSystemAction(
+      organization.id,
+      officerName,
+      "INVALIDATE_REMITTANCE",
+      `Invalidated and removed remittance submission [Ref: ${remittance.referenceNumber}] from ${remittance.studentName}.`
+    );
+  }
 
   revalidatePath(`/department/${department}/remittances`);
   return { success: true, message: 'Remittance submission marked as invalid and removed from queue.' };
@@ -225,9 +286,17 @@ export async function invalidateOnlineRemittance(department: string, remittanceI
 
 // 6. Server Action: Save Bulk Collectibles
 export async function saveBulkCollectibles(department: string, records: any[], ay: string, term: string) {
+  const session = await auth();
+  const userPayload = session?.user as typeof session.user & { fullName?: string };
+  const officerName = userPayload?.fullName || userPayload?.email || "System";
+
   const orgId = await getOrgId(department);
+  let totalAmount = 0;
 
   for (const r of records) {
+    const amount = parseFloat(r.total) || 0;
+    totalAmount += amount;
+
     await prisma.collectible.create({
       data: {
         organizationId: orgId,
@@ -235,11 +304,19 @@ export async function saveBulkCollectibles(department: string, records: any[], a
         term,
         category: r.category,
         headcount: parseInt(r.headcount) || 1,
-        balanceDue: parseFloat(r.total) || 0,
-        status: "Outstanding"
+        balanceDue: amount,
+        status: "Outstanding",
+        encodedBy: officerName
       }
     });
   }
+
+  await logSystemAction(
+    orgId,
+    officerName,
+    "SAVE_COLLECTIBLES",
+    `Assessed bulk collectibles/receivables across ${records.length} categories totaling ₱${totalAmount.toFixed(2)}.`
+  );
 
   revalidatePath(`/department/${department}/collectibles`);
 }

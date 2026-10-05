@@ -6,8 +6,11 @@ import { auth } from '@/auth';
 export async function GET(request: Request) {
   const session = await auth();
   
-  // Security: Only allow admins to trigger database dumps
-  if (session?.user?.role !== 'admin') {
+  // 1. Tell TypeScript that this user object has an optional 'role' property
+  const userWithRole = session?.user as typeof session.user & { role?: string };
+
+  // 2. Security: Only allow admins to trigger database dumps
+  if (userWithRole?.role !== 'admin') {
     return new NextResponse('Unauthorized', { status: 401 });
   }
 
