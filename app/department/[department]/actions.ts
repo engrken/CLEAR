@@ -98,7 +98,13 @@ export async function deletePenalty(department: string, penaltyId: string) {
   return { success: true, message: "Penalty record deleted successfully." };
 }
 
-// 2. Server Action: Record a Penalty
+async function getActionUser(): Promise<string> {
+  const session = await auth();
+  const userWithRole = session?.user as typeof session?.user & { fullName?: string };
+  return userWithRole?.fullName || userWithRole?.email || "System";
+}
+
+// 1. Server Action: Record Penalty
 export async function recordPenalty(department: string, data: {
   date: string;
   studentId: string;
@@ -110,15 +116,10 @@ export async function recordPenalty(department: string, data: {
   ay: string;
   term: string;
 }) {
-  // 1. Get the current authenticated user for the logs
-  const session = await auth();
-  const userPayload = session?.user as typeof session.user & { fullName?: string };
-  const officerName = userPayload?.fullName || userPayload?.email || "System";
-
+  const officerName = await getActionUser();
   const orgId = await getOrgId(department);
   const penaltyId = `PEN-${formatDate(new Date())}-${Math.floor(Math.random() * 1000)}`;
 
-  // 2. Create the penalty record
   await prisma.penalty.create({
     data: {
       organizationId: orgId,
@@ -133,19 +134,12 @@ export async function recordPenalty(department: string, data: {
       ratePerHour: data.ratePerHour,
       fineAmount: data.fineAmount,
       status: "Unsettled",
-      encodedBy: officerName // Optional: if you want to track it on the record itself
+      encodedBy: officerName
     }
   });
 
-  // 3. Write to the System Logs
-  await logSystemAction(
-    orgId,
-    officerName,
-    "RECORD_PENALTY",
-    `Assessed ₱${data.fineAmount} fine (${data.hoursLate} hrs) to ${data.studentName || "Unknown"} for ${data.activity}.`
-  );
+  await logSystemAction(orgId, officerName, "RECORD_PENALTY", `Assessed ₱${data.fineAmount} fine (${data.hoursLate} hrs) to ${data.studentName || "Unknown"} for ${data.activity}.`);
 
-  // 4. Revalidate cache
   revalidatePath(`/department/${department}/penalties`);
   revalidatePath(`/department/${department}`);
 }
@@ -161,10 +155,7 @@ export async function issueCashAdvance(department: string, data: {
   ay: string;
   term: string;
 }) {
-  const session = await auth();
-  const userPayload = session?.user as typeof session.user & { fullName?: string };
-  const officerName = userPayload?.fullName || userPayload?.email || "System";
-
+  const officerName = await getActionUser();
   const orgId = await getOrgId(department);
   const advanceId = `CA-${formatDate(new Date())}-${Math.floor(Math.random() * 1000)}`;
 
@@ -181,16 +172,11 @@ export async function issueCashAdvance(department: string, data: {
       dateIssued: new Date(data.dateIssued),
       expectedReturnDate: new Date(data.expectedReturnDate),
       status: "Pending Liquidation",
-      encodedBy: officerName // Track the user on the record itself
+      encodedBy: officerName
     }
   });
 
-  await logSystemAction(
-    orgId,
-    officerName,
-    "ISSUE_CASH_ADVANCE",
-    `Issued ₱${data.amount} cash advance [${advanceId}] to ${data.requestor} from ${data.fundSource}.`
-  );
+  await logSystemAction(orgId, officerName, "ISSUE_ADVANCE", `Issued ₱${data.amount} cash advance [${advanceId}] to ${data.requestor} from ${data.fundSource}.`);
 
   revalidatePath(`/department/${department}/advances`);
   revalidatePath(`/department/${department}`);
@@ -210,10 +196,7 @@ export async function recordCollection(department: string, data: {
   ay: string;
   term: string;
 }) {
-  const session = await auth();
-  const userPayload = session?.user as typeof session.user & { fullName?: string };
-  const officerName = userPayload?.fullName || userPayload?.email || "System";
-
+  const officerName = await getActionUser();
   const orgId = await getOrgId(department);
   const balanceDue = Math.max(0, data.standardRate - data.amountPaid);
 
@@ -237,12 +220,7 @@ export async function recordCollection(department: string, data: {
     }
   });
 
-  await logSystemAction(
-    orgId,
-    officerName,
-    "RECORD_PAYMENT",
-    `Collected ₱${data.amountPaid} from ${data.studentName} for ${data.itemDescription} [OR: ${data.orNumber}].`
-  );
+  await logSystemAction(orgId, officerName, "RECORD_COLLECTION", `Collected ₱${data.amountPaid} from ${data.studentName} for ${data.itemDescription} [OR: ${data.orNumber}].`);
 
   revalidatePath(`/department/${department}/collections`);
   revalidatePath(`/department/${department}`);
@@ -250,10 +228,7 @@ export async function recordCollection(department: string, data: {
 
 // 5. Server Action: Invalidate Online Remittance
 export async function invalidateOnlineRemittance(department: string, remittanceId: string) {
-  const session = await auth();
-  const userPayload = session?.user as typeof session.user & { fullName?: string };
-  const officerName = userPayload?.fullName || userPayload?.email || "System";
-
+  const officerName = await getActionUser();
   const organization = await prisma.organization.findUnique({
     where: { subdomain: department.toLowerCase() },
   });
@@ -262,22 +237,14 @@ export async function invalidateOnlineRemittance(department: string, remittanceI
     throw new Error(`Department "${department}" not found.`);
   }
 
-  // Fetch the remittance details before deleting so we can accurately log what was removed
-  const remittance = await prisma.onlineRemittance.findUnique({
-    where: { id: remittanceId, organizationId: organization.id }
-  });
+  const remittance = await prisma.onlineRemittance.findUnique({ where: { id: remittanceId, organizationId: organization.id }});
 
   await prisma.onlineRemittance.delete({
     where: { id: remittanceId, organizationId: organization.id },
   });
 
   if (remittance) {
-    await logSystemAction(
-      organization.id,
-      officerName,
-      "INVALIDATE_REMITTANCE",
-      `Invalidated and removed remittance submission [Ref: ${remittance.referenceNumber}] from ${remittance.studentName}.`
-    );
+    await logSystemAction(organization.id, officerName, "INVALIDATE_REMITTANCE", `Invalidated remittance [Ref: ${remittance.referenceNumber}] from ${remittance.studentName}.`);
   }
 
   revalidatePath(`/department/${department}/remittances`);
@@ -286,17 +253,10 @@ export async function invalidateOnlineRemittance(department: string, remittanceI
 
 // 6. Server Action: Save Bulk Collectibles
 export async function saveBulkCollectibles(department: string, records: any[], ay: string, term: string) {
-  const session = await auth();
-  const userPayload = session?.user as typeof session.user & { fullName?: string };
-  const officerName = userPayload?.fullName || userPayload?.email || "System";
-
+  const officerName = await getActionUser();
   const orgId = await getOrgId(department);
-  let totalAmount = 0;
 
   for (const r of records) {
-    const amount = parseFloat(r.total) || 0;
-    totalAmount += amount;
-
     await prisma.collectible.create({
       data: {
         organizationId: orgId,
@@ -304,19 +264,14 @@ export async function saveBulkCollectibles(department: string, records: any[], a
         term,
         category: r.category,
         headcount: parseInt(r.headcount) || 1,
-        balanceDue: amount,
+        balanceDue: parseFloat(r.total) || 0,
         status: "Outstanding",
         encodedBy: officerName
       }
     });
   }
 
-  await logSystemAction(
-    orgId,
-    officerName,
-    "SAVE_COLLECTIBLES",
-    `Assessed bulk collectibles/receivables across ${records.length} categories totaling ₱${totalAmount.toFixed(2)}.`
-  );
+  await logSystemAction(orgId, officerName, "SAVE_COLLECTIBLES", `Assessed bulk collectibles across ${records.length} categories.`);
 
   revalidatePath(`/department/${department}/collectibles`);
 }
@@ -739,6 +694,7 @@ export async function recordPayment(department: string, data: {
   ay: string;
   term: string;
 }) {
+  const officerName = await getActionUser();
   const orgId = await getOrgId(department);
   const paid = Number(data.amountPaid) || 0;
   const rate = Number(data.standardRate) || 0;
@@ -761,9 +717,12 @@ export async function recordPayment(department: string, data: {
       amountPaid: paid,
       balanceDue,
       fundAllocation: data.fundAllocation,
-      status: "Valid"
+      status: "Valid",
+      encodedBy: officerName
     }
   });
+
+  await logSystemAction(orgId, officerName, "RECORD_PAYMENT", `Recorded payment of ₱${paid} from ${data.studentName} [OR: ${data.orNumber}].`);
 
   revalidatePath(`/department/${department}/collections`);
   revalidatePath(`/department/${department}`);
@@ -781,6 +740,7 @@ export async function recordAudit(department: string, data: {
   ay: string;
   term: string;
 }) {
+  const officerName = await getActionUser();
   const orgId = await getOrgId(department);
   const auditId = `AUD-${formatDate(new Date())}`;
   const variance = data.budgetRequested - data.totalExpense;
@@ -802,7 +762,8 @@ export async function recordAudit(department: string, data: {
       totalExpense: data.totalExpense,
       varianceReturn: cashReturn,
       reimbursementDue: reimbursement,
-      status: "Audited & Verified"
+      status: "Audited & Verified",
+      encodedBy: officerName
     }
   });
 
@@ -826,6 +787,8 @@ export async function recordAudit(department: string, data: {
     });
   }
 
+  await logSystemAction(orgId, officerName, "RECORD_LIQUIDATION", `Verified liquidation [${auditId}] for ${data.requestor} totaling ₱${data.totalExpense}.`);
+
   revalidatePath(`/department/${department}/liquidations`);
   revalidatePath(`/department/${department}`);
 }
@@ -839,6 +802,7 @@ export async function transferFunds(department: string, data: {
   ay: string;
   term: string;
 }) {
+  const officerName = await getActionUser();
   const orgId = await getOrgId(department);
 
   await prisma.fundTransfer.create({
@@ -849,9 +813,12 @@ export async function transferFunds(department: string, data: {
       sourceFund: data.fromFund,
       destinationFund: data.toFund,
       amount: data.amount,
-      reason: data.reason
+      reason: data.reason,
+      encodedBy: officerName
     }
   });
+
+  await logSystemAction(orgId, officerName, "TRANSFER_FUNDS", `Realigned ₱${data.amount} from ${data.fromFund} to ${data.toFund}.`);
 
   revalidatePath(`/department/${department}/realign`);
   revalidatePath(`/department/${department}`);
@@ -866,6 +833,7 @@ export async function carryOverTermBalance(department: string, data: {
   amount: number;
   reason: string;
 }) {
+  const officerName = await getActionUser();
   const orgId = await getOrgId(department);
 
   await prisma.fundTransfer.create({
@@ -876,9 +844,12 @@ export async function carryOverTermBalance(department: string, data: {
       sourceFund: `${data.sourceTerm} (${data.sourceAY}) Rollover`,
       destinationFund: "General Fund (Carried Over)",
       amount: data.amount,
-      reason: data.reason
+      reason: data.reason,
+      encodedBy: officerName
     }
   });
+
+  await logSystemAction(orgId, officerName, "CARRY_OVER", `Carried over ₱${data.amount} from ${data.sourceTerm} into ${data.destTerm} General Fund.`);
 
   revalidatePath(`/department/${department}/realign`);
   revalidatePath(`/department/${department}`);
@@ -894,6 +865,7 @@ export async function submitRemittanceBatch(department: string, data: {
   ay: string;
   term: string;
 }) {
+  const officerName = await getActionUser();
   const orgId = await getOrgId(department);
 
   await prisma.collection.updateMany({
@@ -905,6 +877,8 @@ export async function submitRemittanceBatch(department: string, data: {
       status: `Remitted (Slip #${data.depositSlipOr})`
     }
   });
+
+  await logSystemAction(orgId, officerName, "SUBMIT_REMITTANCE_BATCH", `Marked ${data.collectionIds.length} collections as remitted (Slip: ${data.depositSlipOr}).`);
 
   revalidatePath(`/department/${department}/remittances`);
   revalidatePath(`/department/${department}/collections`);
@@ -922,11 +896,12 @@ export async function verifyOnlineRemittance(department: string, data: {
   ay: string;
   term: string;
 }) {
+  const officerName = await getActionUser();
   const orgId = await getOrgId(department);
 
   await prisma.onlineRemittance.update({
     where: { id: data.remittanceId },
-    data: { status: 'Verified' }
+    data: { status: 'Verified', reviewedBy: officerName, orNumber: data.orNumber }
   });
 
   await prisma.collection.create({
@@ -945,9 +920,12 @@ export async function verifyOnlineRemittance(department: string, data: {
       amountPaid: data.amount,
       balanceDue: 0,
       fundAllocation: 'New Accounts (Current Operations)',
-      status: 'Valid'
+      status: 'Valid',
+      encodedBy: officerName
     }
   });
+
+  await logSystemAction(orgId, officerName, "VERIFY_REMITTANCE", `Verified online remittance for ${data.studentName} and issued OR: ${data.orNumber}.`);
 
   revalidatePath(`/department/${department}/remittances`);
   revalidatePath(`/department/${department}/collections`);
@@ -955,7 +933,7 @@ export async function verifyOnlineRemittance(department: string, data: {
   revalidatePath(`/department/${department}`);
 }
 
-// 15. Server Action: Submit Online Payment Proof
+// 15. Server Action: Submit Online Payment Proof (Done by Student)
 export async function submitOnlineRemittance(department: string, data: {
   studentId: string;
   studentName: string;
@@ -981,7 +959,7 @@ export async function submitOnlineRemittance(department: string, data: {
       studentName: data.studentName,
       paymentChannel: data.paymentChannel,
       referenceNumber: data.referenceNo,
-      category: "Online Remittance", // Satisfies required schema field
+      category: "Online Remittance", 
       itemDescription: `${data.particulars} (${data.email})`,
       paymentMode: "Online",
       amountPaid: data.amount,
@@ -989,6 +967,9 @@ export async function submitOnlineRemittance(department: string, data: {
       status: 'Pending Verification'
     }
   });
+
+  // Logged as Public Submission since students don't log in
+  await logSystemAction(orgId, "Public Submission", "SUBMIT_REMITTANCE", `Received ₱${data.amount} online payment proof from ${data.studentName} via ${data.paymentChannel}.`);
 
   revalidatePath(`/department/${department}/remittances`);
   revalidatePath(`/department/${department}/clearance`);
@@ -1000,6 +981,7 @@ export async function upsertStudent(department: string, data: {
   fullName: string;
   email: string;
 }) {
+  const officerName = await getActionUser();
   const orgId = await getOrgId(department);
   const cleanStudentId = data.studentId.trim();
 
@@ -1027,12 +1009,15 @@ export async function upsertStudent(department: string, data: {
     });
   }
 
+  await logSystemAction(orgId, officerName, existing ? "UPDATE_STUDENT" : "ADD_STUDENT", `${existing ? 'Modified' : 'Registered'} profile for ${data.fullName} (${cleanStudentId}).`);
+
   revalidatePath(`/department/${department}/students`);
   revalidatePath(`/department/${department}/clearance`);
 }
 
 // 17. Server Action: Delete Student Record
 export async function deleteStudent(department: string, studentId: string) {
+  const officerName = await getActionUser();
   const orgId = await getOrgId(department);
   
   const existing = await prisma.student.findFirst({
@@ -1043,6 +1028,8 @@ export async function deleteStudent(department: string, studentId: string) {
     await prisma.student.delete({
       where: { id: existing.id }
     });
+    
+    await logSystemAction(orgId, officerName, "DELETE_STUDENT", `Permanently removed student record for ${existing.fullName} (${existing.studentId}).`);
   }
 
   revalidatePath(`/department/${department}/students`);
@@ -1056,6 +1043,7 @@ export async function settlePenaltyCommunityService(department: string, data: {
   ay: string;
   term: string;
 }) {
+  const officerName = await getActionUser();
   const orgId = await getOrgId(department);
 
   const targetPen = await prisma.penalty.findUnique({
@@ -1079,6 +1067,8 @@ export async function settlePenaltyCommunityService(department: string, data: {
       status: newStatus
     }
   });
+
+  await logSystemAction(orgId, officerName, "SETTLE_PENALTY_SERVICE", `Applied ${data.hoursRendered} hrs community service to penalty [${data.penaltyId}]. Status: ${newStatus}`);
 
   revalidatePath(`/department/${department}/penalties`);
   revalidatePath(`/department/${department}`);
