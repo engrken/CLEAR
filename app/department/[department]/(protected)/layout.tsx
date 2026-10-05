@@ -1,14 +1,12 @@
-// app/department/[department]/(protected)/layout.tsx
-
 import type { ReactNode } from "react";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 
-import DepartmentSidebar from "../Sidebar";
-import TopHeader from "../TopHeader";
-import Footer from "../components/Footer";
-import DataPrivacyModal from "../components/DataPrivacyModal";
+import DepartmentSidebar from "@/app/department/[department]/Sidebar";
+import TopHeader from "@/app/department/[department]/TopHeader";
+import Footer from "@/app/department/[department]/components/Footer";
+import DataPrivacyModal from "@/app/department/[department]/components/DataPrivacyModal";
 
 interface ProtectedDepartmentLayoutProps {
   children: ReactNode;
@@ -27,7 +25,9 @@ export default async function ProtectedDepartmentLayout({
 
   const { department } = await params;
 
-  const cleanDepartment = decodeURIComponent(department)
+  const cleanDepartment = decodeURIComponent(
+    department
+  )
     .trim()
     .toLowerCase();
 
@@ -53,9 +53,10 @@ export default async function ProtectedDepartmentLayout({
   // 3. ROLE
   // =========================================================
 
-  const userRole = session.user.role
-    ?.trim()
-    .toLowerCase();
+  const userRole =
+    session.user.role
+      ?.trim()
+      .toLowerCase();
 
   const allowedRoles = new Set([
     "admin",
@@ -66,7 +67,10 @@ export default async function ProtectedDepartmentLayout({
     "superadmin",
   ]);
 
-  if (!userRole || !allowedRoles.has(userRole)) {
+  if (
+    !userRole ||
+    !allowedRoles.has(userRole)
+  ) {
     redirect(
       `/department/${encodeURIComponent(
         cleanDepartment
@@ -83,6 +87,11 @@ export default async function ProtectedDepartmentLayout({
       where: {
         subdomain: cleanDepartment,
       },
+      select: {
+        id: true,
+        subdomain: true,
+        name: true,
+      },
     });
 
   if (!organization) {
@@ -94,8 +103,9 @@ export default async function ProtectedDepartmentLayout({
           </h4>
 
           <p className="small mb-0">
-            The department "{cleanDepartment}" does not
-            exist in the database.
+            The department "
+            {cleanDepartment}
+            " does not exist in the database.
           </p>
         </div>
       </div>
@@ -113,14 +123,15 @@ export default async function ProtectedDepartmentLayout({
   /*
    * SuperAdmin and Master may access all departments.
    *
-   * Everyone else must belong to the department they
-   * are attempting to access.
+   * Everyone else must belong to the department
+   * they are attempting to access.
    */
 
   if (!isGlobalAdmin) {
     if (
       !session.user.organizationId ||
-      session.user.organizationId !== organization.id
+      session.user.organizationId !==
+        organization.id
     ) {
       redirect(
         `/department/${encodeURIComponent(
@@ -135,24 +146,62 @@ export default async function ProtectedDepartmentLayout({
   // =========================================================
 
   return (
-    <div className="d-flex min-vh-100">
+    <div
+      className="d-flex min-vh-100"
+      style={{
+        width: "100%",
+        minHeight: "100vh",
+      }}
+    >
+      {/* =====================================================
+          SIDEBAR
+      ===================================================== */}
+
       <DepartmentSidebar
         department={cleanDepartment}
       />
 
+      {/* =====================================================
+          MAIN APPLICATION AREA
+      ===================================================== */}
+
       <div
         className="flex-grow-1 d-flex flex-column"
-        style={{ minWidth: 0 }}
+        style={{
+          minWidth: 0,
+          width: "100%",
+        }}
       >
+        {/* ===================================================
+            TOP HEADER
+        =================================================== */}
+
         <TopHeader
           department={cleanDepartment}
         />
 
-        <main className="flex-grow-1 p-3 p-md-4">
+        {/* ===================================================
+            PAGE CONTENT
+        =================================================== */}
+
+        <main
+          className="flex-grow-1 p-3 p-md-4"
+          style={{
+            minWidth: 0,
+          }}
+        >
           {children}
         </main>
 
+        {/* ===================================================
+            FOOTER
+        =================================================== */}
+
         <Footer />
+
+        {/* ===================================================
+            DATA PRIVACY
+        =================================================== */}
 
         <DataPrivacyModal />
       </div>

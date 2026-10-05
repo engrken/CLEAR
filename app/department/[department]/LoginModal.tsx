@@ -209,7 +209,7 @@ export default function LoginModal({
       window.location.href =
         `/department/${encodeURIComponent(
           cleanDepartment
-        )}/summary`;
+        )}/`;
 
     } catch (error) {
       console.error(
