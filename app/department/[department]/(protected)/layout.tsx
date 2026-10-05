@@ -1,3 +1,4 @@
+
 import type { ReactNode } from "react";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
@@ -10,9 +11,23 @@ import DataPrivacyModal from "@/app/department/[department]/components/DataPriva
 
 interface ProtectedDepartmentLayoutProps {
   children: ReactNode;
-  params: Promise<{
-    department: string;
-  }>;
+  params: Promise<{ department: string }>;
+}
+
+/*
+ * Local CLEAR session-user type.
+ *
+ * This avoids creating a /types folder.
+ * Your auth.ts already provides these values at runtime.
+ */
+interface ClearSessionUser {
+  id?: string;
+  name?: string | null;
+  email?: string | null;
+  role?: string | null;
+  organizationId?: string | null;
+  department?: string | null;
+  allowedTabs?: string[] | null;
 }
 
 export default async function ProtectedDepartmentLayout({
@@ -20,14 +35,12 @@ export default async function ProtectedDepartmentLayout({
   params,
 }: ProtectedDepartmentLayoutProps) {
   // =========================================================
-  // 1. DEPARTMENT
+  // DEPARTMENT
   // =========================================================
 
   const { department } = await params;
 
-  const cleanDepartment = decodeURIComponent(
-    department
-  )
+  const cleanDepartment = decodeURIComponent(department)
     .trim()
     .toLowerCase();
 
@@ -36,7 +49,7 @@ export default async function ProtectedDepartmentLayout({
   }
 
   // =========================================================
-  // 2. AUTHENTICATION
+  // AUTHENTICATION
   // =========================================================
 
   const session = await auth();
@@ -49,14 +62,29 @@ export default async function ProtectedDepartmentLayout({
     );
   }
 
+  /*
+   * Tell TypeScript about the custom CLEAR session fields.
+   */
+  const user = session.user as ClearSessionUser;
+
   // =========================================================
-  // 3. ROLE
+  // USER ROLE
   // =========================================================
 
   const userRole =
-    session.user.role
-      ?.trim()
-      .toLowerCase();
+    user.role?.trim().toLowerCase() || "";
+
+  // =========================================================
+  // ALLOWED TABS
+  // =========================================================
+
+  const allowedTabs = Array.isArray(user.allowedTabs)
+    ? user.allowedTabs
+    : [];
+
+  // =========================================================
+  // ALLOWED ROLES
+  // =========================================================
 
   const allowedRoles = new Set([
     "admin",
@@ -67,10 +95,7 @@ export default async function ProtectedDepartmentLayout({
     "superadmin",
   ]);
 
-  if (
-    !userRole ||
-    !allowedRoles.has(userRole)
-  ) {
+  if (!allowedRoles.has(userRole)) {
     redirect(
       `/department/${encodeURIComponent(
         cleanDepartment
@@ -79,7 +104,7 @@ export default async function ProtectedDepartmentLayout({
   }
 
   // =========================================================
-  // 4. FIND DEPARTMENT
+  // FIND ORGANIZATION
   // =========================================================
 
   const organization =
@@ -87,25 +112,19 @@ export default async function ProtectedDepartmentLayout({
       where: {
         subdomain: cleanDepartment,
       },
-      select: {
-        id: true,
-        subdomain: true,
-        name: true,
-      },
     });
 
   if (!organization) {
     return (
-      <div className="container p-4">
+      <div className="container-fluid p-4">
         <div className="alert alert-danger shadow-sm border-secondary">
           <h4 className="fw-bold mb-2">
             Department Not Found
           </h4>
 
           <p className="small mb-0">
-            The department "
-            {cleanDepartment}
-            " does not exist in the database.
+            The department "{cleanDepartment}" does not
+            exist in the database.
           </p>
         </div>
       </div>
@@ -113,25 +132,27 @@ export default async function ProtectedDepartmentLayout({
   }
 
   // =========================================================
-  // 5. DEPARTMENT AUTHORIZATION
+  // GLOBAL ADMIN
   // =========================================================
 
   const isGlobalAdmin =
     userRole === "superadmin" ||
     userRole === "master";
 
-  /*
-   * SuperAdmin and Master may access all departments.
-   *
-   * Everyone else must belong to the department
-   * they are attempting to access.
-   */
+  // =========================================================
+  // TENANT / DEPARTMENT SECURITY
+  // =========================================================
 
+  /*
+   * SuperAdmin and Master can access any department.
+   *
+   * Admin, Administrator, Auditor and normal department
+   * accounts must belong to the department they access.
+   */
   if (!isGlobalAdmin) {
     if (
-      !session.user.organizationId ||
-      session.user.organizationId !==
-        organization.id
+      !user.organizationId ||
+      user.organizationId !== organization.id
     ) {
       redirect(
         `/department/${encodeURIComponent(
@@ -142,7 +163,26 @@ export default async function ProtectedDepartmentLayout({
   }
 
   // =========================================================
-  // 6. PROTECTED DEPARTMENT APPLICATION
+  // CURRENT USER
+  // =========================================================
+
+  const currentUser = {
+    id: user.id || "",
+    fullName:
+      user.name || "Department Officer",
+    role:
+      user.role || "OFFICER",
+    email:
+      user.email || "",
+    organizationId:
+      user.organizationId || "",
+    department:
+      user.department || cleanDepartment,
+    allowedTabs,
+  };
+
+  // =========================================================
+  // PROTECTED APPLICATION SHELL
   // =========================================================
 
   return (
@@ -150,20 +190,21 @@ export default async function ProtectedDepartmentLayout({
       className="d-flex min-vh-100"
       style={{
         width: "100%",
-        minHeight: "100vh",
+        minWidth: 0,
       }}
     >
-      {/* =====================================================
-          SIDEBAR
-      ===================================================== */}
+      {/* =================================================== */}
+      {/* SIDEBAR */}
+      {/* =================================================== */}
 
       <DepartmentSidebar
         department={cleanDepartment}
+        currentUser={currentUser}
       />
 
-      {/* =====================================================
-          MAIN APPLICATION AREA
-      ===================================================== */}
+      {/* =================================================== */}
+      {/* MAIN APPLICATION AREA */}
+      {/* =================================================== */}
 
       <div
         className="flex-grow-1 d-flex flex-column"
@@ -172,17 +213,18 @@ export default async function ProtectedDepartmentLayout({
           width: "100%",
         }}
       >
-        {/* ===================================================
-            TOP HEADER
-        =================================================== */}
+        {/* ================================================= */}
+        {/* TOP HEADER */}
+        {/* ================================================= */}
 
         <TopHeader
           department={cleanDepartment}
+          currentUser={currentUser}
         />
 
-        {/* ===================================================
-            PAGE CONTENT
-        =================================================== */}
+        {/* ================================================= */}
+        {/* PAGE CONTENT */}
+        {/* ================================================= */}
 
         <main
           className="flex-grow-1 p-3 p-md-4"
@@ -193,15 +235,15 @@ export default async function ProtectedDepartmentLayout({
           {children}
         </main>
 
-        {/* ===================================================
-            FOOTER
-        =================================================== */}
+        {/* ================================================= */}
+        {/* FOOTER */}
+        {/* ================================================= */}
 
         <Footer />
 
-        {/* ===================================================
-            DATA PRIVACY
-        =================================================== */}
+        {/* ================================================= */}
+        {/* DATA PRIVACY MODAL */}
+        {/* ================================================= */}
 
         <DataPrivacyModal />
       </div>
