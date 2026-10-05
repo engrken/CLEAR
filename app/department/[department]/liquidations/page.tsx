@@ -21,7 +21,7 @@ export default async function LiquidationsPage({
   
   const cleanDepartment = decodeURIComponent(department).toLowerCase().trim();
 
-  // =========================================================
+// =========================================================
   // 2. STRICT LOGIN & PERMISSION CHECK
   // =========================================================
   const session = await auth();
@@ -31,8 +31,10 @@ export default async function LiquidationsPage({
     redirect(`/department/${encodeURIComponent(cleanDepartment)}?login=true`);
   }
 
-  // Check if user has the correct role for Liquidations (Audit)
-  const userRole = session.user.role?.toLowerCase() || 'viewer';
+  // Cast the user object to include the custom 'role' property
+  const userWithRole = session.user as typeof session.user & { role?: string };
+  const userRole = userWithRole.role?.toLowerCase() || 'viewer';
+  
   const allowedRoles = ['admin', 'administrator', 'master', 'auditor', 'audit'];
 
   // Decline access if they are a treasurer or viewer

@@ -1,11 +1,13 @@
 "use client";
 
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import LoginModal from './LoginModal'; 
 // import { logoutAction } from './auth-actions'; 
 
-export default function TopHeader({ department, currentUser }: { department: string; currentUser?: any }) {
+// We wrap the main header logic in a component that consumes useSearchParams
+// so we can wrap it in Suspense below (a Next.js best practice for client boundary params)
+function TopHeaderContent({ department, currentUser }: { department: string; currentUser?: any }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
@@ -232,5 +234,14 @@ export default function TopHeader({ department, currentUser }: { department: str
         department={department} 
       />
     </>
+  );
+}
+
+// Wrap in Suspense to prevent entire page from opting into client-side rendering during build
+export default function TopHeader(props: { department: string; currentUser?: any }) {
+  return (
+    <Suspense fallback={<div className="p-3 bg-card border-bottom border-secondary">Loading header...</div>}>
+      <TopHeaderContent {...props} />
+    </Suspense>
   );
 }
