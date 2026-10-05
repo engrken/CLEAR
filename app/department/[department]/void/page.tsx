@@ -10,7 +10,6 @@ export default async function VoidTransactionsPage({ params, searchParams }: Pag
   const resolvedParams = await params;
   const resolvedSearch = await searchParams;
   
-  // 1. Properly decode and clean the department string to match the database
   const department = resolvedParams?.department || 'engineering';
   const cleanDepartment = decodeURIComponent(department).toLowerCase().trim();
   
@@ -23,7 +22,6 @@ export default async function VoidTransactionsPage({ params, searchParams }: Pag
     where: { subdomain: cleanDepartment },
   });
 
-  // 2. Add an explicit error state if the department isn't found
   if (!organization) {
     return (
       <div className="alert alert-danger p-4 shadow-sm border-secondary m-4">
@@ -36,12 +34,17 @@ export default async function VoidTransactionsPage({ params, searchParams }: Pag
   let records: any[] = [];
   let totalCount = 0;
 
-  // 3. Make all exclusion filters case-insensitive and account for legacy data
+  // FIX: Remove 'mode: insensitive' completely to prevent Prisma crashes.
+  // Instead, explicitly filter out both "VOID" and "Void" variations safely.
   if (category === 'collections') {
     const where = { 
       organizationId: organization.id, 
-      status: { not: { contains: 'VOID', mode: 'insensitive' as const } },
-      paymentType: { not: { contains: 'VOID', mode: 'insensitive' as const } } // Catch legacy sheet data
+      NOT: [
+        { status: { contains: 'VOID' } },
+        { status: { contains: 'Void' } },
+        { paymentType: { contains: 'VOID' } },
+        { paymentType: { contains: 'Void' } }
+      ]
     };
     totalCount = await prisma.collection.count({ where });
     records = await prisma.collection.findMany({
@@ -54,7 +57,10 @@ export default async function VoidTransactionsPage({ params, searchParams }: Pag
   } else if (category === 'penalties') {
     const where = { 
       organizationId: organization.id, 
-      status: { not: { contains: 'Voided', mode: 'insensitive' as const } } 
+      NOT: [
+        { status: { contains: 'VOID' } },
+        { status: { contains: 'Void' } }
+      ]
     };
     totalCount = await prisma.penalty.count({ where });
     records = await prisma.penalty.findMany({
@@ -66,7 +72,10 @@ export default async function VoidTransactionsPage({ params, searchParams }: Pag
   } else if (category === 'advances') {
     const where = { 
       organizationId: organization.id, 
-      status: { not: { contains: 'Cancelled', mode: 'insensitive' as const } } 
+      NOT: [
+        { status: { contains: 'CANCEL' } },
+        { status: { contains: 'Cancel' } }
+      ]
     };
     totalCount = await prisma.cashAdvance.count({ where });
     records = await prisma.cashAdvance.findMany({
@@ -78,7 +87,10 @@ export default async function VoidTransactionsPage({ params, searchParams }: Pag
   } else if (category === 'collectibles') {
     const where = { 
       organizationId: organization.id, 
-      status: { not: { contains: 'Void', mode: 'insensitive' as const } } 
+      NOT: [
+        { status: { contains: 'VOID' } },
+        { status: { contains: 'Void' } }
+      ]
     };
     totalCount = await prisma.collectible.count({ where });
     records = await prisma.collectible.findMany({
@@ -91,7 +103,6 @@ export default async function VoidTransactionsPage({ params, searchParams }: Pag
 
   const totalPages = Math.ceil(totalCount / pageSize) || 1;
 
-  // 4. Safely map data to generic rows for the Client component
   const serializedRecords = records.map(r => ({
     id: r.id,
     date: new Date(r.date || r.dateIssued || Date.now()).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }),
