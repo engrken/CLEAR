@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { fmt } from "@/lib/utils";
-import { recordPayment } from "../actions";
+import { recordPayment } from "../../actions";
 import { ThemedAlert } from '@/lib/alerts';
 
 interface Student { studentId: string; fullName: string; email: string | null; }

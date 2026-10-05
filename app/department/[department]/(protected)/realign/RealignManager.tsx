@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { fmt } from "@/lib/utils";
-import { transferFunds, carryOverTermBalance } from "../actions";
+import { transferFunds, carryOverTermBalance } from "../../actions";
 import { ThemedAlert } from '@/lib/alerts';
 
 interface Fund { name: string; balance: number; }

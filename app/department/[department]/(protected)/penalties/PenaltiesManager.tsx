@@ -3,7 +3,11 @@
 import { useState } from "react";
 import { fmt, formatHoursAndMinutes } from "@/lib/utils";
 import { format } from "date-fns";
-import { recordPenalty, settlePenaltyCommunityService, deletePenalty } from "../actions";
+import {
+  recordPenalty,
+  settlePenaltyCommunityService,
+  deletePenalty
+} from "../../actions";
 import Link from "next/link";
 import { ThemedAlert } from '@/lib/alerts';
 
