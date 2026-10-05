@@ -1,4 +1,3 @@
-
 import type { ReactNode } from "react";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
@@ -9,17 +8,6 @@ import TopHeader from "@/app/department/[department]/TopHeader";
 import Footer from "@/app/department/[department]/components/Footer";
 import DataPrivacyModal from "@/app/department/[department]/components/DataPrivacyModal";
 
-interface ProtectedDepartmentLayoutProps {
-  children: ReactNode;
-  params: Promise<{ department: string }>;
-}
-
-/*
- * Local CLEAR session-user type.
- *
- * This avoids creating a /types folder.
- * Your auth.ts already provides these values at runtime.
- */
 interface ClearSessionUser {
   id?: string;
   name?: string | null;
@@ -33,220 +21,115 @@ interface ClearSessionUser {
 export default async function ProtectedDepartmentLayout({
   children,
   params,
-}: ProtectedDepartmentLayoutProps) {
-  // =========================================================
-  // DEPARTMENT
-  // =========================================================
-
+}: {
+  children: ReactNode;
+  params: Promise<{ department: string }>;
+}) {
   const { department } = await params;
 
   const cleanDepartment = decodeURIComponent(department)
     .trim()
     .toLowerCase();
 
-  if (!cleanDepartment) {
-    redirect("/");
-  }
-
-  // =========================================================
-  // AUTHENTICATION
-  // =========================================================
-
   const session = await auth();
 
+  // Not logged in
   if (!session?.user) {
-    redirect(
-      `/department/${encodeURIComponent(
-        cleanDepartment
-      )}?login=true`
-    );
+    redirect(`/department/${encodeURIComponent(cleanDepartment)}?login=true`);
   }
 
-  /*
-   * Tell TypeScript about the custom CLEAR session fields.
-   */
   const user = session.user as ClearSessionUser;
 
-  // =========================================================
-  // USER ROLE
-  // =========================================================
+  const role = (user.role || "").trim().toLowerCase();
 
-  const userRole =
-    user.role?.trim().toLowerCase() || "";
-
-  // =========================================================
-  // ALLOWED TABS
-  // =========================================================
-
-  const allowedTabs = Array.isArray(user.allowedTabs)
-    ? user.allowedTabs
-    : [];
-
-  // =========================================================
-  // ALLOWED ROLES
-  // =========================================================
-
-  const allowedRoles = new Set([
+  const allowedRoles = [
     "admin",
     "administrator",
     "master",
     "auditor",
     "audit",
     "superadmin",
-  ]);
+  ];
 
-  if (!allowedRoles.has(userRole)) {
+  if (!allowedRoles.includes(role)) {
     redirect(
-      `/department/${encodeURIComponent(
-        cleanDepartment
-      )}?forbidden=true`
+      `/department/${encodeURIComponent(cleanDepartment)}?forbidden=true`
     );
   }
 
-  // =========================================================
-  // FIND ORGANIZATION
-  // =========================================================
-
-  const organization =
-    await prisma.organization.findUnique({
-      where: {
-        subdomain: cleanDepartment,
-      },
-    });
+  const organization = await prisma.organization.findUnique({
+    where: {
+      subdomain: cleanDepartment,
+    },
+  });
 
   if (!organization) {
-    return (
-      <div className="container-fluid p-4">
-        <div className="alert alert-danger shadow-sm border-secondary">
-          <h4 className="fw-bold mb-2">
-            Department Not Found
-          </h4>
+    redirect("/");
+  }
 
-          <p className="small mb-0">
-            The department "{cleanDepartment}" does not
-            exist in the database.
-          </p>
-        </div>
-      </div>
+  // SuperAdmin and Master can access all departments
+  const isGlobalAdmin =
+    role === "superadmin" ||
+    role === "master";
+
+  if (
+    !isGlobalAdmin &&
+    user.organizationId !== organization.id
+  ) {
+    redirect(
+      `/department/${encodeURIComponent(cleanDepartment)}?forbidden=true`
     );
   }
 
-  // =========================================================
-  // GLOBAL ADMIN
-  // =========================================================
-
-  const isGlobalAdmin =
-    userRole === "superadmin" ||
-    userRole === "master";
-
-  // =========================================================
-  // TENANT / DEPARTMENT SECURITY
-  // =========================================================
-
-  /*
-   * SuperAdmin and Master can access any department.
-   *
-   * Admin, Administrator, Auditor and normal department
-   * accounts must belong to the department they access.
-   */
-  if (!isGlobalAdmin) {
-    if (
-      !user.organizationId ||
-      user.organizationId !== organization.id
-    ) {
-      redirect(
-        `/department/${encodeURIComponent(
-          cleanDepartment
-        )}?forbidden=true`
-      );
-    }
-  }
-
-  // =========================================================
-  // CURRENT USER
-  // =========================================================
+  const allowedTabs = Array.isArray(user.allowedTabs)
+    ? user.allowedTabs
+    : [];
 
   const currentUser = {
     id: user.id || "",
-    fullName:
-      user.name || "Department Officer",
-    role:
-      user.role || "OFFICER",
-    email:
-      user.email || "",
-    organizationId:
-      user.organizationId || "",
-    department:
-      user.department || cleanDepartment,
+    fullName: user.name || "Department Officer",
+    role: user.role || "OFFICER",
+    email: user.email || "",
+    organizationId: user.organizationId || "",
+    department: user.department || cleanDepartment,
     allowedTabs,
   };
 
-  // =========================================================
-  // PROTECTED APPLICATION SHELL
-  // =========================================================
-
   return (
-    <div
-      className="d-flex min-vh-100"
-      style={{
-        width: "100%",
-        minWidth: 0,
-      }}
-    >
-      {/* =================================================== */}
-      {/* SIDEBAR */}
-      {/* =================================================== */}
+    <div className="clear-app-shell">
 
-      <DepartmentSidebar
-        department={cleanDepartment}
-        currentUser={currentUser}
-      />
-
-      {/* =================================================== */}
-      {/* MAIN APPLICATION AREA */}
-      {/* =================================================== */}
-
-      <div
-        className="flex-grow-1 d-flex flex-column"
-        style={{
-          minWidth: 0,
-          width: "100%",
-        }}
-      >
-        {/* ================================================= */}
-        {/* TOP HEADER */}
-        {/* ================================================= */}
-
-        <TopHeader
+      {/* STATIC SIDEBAR */}
+      <aside className="clear-sidebar">
+        <DepartmentSidebar
           department={cleanDepartment}
           currentUser={currentUser}
         />
+      </aside>
 
-        {/* ================================================= */}
-        {/* PAGE CONTENT */}
-        {/* ================================================= */}
+      {/* RIGHT SIDE APPLICATION */}
+      <div className="clear-main-area">
 
-        <main
-          className="flex-grow-1 p-3 p-md-4"
-          style={{
-            minWidth: 0,
-          }}
-        >
+        {/* STATIC HEADER */}
+        <header className="clear-header">
+          <TopHeader
+            department={cleanDepartment}
+            currentUser={currentUser}
+          />
+        </header>
+
+        {/* ONLY THIS AREA CHANGES */}
+        <main className="clear-page-content">
           {children}
         </main>
 
-        {/* ================================================= */}
-        {/* FOOTER */}
-        {/* ================================================= */}
+        {/* STATIC FOOTER */}
+        <footer className="clear-footer">
+          <Footer />
+        </footer>
 
-        <Footer />
-
-        {/* ================================================= */}
-        {/* DATA PRIVACY MODAL */}
-        {/* ================================================= */}
-
-        <DataPrivacyModal />
       </div>
+
+      <DataPrivacyModal />
     </div>
   );
 }

@@ -370,3 +370,122 @@ body {
     background: #f1f1f1 !important;
   }
 }
+
+/* =========================================================
+   CLEAR APPLICATION SHELL
+   ========================================================= */
+
+.clear-app-shell {
+  min-height: 100vh;
+  display: flex;
+  background: #f5f7fa;
+}
+
+/* =========================================================
+   SIDEBAR
+   ========================================================= */
+
+.clear-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+
+  width: 260px;
+
+  z-index: 1000;
+
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  background: #ffffff;
+}
+
+/* =========================================================
+   MAIN AREA
+   ========================================================= */
+
+.clear-main-area {
+  min-height: 100vh;
+
+  margin-left: 260px;
+
+  width: calc(100% - 260px);
+
+  display: flex;
+  flex-direction: column;
+}
+
+/* =========================================================
+   HEADER
+   ========================================================= */
+
+.clear-header {
+  position: sticky;
+  top: 0;
+
+  z-index: 900;
+
+  width: 100%;
+}
+
+/* =========================================================
+   PAGE CONTENT
+   ========================================================= */
+
+.clear-page-content {
+  flex: 1;
+
+  width: 100%;
+
+  min-height: calc(100vh - 120px);
+
+  padding: 20px;
+
+  overflow-x: auto;
+}
+
+/* =========================================================
+   FOOTER
+   ========================================================= */
+
+.clear-footer {
+  width: 100%;
+
+  flex-shrink: 0;
+}
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 991px) {
+
+  .clear-sidebar {
+    width: 220px;
+  }
+
+  .clear-main-area {
+    margin-left: 220px;
+    width: calc(100% - 220px);
+  }
+
+}
+
+@media (max-width: 767px) {
+
+  .clear-sidebar {
+    width: 0;
+    overflow: hidden;
+  }
+
+  .clear-main-area {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .clear-page-content {
+    padding: 12px;
+  }
+
+}
