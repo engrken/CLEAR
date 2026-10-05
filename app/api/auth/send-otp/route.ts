@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma'; // Adjust path based on your folder structure
+import nodemailer from 'nodemailer';
 
 export async function POST(request: Request) {
   try {
@@ -32,44 +33,38 @@ export async function POST(request: Request) {
       },
     });
 
-    // 4. Dispatch the email via Resend using native fetch API
-    const resendRes = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+    // 4. Configure Nodemailer Transporter using your SMTP environment variables
+    const transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: Number(process.env.SMTP_PORT),
+      secure: process.env.SMTP_PORT === '465', // Use true for port 465
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASSWORD,
       },
-      body: JSON.stringify({
-        from: 'CLEAR System <onboarding@resend.dev>', // Use onboarding@resend.dev for testing, or your verified domain
-        to: [email],
-        subject: 'CLEAR System: Super Admin Verification Code',
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
-            <h2 style="color: #0dcaf0; margin-bottom: 20px;">CLEAR System Authorization</h2>
-            <p style="color: #555; font-size: 15px;">You are attempting to access the Super Admin Setup Module.</p>
-            <p style="color: #555; font-size: 15px;">Your one-time verification code is:</p>
-            
-            <div style="background-color: #f8f9fa; padding: 15px; text-align: center; border-radius: 6px; margin: 25px 0;">
-              <h1 style="letter-spacing: 8px; margin: 0; color: #212529; font-size: 32px;">${otpCode}</h1>
-            </div>
-            
-            <p style="color: #777; font-size: 13px; margin-top: 30px;">
-              This code will expire in 5 minutes. If you did not request this access, please ignore this email.
-            </p>
-          </div>
-        `,
-      }),
     });
 
-    const resendData = await resendRes.json();
-
-    if (!resendRes.ok) {
-      console.error('Resend Fetch Error:', resendData);
-      return NextResponse.json(
-        { success: false, message: 'Failed to dispatch email via Resend API.' },
-        { status: 500 }
-      );
-    }
+    // 5. Dispatch the email via Gmail SMTP
+    await transporter.sendMail({
+      from: process.env.MAIL_FROM, 
+      to: email,
+      subject: 'CLEAR System: Super Admin Verification Code',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+          <h2 style="color: #0dcaf0; margin-bottom: 20px;">CLEAR System Authorization</h2>
+          <p style="color: #555; font-size: 15px;">You are attempting to access the Super Admin Setup Module.</p>
+          <p style="color: #555; font-size: 15px;">Your one-time verification code is:</p>
+          
+          <div style="background-color: #f8f9fa; padding: 15px; text-align: center; border-radius: 6px; margin: 25px 0;">
+            <h1 style="letter-spacing: 8px; margin: 0; color: #212529; font-size: 32px;">${otpCode}</h1>
+          </div>
+          
+          <p style="color: #777; font-size: 13px; margin-top: 30px;">
+            This code will expire in 5 minutes. If you did not request this access, please ignore this email.
+          </p>
+        </div>
+      `,
+    });
 
     return NextResponse.json({ 
       success: true, 
@@ -79,7 +74,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('Send OTP Server Error:', error);
     return NextResponse.json(
-      { success: false, message: 'Internal server error during OTP generation.' },
+      { success: false, message: 'Internal server error during OTP dispatch.' },
       { status: 500 }
     );
   }

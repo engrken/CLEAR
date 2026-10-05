@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import crypto from 'node:crypto';
 import { cookies } from 'next/headers';
+import nodemailer from 'nodemailer';
 
 // Helper: Format date for ID generation (yyyyMMdd-HHmmss)
 function formatDate(date: Date) {
@@ -245,106 +246,313 @@ export async function saveBulkCollectibles(department: string, records: any[], a
 
 // --- AUTHENTICATION ACTIONS ---
 
-export async function requestOtp(department: string, email: string) {
+export async function requestOtp(
+  department: string,
+  email: string
+) {
+  const cleanDepartment = department.trim().toLowerCase();
   const cleanEmail = email.trim().toLowerCase();
 
+  // --------------------------------------------------
+  // FIND DEPARTMENT
+  // --------------------------------------------------
+
   const organization = await prisma.organization.findUnique({
-    where: { subdomain: department },
+    where: {
+      subdomain: cleanDepartment,
+    },
   });
 
   if (!organization) {
-    throw new Error(`Department '${department}' not found.`);
+    throw new Error(
+      `Department '${cleanDepartment}' not found.`
+    );
   }
 
+  // --------------------------------------------------
+  // FIND USER
+  // --------------------------------------------------
+
   const user = await prisma.tenantUser.findFirst({
-    where: { 
-      organizationId: organization.id, 
-      email: cleanEmail 
-    }
+    where: {
+      organizationId: organization.id,
+      email: cleanEmail,
+    },
   });
 
   if (!user) {
-    throw new Error("This account is not registered or does not belong to this department.");
+    throw new Error(
+      "This account is not registered or does not belong to this department."
+    );
   }
 
   if (user.status !== 'Active') {
-    throw new Error("This account is currently inactive.");
+    throw new Error(
+      "This account is currently inactive."
+    );
   }
+
+  // --------------------------------------------------
+  // CHECK LOCKOUT
+  // --------------------------------------------------
 
   const cookieStore = await cookies();
 
-  // 10-minute Lockout constraint check
-  const lockoutCookie = cookieStore.get('fcu_lockout');
+  const lockoutCookie =
+    cookieStore.get('fcu_lockout');
+
   if (lockoutCookie) {
-    const lockoutTime = parseInt(lockoutCookie.value, 10);
+    const lockoutTime =
+      parseInt(lockoutCookie.value, 10);
+
     if (Date.now() < lockoutTime) {
-      const remainingMinutes = Math.ceil((lockoutTime - Date.now()) / 60000);
-      throw new Error(`Too many failed attempts. Account temporarily locked. Try again in ${remainingMinutes} minute(s).`);
+      const remainingMinutes =
+        Math.ceil(
+          (lockoutTime - Date.now()) / 60000
+        );
+
+      throw new Error(
+        `Too many failed attempts. Account temporarily locked. Try again in ${remainingMinutes} minute(s).`
+      );
     }
   }
 
-  const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-  const hashedCode = crypto.createHash('sha256').update(otpCode).digest('hex');
-  const expiresAt = Date.now() + 5 * 60 * 1000; // 5 mins expiry
+  // --------------------------------------------------
+  // GENERATE OTP
+  // --------------------------------------------------
 
-  cookieStore.set('fcu_otp_hash', `${hashedCode}:${expiresAt}`, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    path: '/',
-    maxAge: 300
-  });
+  const otpCode =
+    Math.floor(
+      100000 + Math.random() * 900000
+    ).toString();
 
-  cookieStore.set('fcu_otp_email', cleanEmail, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    path: '/',
-    maxAge: 300
-  });
+  const hashedCode =
+    crypto
+      .createHash('sha256')
+      .update(otpCode)
+      .digest('hex');
 
-  cookieStore.set('fcu_otp_strikes', '0', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    path: '/',
-    maxAge: 300
-  });
+  const expiresAt =
+    Date.now() + 5 * 60 * 1000;
 
-  try {
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer re_Z9WnXL3o_3b5JFUtB7xeTKDF2fwBse8xS`,
+  // --------------------------------------------------
+  // STORE OTP SESSION
+  // --------------------------------------------------
+
+  cookieStore.set(
+    'fcu_otp_hash',
+    `${hashedCode}:${expiresAt}`,
+    {
+      httpOnly: true,
+      secure:
+        process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 300,
+    }
+  );
+
+  cookieStore.set(
+    'fcu_otp_email',
+    cleanEmail,
+    {
+      httpOnly: true,
+      secure:
+        process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 300,
+    }
+  );
+
+  cookieStore.set(
+    'fcu_otp_strikes',
+    '0',
+    {
+      httpOnly: true,
+      secure:
+        process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 300,
+    }
+  );
+
+  // --------------------------------------------------
+  // GMAIL SMTP TRANSPORT
+  // --------------------------------------------------
+
+  const smtpUser =
+    process.env.SMTP_USER;
+
+  const smtpPass =
+    process.env.SMTP_PASS;
+
+  if (!smtpUser || !smtpPass) {
+    console.error(
+      'SMTP_USER or SMTP_PASS is not configured.'
+    );
+
+    throw new Error(
+      'Email service is not configured.'
+    );
+  }
+
+  const transporter =
+    nodemailer.createTransport({
+      host:
+        process.env.SMTP_HOST ||
+        'smtp.gmail.com',
+
+      port:
+        Number(
+          process.env.SMTP_PORT || 465
+        ),
+
+      secure: true,
+
+      auth: {
+        user: smtpUser,
+        pass: smtpPass,
       },
-      body: JSON.stringify({
-        from: 'CLEAR System <no-reply@coe.site.je>',
-        to: [cleanEmail],
-        subject: `[CLEAR System] Authorization Code for College of ${department.toUpperCase()}`,
-        html: `
-          <div style="font-family: Arial, sans-serif; padding: 28px; color: #333; background-color: #f8f9fa; border-radius: 8px; border: 1px solid #dee2e6;">
-            <h2 style="color: #0d6efd; margin-top: 0;">Filamer Christian University</h2>
-            <h4 style="color: #495057; margin-bottom: 20px;">CLEAR System Departmental Authorization</h4>
-            <p>You requested a verification code to sign in to the portal.</p>
-            <p>Your 6-digit one-time authorization PIN is:</p>
-            <div style="font-size: 34px; font-weight: bold; letter-spacing: 6px; color: #198754; background: #ffffff; padding: 14px 24px; display: inline-block; border: 1px solid #ced4da; border-radius: 6px; margin: 14px 0;">
-              ${otpCode}
-            </div>
-            <p style="font-size: 13px; color: #6c757d; margin-top: 16px;">This code will expire in <strong>5 minutes</strong>. Do not share this code with anyone.</p>
-            <hr style="border: none; border-top: 1px solid #dee2e6; margin: 24px 0;" />
-            <p style="font-size: 11px; color: #adb5bd; margin-bottom: 0;">Centralized Liquidation of Expenses & Audit Records System</p>
-          </div>
-        `,
-      }),
     });
 
-    if (!res.ok) {
-      const errorData = await res.json();
-      console.error("Resend API Error:", errorData);
-      throw new Error("Failed to dispatch verification email.");
-    }
-  } catch (err) {
-    console.error("Resend Dispatch Exception:", err);
-    throw new Error("Failed to dispatch verification email.");
+  // --------------------------------------------------
+  // SEND OTP EMAIL
+  // --------------------------------------------------
+
+  try {
+
+    await transporter.sendMail({
+      from:
+        `"CLEAR System" <${smtpUser}>`,
+
+      to: cleanEmail,
+
+      subject:
+        `[CLEAR System] OTP CODE FOR COLLEGE OF ${cleanDepartment.toUpperCase()}`,
+
+      text: `
+CLEAR System
+
+Filamer Christian University
+
+You requested a verification code to sign in to the CLEAR System.
+
+Your 6-digit One-Time PIN is:
+
+${otpCode}
+
+This code will expire in 5 minutes.
+
+Do not share this code with anyone.
+
+Centralized Liquidation of Expenses & Audit Records System
+      `.trim(),
+
+      html: `
+        <div style="
+          font-family: Arial, sans-serif;
+          max-width: 600px;
+          margin: 0 auto;
+          padding: 30px;
+          background-color: #f8f9fa;
+          color: #333;
+          border-radius: 10px;
+          border: 1px solid #dee2e6;
+        ">
+
+          <h2 style="
+            color: #0d6efd;
+            margin-top: 0;
+          ">
+            Filamer Christian University, Inc.
+          </h2>
+
+          <h4 style="
+            color: #495057;
+            margin-bottom: 20px;
+          ">
+            CLEAR System Departmental Authorization
+          </h4>
+
+          <p>
+            You requested a verification code to sign in
+            to the CLEAR System.
+          </p>
+
+          <p>
+            Your 6-digit one-time authorization PIN is:
+          </p>
+
+          <div style="
+            font-size: 36px;
+            font-weight: bold;
+            letter-spacing: 8px;
+            color: #198754;
+            background: #ffffff;
+            padding: 18px 24px;
+            display: inline-block;
+            border: 1px solid #ced4da;
+            border-radius: 8px;
+            margin: 15px 0;
+          ">
+            ${otpCode}
+          </div>
+
+          <p style="
+            font-size: 14px;
+            color: #6c757d;
+            margin-top: 18px;
+          ">
+            This code will expire in
+            <strong>5 minutes</strong>.
+          </p>
+
+          <p style="
+            font-size: 14px;
+            color: #dc3545;
+            font-weight: bold;
+          ">
+            Do not share this code with anyone.
+          </p>
+
+          <hr style="
+            border: none;
+            border-top: 1px solid #dee2e6;
+            margin: 25px 0;
+          " />
+
+          <p style="
+            font-size: 11px;
+            color: #adb5bd;
+            margin-bottom: 0;
+          ">
+            Centralized Liquidation of Expenses
+            & Audit Records System
+          </p>
+
+        </div>
+      `,
+    });
+
+  } catch (error) {
+
+    console.error(
+      'Gmail SMTP Error:',
+      error
+    );
+
+    throw new Error(
+      'Failed to dispatch verification email.'
+    );
   }
+
+  return {
+    success: true,
+    message:
+      'Verification code sent successfully.',
+  };
 }
 
 export async function verifyOtp(department: string, email: string, submittedOtp: string) {
