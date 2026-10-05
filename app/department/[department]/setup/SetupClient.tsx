@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { fmt } from "@/lib/utils";
+import { ThemedAlert } from '@/lib/alerts';
 
 const DEFAULT_FUNDS = [
   "General Fund (Carried Over)",

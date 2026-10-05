@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { submitOnlineRemittanceDirect } from "./actions";
+import { ThemedAlert } from '@/lib/alerts';
 
 export default function ClearanceClientView({
   department,

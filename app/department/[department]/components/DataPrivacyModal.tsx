@@ -39,7 +39,7 @@ export default function DataPrivacyModal() {
 
             <h6 className="text-info small fw-bold">1. Information We Process</h6>
             <p className="small text-secondary mb-2">
-              The Centralized Liquidation of Expense & Audit Records (CLEAR) portal collects and verifies your Student ID, Full Name, Year Level, Institutional/Personal Email, and financial transaction records (e.g., receipt numbers, fees paid, online remittance slips). <strong>Students are strictly advised to mask or redact their personal mobile numbers and remaining e-wallet balances prior to submitting remittance screenshots.</strong>
+              The Centralized Liquidation of Expenses & Audit Records (CLEAR) portal collects and verifies your Student ID, Full Name, Year Level, Institutional/Personal Email, and financial transaction records (e.g., receipt numbers, fees paid, online remittance slips). <strong>Students are strictly advised to mask or redact their personal mobile numbers and remaining e-wallet balances prior to submitting remittance screenshots.</strong>
             </p>
 
             <h6 className="text-info small fw-bold">2. Purpose of Processing</h6>

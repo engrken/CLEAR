@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { fmt } from "@/lib/utils";
 import { submitOnlineRemittance } from "../actions";
+import { ThemedAlert } from '@/lib/alerts';
 
 interface StudentClearance {
   studentId: string;

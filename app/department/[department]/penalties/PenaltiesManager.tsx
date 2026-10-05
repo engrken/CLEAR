@@ -5,6 +5,7 @@ import { fmt, formatHoursAndMinutes } from "@/lib/utils";
 import { format } from "date-fns";
 import { recordPenalty, settlePenaltyCommunityService, deletePenalty } from "../actions";
 import Link from "next/link";
+import { ThemedAlert } from '@/lib/alerts';
 
 interface Student { studentId: string; fullName: string; email: string | null; }
 interface Penalty { id: string; penaltyId: string; date: Date; studentId: string | null; studentName: string; activity: string; hoursLate: number; ratePerHour: number; fineAmount: number; status: string; }

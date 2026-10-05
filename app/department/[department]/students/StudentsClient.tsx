@@ -11,6 +11,8 @@ import {
   bulkImportStudents 
 } from "./actions";
 
+import { ThemedAlert } from '@/lib/alerts';
+
 interface StudentRecord {
   id: string;
   studentId: string;
