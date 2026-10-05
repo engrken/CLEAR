@@ -6,6 +6,17 @@ import { transferFunds, carryOverTermBalance } from "../actions";
 
 interface Fund { name: string; balance: number; }
 
+// Pre-defined Academic Years for the dropdown
+const AY_OPTIONS = [
+  "A.Y. 2029 - 2030",
+  "A.Y. 2028 - 2029",
+  "A.Y. 2027 - 2028",
+  "A.Y. 2026 - 2027",
+  "A.Y. 2025 - 2026",
+  "A.Y. 2024 - 2025",
+  "A.Y. 2023 - 2024"
+];
+
 export default function RealignManager({
   department,
   ay,
@@ -179,7 +190,16 @@ export default function RealignManager({
               <div className="row g-2 mb-2">
                 <div className="col-6">
                   <label className="form-label text-secondary small fw-semibold">Source Academic Year</label>
-                  <input type="text" className="form-control" value={carrySourceAY} onChange={e => setCarrySourceAY(e.target.value)} required />
+                  <select 
+                    className="form-select" 
+                    value={carrySourceAY} 
+                    onChange={e => setCarrySourceAY(e.target.value)} 
+                    required
+                  >
+                    {AY_OPTIONS.map(option => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
                 </div>
                 <div className="col-6">
                   <label className="form-label text-secondary small fw-semibold">Source Term</label>
@@ -207,7 +227,7 @@ export default function RealignManager({
         </div>
       </div>
 
-      {/* CONFIRMATION PREVIEW MODAL (Replaces fundPreviewModal)[cite: 5] */}
+      {/* CONFIRMATION PREVIEW MODAL */}
       {showPreviewModal && previewData && (
         <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
           <div className="modal-dialog modal-dialog-centered">

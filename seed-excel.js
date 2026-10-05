@@ -32,32 +32,45 @@ async function main() {
   };
 
   // 2. Import Students
-  const validStudentIds = new Set();
+  // We MUST map the raw textual student ID (e.g., 24-CECE1-001) to the auto-generated Postgres UUID 
+  // because Collections and Enrollments require the UUID for their foreign keys.
+  const studentMap = new Map(); 
+  
   if (workbook.Sheets['Students']) {
     const studentsSheet = XLSX.utils.sheet_to_json(workbook.Sheets['Students']);
     for (const row of studentsSheet) {
       const studentId = String(row['Student ID'] || '').trim();
       if (!studentId) continue;
-      validStudentIds.add(studentId);
 
-      await prisma.student.upsert({
-        where: { id: studentId },
-        update: {
-          fullName: String(row['Full Name'] || ''),
-          yearLevel: String(row['Year Level'] || '1st Year'),
-          email: row['Email'] ? String(row['Email']) : null,
-        },
-        create: {
-          id: studentId,
-          organizationId: org.id,
-          studentId: studentId,
-          fullName: String(row['Full Name'] || ''),
-          yearLevel: String(row['Year Level'] || '1st Year'),
-          email: row['Email'] ? String(row['Email']) : null,
-        },
+      let dbStudent = await prisma.student.findFirst({
+        where: { organizationId: org.id, studentId: studentId }
       });
+
+      if (dbStudent) {
+        dbStudent = await prisma.student.update({
+          where: { id: dbStudent.id },
+          data: {
+            fullName: String(row['Full Name'] || ''),
+            yearLevel: String(row['Year Level'] || '1st Year'),
+            email: row['Email'] ? String(row['Email']) : null,
+          }
+        });
+      } else {
+        dbStudent = await prisma.student.create({
+          data: {
+            organizationId: org.id,
+            studentId: studentId,
+            fullName: String(row['Full Name'] || ''),
+            yearLevel: String(row['Year Level'] || '1st Year'),
+            email: row['Email'] ? String(row['Email']) : null,
+          }
+        });
+      }
+      
+      // Store the UUID map for future relations
+      studentMap.set(studentId, dbStudent.id);
     }
-    console.log(`✅ Students synced (${validStudentIds.size} records).`);
+    console.log(`✅ Students synced (${studentMap.size} records mapped).`);
   }
 
   // 3. Import Users / TenantUsers
@@ -68,8 +81,11 @@ async function main() {
       const username = String(row['Username'] || '').trim();
       if (!email || !username) continue;
 
+      // MUST use composite unique key for the upsert where clause
       await prisma.tenantUser.upsert({
-        where: { email },
+        where: { 
+          organizationId_email: { organizationId: org.id, email: email } 
+        },
         update: {
           fullName: String(row['Full_Name'] || ''),
           role: String(row['Role'] || 'treasurer'),
@@ -130,7 +146,9 @@ async function main() {
     const collectionsSheet = XLSX.utils.sheet_to_json(workbook.Sheets['Collections']);
     for (const row of collectionsSheet) {
       const rawStudentId = row['Student ID'] ? String(row['Student ID']).trim() : null;
-      const verifiedStudentId = rawStudentId && validStudentIds.has(rawStudentId) ? rawStudentId : null;
+      // Resolve the actual UUID from our mapping dictionary
+      const actualStudentUuid = rawStudentId ? (studentMap.get(rawStudentId) || null) : null;
+      
       const orNumber = String(row['OR Number'] || '');
       const itemDescription = String(row['Item Description'] || '');
 
@@ -153,7 +171,7 @@ async function main() {
           academicYear: String(row['Academic Year'] || 'A.Y. 2026 - 2027'),
           term: String(row['Term'] || '1st Sem'),
           date: parseDate(row['Date']),
-          studentId: verifiedStudentId,
+          studentId: actualStudentUuid, // <--- Correct Foreign Key mapping
           studentName: String(row['Student Name'] || ''),
           orNumber,
           category: String(row['Category'] || ''),
@@ -175,8 +193,8 @@ async function main() {
     const penaltiesSheet = XLSX.utils.sheet_to_json(workbook.Sheets['Penalties']);
     for (const row of penaltiesSheet) {
       const penaltyId = String(row['Penalty ID'] || `PEN-${Date.now()}`);
+      // Penalties do not have a foreign key relation to student in schema, so raw string is safe
       const rawStudentId = row['Student ID'] ? String(row['Student ID']).trim() : null;
-      const verifiedStudentId = rawStudentId && validStudentIds.has(rawStudentId) ? rawStudentId : null;
 
       await prisma.penalty.upsert({
         where: { penaltyId },
@@ -187,7 +205,7 @@ async function main() {
           academicYear: String(row['Academic Year'] || 'A.Y. 2026 - 2027'),
           term: String(row['Term'] || '1st Sem'),
           date: parseDate(row['Date']),
-          studentId: verifiedStudentId,
+          studentId: rawStudentId,
           studentName: String(row['Student Name'] || ''),
           activity: String(row['Activity'] || ''),
           hoursLate: Number(row['Hours Late'] || 0),
@@ -258,10 +276,13 @@ async function main() {
   if (workbook.Sheets['Enrollments']) {
     const enrollmentsSheet = XLSX.utils.sheet_to_json(workbook.Sheets['Enrollments']);
     for (const row of enrollmentsSheet) {
-      const studentId = String(row['Student ID'] || '').trim();
+      const rawStudentId = String(row['Student ID'] || '').trim();
+      const actualStudentUuid = studentMap.get(rawStudentId);
+      
       const academicYear = String(row['Academic Year'] || 'A.Y. 2026 - 2027');
       const term = String(row['Term'] || '1st Sem');
-      if (!studentId || !validStudentIds.has(studentId)) continue;
+      
+      if (!actualStudentUuid) continue; // Skip if mapping fails
 
       await prisma.enrollment.upsert({
         where: {
@@ -269,7 +290,7 @@ async function main() {
             organizationId: org.id,
             academicYear,
             term,
-            studentId,
+            studentId: actualStudentUuid, // <--- Correct Foreign Key mapping
           }
         },
         update: {
@@ -279,7 +300,7 @@ async function main() {
         },
         create: {
           organizationId: org.id,
-          studentId,
+          studentId: actualStudentUuid, // <--- Correct Foreign Key mapping
           academicYear,
           term,
           enrollmentStatus: String(row['Enrollment Status'] || 'Enrolled'),
