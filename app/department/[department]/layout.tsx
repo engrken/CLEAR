@@ -19,25 +19,7 @@ export default async function DepartmentLayout({
   const cleanDepartment = decodeURIComponent(department).toLowerCase().trim();
 
   // =========================================================
-  // 1. STRICT LOGIN & PERMISSION CHECK (Protects all subpages)
-  // =========================================================
-  const session = await auth();
-
-  if (!session?.user) {
-    redirect(`/department/${encodeURIComponent(cleanDepartment)}?login=true`);
-  }
-
-  const userWithRole = session.user as typeof session.user & { role?: string };
-  const userRole = userWithRole.role?.toLowerCase() || 'viewer';
-  
-  const allowedRoles = ['admin', 'administrator', 'master', 'auditor', 'audit'];
-
-  if (!allowedRoles.includes(userRole)) {
-    redirect(`/department/${encodeURIComponent(cleanDepartment)}?forbidden=true`);
-  }
-
-  // =========================================================
-  // 2. VERIFY DEPARTMENT EXISTS
+  // 1. VERIFY DEPARTMENT EXISTS FIRST
   // =========================================================
   const organization = await prisma.organization.findUnique({
     where: {
