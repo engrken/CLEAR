@@ -14,7 +14,7 @@ export default async function StudentsPage({
   const yearFilter = resolvedSearch.year || 'ALL';
   const statusFilter = resolvedSearch.status || 'ALL';
   const page = parseInt(resolvedSearch.page || '1', 10);
-  const pageSize = 10; // 👈 Updated limit to 10 students per page
+  const pageSize = 10;
   const ay = resolvedSearch.ay || 'A.Y. 2026 - 2027';
   const term = resolvedSearch.term || '1st Sem';
 
@@ -31,7 +31,7 @@ export default async function StudentsPage({
     );
   }
 
-  // Build dynamic Prisma where clause
+  // 1. Build dynamic Prisma where clause for the main list
   const whereClause: any = {
     organizationId: organization.id,
     ...(search ? {
@@ -44,9 +44,38 @@ export default async function StudentsPage({
     ...(yearFilter !== 'ALL' ? { yearLevel: yearFilter } : {}),
   };
 
-  // Fetch total count and paginated students concurrently
-  const [totalDirectory, students] = await Promise.all([
+  // Push status filtering to DB layer to ensure accurate pagination
+  if (statusFilter === 'Inactive') {
+    whereClause.enrollments = {
+      some: { academicYear: ay, term, enrollmentStatus: { not: 'Enrolled' } }
+    };
+  } else if (statusFilter === 'Enrolled') {
+    whereClause.NOT = {
+      enrollments: {
+        some: { academicYear: ay, term, enrollmentStatus: { not: 'Enrolled' } }
+      }
+    };
+  }
+
+  // 2. Fetch overall metrics and paginated records concurrently
+  const [totalDirectory, absoluteInactiveCount, totalFiltered, students] = await Promise.all([
+    // A. Grand total of all students in this department
     prisma.student.count({ where: { organizationId: organization.id } }),
+    
+    // B. Grand total of inactive students for this specific term
+    prisma.student.count({
+      where: {
+        organizationId: organization.id,
+        enrollments: {
+          some: { academicYear: ay, term, enrollmentStatus: { not: 'Enrolled' } }
+        }
+      }
+    }),
+
+    // C. Total count matching current search & filters (for pagination math)
+    prisma.student.count({ where: whereClause }),
+
+    // D. The actual paginated student records
     prisma.student.findMany({
       where: whereClause,
       include: {
@@ -60,16 +89,15 @@ export default async function StudentsPage({
     }),
   ]);
 
-  let enrolledCount = 0;
-  let notEnrolledCount = 0;
+  // 3. Calculate accurate top-level department metrics
+  const notEnrolledCount = absoluteInactiveCount;
+  const enrolledCount = totalDirectory - notEnrolledCount;
 
+  // 4. Format the final output array
   const formattedStudents = students.map(s => {
     const termEnrollment = s.enrollments[0];
     const status = termEnrollment?.enrollmentStatus || 'Enrolled';
     
-    if (status === 'Enrolled') enrolledCount++;
-    else notEnrolledCount++;
-
     return {
       id: s.id,
       studentId: s.studentId,
@@ -80,11 +108,8 @@ export default async function StudentsPage({
     };
   });
 
-  const filteredStudents = statusFilter === 'ALL' 
-    ? formattedStudents 
-    : formattedStudents.filter(s => s.status === statusFilter);
-
-  const totalPages = Math.ceil(totalDirectory / pageSize);
+  // Safe pagination division
+  const totalPages = Math.ceil(totalFiltered / pageSize);
 
   return (
     <div className="module p-0 bg-transparent border-0 shadow-none">
@@ -93,7 +118,7 @@ export default async function StudentsPage({
         organizationId={organization.id}
         ay={ay}
         term={term}
-        initialStudents={filteredStudents}
+        initialStudents={formattedStudents}
         totalDirectory={totalDirectory}
         enrolledCount={enrolledCount}
         notEnrolledCount={notEnrolledCount}
