@@ -198,7 +198,7 @@ export default function AdminOtpModal() {
       // ------------------------------------------------
 
       router.push(
-        '/dashboard/provision'
+        '/dashboard/provisions'
       );
 
       router.refresh();
