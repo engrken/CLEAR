@@ -100,7 +100,10 @@ export async function deletePenalty(department: string, penaltyId: string) {
 
 async function getActionUser(): Promise<string> {
   const session = await auth();
-  const userWithRole = session?.user as typeof session.user & { fullName?: string };
+  
+  // Explicitly define the expected shape instead of using typeof
+  const userWithRole = session?.user as { fullName?: string; email?: string } | undefined;
+  
   return userWithRole?.fullName || userWithRole?.email || "System";
 }
 
