@@ -35,7 +35,7 @@ export default function RealignManager({
   const [transferReason, setTransferReason] = useState("");
 
   // Carry Over Form State
-  const [carrySourceAY, setCarrySourceAY] = useState("A.Y. 2025 - 2026");
+  const [carrySourceAY, setCarrySourceAY] = useState("A.Y. 2026 - 2027");
   const [carrySourceTerm, setCarrySourceTerm] = useState("2nd Sem");
   const [carryAmount, setCarryAmount] = useState("");
   const [carryReason, setCarryReason] = useState(`Carried over remaining balance into General Fund of ${term} (${ay})`);
