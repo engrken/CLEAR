@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { saveTenantUser, deleteTenantUser } from "./actions";
+import { ThemedAlert } from '@/lib/alerts';
 
 interface TenantUser {
   id: string;

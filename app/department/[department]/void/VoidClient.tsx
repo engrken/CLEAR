@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { executeVoidTransaction } from "./actions";
+import { ThemedAlert } from '@/lib/alerts';
 
 export default function VoidClient({ 
   initialRecords, 
