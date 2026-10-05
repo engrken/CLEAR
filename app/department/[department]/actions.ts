@@ -100,7 +100,7 @@ export async function deletePenalty(department: string, penaltyId: string) {
 
 async function getActionUser(): Promise<string> {
   const session = await auth();
-  const userWithRole = session?.user as typeof session?.user & { fullName?: string };
+  const userWithRole = session?.user as typeof session.user & { fullName?: string };
   return userWithRole?.fullName || userWithRole?.email || "System";
 }
 
