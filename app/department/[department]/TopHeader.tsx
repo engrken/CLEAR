@@ -2,7 +2,8 @@
 
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import { requestOtp, verifyOtp } from './actions';
+import LoginModal from './LoginModal'; // Imported the standalone modal
+// import { logoutAction } from './auth-actions'; // Add a server action to clear HttpOnly cookies
 
 export default function TopHeader({ department, currentUser }: { department: string; currentUser?: any }) {
   const router = useRouter();
@@ -17,14 +18,8 @@ export default function TopHeader({ department, currentUser }: { department: str
   const [userName, setUserName] = useState(currentUser?.fullName || 'Department Officer');
   const [role, setRole] = useState(currentUser?.role || 'OFFICER');
   
-  // Login Modal State
+  // Simplified Modal State
   const [showModal, setShowModal] = useState(false);
-  const [authStep, setAuthStep] = useState<'email' | 'otp'>('email');
-  const [authEmail, setAuthEmail] = useState('');
-  const [authOtp, setAuthOtp] = useState('');
-  const [authLoading, setAuthLoading] = useState(false);
-  const [authError, setAuthError] = useState<string | null>(null);
-
   const [fcuError, setFcuError] = useState(false);
 
   useEffect(() => {
@@ -40,13 +35,12 @@ export default function TopHeader({ department, currentUser }: { department: str
           setUserName(parsed.fullName);
           setRole(parsed.role);
         } catch (e) {
-          setUserName(storedUser);
+          setUserName('Department Officer'); // Fixed fallback
         }
       }
     }
   }, [currentUser]);
 
-  // Root-relative path pointing directly to public/fcu.png
   const fcuLogoPath = '/fcu.png';
 
   const toggleTheme = () => {
@@ -63,75 +57,35 @@ export default function TopHeader({ department, currentUser }: { department: str
     router.push(`${pathname}?${params.toString()}`);
   };
 
-  const handleAuthAction = () => {
+  const handleAuthAction = async () => {
     if (isLoggedIn) {
       try {
+        // await logoutAction(); // Call server action here to clear HttpOnly cookies securely
+        
         localStorage.removeItem('fcu_clear_user');
         localStorage.removeItem('fcu_clear_token');
         
-        document.cookie = "fcu_session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-        document.cookie = "fcu_otp_hash=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-        document.cookie = "fcu_otp_email=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-        document.cookie = "fcu_otp_strikes=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-        document.cookie = "fcu_lockout=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+        // Fallback for non-HttpOnly cookies
+        const cookiesToClear = ['fcu_session', 'fcu_otp_hash', 'fcu_otp_email', 'fcu_otp_strikes', 'fcu_lockout'];
+        cookiesToClear.forEach(cookie => {
+          document.cookie = `${cookie}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+        });
         
         setIsLoggedIn(false);
       } catch (e) {
-        // Fallback catch
+        console.error("Logout failed", e);
       }
       
       alert("Signed out successfully.");
       window.location.reload();
     } else {
-      setAuthStep('email');
-      setAuthEmail('');
-      setAuthOtp('');
-      setAuthError(null);
       setShowModal(true);
-    }
-  };
-
-  const submitEmailRequest = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!authEmail) return setAuthError("Please enter your institutional email.");
-    setAuthLoading(true);
-    setAuthError(null);
-    try {
-      await requestOtp(department, authEmail);
-      setAuthStep('otp');
-    } catch (err: any) {
-      setAuthError(err.message);
-    } finally {
-      setAuthLoading(false);
-    }
-  };
-
-  const submitOtpVerify = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!authOtp || authOtp.length !== 6) return setAuthError("Please enter a valid 6-digit code.");
-    setAuthLoading(true);
-    setAuthError(null);
-    try {
-      const res = await verifyOtp(department, authEmail, authOtp);
-      if (res.success) {
-        localStorage.setItem('fcu_clear_user', JSON.stringify(res.user));
-        setShowModal(false);
-        setTimeout(() => {
-           window.location.reload();
-        }, 200);
-      }
-    } catch (err: any) {
-      setAuthError(err.message);
-    } finally {
-      setAuthLoading(false);
     }
   };
 
   return (
     <>
       <header className="navbar navbar-expand border-bottom border-secondary px-4 py-3 bg-card shadow-sm flex-column align-items-stretch">
-        
-        {/* Top Row: Brand Header & Mobile Toggle */}
         <div className="d-flex align-items-center justify-content-between w-100">
           <div className="d-flex align-items-center gap-3">
             <button 
@@ -170,9 +124,7 @@ export default function TopHeader({ department, currentUser }: { department: str
           </div>
         </div>
 
-        {/* Bottom Row: Filters, Theme, Badge, and Auth Button */}
         <div className="d-flex align-items-center justify-content-end flex-wrap gap-3 mt-3 pt-2 border-top border-secondary border-opacity-25 w-100">
-          
           <div className="d-flex align-items-center gap-2">
             <select 
               className="form-select form-select-sm bg-card text-color border-secondary"
@@ -228,91 +180,15 @@ export default function TopHeader({ department, currentUser }: { department: str
             <i className={`bi ${isLoggedIn ? 'bi-box-arrow-right' : 'bi-shield-lock-fill'}`}></i>
             <span className="fw-bold">{isLoggedIn ? "Sign Out" : "Sign In"}</span>
           </button>
-
         </div>
       </header>
 
-      {/* Embedded Departmental Authorization Modal */}
-      {showModal && (
-        <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 1055 }}>
-          <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content card border-secondary shadow-lg bg-card text-color">
-              
-              <div className="modal-header border-secondary">
-                <h5 className="modal-title d-flex align-items-center fw-bold">
-                  <i className="bi bi-shield-lock-fill text-primary me-2 fs-4"></i>
-                  Departmental Authorization
-                </h5>
-                <button type="button" className="btn-close" onClick={() => setShowModal(false)}></button>
-              </div>
-
-              <div className="modal-body p-4">
-                {authError && (
-                  <div className="alert alert-danger py-2 small mb-3">
-                    <i className="bi bi-exclamation-triangle-fill me-2"></i>{authError}
-                  </div>
-                )}
-
-                {authStep === 'email' ? (
-                  <form onSubmit={submitEmailRequest}>
-                    <p className="text-secondary small mb-3">
-                      Enter your registered institutional email address. A 6-digit verification code will be dispatched to your inbox.
-                    </p>
-                    <div className="mb-3">
-                      <label className="form-label text-secondary small fw-semibold">Email Address</label>
-                      <input 
-                        type="email" 
-                        className="form-control bg-card text-color border-secondary" 
-                        placeholder="officer@domain.edu.ph" 
-                        value={authEmail}
-                        onChange={(e) => setAuthEmail(e.target.value)}
-                        required 
-                        autoFocus
-                      />
-                    </div>
-                    <button type="submit" className="btn btn-primary w-100 fw-bold" disabled={authLoading}>
-                      {authLoading ? 'Sending Code...' : 'Send Verification Code'}
-                    </button>
-                  </form>
-                ) : (
-                  <form onSubmit={submitOtpVerify}>
-                    <p className="text-secondary small mb-1">We sent a verification code to:</p>
-                    <div className="fw-bold text-accent mb-3">{authEmail}</div>
-                    
-                    <div className="mb-3">
-                      <label className="form-label text-secondary small fw-semibold">Enter 6-Digit Code</label>
-                      <input 
-                        type="text" 
-                        className="form-control bg-card text-color border-secondary text-center fs-4 font-monospace py-2" 
-                        maxLength={6} 
-                        placeholder="000000" 
-                        value={authOtp}
-                        onChange={(e) => setAuthOtp(e.target.value.replace(/[^0-9]/g, ''))}
-                        required 
-                        autoFocus
-                      />
-                    </div>
-                    
-                    <div className="d-grid gap-2">
-                      <button type="submit" className="btn btn-success fw-bold" disabled={authLoading}>
-                        {authLoading ? 'Verifying...' : 'Verify & Sign In'}
-                      </button>
-                      <button 
-                        type="button" 
-                        className="btn btn-link btn-sm text-secondary text-decoration-none mt-1" 
-                        onClick={() => { setAuthStep('email'); setAuthOtp(''); setAuthError(null); }}
-                        disabled={authLoading}
-                      >
-                        Use a different email
-                      </button>
-                    </div>
-                  </form>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Replaced 60+ lines of duplicate code with the component */}
+      <LoginModal 
+        show={showModal} 
+        onClose={() => setShowModal(false)} 
+        department={department} 
+      />
     </>
   );
 }

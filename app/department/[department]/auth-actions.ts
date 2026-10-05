@@ -3,6 +3,7 @@
 import { prisma } from '@/lib/prisma';
 import { cookies } from 'next/headers';
 import crypto from 'crypto';
+import nodemailer from 'nodemailer';
 
 export async function requestOtp(department: string, email: string) {
   const cleanEmail = email.trim().toLowerCase();
@@ -39,9 +40,46 @@ export async function requestOtp(department: string, email: string) {
   cookieStore.set('fcu_otp_strikes', '0', { maxAge: 300, httpOnly: true });
 
   // ---------------------------------------------------------------------------
-  // TODO: Add your Nodemailer or Resend logic here to email the `otp` variable.
-  // For development, the OTP is printed to your terminal:
-  console.log(`\n[AUTH NOTIFICATION] -> Verification Code for ${cleanEmail} is: ${otp}\n`);
+  // GMAIL SMTP DISPATCH LOGIC
+  // ---------------------------------------------------------------------------
+  const smtpUser = process.env.SMTP_USER;
+  const smtpPassword = process.env.SMTP_PASSWORD;
+
+  if (!smtpUser || !smtpPassword) {
+    console.error("Missing SMTP Credentials");
+    throw new Error("Email service is not configured. Please restart your Next.js server.");
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: Number(process.env.SMTP_PORT),
+    secure: process.env.SMTP_PORT === '465', 
+    auth: {
+      user: smtpUser,
+      pass: smtpPassword,
+    },
+  });
+
+  await transporter.sendMail({
+    from: process.env.MAIL_FROM, 
+    to: cleanEmail,
+    subject: `CLEAR System: ${organization.name || 'Department'} Verification Code`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+        <h2 style="color: #0dcaf0; margin-bottom: 20px;">CLEAR System Authorization</h2>
+        <p style="color: #555; font-size: 15px;">You are attempting to securely sign in to your department workspace.</p>
+        <p style="color: #555; font-size: 15px;">Your one-time verification code is:</p>
+        
+        <div style="background-color: #f8f9fa; padding: 15px; text-align: center; border-radius: 6px; margin: 25px 0;">
+          <h1 style="letter-spacing: 8px; margin: 0; color: #212529; font-size: 32px;">${otp}</h1>
+        </div>
+        
+        <p style="color: #777; font-size: 13px; margin-top: 30px;">
+          This code will expire in 5 minutes. If you did not request this access, please ignore this email.
+        </p>
+      </div>
+    `,
+  });
   // ---------------------------------------------------------------------------
 
   return { success: true, message: `A 6-digit verification code has been dispatched to ${cleanEmail}.` };
