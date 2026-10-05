@@ -15,93 +15,89 @@ export default async function LiquidationsPage({
   }>;
 }) {
   // =========================================================
-  // STRICT LOGIN CHECK
+  // 1. EXTRACT PARAMS EARLY FOR REDIRECTION
+  // =========================================================
+  const { department } = await params;
+  
+  const cleanDepartment = decodeURIComponent(department).toLowerCase().trim();
+
+  // =========================================================
+  // 2. STRICT LOGIN & PERMISSION CHECK
   // =========================================================
   const session = await auth();
 
+  // If not logged in, redirect to dashboard and trigger the LoginModal
   if (!session?.user) {
-    redirect('/department/${subdomain}');
+    redirect(`/department/${encodeURIComponent(cleanDepartment)}?login=true`);
+  }
+
+  // Check if user has the correct role for Liquidations (Audit)
+  const userRole = session.user.role?.toLowerCase() || 'viewer';
+  const allowedRoles = ['admin', 'administrator', 'master', 'auditor', 'audit'];
+
+  // Decline access if they are a treasurer or viewer
+  if (!allowedRoles.includes(userRole)) {
+    redirect(`/department/${encodeURIComponent(cleanDepartment)}?forbidden=true`);
   }
 
   // =========================================================
-  // PARAMETERS
+  // 3. RESOLVE SEARCH PARAMS
   // =========================================================
-  const { department } = await params;
+  const resolvedSearch = searchParams ? await searchParams : {};
 
-  const resolvedSearch = searchParams
-    ? await searchParams
-    : {};
-
-  const ay =
-    resolvedSearch.ay || 'A.Y. 2026 - 2027';
-
-  const term =
-    resolvedSearch.term || '1st Sem';
-
-  const prefillCaId =
-    resolvedSearch.caId || '';
+  const ay = resolvedSearch.ay || 'A.Y. 2026 - 2027';
+  const term = resolvedSearch.term || '1st Sem';
+  const prefillCaId = resolvedSearch.caId || '';
 
   // =========================================================
-  // FIND DEPARTMENT
+  // 4. FIND DEPARTMENT
   // =========================================================
-  const cleanDepartment =
-    decodeURIComponent(department)
-      .toLowerCase()
-      .trim();
-
-  const organization =
-    await prisma.organization.findUnique({
-      where: {
-        subdomain: cleanDepartment,
-      },
-    });
+  const organization = await prisma.organization.findUnique({
+    where: {
+      subdomain: cleanDepartment,
+    },
+  });
 
   if (!organization) {
     return (
       <div className="alert alert-danger p-4 shadow-sm border-secondary">
-        <h4 className="fw-bold mb-2">
-          Department Not Found
-        </h4>
-
+        <h4 className="fw-bold mb-2">Department Not Found</h4>
         <p className="small mb-0">
-          The department '
-          {decodeURIComponent(department)}
-          ' does not exist.
+          The department '{decodeURIComponent(department)}' does not exist.
         </p>
       </div>
     );
   }
 
   // =========================================================
-  // FETCH PENDING CASH ADVANCES AND FUNDS
+  // 5. FETCH PENDING CASH ADVANCES AND FUNDS
   // =========================================================
-  const [pendingAdvances, funds] =
-    await Promise.all([
-      prisma.cashAdvance.findMany({
-        where: {
-          organizationId: organization.id,
-          academicYear: ay,
-          term,
-          status: {
-            contains: 'Pending',
-          },
+  const [pendingAdvances, funds] = await Promise.all([
+    prisma.cashAdvance.findMany({
+      where: {
+        organizationId: organization.id,
+        academicYear: ay,
+        term,
+        status: {
+          contains: 'Pending',
         },
-        orderBy: {
-          dateIssued: 'desc',
-        },
-      }),
+      },
+      orderBy: {
+        dateIssued: 'desc',
+      },
+    }),
 
-      prisma.fund.findMany({
-        where: {
-          organizationId: organization.id,
-          academicYear: ay,
-          term,
-        },
-      }),
-    ]);
+    prisma.fund.findMany({
+      where: {
+        organizationId: organization.id,
+        academicYear: ay,
+        term,
+      },
+    }),
+  ]);
 
   // =========================================================
-  // PAGE
+  // 6. RENDER PAGE
   // =========================================================
   return (
     <div className="module card p-3 p-md-4 border-secondary shadow-sm">

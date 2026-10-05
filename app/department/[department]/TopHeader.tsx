@@ -2,8 +2,8 @@
 
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import LoginModal from './LoginModal'; // Imported the standalone modal
-// import { logoutAction } from './auth-actions'; // Add a server action to clear HttpOnly cookies
+import LoginModal from './LoginModal'; 
+// import { logoutAction } from './auth-actions'; 
 
 export default function TopHeader({ department, currentUser }: { department: string; currentUser?: any }) {
   const router = useRouter();
@@ -18,10 +18,42 @@ export default function TopHeader({ department, currentUser }: { department: str
   const [userName, setUserName] = useState(currentUser?.fullName || 'Department Officer');
   const [role, setRole] = useState(currentUser?.role || 'OFFICER');
   
-  // Simplified Modal State
+  // Modal & Trigger State
   const [showModal, setShowModal] = useState(false);
   const [fcuError, setFcuError] = useState(false);
+  const [showForbidden, setShowForbidden] = useState(false);
 
+  // =========================================================
+  // AUTHENTICATION TRIGGERS & URL CLEANUP
+  // =========================================================
+  useEffect(() => {
+    const loginParam = searchParams.get('login');
+    const forbiddenParam = searchParams.get('forbidden');
+    
+    let shouldCleanUrl = false;
+    const params = new URLSearchParams(searchParams.toString());
+
+    if (loginParam === 'true') {
+      setShowModal(true);
+      params.delete('login');
+      shouldCleanUrl = true;
+    }
+
+    if (forbiddenParam === 'true') {
+      setShowForbidden(true);
+      setTimeout(() => setShowForbidden(false), 5000); // Auto-hide after 5s
+      params.delete('forbidden');
+      shouldCleanUrl = true;
+    }
+
+    if (shouldCleanUrl) {
+      router.replace(`${pathname}?${params.toString()}`);
+    }
+  }, [searchParams, pathname, router]);
+
+  // =========================================================
+  // STANDARD INITIALIZATION
+  // =========================================================
   useEffect(() => {
     const currentTheme = document.documentElement.getAttribute('data-bs-theme') || 'dark';
     setTheme(currentTheme);
@@ -35,7 +67,7 @@ export default function TopHeader({ department, currentUser }: { department: str
           setUserName(parsed.fullName);
           setRole(parsed.role);
         } catch (e) {
-          setUserName('Department Officer'); // Fixed fallback
+          setUserName('Department Officer');
         }
       }
     }
@@ -60,12 +92,9 @@ export default function TopHeader({ department, currentUser }: { department: str
   const handleAuthAction = async () => {
     if (isLoggedIn) {
       try {
-        // await logoutAction(); // Call server action here to clear HttpOnly cookies securely
-        
         localStorage.removeItem('fcu_clear_user');
         localStorage.removeItem('fcu_clear_token');
         
-        // Fallback for non-HttpOnly cookies
         const cookiesToClear = ['fcu_session', 'fcu_otp_hash', 'fcu_otp_email', 'fcu_otp_strikes', 'fcu_lockout'];
         cookiesToClear.forEach(cookie => {
           document.cookie = `${cookie}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
@@ -183,7 +212,20 @@ export default function TopHeader({ department, currentUser }: { department: str
         </div>
       </header>
 
-      {/* Replaced 60+ lines of duplicate code with the component */}
+      {/* 1. Forbidden Access Alert */}
+      {showForbidden && (
+        <div 
+          className="alert alert-danger alert-dismissible fade show shadow-sm" 
+          role="alert" 
+          style={{ position: "fixed", top: "20px", right: "20px", zIndex: 1060 }}
+        >
+          <i className="bi bi-shield-lock-fill me-2"></i>
+          <strong>Access Denied:</strong> You lack permission for this module.
+          <button type="button" className="btn-close" onClick={() => setShowForbidden(false)} aria-label="Close"></button>
+        </div>
+      )}
+
+      {/* 2. Login Modal Component */}
       <LoginModal 
         show={showModal} 
         onClose={() => setShowModal(false)} 
