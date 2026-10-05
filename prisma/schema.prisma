@@ -226,14 +226,16 @@ model FundTransfer {
 }
 
 model SystemLog {
-  id             String   @id @default(uuid())
+  id             String       @id @default(cuid())
   organizationId String
-  timestamp      DateTime @default(now())
-  user           String
-  action         String
-  details        String
-
+  timestamp      DateTime     @default(now())
+  user           String       // The name or email of the officer
+  action         String       // e.g., "USER_LOGOUT", "RECORD_PAYMENT", "UNAUTHORIZED_ATTEMPT"
+  details        String?      @db.Text // Optional extra information
+  
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, timestamp])
 }
 
 model TenantUser {
