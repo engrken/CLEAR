@@ -1,118 +1,254 @@
-// /auth.ts (Root of your project)
 import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { prisma } from "@/lib/prisma";
 
-// 1. CUSTOM ERROR CLASS: Forces NextAuth to display actual error messages instead of "Configuration"
 class CustomAuthError extends CredentialsSignin {
   constructor(message: string) {
     super(message);
-    this.code = message; 
+    this.code = message;
   }
 }
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+export const {
+  handlers,
+  auth,
+  signIn,
+  signOut,
+} = NextAuth({
   providers: [
     Credentials({
       name: "OTP Verification",
-      credentials: {
-        email: { label: "Email", type: "email" },
-        // Supports 'code' from the admin modal or 'otp' from legacy requests
-        code: { label: "Verification Code", type: "text" }, 
-      },
-      async authorize(credentials) {
-        const email = credentials?.email ? String(credentials.email).trim().toLowerCase() : null;
-        const code = credentials?.code ? String(credentials.code).trim() : null;
 
-        if (!email || !code) {
-          throw new CustomAuthError("Email and verification code are required.");
+      credentials: {
+        email: {
+          label: "Email",
+          type: "email",
+        },
+
+        code: {
+          label: "Verification Code",
+          type: "text",
+        },
+
+        department: {
+          label: "Department",
+          type: "text",
+        },
+      },
+
+      async authorize(credentials) {
+        const email = credentials?.email
+          ? String(credentials.email)
+              .trim()
+              .toLowerCase()
+          : null;
+
+        const code = credentials?.code
+          ? String(credentials.code).trim()
+          : null;
+
+        const department =
+          credentials?.department
+            ? String(credentials.department)
+                .trim()
+                .toLowerCase()
+            : null;
+
+        if (!email || !code || !department) {
+          throw new CustomAuthError(
+            "Email, verification code, and department are required."
+          );
         }
 
-        // =======================================================
-        // 2. SUPER ADMIN AUTHORIZATION (CLEAR System Architect)
-        // =======================================================
-        if (email === "kent.bsece@gmail.com") {
-          const tokenRecord = await prisma.verificationToken.findUnique({
-            where: { identifier: email },
+        // =====================================================
+        // FIND REQUESTED DEPARTMENT
+        // =====================================================
+
+        const organization =
+          await prisma.organization.findUnique({
+            where: {
+              subdomain: department,
+            },
           });
 
+        if (!organization) {
+          throw new CustomAuthError(
+            "Department not found."
+          );
+        }
+
+        // =====================================================
+        // SUPER ADMIN
+        // =====================================================
+
+        if (
+          email === "kent.bsece@gmail.com"
+        ) {
+          const tokenRecord =
+            await prisma.verificationToken.findUnique({
+              where: {
+                identifier: email,
+              },
+            });
+
           if (!tokenRecord) {
-            throw new CustomAuthError("No verification code requested.");
+            throw new CustomAuthError(
+              "No verification code requested."
+            );
           }
 
-          if (tokenRecord.token !== code) {
-            throw new CustomAuthError("Invalid verification code.");
+          if (
+            tokenRecord.expires < new Date()
+          ) {
+            await prisma.verificationToken.delete({
+              where: {
+                identifier: email,
+              },
+            });
+
+            throw new CustomAuthError(
+              "Verification code has expired."
+            );
           }
 
-          if (tokenRecord.expires < new Date()) {
-            throw new CustomAuthError("Verification code has expired.");
+          if (
+            tokenRecord.token !== code
+          ) {
+            throw new CustomAuthError(
+              "Invalid verification code."
+            );
           }
 
-          // Clear OTP after successful use to prevent replay attacks
           await prisma.verificationToken.delete({
-            where: { identifier: email },
+            where: {
+              identifier: email,
+            },
           });
 
           return {
             id: "super-admin-01",
             name: "System Architect",
-            email: email,
+            email,
             role: "SuperAdmin",
+            organizationId: null,
           };
         }
 
-        // =======================================================
-        // 3. TENANT USER AUTHORIZATION (Department Officers)
-        // =======================================================
-        const user = await prisma.tenantUser.findFirst({
-          where: { email },
-        });
+        // =====================================================
+        // TENANT USER
+        // =====================================================
 
-        if (!user || user.status !== 'Active') {
-          throw new CustomAuthError("Email not found in authorized officers roster or account is inactive.");
+        const user =
+          await prisma.tenantUser.findFirst({
+            where: {
+              organizationId: organization.id,
+              email,
+              status: "Active",
+            },
+          });
+
+        if (!user) {
+          throw new CustomAuthError(
+            "This account is not registered or is inactive for this department."
+          );
         }
 
-        if (!user.otpCode || user.otpCode.trim() !== code) {
-          throw new CustomAuthError("Invalid verification code.");
+        // =====================================================
+        // VERIFY OTP
+        // =====================================================
+
+        if (
+          !user.otpCode ||
+          user.otpCode.trim() !== code
+        ) {
+          throw new CustomAuthError(
+            "Invalid verification code."
+          );
         }
 
-        if (user.otpExpires && new Date() > user.otpExpires) {
-          throw new CustomAuthError("Verification code has expired.");
+        if (
+          !user.otpExpires ||
+          new Date() > user.otpExpires
+        ) {
+          await prisma.tenantUser.update({
+            where: {
+              id: user.id,
+            },
+
+            data: {
+              otpCode: null,
+              otpExpires: null,
+            },
+          });
+
+          throw new CustomAuthError(
+            "Verification code has expired."
+          );
         }
 
-        // Clear OTP after successful use using the unique record id
+        // =====================================================
+        // CLEAR OTP
+        // =====================================================
+
         await prisma.tenantUser.update({
-          where: { id: user.id },
-          data: { otpCode: null, otpExpires: null },
+          where: {
+            id: user.id,
+          },
+
+          data: {
+            otpCode: null,
+            otpExpires: null,
+          },
         });
+
+        // =====================================================
+        // AUTHENTICATED USER
+        // =====================================================
 
         return {
           id: user.id,
           name: user.fullName,
           email: user.email,
           role: user.role,
+          organizationId:
+            user.organizationId,
         };
       },
     }),
   ],
+
   pages: {
-    signIn: '/',
+    signIn: "/",
   },
+
   session: {
-    strategy: 'jwt',
-    maxAge: 6 * 60 * 60, // 6 hours
+    strategy: "jwt",
+    maxAge: 6 * 60 * 60,
   },
+
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.role = (user as any).role;
+        token.role = user.role;
+        token.organizationId =
+          user.organizationId;
       }
+
       return token;
     },
+
     async session({ session, token }) {
       if (session.user) {
-        (session.user as any).role = token.role;
+        session.user.id =
+          token.sub ?? "";
+
+        session.user.role =
+          token.role ?? "viewer";
+
+        session.user.organizationId =
+          token.organizationId ?? null;
       }
+
       return session;
     },
   },

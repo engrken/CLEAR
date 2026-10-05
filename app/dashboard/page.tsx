@@ -7,17 +7,8 @@ import AdminOtpModal from './components/AdminOtpModal';
 export default async function DashboardPage() {
   const departments = await prisma.organization.findMany();
 
-  const isProduction = Boolean(
-    process.env.NODE_ENV === 'production' || process.env.VERCEL
-  );
-
-  const getDeptUrl = (subdomain: string) => {
-    if (isProduction) {
-      return `/department/${subdomain}`;
-    }
-
-    return `http://localhost:3000/department/${subdomain}`;
-  };
+  const getDeptUrl = (subdomain: string) =>
+  `/department/${encodeURIComponent(subdomain)}`;
 
   return (
     <>
