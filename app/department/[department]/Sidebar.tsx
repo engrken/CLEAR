@@ -1,142 +1,89 @@
-
 "use client";
 
-import Link from "next/link";
-import {
-  usePathname,
-  useSearchParams,
-} from "next/navigation";
-import { useMemo, useState, useEffect } from "react";
+import Link from 'next/link';
+import { usePathname, useSearchParams } from 'next/navigation';
 
-interface CurrentUser {
-  id?: string;
-  fullName?: string;
-  role?: string;
-  email?: string;
-  organizationId?: string;
-  department?: string;
-  allowedTabs?: string[];
-}
-
-interface DepartmentSidebarProps {
-  department: string;
-  currentUser?: CurrentUser;
-}
+const PRESET_ROLE_TABS: Record<string, string[]> = {
+  admin: [
+    'tab-overview', 'tab-students', 'tab-clearance', 'tab-payment', 
+    'tab-remittances', 'tab-penalties', 'tab-advances', 'tab-audit', 
+    'tab-collectibles', 'tab-reports', 'tab-void', 'tab-report', 
+    'tab-transfer', 'tab-users', 'tab-setup'
+  ],
+  treasurer: [
+    'tab-overview', 'tab-clearance', 'tab-reports',
+    'tab-payment', 'tab-remittances', 'tab-penalties', 'tab-advances',
+    'tab-collectibles', 'tab-report', 'tab-transfer'
+  ],
+  auditor: [
+    'tab-overview', 'tab-clearance', 'tab-reports', 'tab-audit', 'tab-report'
+  ],
+  viewer: [
+    'tab-overview', 'tab-clearance', 'tab-reports', 'tab-report'
+  ]
+};
 
 export default function DepartmentSidebar({
   department,
   currentUser,
-}: DepartmentSidebarProps) {
+}: {
+  department: string;
+  currentUser?: any;
+}) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
   // =========================================================
-  // USER
+  // SECURE ROLE & ACCESS DERIVATION
   // =========================================================
+  const rawRole = (currentUser?.role || 'viewer').toLowerCase();
+  
+  // Normalize admin roles
+  const normalizedRole = ['master', 'administrator', 'admin', 'superadmin'].includes(rawRole) 
+    ? 'admin' 
+    : rawRole;
 
-  const role =
-    currentUser?.role?.trim().toLowerCase() || "";
+  const isAdmin = normalizedRole === 'admin';
 
-  const allowedTabs = useMemo(() => {
-    if (
-      Array.isArray(
-        currentUser?.allowedTabs
-      )
-    ) {
-      return currentUser.allowedTabs;
-    }
-
-    return [];
-  }, [currentUser?.allowedTabs]);
+  // Prioritize customized 'allowedTabs' if they exist; otherwise fallback to role presets
+  const effectiveTabs = (currentUser?.allowedTabs && currentUser.allowedTabs.length > 0)
+    ? currentUser.allowedTabs
+    : (PRESET_ROLE_TABS[normalizedRole] || PRESET_ROLE_TABS.viewer);
 
   // =========================================================
-  // ADMIN ACCESS
-  // =========================================================
-
-  const isAdmin =
-    role === "admin" ||
-    role === "administrator" ||
-    role === "master" ||
-    role === "superadmin";
-
-  // =========================================================
-  // DEPARTMENT
+  // DEPARTMENT PATH
   // =========================================================
 
   const deptKey = department
-    ? decodeURIComponent(department)
-        .trim()
-        .toLowerCase()
-        .replace(/\s+/g, "")
-    : "engineering";
+    ? decodeURIComponent(department).toLowerCase().replace(/\s+/g, '')
+    : 'engineering';
 
-  const basePath =
-    `/department/${encodeURIComponent(
-      deptKey
-    )}`;
+  const basePath = `/department/${encodeURIComponent(deptKey)}`;
 
   // =========================================================
-  // ACADEMIC YEAR
+  // ACADEMIC YEAR / TERM
   // =========================================================
 
-  const ay =
-    searchParams.get("ay") ||
-    "A.Y. 2026 - 2027";
+  const ay = searchParams.get('ay') || 'A.Y. 2026 - 2027';
+  const term = searchParams.get('term') || '1st Sem';
 
-  const term =
-    searchParams.get("term") ||
-    "1st Sem";
-
-  const queryString =
-    `?ay=${encodeURIComponent(ay)}` +
-    `&term=${encodeURIComponent(term)}`;
+  const queryString = `?ay=${encodeURIComponent(ay)}&term=${encodeURIComponent(term)}`;
 
   // =========================================================
-  // LOGOS
+  // LOGO
   // =========================================================
 
-  const logoPath =
-    `/${deptKey}_logo.png`;
-
-  const fallbackLogoPath =
-    "/engineering_logo.png";
+  const logoPath = `/${deptKey}_logo.png`;
+  const fallbackLogoPath = '/engineering_logo.png';
 
   // =========================================================
-  // MOBILE SIDEBAR
-  // =========================================================
-
-  const [sidebarOpen, setSidebarOpen] =
-    useState(false);
-
-  useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth >= 992) {
-        setSidebarOpen(false);
-      }
-    };
-
-    window.addEventListener(
-      "resize",
-      handleResize
-    );
-
-    return () => {
-      window.removeEventListener(
-        "resize",
-        handleResize
-      );
-    };
-  }, []);
-
-  // =========================================================
-  // ACTIVE LINK
+  // ACTIVE LINK DETECTION
   // =========================================================
 
   const isActive = (path: string) => {
-    const fullPath =
-      `${basePath}${path}`;
+    const fullPath = `${basePath}${path}`;
 
-    if (path === "") {
+    if (path === '') {
       return (
         pathname === basePath ||
         pathname === `${basePath}/`
@@ -145,528 +92,222 @@ export default function DepartmentSidebar({
 
     return (
       pathname === fullPath ||
-      pathname.startsWith(
-        `${fullPath}/`
-      )
+      pathname.startsWith(`${fullPath}/`)
     );
   };
 
   // =========================================================
-  // CLOSE MOBILE SIDEBAR
+  // MOBILE SIDEBAR
   // =========================================================
 
   const handleNavClick = () => {
-    if (
-      typeof window !== "undefined" &&
-      window.innerWidth < 992
-    ) {
-      setSidebarOpen(false);
+    if (typeof window !== 'undefined' && window.innerWidth < 992) {
+      const sidebar = document.getElementById('appSidebar');
+      if (sidebar) sidebar.classList.remove('show');
     }
   };
-
-  // =========================================================
-  // TAB ACCESS
-  // =========================================================
-
-  const canAccess = (tabId: string) => {
-    /*
-     * Global/admin users see everything.
-     */
-    if (isAdmin) {
-      return true;
-    }
-
-    /*
-     * Other users use their allowedTabs from NextAuth.
-     */
-    return allowedTabs.includes(tabId);
-  };
-
-  // =========================================================
-  // NAV ITEM CLASS
-  // =========================================================
 
   const navItemClass = (path: string) => `
-    list-group-item
-    list-group-item-action
-    rounded
-    py-2
-    px-3
-    d-flex
-    align-items-center
-    text-decoration-none
-    border-0
-    mb-1
+    list-group-item list-group-item-action rounded py-2 px-3 d-flex align-items-center text-decoration-none
     ${
       isActive(path)
-        ? "bg-info bg-opacity-10 text-info fw-bold border-start border-info border-4"
-        : "text-secondary"
+        ? 'bg-info bg-opacity-10 text-info fw-bold border-start border-info border-4'
+        : 'text-secondary'
     }
   `;
 
   // =========================================================
-  // SECTION TITLE
+  // ACCESS CONTROL EVALUATOR
   // =========================================================
 
-  const sectionTitle = (
-    title: string
-  ) => (
-    <div className="text-uppercase text-secondary small fw-bold mt-3 mb-2 px-2">
-      {title}
-    </div>
-  );
-
-  // =========================================================
-  // RENDER
-  // =========================================================
+  const canAccess = (tabId: string) => {
+    if (isAdmin) return true;
+    return effectiveTabs.includes(tabId);
+  };
 
   return (
-    <>
-      {/* =================================================== */}
-      {/* MOBILE MENU BUTTON */}
-      {/* =================================================== */}
+    <nav
+      id="appSidebar"
+      className="sidebar border-end border-secondary bg-card p-3 d-flex flex-column custom-scrollbar"
+      style={{
+        width: '280px',
+        height: '100vh',
+        position: 'sticky',
+        top: 0,
+        overflowY: 'auto',
+        transition: 'all 0.3s ease',
+      }}
+    >
 
-      <button
-        type="button"
-        className="btn btn-dark d-lg-none position-fixed"
-        style={{
-          top: "12px",
-          left: "12px",
-          zIndex: 1050,
-        }}
-        onClick={() =>
-          setSidebarOpen(
-            (previous) => !previous
-          )
-        }
-        aria-label="Toggle navigation"
-      >
-        ☰
-      </button>
-
-      {/* =================================================== */}
-      {/* SIDEBAR */}
-      {/* =================================================== */}
-
-      <nav
-        id="appSidebar"
-        className={`sidebar border-end border-secondary bg-card p-3 d-flex flex-column custom-scrollbar ${
-          sidebarOpen ? "show" : ""
-        }`}
-        style={{
-          width: "280px",
-          minWidth: "280px",
-          height: "100vh",
-          position: "sticky",
-          top: 0,
-          overflowY: "auto",
-          transition: "all 0.3s ease",
-          zIndex: 1040,
-        }}
-      >
-        {/* ================================================= */}
-        {/* BRAND */}
-        {/* ================================================= */}
-
-        <div className="text-center mb-4">
+      {/* =====================================================
+          HEADER
+      ====================================================== */}
+      <div className="d-flex align-items-center mb-4 px-2">
+        <div style={{ width: '40px', flexShrink: 0 }} className="text-center me-2">
           <img
             src={logoPath}
             alt={`${department} Logo`}
-            className="img-fluid mb-2"
-            style={{
-              maxHeight: "70px",
-              maxWidth: "180px",
-              objectFit: "contain",
+            onError={(e) => {
+              e.currentTarget.onerror = null;
+              e.currentTarget.src = fallbackLogoPath;
             }}
-            onError={(event) => {
-              const image =
-                event.currentTarget;
-
-              if (
-                image.src !==
-                `${window.location.origin}${fallbackLogoPath}`
-              ) {
-                image.src =
-                  fallbackLogoPath;
-              }
-            }}
+            style={{ width: '100%', maxHeight: '40px', objectFit: 'contain' }}
           />
-
-          <div className="fw-bold text-info">
-            CLEAR
-          </div>
-
-          <div className="small text-secondary">
-            {department
-              .charAt(0)
-              .toUpperCase() +
-              department.slice(1)}{" "}
-            Department
-          </div>
         </div>
 
-        {/* ================================================= */}
-        {/* CURRENT USER */}
-        {/* ================================================= */}
+        <div className="overflow-hidden">
+          <h6 className="fw-bold mb-0 text-accent text-truncate">
+            CLEAR System
+          </h6>
+          <small className="text-secondary text-truncate d-block" style={{ fontSize: '0.75rem', textTransform: 'uppercase' }}>
+            COLLEGE OF {department}
+          </small>
+        </div>
+      </div>
 
-        <div className="bg-dark bg-opacity-25 rounded p-3 mb-3">
-          <div className="small text-secondary">
-            Signed in as
-          </div>
+      {/* =====================================================
+          NAVIGATION
+      ====================================================== */}
+      <div className="list-group list-group-flush gap-1 flex-grow-1" style={{ fontSize: '0.9rem' }}>
 
-          <div
-            className="fw-bold text-light text-truncate"
-            title={
-              currentUser?.fullName || ""
-            }
-          >
-            {currentUser?.fullName ||
-              "Department Officer"}
-          </div>
-
-          <div className="small text-info text-uppercase">
-            {currentUser?.role ||
-              "OFFICER"}
-          </div>
+        {/* ===================================================
+            CORE
+        ==================================================== */}
+        <div className="text-uppercase text-secondary fw-bold px-2 py-1" style={{ fontSize: '0.65rem', letterSpacing: '0.05em' }}>
+          Core
         </div>
 
-        {/* ================================================= */}
-        {/* NAVIGATION */}
-        {/* ================================================= */}
+        {canAccess('tab-overview') && (
+          <Link href={`${basePath}${queryString}`} onClick={handleNavClick} className={navItemClass('')}>
+            <i className="bi bi-speedometer2 me-3 fs-6"></i>Overview
+          </Link>
+        )}
 
-        <div className="list-group list-group-flush">
+        {canAccess('tab-clearance') && (
+          <Link href={`${basePath}/clearance${queryString}`} onClick={handleNavClick} className={navItemClass('/clearance')}>
+            <i className="bi bi-person-check me-3 fs-6"></i>Clearance
+          </Link>
+        )}
 
-          {/* ================================================= */}
-          {/* CORE */}
-          {/* ================================================= */}
+        {canAccess('tab-students') && (
+          <Link href={`${basePath}/students${queryString}`} onClick={handleNavClick} className={navItemClass('/students')}>
+            <i className="bi bi-people me-3 fs-6"></i>Students Roster
+          </Link>
+        )}
 
-          {sectionTitle("Core")}
-
-          {canAccess("tab-overview") && (
-            <Link
-              href={`${basePath}${queryString}`}
-              className={navItemClass("")}
-              onClick={handleNavClick}
-            >
-              <span className="me-2">
-                ⌂
-              </span>
-              Overview
-            </Link>
-          )}
-
-          {canAccess("tab-clearance") && (
-            <Link
-              href={`${basePath}/clearance${queryString}`}
-              className={navItemClass(
-                "/clearance"
-              )}
-              onClick={handleNavClick}
-            >
-              <span className="me-2">
-                ✓
-              </span>
-              Clearance
-            </Link>
-          )}
-
-          {canAccess("tab-students") && (
-            <Link
-              href={`${basePath}/students${queryString}`}
-              className={navItemClass(
-                "/students"
-              )}
-              onClick={handleNavClick}
-            >
-              <span className="me-2">
-                ♙
-              </span>
-              Students
-            </Link>
-          )}
-
-          {/* ================================================= */}
-          {/* OPERATIONS */}
-          {/* ================================================= */}
-
-          {sectionTitle("Operations")}
-
-          {canAccess("tab-collections") && (
-            <Link
-              href={`${basePath}/collections${queryString}`}
-              className={navItemClass(
-                "/collections"
-              )}
-              onClick={handleNavClick}
-            >
-              <span className="me-2">
-                ₱
-              </span>
-              Collections
-            </Link>
-          )}
-
-          {canAccess("tab-remittances") && (
-            <Link
-              href={`${basePath}/remittances${queryString}`}
-              className={navItemClass(
-                "/remittances"
-              )}
-              onClick={handleNavClick}
-            >
-              <span className="me-2">
-                ⇄
-              </span>
-              Remittances
-            </Link>
-          )}
-
-          {canAccess("tab-advances") && (
-            <Link
-              href={`${basePath}/advances${queryString}`}
-              className={navItemClass(
-                "/advances"
-              )}
-              onClick={handleNavClick}
-            >
-              <span className="me-2">
-                ▣
-              </span>
-              Cash Advances
-            </Link>
-          )}
-
-          {canAccess("tab-liquidations") && (
-            <Link
-              href={`${basePath}/liquidations${queryString}`}
-              className={navItemClass(
-                "/liquidations"
-              )}
-              onClick={handleNavClick}
-            >
-              <span className="me-2">
-                ▤
-              </span>
-              Liquidations
-            </Link>
-          )}
-
-          {canAccess("tab-penalties") && (
-            <Link
-              href={`${basePath}/penalties${queryString}`}
-              className={navItemClass(
-                "/penalties"
-              )}
-              onClick={handleNavClick}
-            >
-              <span className="me-2">
-                !
-              </span>
-              Penalties
-            </Link>
-          )}
-
-          {canAccess("tab-collectibles") && (
-            <Link
-              href={`${basePath}/collectibles${queryString}`}
-              className={navItemClass(
-                "/collectibles"
-              )}
-              onClick={handleNavClick}
-            >
-              <span className="me-2">
-                ◈
-              </span>
-              Collectibles
-            </Link>
-          )}
-
-          {/* ================================================= */}
-          {/* AUDIT & REPORTING */}
-          {/* ================================================= */}
-
-          {sectionTitle(
-            "Audit & Reporting"
-          )}
-
-          {canAccess("tab-reports") && (
-            <Link
-              href={`${basePath}/reports${queryString}`}
-              className={navItemClass(
-                "/reports"
-              )}
-              onClick={handleNavClick}
-            >
-              <span className="me-2">
-                ▥
-              </span>
-              Reports
-            </Link>
-          )}
-
-          {canAccess("tab-summary") && (
-            <Link
-              href={`${basePath}/summary${queryString}`}
-              className={navItemClass(
-                "/summary"
-              )}
-              onClick={handleNavClick}
-            >
-              <span className="me-2">
-                ▦
-              </span>
-              Summary
-            </Link>
-          )}
-
-          {canAccess("tab-realign") && (
-            <Link
-              href={`${basePath}/realign${queryString}`}
-              className={navItemClass(
-                "/realign"
-              )}
-              onClick={handleNavClick}
-            >
-              <span className="me-2">
-                ↻
-              </span>
-              Fund Realignment
-            </Link>
-          )}
-
-          {/* ================================================= */}
-          {/* ADMINISTRATION */}
-          {/* ================================================= */}
-
-          {sectionTitle(
-            "Administration"
-          )}
-
-          {canAccess("tab-void") && (
-            <Link
-              href={`${basePath}/void${queryString}`}
-              className={navItemClass(
-                "/void"
-              )}
-              onClick={handleNavClick}
-            >
-              <span className="me-2">
-                ⊘
-              </span>
-              Void Transactions
-            </Link>
-          )}
-
-          {canAccess("tab-users") && (
-            <Link
-              href={`${basePath}/users${queryString}`}
-              className={navItemClass(
-                "/users"
-              )}
-              onClick={handleNavClick}
-            >
-              <span className="me-2">
-                ♙
-              </span>
-              Users
-            </Link>
-          )}
-
-          {canAccess("tab-logs") && (
-            <Link
-              href={`${basePath}/logs${queryString}`}
-              className={navItemClass(
-                "/logs"
-              )}
-              onClick={handleNavClick}
-            >
-              <span className="me-2">
-                ☷
-              </span>
-              System Logs
-            </Link>
-          )}
-
-          {canAccess("tab-setup") && (
-            <Link
-              href={`${basePath}/setup${queryString}`}
-              className={navItemClass(
-                "/setup"
-              )}
-              onClick={handleNavClick}
-            >
-              <span className="me-2">
-                ⚙
-              </span>
-              Setup
-            </Link>
-          )}
-        </div>
-
-        {/* ================================================= */}
-        {/* SPACER */}
-        {/* ================================================= */}
-
-        <div className="flex-grow-1" />
-
-        {/* ================================================= */}
-        {/* ACADEMIC INFORMATION */}
-        {/* ================================================= */}
-
-        <div className="border-top border-secondary pt-3 mt-3">
-          <div className="small text-secondary">
-            Academic Year
+        {/* ===================================================
+            OPERATIONS
+        ==================================================== */}
+        {(
+          canAccess('tab-payment') || canAccess('tab-remittances') || canAccess('tab-advances') ||
+          canAccess('tab-audit') || canAccess('tab-penalties') || canAccess('tab-collectibles')
+        ) && (
+          <div className="text-uppercase text-secondary fw-bold px-2 pt-3 pb-1" style={{ fontSize: '0.65rem', letterSpacing: '0.05em' }}>
+            Operations
           </div>
+        )}
 
-          <div className="small text-light">
-            {ay}
+        {canAccess('tab-payment') && (
+          <Link href={`${basePath}/collections${queryString}`} onClick={handleNavClick} className={navItemClass('/collections')}>
+            <i className="bi bi-cash-stack me-3 fs-6"></i>Collections
+          </Link>
+        )}
+
+        {canAccess('tab-remittances') && (
+          <Link href={`${basePath}/remittances${queryString}`} onClick={handleNavClick} className={navItemClass('/remittances')}>
+            <i className="bi bi-upload me-3 fs-6"></i>Remittance Queue
+          </Link>
+        )}
+
+        {canAccess('tab-advances') && (
+          <Link href={`${basePath}/advances${queryString}`} onClick={handleNavClick} className={navItemClass('/advances')}>
+            <i className="bi bi-journal-arrow-up me-3 fs-6"></i>Cash Advances
+          </Link>
+        )}
+
+        {canAccess('tab-audit') && (
+          <Link href={`${basePath}/liquidations${queryString}`} onClick={handleNavClick} className={navItemClass('/liquidations')}>
+            <i className="bi bi-receipt me-3 fs-6"></i>Liquidations
+          </Link>
+        )}
+
+        {canAccess('tab-penalties') && (
+          <Link href={`${basePath}/penalties${queryString}`} onClick={handleNavClick} className={navItemClass('/penalties')}>
+            <i className="bi bi-exclamation-octagon me-3 fs-6"></i>Penalties & Fines
+          </Link>
+        )}
+
+        {canAccess('tab-collectibles') && (
+          <Link href={`${basePath}/collectibles${queryString}`} onClick={handleNavClick} className={navItemClass('/collectibles')}>
+            <i className="bi bi-inbox me-3 fs-6"></i>Collectibles & Dues
+          </Link>
+        )}
+
+        {/* ===================================================
+            AUDIT & REPORTING
+        ==================================================== */}
+        {(
+          canAccess('tab-reports') || canAccess('tab-report') || canAccess('tab-transfer')
+        ) && (
+          <div className="text-uppercase text-secondary fw-bold px-2 pt-3 pb-1" style={{ fontSize: '0.65rem', letterSpacing: '0.05em' }}>
+            Audit & Reporting
           </div>
+        )}
 
-          <div className="small text-secondary mt-2">
-            Term
+        {canAccess('tab-reports') && (
+          <Link href={`${basePath}/reports${queryString}`} onClick={handleNavClick} className={navItemClass('/reports')}>
+            <i className="bi bi-bar-chart-line me-3 fs-6"></i>Detailed Reports
+          </Link>
+        )}
+
+        {canAccess('tab-report') && (
+          <Link href={`${basePath}/summary${queryString}`} onClick={handleNavClick} className={navItemClass('/summary')}>
+            <i className="bi bi-file-earmark-text me-3 fs-6"></i>Summary Report
+          </Link>
+        )}
+
+        {canAccess('tab-transfer') && (
+          <Link href={`${basePath}/realign${queryString}`} onClick={handleNavClick} className={navItemClass('/realign')}>
+            <i className="bi bi-arrow-left-right me-3 fs-6"></i>Realign Funds
+          </Link>
+        )}
+
+        {/* ===================================================
+            ADMINISTRATION
+        ==================================================== */}
+        {(
+          canAccess('tab-void') || canAccess('tab-users') || canAccess('tab-setup') || isAdmin
+        ) && (
+          <div className="text-uppercase text-secondary fw-bold px-2 pt-3 pb-1" style={{ fontSize: '0.65rem', letterSpacing: '0.05em' }}>
+            Administration
           </div>
+        )}
 
-          <div className="small text-light">
-            {term}
-          </div>
-        </div>
-      </nav>
+        {canAccess('tab-void') && (
+          <Link href={`${basePath}/void${queryString}`} onClick={handleNavClick} className={navItemClass('/void')}>
+            <i className="bi bi-slash-circle me-3 fs-6"></i>Void Center
+          </Link>
+        )}
 
-      {/* =================================================== */}
-      {/* MOBILE BACKDROP */}
-      {/* =================================================== */}
+        {canAccess('tab-users') && (
+          <Link href={`${basePath}/users${queryString}`} onClick={handleNavClick} className={navItemClass('/users')}>
+            <i className="bi bi-person-gear me-3 fs-6"></i>User Management
+          </Link>
+        )}
 
-      {sidebarOpen && (
-        <div
-          className="d-lg-none position-fixed top-0 start-0 w-100 h-100 bg-dark bg-opacity-50"
-          style={{
-            zIndex: 1030,
-          }}
-          onClick={() =>
-            setSidebarOpen(false)
-          }
-        />
-      )}
+        {isAdmin && (
+          <Link href={`${basePath}/logs${queryString}`} onClick={handleNavClick} className={navItemClass('/logs')}>
+            <i className="bi bi-journal-text me-3 fs-6"></i>System Logs
+          </Link>
+        )}
 
-      {/* =================================================== */}
-      {/* MOBILE CSS */}
-      {/* =================================================== */}
+        {canAccess('tab-setup') && (
+          <Link href={`${basePath}/setup${queryString}`} onClick={handleNavClick} className={navItemClass('/setup')}>
+            <i className="bi bi-sliders me-3 fs-6"></i>System Setup
+          </Link>
+        )}
 
-      <style jsx>{`
-        @media (max-width: 991.98px) {
-          #appSidebar {
-            position: fixed !important;
-            left: 0;
-            top: 0;
-            transform: translateX(-100%);
-            box-shadow: 0 0 30px rgba(0, 0, 0, 0.4);
-          }
-
-          #appSidebar.show {
-            transform: translateX(0);
-          }
-        }
-      `}</style>
-    </>
+      </div>
+    </nav>
   );
 }

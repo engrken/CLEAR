@@ -1,62 +1,71 @@
 import type { ReactNode } from "react";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { redirect } from "next/navigation";
 
 import DepartmentSidebar from "@/app/department/[department]/Sidebar";
 import TopHeader from "@/app/department/[department]/TopHeader";
 import Footer from "@/app/department/[department]/components/Footer";
 import DataPrivacyModal from "@/app/department/[department]/components/DataPrivacyModal";
 
-interface ClearSessionUser {
-  id?: string;
-  name?: string | null;
-  email?: string | null;
-  role?: string | null;
-  organizationId?: string | null;
-  department?: string | null;
-  allowedTabs?: string[] | null;
+interface ProtectedDepartmentLayoutProps {
+  children: ReactNode;
+  params: Promise<{ department: string }>;
 }
 
 export default async function ProtectedDepartmentLayout({
   children,
   params,
-}: {
-  children: ReactNode;
-  params: Promise<{ department: string }>;
-}) {
+}: ProtectedDepartmentLayoutProps) {
   const { department } = await params;
 
   const cleanDepartment = decodeURIComponent(department)
     .trim()
     .toLowerCase();
 
-  const session = await auth();
-
-  // Not logged in
-  if (!session?.user) {
-    redirect(`/department/${encodeURIComponent(cleanDepartment)}?login=true`);
-  }
-
-  const user = session.user as ClearSessionUser;
-
-  const role = (user.role || "").trim().toLowerCase();
-
-  const allowedRoles = [
-    "admin",
-    "administrator",
-    "master",
-    "auditor",
-    "audit",
-    "superadmin",
-  ];
-
-  if (!allowedRoles.includes(role)) {
-    redirect(
-      `/department/${encodeURIComponent(cleanDepartment)}?forbidden=true`
+  // ---------------------------------------------------------
+  // INVALID DEPARTMENT CHECK
+  // ---------------------------------------------------------
+  if (!cleanDepartment) {
+    return (
+      <div className="d-flex min-vh-100 align-items-center justify-content-center">
+         <h2>Invalid Department</h2>
+      </div>
     );
   }
 
+  // ---------------------------------------------------------
+  // AUTHENTICATION STATE
+  // ---------------------------------------------------------
+  const session = await auth();
+
+  // If unauthenticated, DO NOT redirect (prevents infinite loops).
+  // Return raw children so page.tsx can render the OtpModal/Login UI.
+  if (!session?.user) {
+    return <>{children}</>;
+  }
+
+  // ---------------------------------------------------------
+  // USER INFORMATION FROM NEXTAUTH
+  // ---------------------------------------------------------
+  const userRole = session.user.role?.trim().toLowerCase() || "officer";
+
+  const allowedTabs = Array.isArray(session.user.allowedTabs)
+    ? session.user.allowedTabs
+    : [];
+
+  const currentUser = {
+    id: session.user.id,
+    fullName: session.user.name || "Department Officer",
+    role: session.user.role || "OFFICER",
+    email: session.user.email || "",
+    organizationId: session.user.organizationId || "",
+    department: session.user.department || cleanDepartment,
+    allowedTabs,
+  };
+
+  // ---------------------------------------------------------
+  // ORGANIZATION / DEPARTMENT CHECK
+  // ---------------------------------------------------------
   const organization = await prisma.organization.findUnique({
     where: {
       subdomain: cleanDepartment,
@@ -64,72 +73,100 @@ export default async function ProtectedDepartmentLayout({
   });
 
   if (!organization) {
-    redirect("/");
-  }
-
-  // SuperAdmin and Master can access all departments
-  const isGlobalAdmin =
-    role === "superadmin" ||
-    role === "master";
-
-  if (
-    !isGlobalAdmin &&
-    user.organizationId !== organization.id
-  ) {
-    redirect(
-      `/department/${encodeURIComponent(cleanDepartment)}?forbidden=true`
+    return (
+      <div className="container-fluid p-4">
+        <div className="alert alert-danger shadow-sm border-secondary">
+          <h4 className="fw-bold mb-2">
+            Department Not Found
+          </h4>
+          <p className="small mb-0">
+            The department "{cleanDepartment}" does not exist
+            in the database.
+          </p>
+        </div>
+      </div>
     );
   }
 
-  const allowedTabs = Array.isArray(user.allowedTabs)
-    ? user.allowedTabs
-    : [];
+  // ---------------------------------------------------------
+  // AUTHORIZATION & TENANT ISOLATION
+  // ---------------------------------------------------------
+  // Note: "officer" was added to prevent default department officers from being locked out.
+  const allowedRoles = new Set([
+    "admin",
+    "administrator",
+    "master",
+    "auditor",
+    "audit",
+    "superadmin",
+    "officer" 
+  ]);
 
-  const currentUser = {
-    id: user.id || "",
-    fullName: user.name || "Department Officer",
-    role: user.role || "OFFICER",
-    email: user.email || "",
-    organizationId: user.organizationId || "",
-    department: user.department || cleanDepartment,
-    allowedTabs,
-  };
+  const isGlobalAdmin = userRole === "superadmin" || userRole === "master";
+  let isForbidden = false;
+  let forbiddenReason = "";
 
+  if (!allowedRoles.has(userRole)) {
+    isForbidden = true;
+    forbiddenReason = "Your role lacks permission to access the CLEAR system.";
+  }
+
+  if (!isGlobalAdmin && !isForbidden) {
+    if (!session.user.organizationId || session.user.organizationId !== organization.id) {
+      isForbidden = true;
+      forbiddenReason = "You are not authorized to view records for this department.";
+    }
+  }
+
+  // ---------------------------------------------------------
+  // PROTECTED APPLICATION SHELL
+  // ---------------------------------------------------------
   return (
-    <div className="clear-app-shell">
+    <div
+      className="d-flex min-vh-100"
+      style={{
+        width: "100%",
+        minWidth: 0,
+      }}
+    >
+      <DepartmentSidebar
+        department={cleanDepartment}
+        currentUser={currentUser}
+      />
 
-      {/* STATIC SIDEBAR */}
-      <aside className="clear-sidebar">
-        <DepartmentSidebar
+      <div
+        className="flex-grow-1 d-flex flex-column"
+        style={{
+          minWidth: 0,
+          width: "100%",
+        }}
+      >
+        <TopHeader
           department={cleanDepartment}
           currentUser={currentUser}
         />
-      </aside>
 
-      {/* RIGHT SIDE APPLICATION */}
-      <div className="clear-main-area">
-
-        {/* STATIC HEADER */}
-        <header className="clear-header">
-          <TopHeader
-            department={cleanDepartment}
-            currentUser={currentUser}
-          />
-        </header>
-
-        {/* ONLY THIS AREA CHANGES */}
-        <main className="clear-page-content">
-          {children}
+        <main
+          className="flex-grow-1 p-3 p-md-4"
+          style={{
+            minWidth: 0,
+          }}
+        >
+          {isForbidden ? (
+            <div className="alert alert-danger shadow-sm border-secondary">
+              <h4 className="fw-bold mb-2">
+                <i className="bi bi-shield-lock-fill me-2"></i> Access Denied
+              </h4>
+              <p className="small mb-0">{forbiddenReason}</p>
+            </div>
+          ) : (
+            children
+          )}
         </main>
 
-        {/* STATIC FOOTER */}
-        <footer className="clear-footer">
-          <Footer />
-        </footer>
-
+        <Footer />
+        <DataPrivacyModal />
       </div>
-
-      <DataPrivacyModal />
     </div>
   );
 }
