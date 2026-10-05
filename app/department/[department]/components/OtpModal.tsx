@@ -24,6 +24,10 @@ export default function OtpModal({
   const [devNotice, setDevNotice] =
     useState("");
 
+  // =========================================================
+  // SEND OTP
+  // =========================================================
+
   const handleSendOtp = async (
     e: React.FormEvent
   ) => {
@@ -33,20 +37,19 @@ export default function OtpModal({
     setDevNotice("");
 
     try {
+      const cleanEmail = email.trim().toLowerCase();
+
       const result = await requestOtp(
         department,
-        email
+        cleanEmail
       );
 
       if (result.success) {
-        setDevNotice(
-          result.message
-        );
-
+        setDevNotice(result.message);
         setStep("code");
       }
     } catch (error) {
-      console.error(error);
+      console.error("OTP request error:", error);
 
       alert(
         error instanceof Error
@@ -58,48 +61,83 @@ export default function OtpModal({
     }
   };
 
+  // =========================================================
+  // VERIFY OTP
+  // =========================================================
+
   const handleVerifyOtp = async (
-    e: React.FormEvent
-  ) => {
-    e.preventDefault();
+  e: React.FormEvent
+) => {
+  e.preventDefault();
 
-    setLoading(true);
+  if (code.length !== 6) {
+    alert("Please enter the complete 6-digit verification code.");
+    return;
+  }
 
-    try {
-      const result = await signIn(
-        "credentials",
-        {
-          email,
-          code,
-          department,
-          redirect: false,
-        }
-      );
+  setLoading(true);
 
-      if (result?.error) {
-        alert(result.error);
-        return;
-      }
+  try {
+    const result = await signIn("credentials", {
+      email: email.trim().toLowerCase(),
+      code: code.trim(),
+      department: decodeURIComponent(department)
+        .trim()
+        .toLowerCase(),
+      redirect: false,
+    });
 
-      // =====================================================
-      // SUCCESS
-      // =====================================================
+    console.log("NextAuth signIn result:", result);
 
-      window.location.href =
-        `/department/${encodeURIComponent(
-          department
-        )}`;
+    if (!result) {
+      alert("No response was received from the authentication server.");
+      return;
+    }
 
-    } catch (error) {
-      console.error(error);
+    if (result.error) {
+      console.error("NextAuth authentication error:", result.error);
 
       alert(
-        "Verification failed."
+        result.error === "CredentialsSignin"
+          ? "The verification code was rejected. Please check that you entered the latest OTP correctly."
+          : result.error
       );
-    } finally {
-      setLoading(false);
+
+      return;
     }
+
+    // Successful authentication
+    window.location.href =
+      `/department/${encodeURIComponent(
+        decodeURIComponent(department).trim().toLowerCase()
+      )}/summary`;
+
+  } catch (error) {
+    console.error("OTP verification error:", error);
+
+    alert(
+      error instanceof Error
+        ? error.message
+        : "Verification failed. Please try again."
+    );
+  } finally {
+    setLoading(false);
+  }
+};
+
+  // =========================================================
+  // RESET LOGIN
+  // =========================================================
+
+  const resetLogin = () => {
+    setStep("email");
+    setCode("");
+    setDevNotice("");
   };
+
+  // =========================================================
+  // UI
+  // =========================================================
 
   return (
     <div
@@ -117,9 +155,11 @@ export default function OtpModal({
           <div className="d-flex justify-content-between align-items-center mb-3">
 
             <h5 className="modal-title text-accent fw-bold">
+
               <i className="bi bi-shield-lock-fill me-2"></i>
 
               Departmental Authorization
+
             </h5>
 
             <button
@@ -128,33 +168,45 @@ export default function OtpModal({
               data-bs-dismiss="modal"
               aria-label="Close"
             />
+
           </div>
 
           {/* DEPARTMENT */}
 
           <div className="text-center mb-3">
+
             <span className="badge bg-secondary">
+
               <i className="bi bi-building me-1"></i>
+
               {department}
+
             </span>
+
           </div>
 
-          {/* EMAIL */}
+          {/* =================================================
+              EMAIL STEP
+          ================================================= */}
 
           {step === "email" ? (
 
             <form onSubmit={handleSendOtp}>
 
               <p className="text-secondary small mb-3">
+
                 Enter your registered institutional
                 email address. A 6-digit verification
                 code will be dispatched to your inbox.
+
               </p>
 
               <div className="mb-3">
 
                 <label className="form-label text-secondary small fw-semibold">
+
                   Email Address
+
                 </label>
 
                 <input
@@ -176,39 +228,59 @@ export default function OtpModal({
                 className="btn btn-info w-100 fw-bold py-2 text-dark"
                 disabled={loading}
               >
+
                 {loading
                   ? "Sending Code..."
                   : "Send Verification Code"}
+
               </button>
 
             </form>
 
           ) : (
 
+            /* =================================================
+               CODE STEP
+            ================================================= */
+
             <form onSubmit={handleVerifyOtp}>
 
               <div className="mb-3 text-center">
 
                 <p className="text-secondary small mb-1">
+
                   We sent a verification code to:
+
                 </p>
 
                 <span className="text-info fw-bold fs-6">
+
                   {email}
+
                 </span>
 
               </div>
 
+              {/* SERVER MESSAGE */}
+
               {devNotice && (
+
                 <div className="alert alert-secondary bg-dark border-secondary text-light small py-2 px-3 mb-3 text-center">
+
                   {devNotice}
+
                 </div>
+
               )}
+
+              {/* OTP INPUT */}
 
               <div className="mb-3">
 
                 <label className="form-label text-secondary small fw-semibold">
+
                   Enter 6-Digit Code
+
                 </label>
 
                 <input
@@ -228,9 +300,12 @@ export default function OtpModal({
                   placeholder="000000"
                   required
                   autoComplete="one-time-code"
+                  autoFocus
                 />
 
               </div>
+
+              {/* VERIFY BUTTON */}
 
               <button
                 type="submit"
@@ -240,23 +315,25 @@ export default function OtpModal({
                   code.length !== 6
                 }
               >
+
                 {loading
                   ? "Verifying..."
                   : "Verify & Sign In"}
+
               </button>
+
+              {/* RESET */}
 
               <div className="text-center">
 
                 <button
                   type="button"
                   className="btn btn-link text-secondary text-decoration-none small p-0"
-                  onClick={() => {
-                    setStep("email");
-                    setCode("");
-                    setDevNotice("");
-                  }}
+                  onClick={resetLogin}
                 >
+
                   Use a different email
+
                 </button>
 
               </div>

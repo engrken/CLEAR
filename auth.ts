@@ -37,6 +37,8 @@ export const {
       },
 
       async authorize(credentials) {
+        console.log("========== AUTH START ==========");
+
         const email = credentials?.email
           ? String(credentials.email)
               .trim()
@@ -47,21 +49,89 @@ export const {
           ? String(credentials.code).trim()
           : null;
 
-        const department =
-          credentials?.department
-            ? String(credentials.department)
-                .trim()
-                .toLowerCase()
-            : null;
+        const department = credentials?.department
+          ? decodeURIComponent(
+              String(credentials.department)
+            )
+              .trim()
+              .toLowerCase()
+          : null;
 
-        if (!email || !code || !department) {
+        console.log("AUTH EMAIL:", email);
+        console.log("AUTH DEPARTMENT:", department);
+        console.log("AUTH CODE RECEIVED:", !!code);
+
+        if (!email || !code) {
           throw new CustomAuthError(
-            "Email, verification code, and department are required."
+            "Email and verification code are required."
           );
         }
 
         // =====================================================
-        // FIND REQUESTED DEPARTMENT
+        // SUPER ADMIN
+        // =====================================================
+
+        if (email === "kent.bsece@gmail.com") {
+          console.log("AUTH MODE: SUPER ADMIN");
+
+          const tokenRecord =
+            await prisma.verificationToken.findUnique({
+              where: {
+                identifier: email,
+              },
+            });
+
+          if (!tokenRecord) {
+            throw new CustomAuthError(
+              "No Super Admin verification code requested."
+            );
+          }
+
+          if (tokenRecord.token !== code) {
+            throw new CustomAuthError(
+              "Invalid Super Admin verification code."
+            );
+          }
+
+          if (tokenRecord.expires < new Date()) {
+            throw new CustomAuthError(
+              "Super Admin verification code has expired."
+            );
+          }
+
+          await prisma.verificationToken.delete({
+            where: {
+              identifier: email,
+            },
+          });
+
+          console.log("SUPER ADMIN AUTH SUCCESS");
+
+          return {
+            id: "super-admin-01",
+            name: "System Architect",
+            email,
+            role: "SuperAdmin",
+            organizationId: null,
+            department: null,
+            allowedTabs: [],
+          };
+        }
+
+        // =====================================================
+        // NORMAL DEPARTMENT USER
+        // =====================================================
+
+        console.log("AUTH MODE: DEPARTMENT USER");
+
+        if (!department) {
+          throw new CustomAuthError(
+            "Department is required."
+          );
+        }
+
+        // =====================================================
+        // FIND ORGANIZATION
         // =====================================================
 
         const organization =
@@ -77,65 +147,14 @@ export const {
           );
         }
 
-        // =====================================================
-        // SUPER ADMIN
-        // =====================================================
-
-        if (
-          email === "kent.bsece@gmail.com"
-        ) {
-          const tokenRecord =
-            await prisma.verificationToken.findUnique({
-              where: {
-                identifier: email,
-              },
-            });
-
-          if (!tokenRecord) {
-            throw new CustomAuthError(
-              "No verification code requested."
-            );
-          }
-
-          if (
-            tokenRecord.expires < new Date()
-          ) {
-            await prisma.verificationToken.delete({
-              where: {
-                identifier: email,
-              },
-            });
-
-            throw new CustomAuthError(
-              "Verification code has expired."
-            );
-          }
-
-          if (
-            tokenRecord.token !== code
-          ) {
-            throw new CustomAuthError(
-              "Invalid verification code."
-            );
-          }
-
-          await prisma.verificationToken.delete({
-            where: {
-              identifier: email,
-            },
-          });
-
-          return {
-            id: "super-admin-01",
-            name: "System Architect",
-            email,
-            role: "SuperAdmin",
-            organizationId: null,
-          };
-        }
+        console.log(
+          "AUTH ORGANIZATION:",
+          organization.id,
+          organization.subdomain
+        );
 
         // =====================================================
-        // TENANT USER
+        // FIND USER
         // =====================================================
 
         const user =
@@ -147,48 +166,70 @@ export const {
             },
           });
 
+        console.log("AUTH USER FOUND:", !!user);
+        console.log("AUTH USER ID:", user?.id);
+        console.log(
+          "AUTH OTP EXISTS:",
+          !!user?.otpCode
+        );
+
+        console.log(
+          "AUTH OTP EXPIRED:",
+          user?.otpExpires
+            ? user.otpExpires < new Date()
+            : null
+        );
+
         if (!user) {
           throw new CustomAuthError(
-            "This account is not registered or is inactive for this department."
+            "This account is not authorized for this department."
           );
         }
 
         // =====================================================
-        // VERIFY OTP
+        // CHECK OTP EXISTENCE
         // =====================================================
 
-        if (
-          !user.otpCode ||
-          user.otpCode.trim() !== code
-        ) {
+        if (!user.otpCode) {
           throw new CustomAuthError(
-            "Invalid verification code."
+            "No department verification code requested."
           );
         }
+
+        // =====================================================
+        // CHECK OTP EXPIRATION
+        // =====================================================
 
         if (
           !user.otpExpires ||
-          new Date() > user.otpExpires
+          user.otpExpires < new Date()
         ) {
-          await prisma.tenantUser.update({
-            where: {
-              id: user.id,
-            },
-
-            data: {
-              otpCode: null,
-              otpExpires: null,
-            },
-          });
-
           throw new CustomAuthError(
             "Verification code has expired."
           );
         }
 
         // =====================================================
-        // CLEAR OTP
+        // CHECK OTP VALUE
         // =====================================================
+
+        if (
+          user.otpCode.trim() !== code.trim()
+        ) {
+          console.log("AUTH OTP MISMATCH");
+
+          throw new CustomAuthError(
+            "Invalid verification code."
+          );
+        }
+
+        console.log("AUTH OTP VALID.");
+
+        // =====================================================
+        // CONSUME OTP
+        // =====================================================
+
+        console.log("AUTH CLEARING OTP...");
 
         await prisma.tenantUser.update({
           where: {
@@ -201,17 +242,48 @@ export const {
           },
         });
 
+        console.log("AUTH OTP CLEARED.");
+
         // =====================================================
-        // AUTHENTICATED USER
+        // PARSE ALLOWED TABS
         // =====================================================
+
+        let allowedTabs: string[] = [];
+
+        try {
+          if (user.allowedTabs) {
+            const parsed =
+              JSON.parse(user.allowedTabs);
+
+            if (Array.isArray(parsed)) {
+              allowedTabs = parsed;
+            }
+          }
+        } catch {
+          allowedTabs = [];
+        }
+
+        console.log(
+          "AUTH ALLOWED TABS:",
+          allowedTabs
+        );
+
+        // =====================================================
+        // SUCCESS
+        // =====================================================
+
+        console.log(
+          "========== AUTH SUCCESS =========="
+        );
 
         return {
           id: user.id,
           name: user.fullName,
           email: user.email,
           role: user.role,
-          organizationId:
-            user.organizationId,
+          organizationId: organization.id,
+          department: organization.subdomain,
+          allowedTabs,
         };
       },
     }),
@@ -229,9 +301,19 @@ export const {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.role = user.role;
+        const authenticatedUser = user as any;
+
+        token.role =
+          authenticatedUser.role ?? null;
+
         token.organizationId =
-          user.organizationId;
+          authenticatedUser.organizationId ?? null;
+
+        token.department =
+          authenticatedUser.department ?? null;
+
+        token.allowedTabs =
+          authenticatedUser.allowedTabs ?? [];
       }
 
       return token;
@@ -239,14 +321,20 @@ export const {
 
     async session({ session, token }) {
       if (session.user) {
-        session.user.id =
-          token.sub ?? "";
+        const sessionUser =
+          session.user as any;
 
-        session.user.role =
-          token.role ?? "viewer";
+        sessionUser.role =
+          token.role ?? null;
 
-        session.user.organizationId =
+        sessionUser.organizationId =
           token.organizationId ?? null;
+
+        sessionUser.department =
+          token.department ?? null;
+
+        sessionUser.allowedTabs =
+          token.allowedTabs ?? [];
       }
 
       return session;
