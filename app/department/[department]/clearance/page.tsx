@@ -236,18 +236,17 @@ export default async function ClearancePage({
     if (studentRecord) {
       [collections, penalties, cashAdvances] = await Promise.all([
         prisma.collection.findMany({
-          where: { organizationId: organization.id, academicYear: ay, term, studentId: studentRecord.studentId },
-          orderBy: { date: 'desc' }
-        }),
-        prisma.penalty.findMany({
-          where: { organizationId: organization.id, academicYear: ay, term, studentId: studentRecord.studentId },
-          orderBy: { date: 'desc' }
-        }),
-        prisma.cashAdvance.findMany({
-          where: { organizationId: organization.id, academicYear: ay, term, requestor: { contains: studentRecord.studentId } },
-          orderBy: { dateIssued: 'desc' }
-        })
-      ]);
+  where: {
+    organizationId: organization.id,
+    academicYear: ay,
+    term,
+    OR: [
+      { studentId: studentRecord.studentId },
+      { studentName: { equals: studentRecord.fullName, mode: 'insensitive' } }
+    ]
+  },
+  orderBy: { date: 'desc' }
+});
 
       // Departmental Package Check
       const pkgRate = termPackages[term] || 0;
@@ -277,8 +276,8 @@ export default async function ClearancePage({
       isCleared = pendingDues.length === 0;
 
       if (isCleared) {
-        const rawStr = `${studentRecord.studentId}|${ay}|${term}|${salt}`;
-        clearanceSig = crypto.createHash('sha256').update(rawStr).digest('hex');
+        const rawStr = `${studentRecord.studentId.toLowerCase()}|${ay}|${term}|${salt}`;
+clearanceSig = crypto.createHash('sha256').update(rawStr).digest('hex');
         verifyUrl = `${basePath}/clearance?ay=${encodeURIComponent(ay)}&term=${encodeURIComponent(term)}&q=${encodeURIComponent(studentRecord.studentId)}&sig=${encodeURIComponent(clearanceSig)}`;
       }
     }
