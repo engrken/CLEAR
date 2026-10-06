@@ -1,30 +1,27 @@
 import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
-import { redirect } from 'next/navigation';
 import Link from 'next/link';
 
 export default async function RootPage() {
   const session = await auth();
 
-  // If authenticated, route to the appropriate portal
+  // Determine destination URL if the user is logged in
+  let dashboardUrl = '/dashboard';
   if (session?.user) {
     if (session.user.role === 'SuperAdmin') {
-      redirect('/dashboard/provisions');
-    }
-
-    if (session.user.organizationId) {
+      dashboardUrl = '/dashboard/provisions';
+    } else if (session.user.organizationId) {
       const org = await prisma.organization.findUnique({
         where: { id: session.user.organizationId },
         select: { subdomain: true },
       });
-
       if (org?.subdomain) {
-        redirect(`/department/${org.subdomain}`);
+        dashboardUrl = `/department/${org.subdomain}`;
       }
     }
-
-    redirect('/dashboard');
   }
+
+  const isLoggedIn = Boolean(session?.user);
 
   return (
     <div className="min-vh-100 d-flex flex-column bg-canvas text-color position-relative overflow-hidden">
@@ -71,10 +68,10 @@ export default async function RootPage() {
 
           <div className="d-flex align-items-center gap-3">
             <Link 
-              href="/dashboard" 
+              href={dashboardUrl} 
               className="btn btn-info btn-sm fw-bold px-3 py-2 shadow-sm d-flex align-items-center gap-2"
             >
-              <span>Access Portal</span>
+              <span>{isLoggedIn ? 'Go to Workspace' : 'Access Portal'}</span>
               <i className="bi bi-arrow-right"></i>
             </Link>
           </div>
@@ -103,11 +100,11 @@ export default async function RootPage() {
 
               <div className="d-flex flex-wrap gap-3 mb-5">
                 <Link 
-                  href="/dashboard" 
+                  href={dashboardUrl} 
                   className="btn btn-warning fw-bold px-4 py-2 shadow-sm d-flex align-items-center gap-2"
                 >
                   <i className="bi bi-box-arrow-in-right"></i>
-                  <span>Enter Department Portal</span>
+                  <span>{isLoggedIn ? 'Open Your Portal' : 'Enter Department Portal'}</span>
                 </Link>
                 <a 
                   href="#features" 
@@ -150,7 +147,6 @@ export default async function RootPage() {
                 <h6 className="fw-bold text-accent mb-1">Instant Clearance & Audit Metrics</h6>
                 <p className="text-secondary small mb-3">Real-time status overview across department operations.</p>
 
-                {/* Micro Metric Widgets */}
                 <div className="vstack gap-2 mb-3">
                   <div className="p-2 rounded bg-body border border-secondary border-opacity-50 d-flex justify-content-between align-items-center">
                     <span className="small text-secondary">Collections Cleared</span>
