@@ -8,6 +8,11 @@ import Image from 'next/image';
 import ClearanceClientView from './ClearanceClientView';
 import Footer from '../components/Footer';
 import DataPrivacyModal from '../components/DataPrivacyModal';
+import { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Centralized Liquidation of Expense & Audit Records',
+};
 
 // =========================================================
 // LEGACY TERM PACKAGES MAPPING

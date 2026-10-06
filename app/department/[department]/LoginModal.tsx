@@ -292,7 +292,7 @@ export default function LoginModal({
 
                 <i className="bi bi-building me-1"></i>
 
-                {department}
+                {department?.toUpperCase()}
 
               </span>
 
