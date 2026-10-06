@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { fmt } from "@/lib/utils";
-import { transferFunds, carryOverTermBalance } from "../../actions";
+import { transferFunds, carryOverTermBalance } from "../actions";
 import { ThemedAlert } from '@/lib/alerts';
 
 interface Fund { name: string; balance: number; }
@@ -13,9 +13,7 @@ const AY_OPTIONS = [
   "A.Y. 2028 - 2029",
   "A.Y. 2027 - 2028",
   "A.Y. 2026 - 2027",
-  "A.Y. 2025 - 2026",
-  "A.Y. 2024 - 2025",
-  "A.Y. 2023 - 2024"
+  "A.Y. 2025 - 2026"
 ];
 
 export default function RealignManager({
