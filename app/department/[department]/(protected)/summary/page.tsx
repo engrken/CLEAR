@@ -229,16 +229,30 @@ export default async function SummaryReportPage({
     const headcount = ec.headcount || 1;
     const total = Number(ec.balanceDue) || Number(ec.total) || 0;
     
-    // For explicit collectibles, we assume they might not have a specific student linked 
-    // in this table, so we use a fallback ID to ensure they get counted if headcount > 0
-    const fakeStudentKey = `EXPLICIT-${ec.id}`;
-
-    if (addStudentObligation(fakeStudentKey, itemName)) {
+    // 1. Try to extract a real student identifier from the Collectible row
+    const sId = ec.studentId?.trim().toLowerCase() || '';
+    const sName = (ec.studentName || ec.fullName)?.trim().toLowerCase() || '';
+    
+    if (sId || sName) {
+      // 2a. RECORD HAS A STUDENT: Deduplicate normally using their unique key
+      const studentKey = sName || sId;
+      
+      if (addStudentObligation(studentKey, itemName)) {
+        if (!collectiblesMap[itemName]) {
+          collectiblesMap[itemName] = { category: itemName, headcount: 0, total: 0 };
+        }
+        collectiblesMap[itemName].headcount += headcount;
+        collectiblesMap[itemName].total += total;
+      }
+    } else {
+      // 2b. RECORD IS A HEADLESS AGGREGATE (No specific student attached):
+      // Check if the detailed Collections loop already found students for this item.
+      // If it did (e.g., Fellowship Night already exists), DO NOT add the duplicate aggregate!
       if (!collectiblesMap[itemName]) {
         collectiblesMap[itemName] = { category: itemName, headcount: 0, total: 0 };
+        collectiblesMap[itemName].headcount += headcount;
+        collectiblesMap[itemName].total += total;
       }
-      collectiblesMap[itemName].headcount += headcount;
-      collectiblesMap[itemName].total += total;
     }
   });
 
