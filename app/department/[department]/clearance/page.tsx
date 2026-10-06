@@ -92,37 +92,48 @@ export default async function ClearancePage({
   // =======================================================
   // REUSABLE PUBLIC HEADER COMPONENT
   // =======================================================
-  const PublicHeader = () => (
-    <header className="navbar border-bottom border-secondary px-4 py-3 bg-card shadow-sm d-print-none">
-      <div className="d-flex align-items-center gap-3 w-100">
-        <img 
-          src="/fcu.png" 
-          alt="FCU Logo" 
-          style={{ width: '55px', objectFit: 'contain' }} 
-        />
-        <div>
-          <h5 className="mb-0 fw-bold text-accent">CLEAR System</h5>
-          <small className="text-secondary text-uppercase fw-semibold" style={{ letterSpacing: '0.05em' }}>
-            College of {organization.name}
-          </small>
+  const PublicHeader = () => {
+    const displayOrgName = organization.name.toLowerCase().startsWith('college of') 
+      ? organization.name 
+      : `College of ${organization.name}`;
+
+    return (
+      <header className="navbar border-bottom border-secondary px-4 py-3 bg-card shadow-sm d-print-none">
+        <div className="d-flex align-items-center gap-3 w-100">
+          <img 
+            src="/fcu.png" 
+            alt="FCU Logo" 
+            style={{ width: '55px', objectFit: 'contain' }} 
+          />
+          <div>
+            <h5 className="mb-0 fw-bold text-accent">CLEAR System</h5>
+            <small className="text-secondary text-uppercase fw-semibold" style={{ letterSpacing: '0.05em' }}>
+              {displayOrgName}
+            </small>
+          </div>
         </div>
-      </div>
-    </header>
-  );
+      </header>
+    );
+  };
 
   // =======================================================
   // CRYPTOGRAPHIC SIGNATURE VERIFICATION (CERTIFICATE VIEW)
   // =======================================================
 
-  const salt = process.env.CLEARANCE_SALT || 'JIECEP_CLEARANCE_KEY_2026';
+  const salt = process.env.CLEARANCE_SALT || 'CLEARANCE_KEY_2026';
 
   if (sigParam && q) {
+    // CRITICAL FIX: Lowercase 'q' to match the legacy Code.gs signature generation
     const expectedSig = crypto
       .createHash('sha256')
-      .update(`${q}|${ay}|${term}|${salt}`)
+      .update(`${q.toLowerCase()}|${ay}|${term}|${salt}`)
       .digest('hex');
 
     const isSignatureValid = sigParam.toLowerCase() === expectedSig.toLowerCase();
+
+    const displayOrgName = organization.name.toLowerCase().startsWith('college of') 
+      ? organization.name 
+      : `College of ${organization.name}`;
 
     return (
       <div className="d-flex flex-column min-vh-100 bg-canvas">
@@ -138,11 +149,11 @@ export default async function ClearancePage({
             }}
           >
             <h4 className="text-info fw-bold mb-1">
-              College of {organization.name}
+              {displayOrgName}
             </h4>
 
             <small className="text-secondary d-block mb-4">
-              Centralized Liquidation of Expense & Audit Records
+              Centralized Liquidation of Expenses & Audit Records
             </small>
 
             {isSignatureValid ? (
