@@ -7,7 +7,7 @@ import {
   recordPenalty,
   settlePenaltyCommunityService,
   deletePenalty
-} from "../actions";
+} from "../../actions";
 import Link from "next/link";
 import { ThemedAlert } from '@/lib/alerts';
 
