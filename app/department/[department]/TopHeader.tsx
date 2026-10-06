@@ -2,11 +2,9 @@
 
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { useState, useEffect, Suspense } from 'react';
-import { signOut } from "next-auth/react"; // <-- IMPORT NEXTAUTH SIGNOUT
+import { signOut } from "next-auth/react";
 import LoginModal from './LoginModal'; 
 
-// We wrap the main header logic in a component that consumes useSearchParams
-// so we can wrap it in Suspense below (a Next.js best practice for client boundary params)
 function TopHeaderContent({ 
   department, 
   currentUser, 
@@ -22,16 +20,16 @@ function TopHeaderContent({
   const searchParams = useSearchParams();
   const pathname = usePathname();
 
-  // NOW DYNAMIC
   const ay = searchParams.get('ay') || defaultAy;
   const term = searchParams.get('term') || defaultTerm;
 
   const [theme, setTheme] = useState('dark');
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userName, setUserName] = useState(currentUser?.fullName || 'Department Officer');
-  const [role, setRole] = useState(currentUser?.role || 'OFFICER');
   
-  // Modal & Trigger State
+  // Statically derive user data from the passed server session
+  const isLoggedIn = !!currentUser;
+  const userName = currentUser?.name || currentUser?.fullName || 'Department Officer';
+  const role = currentUser?.role || 'OFFICER';
+  
   const [showModal, setShowModal] = useState(false);
   const [fcuError, setFcuError] = useState(false);
   const [showForbidden, setShowForbidden] = useState(false);
@@ -54,7 +52,7 @@ function TopHeaderContent({
 
     if (forbiddenParam === 'true') {
       setShowForbidden(true);
-      setTimeout(() => setShowForbidden(false), 5000); // Auto-hide after 5s
+      setTimeout(() => setShowForbidden(false), 5000); 
       params.delete('forbidden');
       shouldCleanUrl = true;
     }
@@ -65,26 +63,12 @@ function TopHeaderContent({
   }, [searchParams, pathname, router]);
 
   // =========================================================
-  // STANDARD INITIALIZATION
+  // THEME INITIALIZATION
   // =========================================================
   useEffect(() => {
     const currentTheme = document.documentElement.getAttribute('data-bs-theme') || 'dark';
     setTheme(currentTheme);
-    
-    const storedUser = localStorage.getItem('fcu_clear_user');
-    if (currentUser || storedUser) {
-      setIsLoggedIn(true);
-      if (!currentUser && storedUser) {
-        try {
-          const parsed = JSON.parse(storedUser);
-          setUserName(parsed.fullName);
-          setRole(parsed.role);
-        } catch (e) {
-          setUserName('Department Officer');
-        }
-      }
-    }
-  }, [currentUser]);
+  }, []);
 
   const fcuLogoPath = '/fcu.png';
 
@@ -105,20 +89,13 @@ function TopHeaderContent({
   const handleAuthAction = async () => {
     if (isLoggedIn) {
       try {
-        // 1. Tell NextAuth to properly destroy the secure HttpOnly session cookie
         await signOut({ redirect: false });
-
-        // 2. Clear out any legacy local storage data
-        localStorage.removeItem('fcu_clear_user');
-        localStorage.removeItem('fcu_clear_token');
         
-        // 3. Clear out legacy cookies
+        // Clear out legacy cookies just in case
         const cookiesToClear = ['fcu_session', 'fcu_otp_hash', 'fcu_otp_email', 'fcu_otp_strikes', 'fcu_lockout'];
         cookiesToClear.forEach(cookie => {
           document.cookie = `${cookie}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
         });
-        
-        setIsLoggedIn(false);
       } catch (e) {
         console.error("Logout failed", e);
       }
@@ -203,11 +180,18 @@ function TopHeaderContent({
             <i className={`bi ${theme === 'light' ? 'bi-moon-fill' : 'bi-sun-fill'}`} style={{ fontSize: '0.85rem' }}></i>
           </button>
 
+          {/* FIX: DISPLAY STATIC USERNAME */}
           <div>
             {isLoggedIn ? (
-              <span className="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25 px-2 py-1 text-uppercase fw-bold" style={{ fontSize: '0.75rem' }} title={fullName}>
-                {fullName}
-              </span>
+              <div className="d-flex align-items-center border border-info border-opacity-25 rounded bg-info bg-opacity-10 px-2 py-1">
+                <i className="bi bi-person-circle text-info me-2"></i>
+                <span className="text-info fw-bold me-2" style={{ fontSize: '0.8rem' }}>
+                  {userName}
+                </span>
+                <span className="badge bg-info text-dark text-uppercase" style={{ fontSize: '0.65rem' }}>
+                  {role}
+                </span>
+              </div>
             ) : (
               <span className="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 px-2 py-1 text-uppercase fw-bold" style={{ fontSize: '0.75rem' }}>
                 GUEST / PUBLIC
@@ -250,7 +234,6 @@ function TopHeaderContent({
   );
 }
 
-// Wrap in Suspense to prevent entire page from opting into client-side rendering during build
 export default function TopHeader(props: { 
 department: string;
 currentUser?: any;
