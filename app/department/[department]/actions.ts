@@ -101,7 +101,6 @@ export async function deletePenalty(department: string, penaltyId: string) {
 async function getActionUser(): Promise<string> {
   const session = await auth();
   
-  // Explicitly define the expected shape instead of using typeof
   const userWithRole = session?.user as { fullName?: string; email?: string } | undefined;
   
   return userWithRole?.fullName || userWithRole?.email || "System";
@@ -288,10 +287,6 @@ export async function requestOtp(
   const cleanDepartment = department.trim().toLowerCase();
   const cleanEmail = email.trim().toLowerCase();
 
-  // --------------------------------------------------
-  // FIND DEPARTMENT
-  // --------------------------------------------------
-
   const organization = await prisma.organization.findUnique({
     where: {
       subdomain: cleanDepartment,
@@ -303,10 +298,6 @@ export async function requestOtp(
       `Department '${cleanDepartment}' not found.`
     );
   }
-
-  // --------------------------------------------------
-  // FIND USER
-  // --------------------------------------------------
 
   const user = await prisma.tenantUser.findFirst({
     where: {
@@ -326,10 +317,6 @@ export async function requestOtp(
       "This account is currently inactive."
     );
   }
-
-  // --------------------------------------------------
-  // CHECK LOCKOUT
-  // --------------------------------------------------
 
   const cookieStore = await cookies();
 
@@ -352,10 +339,6 @@ export async function requestOtp(
     }
   }
 
-  // --------------------------------------------------
-  // GENERATE OTP
-  // --------------------------------------------------
-
   const otpCode =
     Math.floor(
       100000 + Math.random() * 900000
@@ -369,10 +352,6 @@ export async function requestOtp(
 
   const expiresAt =
     Date.now() + 5 * 60 * 1000;
-
-  // --------------------------------------------------
-  // STORE OTP SESSION
-  // --------------------------------------------------
 
   cookieStore.set(
     'fcu_otp_hash',
@@ -413,10 +392,6 @@ export async function requestOtp(
     }
   );
 
-  // --------------------------------------------------
-  // GMAIL SMTP TRANSPORT
-  // --------------------------------------------------
-
   const smtpUser =
     process.env.SMTP_USER;
 
@@ -451,10 +426,6 @@ export async function requestOtp(
         pass: smtpPass,
       },
     });
-
-  // --------------------------------------------------
-  // SEND OTP EMAIL
-  // --------------------------------------------------
 
   try {
 
@@ -971,7 +942,6 @@ export async function submitOnlineRemittance(department: string, data: {
     }
   });
 
-  // Logged as Public Submission since students don't log in
   await logSystemAction(orgId, "Public Submission", "SUBMIT_REMITTANCE", `Received ₱${data.amount} online payment proof from ${data.studentName} via ${data.paymentChannel}.`);
 
   revalidatePath(`/department/${department}/remittances`);
@@ -1225,6 +1195,20 @@ export async function getDepartmentFinancials(organizationId: string, ay: string
   const pkgTotal = termPkg.total;
   const paidMap: Record<string, number> = {};
 
+  // Track specific student obligations to prevent duplicates across tables in overview
+  const studentItemObligations: Record<string, Set<string>> = {}; 
+
+  const addStudentObligation = (studentKey: string, itemName: string) => {
+    if (!studentItemObligations[studentKey]) {
+      studentItemObligations[studentKey] = new Set();
+    }
+    if (!studentItemObligations[studentKey].has(itemName)) {
+      studentItemObligations[studentKey].add(itemName);
+      return true; 
+    }
+    return false; 
+  };
+
   validCollections.forEach(c => {
     if (c.category === 'Departmental Fee' || c.category === 'Departmental Fee - Package' || termPkg.items.some(pi => pi.name.toLowerCase() === (c.itemDescription || '').toLowerCase())) {
       const sId = c.studentId?.trim().toLowerCase() || '';
@@ -1248,6 +1232,7 @@ export async function getDepartmentFinancials(organizationId: string, ay: string
     if (remitted < pkgTotal) {
       unpaidOrPartialPackageCount++;
       totalPackageReceivable += (pkgTotal - remitted);
+      if (key) addStudentObligation(key, 'Departmental Fee');
     }
   });
 
@@ -1265,13 +1250,20 @@ export async function getDepartmentFinancials(organizationId: string, ay: string
     const balDue = Number(c.balanceDue) || 0;
     const pType = c.paymentType || '';
     const orNum = c.orNumber || '';
+    const sId = c.studentId?.trim().toLowerCase() || '';
+    const sName = c.studentName?.trim().toLowerCase() || '';
+    const studentKey = sName || sId || `UNKNOWN-${c.id}`;
+
     if ((balDue > 0 || pType.includes('Unpaid') || orNum.startsWith('DUE-')) && c.category !== 'Departmental Fee' && c.category !== 'Departmental Fee - Package') {
       const itemName = c.itemDescription || c.category || 'Other Due';
-      if (!collectiblesMap[itemName]) {
-        collectiblesMap[itemName] = { category: itemName, headcount: 0, total: 0 };
+      
+      if (addStudentObligation(studentKey, itemName)) {
+        if (!collectiblesMap[itemName]) {
+          collectiblesMap[itemName] = { category: itemName, headcount: 0, total: 0 };
+        }
+        collectiblesMap[itemName].headcount += 1;
+        collectiblesMap[itemName].total += balDue > 0 ? balDue : Number(c.standardRate || 0);
       }
-      collectiblesMap[itemName].headcount += 1;
-      collectiblesMap[itemName].total += balDue > 0 ? balDue : Number(c.standardRate || 0);
     }
   });
 
@@ -1286,11 +1278,25 @@ export async function getDepartmentFinancials(organizationId: string, ay: string
     const headcount = ec.headcount || 1;
     const total = Number(ec.balanceDue) || Number(ec.total) || 0;
 
-    if (!collectiblesMap[itemName]) {
-      collectiblesMap[itemName] = { category: itemName, headcount: 0, total: 0 };
+    const sId = ec.studentId?.trim().toLowerCase() || '';
+    const sName = (ec.studentName || ec.fullName)?.trim().toLowerCase() || '';
+
+    if (sId || sName) {
+      const studentKey = sName || sId;
+      if (addStudentObligation(studentKey, itemName)) {
+        if (!collectiblesMap[itemName]) {
+          collectiblesMap[itemName] = { category: itemName, headcount: 0, total: 0 };
+        }
+        collectiblesMap[itemName].headcount += headcount;
+        collectiblesMap[itemName].total += total;
+      }
+    } else {
+      if (!collectiblesMap[itemName]) {
+        collectiblesMap[itemName] = { category: itemName, headcount: 0, total: 0 };
+        collectiblesMap[itemName].headcount += headcount;
+        collectiblesMap[itemName].total += total;
+      }
     }
-    collectiblesMap[itemName].headcount += headcount;
-    collectiblesMap[itemName].total += total;
   });
 
   const collectiblesList = Object.values(collectiblesMap);
