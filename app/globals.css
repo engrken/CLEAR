@@ -370,3 +370,81 @@ body {
     background: #f1f1f1 !important;
   }
 }
+
+/* =========================================================
+   UI/UX POLISH & MICRO-INTERACTIONS
+   ========================================================= */
+
+/* 1. Tactile Button Press Effect */
+.btn {
+  transition: transform 0.1s ease, background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+/* 2. Enhanced Card Hover Elevation */
+/* Add className="card hover-lift" on interactive cards (like dashboard dept cards) */
+.card.hover-lift {
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.card.hover-lift:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 0.75rem 1.5rem rgba(0, 0, 0, 0.2) !important;
+  border-color: rgba(var(--accent-rgb), 0.5) !important;
+}
+
+/* 3. Modern Sleek Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
+  transition: background 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* 4. Rich Empty State Container Styling */
+.empty-state-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1.5rem;
+  text-align: center;
+  background-color: var(--bg-card);
+  border: 1px dashed var(--border-color);
+  border-radius: 0.75rem;
+}
+
+.empty-state-icon {
+  font-size: 2.5rem;
+  color: var(--text-muted);
+  opacity: 0.6;
+  margin-bottom: 0.75rem;
+}
+
+/* 5. Smooth Table Row Highlighting */
+.table-hover tbody tr {
+  transition: background-color 0.15s ease;
+}
+
+[data-bs-theme="dark"] .table-hover tbody tr:hover {
+  background-color: rgba(56, 189, 248, 0.04);
+}
+
+[data-bs-theme="light"] .table-hover tbody tr:hover {
+  background-color: rgba(2, 132, 199, 0.04);
+}
