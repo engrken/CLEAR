@@ -12,6 +12,17 @@ interface ProtectedDepartmentLayoutProps {
   params: Promise<{ department: string }>;
 }
 
+// 1. Define the custom user type for NextAuth to satisfy TypeScript
+interface ExtendedUser {
+  id?: string;
+  name?: string | null;
+  email?: string | null;
+  role?: string;
+  organizationId?: string;
+  department?: string;
+  allowedTabs?: string[];
+}
+
 export default async function ProtectedDepartmentLayout({
   children,
   params,
@@ -45,21 +56,24 @@ export default async function ProtectedDepartmentLayout({
   }
 
   // ---------------------------------------------------------
-  // USER INFORMATION FROM NEXTAUTH
+  // USER INFORMATION FROM NEXTAUTH (WITH TYPESCRIPT FIX)
   // ---------------------------------------------------------
-  const userRole = session.user.role?.trim().toLowerCase() || "officer";
+  // 2. Cast session.user to ExtendedUser
+  const authUser = session.user as ExtendedUser;
 
-  const allowedTabs = Array.isArray(session.user.allowedTabs)
-    ? session.user.allowedTabs
+  const userRole = authUser.role?.trim().toLowerCase() || "officer";
+
+  const allowedTabs = Array.isArray(authUser.allowedTabs)
+    ? authUser.allowedTabs
     : [];
 
   const currentUser = {
-    id: session.user.id,
-    fullName: session.user.name || "Department Officer",
-    role: session.user.role || "OFFICER",
-    email: session.user.email || "",
-    organizationId: session.user.organizationId || "",
-    department: session.user.department || cleanDepartment,
+    id: authUser.id || "",
+    fullName: authUser.name || "Department Officer",
+    role: authUser.role || "OFFICER",
+    email: authUser.email || "",
+    organizationId: authUser.organizationId || "",
+    department: authUser.department || cleanDepartment,
     allowedTabs,
   };
 
@@ -112,7 +126,7 @@ export default async function ProtectedDepartmentLayout({
   }
 
   if (!isGlobalAdmin && !isForbidden) {
-    if (!session.user.organizationId || session.user.organizationId !== organization.id) {
+    if (!authUser.organizationId || authUser.organizationId !== organization.id) {
       isForbidden = true;
       forbiddenReason = "You are not authorized to view records for this department.";
     }
