@@ -1,19 +1,28 @@
-// app/page.tsx
 import { auth } from '@/auth';
+import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 
 export default async function RootPage() {
   const session = await auth();
 
-  // If already authenticated, redirect straight to their workspace
-  if (session) {
-    if (session.user?.role === 'SuperAdmin') {
+  // If authenticated, route to the appropriate portal
+  if (session?.user) {
+    if (session.user.role === 'SuperAdmin') {
       redirect('/dashboard/provisions');
     }
-    if (session.user?.department) {
-      redirect(`/department/${session.user.department}`);
+
+    if (session.user.organizationId) {
+      const org = await prisma.organization.findUnique({
+        where: { id: session.user.organizationId },
+        select: { subdomain: true },
+      });
+
+      if (org?.subdomain) {
+        redirect(`/department/${org.subdomain}`);
+      }
     }
+
     redirect('/dashboard');
   }
 
