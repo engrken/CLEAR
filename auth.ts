@@ -108,10 +108,10 @@ export const {
           console.log("SUPER ADMIN AUTH SUCCESS");
 
           return {
-            id: "super-admin-01",
-            name: "System Architect",
-            email,
-            role: "SuperAdmin",
+            id: user.id,
+            name: user.fullName,
+            email: user.email,
+            role: user.role,
             organizationId: null,
             department: null,
             allowedTabs: [],
