@@ -1104,6 +1104,49 @@ export async function settlePenaltyCommunityService(department: string, data: {
   revalidatePath(`/department/${department}`);
 }
 
+// 18. Server Action: Update Current User Profile Email
+export async function updateMyEmail(department: string, newEmail: string) {
+  const session = await auth();
+  const sessionUser = session?.user as { email?: string } | undefined;
+
+  if (!sessionUser?.email) {
+    throw new Error("Unauthorized: No active session found.");
+  }
+
+  const orgId = await getOrgId(department);
+  const cleanNewEmail = newEmail.trim().toLowerCase();
+
+  if (!cleanNewEmail || !cleanNewEmail.includes('@')) {
+    throw new Error("Please provide a valid email address.");
+  }
+
+  // Find the user by current session email and organization
+  const user = await prisma.tenantUser.findFirst({
+    where: { organizationId: orgId, email: sessionUser.email }
+  });
+
+  if (!user) {
+    throw new Error("User record not found in this department.");
+  }
+
+  // Check if email is already taken by another account in the org
+  const existing = await prisma.tenantUser.findFirst({
+    where: { organizationId: orgId, email: cleanNewEmail }
+  });
+
+  if (existing && existing.id !== user.id) {
+    throw new Error("This email is already registered by another account.");
+  }
+
+  await prisma.tenantUser.update({
+    where: { id: user.id },
+    data: { email: cleanNewEmail }
+  });
+
+  revalidatePath(`/department/${department}`);
+  return { success: true, message: "Email updated successfully! Please sign out and sign back in to apply changes fully." };
+}
+
 // =========================================================================
 // OPTIMIZED FINANCIAL ENGINE: ADAPTIVE TERM & A.Y. DATA FILTERING
 // =========================================================================

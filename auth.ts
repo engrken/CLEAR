@@ -283,6 +283,7 @@ export const {
           role: user.role,
           organizationId: organization.id,
           department: organization.subdomain,
+		  username: user.username,
           allowedTabs,
         };
       },
@@ -302,28 +303,24 @@ export const {
     async jwt({ token, user }) {
       if (user) {
         const authenticatedUser = user as any;
-
-        // FIX: Removed ?? null to rely on undefined natively
         if (authenticatedUser.role) token.role = authenticatedUser.role;
         if (authenticatedUser.organizationId) token.organizationId = authenticatedUser.organizationId;
         if (authenticatedUser.department) token.department = authenticatedUser.department;
+        if (authenticatedUser.username) token.username = authenticatedUser.username; // ADDED
         token.allowedTabs = authenticatedUser.allowedTabs || [];
       }
-
       return token;
     },
 
     async session({ session, token }) {
       if (session.user) {
         const sessionUser = session.user as any;
-
-        // FIX: Removed ?? null to rely on undefined natively
         if (token.role) sessionUser.role = token.role;
         if (token.organizationId) sessionUser.organizationId = token.organizationId;
         if (token.department) sessionUser.department = token.department;
+        if (token.username) sessionUser.username = token.username; // ADDED
         sessionUser.allowedTabs = token.allowedTabs || [];
       }
-
       return session;
     },
   },

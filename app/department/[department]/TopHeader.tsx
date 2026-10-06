@@ -1,9 +1,28 @@
 "use client";
 
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, useTransition } from 'react';
 import { signOut } from "next-auth/react";
 import LoginModal from './LoginModal'; 
+import { updateMyEmail } from '../actions'; // IMPORT THE NEW ACTION
+
+const MODULE_LABELS: Record<string, string> = {
+  'tab-overview': 'Overview',
+  'tab-students': 'Students Roster',
+  'tab-clearance': 'Clearance',
+  'tab-payment': 'Collections',
+  'tab-remittances': 'Remittance Queue',
+  'tab-penalties': 'Penalties',
+  'tab-advances': 'Cash Advances',
+  'tab-audit': 'Liquidations',
+  'tab-collectibles': 'Collectibles',
+  'tab-reports': 'Detailed Reports',
+  'tab-void': 'Void Center',
+  'tab-report': 'Summary Report',
+  'tab-transfer': 'Realign Funds',
+  'tab-users': 'User Management',
+  'tab-setup': 'System Setup'
+};
 
 function TopHeaderContent({ 
   department, 
@@ -25,18 +44,22 @@ function TopHeaderContent({
 
   const [theme, setTheme] = useState('dark');
   
-  // Statically derive user data from the passed server session
   const isLoggedIn = !!currentUser;
   const userName = currentUser?.name || currentUser?.fullName || 'Department Officer';
   const role = currentUser?.role || 'OFFICER';
+  const username = currentUser?.username || 'N/A';
+  const initialEmail = currentUser?.email || '';
+  const allowedTabs = currentUser?.allowedTabs || [];
   
+  // Profile Modal State & Editable Email
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [editableEmail, setEditableEmail] = useState(initialEmail);
+  const [isPending, startTransition] = useTransition();
+
   const [showModal, setShowModal] = useState(false);
   const [fcuError, setFcuError] = useState(false);
   const [showForbidden, setShowForbidden] = useState(false);
 
-  // =========================================================
-  // AUTHENTICATION TRIGGERS & URL CLEANUP
-  // =========================================================
   useEffect(() => {
     const loginParam = searchParams.get('login');
     const forbiddenParam = searchParams.get('forbidden');
@@ -62,9 +85,6 @@ function TopHeaderContent({
     }
   }, [searchParams, pathname, router]);
 
-  // =========================================================
-  // THEME INITIALIZATION
-  // =========================================================
   useEffect(() => {
     const currentTheme = document.documentElement.getAttribute('data-bs-theme') || 'dark';
     setTheme(currentTheme);
@@ -90,8 +110,6 @@ function TopHeaderContent({
     if (isLoggedIn) {
       try {
         await signOut({ redirect: false });
-        
-        // Clear out legacy cookies just in case
         const cookiesToClear = ['fcu_session', 'fcu_otp_hash', 'fcu_otp_email', 'fcu_otp_strikes', 'fcu_lockout'];
         cookiesToClear.forEach(cookie => {
           document.cookie = `${cookie}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
@@ -105,6 +123,22 @@ function TopHeaderContent({
     } else {
       setShowModal(true);
     }
+  };
+
+  const handleSaveEmail = (e: React.FormEvent) => {
+    e.preventDefault();
+    startTransition(async () => {
+      try {
+        const res = await updateMyEmail(department, editableEmail);
+        if (res.success) {
+          alert(res.message);
+          setShowProfileModal(false);
+          window.location.reload();
+        }
+      } catch (err: any) {
+        alert(err.message || "Failed to update email.");
+      }
+    });
   };
 
   return (
@@ -180,10 +214,15 @@ function TopHeaderContent({
             <i className={`bi ${theme === 'light' ? 'bi-moon-fill' : 'bi-sun-fill'}`} style={{ fontSize: '0.85rem' }}></i>
           </button>
 
-          {/* FIX: DISPLAY STATIC USERNAME */}
+          {/* CLICKABLE USER PROFILE BADGE */}
           <div>
             {isLoggedIn ? (
-              <div className="d-flex align-items-center border border-info border-opacity-25 rounded bg-info bg-opacity-10 px-2 py-1">
+              <div 
+                className="d-flex align-items-center border border-info border-opacity-25 rounded bg-info bg-opacity-10 px-2 py-1 shadow-sm transition-all"
+                style={{ cursor: 'pointer' }}
+                onClick={() => setShowProfileModal(true)}
+                title="Click to view and edit profile"
+              >
                 <i className="bi bi-person-circle text-info me-2"></i>
                 <span className="text-info fw-bold me-2" style={{ fontSize: '0.8rem' }}>
                   {userName}
@@ -211,7 +250,79 @@ function TopHeaderContent({
         </div>
       </header>
 
-      {/* 1. Forbidden Access Alert */}
+      {/* USER PROFILE MODAL */}
+      {showProfileModal && (
+        <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content card border-secondary shadow bg-card text-color">
+              <div className="modal-header border-secondary">
+                <h5 className="modal-title text-accent fw-bold">
+                  <i className="bi bi-person-badge me-2"></i>Officer Profile Settings
+                </h5>
+                <button type="button" className="btn-close btn-close-white" onClick={() => setShowProfileModal(false)}></button>
+              </div>
+              <form onSubmit={handleSaveEmail}>
+                <div className="modal-body p-4">
+                  <div className="mb-3">
+                    <label className="form-label text-secondary small fw-semibold">Full Name</label>
+                    <input type="text" className="form-control bg-card text-color border-secondary" value={userName} disabled />
+                  </div>
+
+                  <div className="row g-2 mb-3">
+                    <div className="col-md-6">
+                      <label className="form-label text-secondary small fw-semibold">Username</label>
+                      <input type="text" className="form-control bg-card text-color border-secondary font-monospace" value={username} disabled />
+                    </div>
+                    <div className="col-md-6">
+                      <label className="form-label text-secondary small fw-semibold">System Role</label>
+                      <input type="text" className="form-control bg-card text-color border-secondary text-uppercase fw-bold" value={role} disabled />
+                    </div>
+                  </div>
+
+                  <div className="mb-3">
+                    <label className="form-label text-secondary small fw-semibold">
+                      Email Address <span className="text-info">(Editable)</span>
+                    </label>
+                    <input 
+                      type="email" 
+                      className="form-control bg-card text-color border-secondary" 
+                      value={editableEmail} 
+                      onChange={(e) => setEditableEmail(e.target.value)} 
+                      required 
+                    />
+                    <small className="text-secondary d-block mt-1">Make sure this email is valid for receiving notifications and OTP codes.</small>
+                  </div>
+
+                  <div className="mb-2">
+                    <label className="form-label text-secondary small fw-bold">Granted Module Permissions ({allowedTabs.length})</label>
+                    <div className="border border-secondary rounded p-2 bg-surface" style={{ maxHeight: '130px', overflowY: 'auto' }}>
+                      {allowedTabs.length > 0 ? (
+                        <div className="d-flex flex-wrap gap-1">
+                          {allowedTabs.map((tabId: string) => (
+                            <span key={tabId} className="badge bg-secondary-subtle text-info border border-secondary" style={{ fontSize: '0.7rem' }}>
+                              {MODULE_LABELS[tabId] || tabId}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="small text-secondary fst-italic">No custom tab permissions assigned.</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="modal-footer border-secondary">
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowProfileModal(false)}>Cancel</button>
+                  <button type="submit" className="btn btn-info btn-sm fw-bold px-4 text-dark" disabled={isPending}>
+                    {isPending ? 'Saving...' : 'Save Changes'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Forbidden Access Alert */}
       {showForbidden && (
         <div 
           className="alert alert-danger alert-dismissible fade show shadow-sm" 
@@ -224,7 +335,6 @@ function TopHeaderContent({
         </div>
       )}
 
-      {/* 2. Login Modal Component */}
       <LoginModal 
         show={showModal} 
         onClose={() => setShowModal(false)} 
