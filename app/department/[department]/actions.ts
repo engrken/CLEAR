@@ -8,6 +8,39 @@ import nodemailer from 'nodemailer';
 import { auth } from '@/auth';
 import { logSystemAction } from '@/lib/logger';
 
+// =========================================================================
+// AUTHORIZATION GUARD
+// =========================================================================
+/**
+ * Validates if the active session has the required tab permission.
+ * Throws an error if unauthorized, halting the server action.
+ */
+export async function requireTabAccess(requiredTab: string) {
+  const session = await auth();
+  
+  if (!session?.user) {
+    throw new Error("401 Unauthorized: Session expired or invalid.");
+  }
+
+  // FIX: Cast to any to bypass the missing type definitions in your existing types folder
+  const customUser = session.user as any;
+
+  const role = customUser.role?.toLowerCase() || 'viewer';
+  const allowedTabs = (customUser.allowedTabs as string[]) || [];
+
+  // Full clearance for administrators overrides tab-level restrictions
+  if (['admin', 'administrator', 'master', 'superadmin'].includes(role)) {
+    return customUser;
+  }
+
+  // Reject if the assigned scope lacks the necessary tab
+  if (!allowedTabs.includes(requiredTab)) {
+    throw new Error(`403 Forbidden: Your account scope lacks permission for the ${requiredTab} module.`);
+  }
+
+  return customUser;
+}
+
 // Helper: Format date for ID generation (yyyyMMdd-HHmmss)
 function formatDate(date: Date) {
   const pad = (n: number) => n.toString().padStart(2, '0');
@@ -24,6 +57,7 @@ async function getOrgId(department: string) {
 }
 
 export async function createDepartment(formData: FormData) {
+  // Creating a department is a root-level action, typically protected higher up
   const name = formData.get('name') as string;
   const subdomain = formData.get('subdomain') as string;
   const code = formData.get('code') as string;
@@ -58,6 +92,8 @@ export async function assessStudentDue(department: string, payload: {
   ay: string;
   term: string;
 }) {
+  await requireTabAccess('tab-collectibles'); // GUARD
+
   const organization = await prisma.organization.findUnique({
     where: { subdomain: department.toLowerCase() },
   });
@@ -82,6 +118,8 @@ export async function assessStudentDue(department: string, payload: {
 }
 
 export async function deletePenalty(department: string, penaltyId: string) {
+  await requireTabAccess('tab-void'); // GUARD (Deletion acts as a Void)
+
   const organization = await prisma.organization.findUnique({
     where: { subdomain: department.toLowerCase() },
   });
@@ -100,9 +138,7 @@ export async function deletePenalty(department: string, penaltyId: string) {
 
 async function getActionUser(): Promise<string> {
   const session = await auth();
-  
   const userWithRole = session?.user as { fullName?: string; email?: string } | undefined;
-  
   return userWithRole?.fullName || userWithRole?.email || "System";
 }
 
@@ -118,6 +154,8 @@ export async function recordPenalty(department: string, data: {
   ay: string;
   term: string;
 }) {
+  await requireTabAccess('tab-penalties'); // GUARD
+
   const officerName = await getActionUser();
   const orgId = await getOrgId(department);
   const penaltyId = `PEN-${formatDate(new Date())}-${Math.floor(Math.random() * 1000)}`;
@@ -157,6 +195,8 @@ export async function issueCashAdvance(department: string, data: {
   ay: string;
   term: string;
 }) {
+  await requireTabAccess('tab-advances'); // GUARD
+
   const officerName = await getActionUser();
   const orgId = await getOrgId(department);
   const advanceId = `CA-${formatDate(new Date())}-${Math.floor(Math.random() * 1000)}`;
@@ -198,6 +238,8 @@ export async function recordCollection(department: string, data: {
   ay: string;
   term: string;
 }) {
+  await requireTabAccess('tab-payment'); // GUARD
+
   const officerName = await getActionUser();
   const orgId = await getOrgId(department);
   const balanceDue = Math.max(0, data.standardRate - data.amountPaid);
@@ -230,6 +272,8 @@ export async function recordCollection(department: string, data: {
 
 // 5. Server Action: Invalidate Online Remittance
 export async function invalidateOnlineRemittance(department: string, remittanceId: string) {
+  await requireTabAccess('tab-remittances'); // GUARD
+
   const officerName = await getActionUser();
   const organization = await prisma.organization.findUnique({
     where: { subdomain: department.toLowerCase() },
@@ -255,6 +299,8 @@ export async function invalidateOnlineRemittance(department: string, remittanceI
 
 // 6. Server Action: Save Bulk Collectibles
 export async function saveBulkCollectibles(department: string, records: any[], ay: string, term: string) {
+  await requireTabAccess('tab-collectibles'); // GUARD
+
   const officerName = await getActionUser();
   const orgId = await getOrgId(department);
 
@@ -279,11 +325,8 @@ export async function saveBulkCollectibles(department: string, records: any[], a
 }
 
 // --- AUTHENTICATION ACTIONS ---
-
-export async function requestOtp(
-  department: string,
-  email: string
-) {
+// (No guards needed here as they handle login/OTP creation)
+export async function requestOtp(department: string, email: string) {
   const cleanDepartment = department.trim().toLowerCase();
   const cleanEmail = email.trim().toLowerCase();
 
@@ -668,6 +711,8 @@ export async function recordPayment(department: string, data: {
   ay: string;
   term: string;
 }) {
+  await requireTabAccess('tab-payment'); // GUARD
+
   const officerName = await getActionUser();
   const orgId = await getOrgId(department);
   const paid = Number(data.amountPaid) || 0;
@@ -714,6 +759,8 @@ export async function recordAudit(department: string, data: {
   ay: string;
   term: string;
 }) {
+  await requireTabAccess('tab-audit'); // GUARD
+
   const officerName = await getActionUser();
   const orgId = await getOrgId(department);
   const auditId = `AUD-${formatDate(new Date())}`;
@@ -776,6 +823,8 @@ export async function transferFunds(department: string, data: {
   ay: string;
   term: string;
 }) {
+  await requireTabAccess('tab-transfer'); // GUARD
+
   const officerName = await getActionUser();
   const orgId = await getOrgId(department);
 
@@ -807,6 +856,8 @@ export async function carryOverTermBalance(department: string, data: {
   amount: number;
   reason: string;
 }) {
+  await requireTabAccess('tab-transfer'); // GUARD
+
   const officerName = await getActionUser();
   const orgId = await getOrgId(department);
 
@@ -839,6 +890,8 @@ export async function submitRemittanceBatch(department: string, data: {
   ay: string;
   term: string;
 }) {
+  await requireTabAccess('tab-remittances'); // GUARD
+
   const officerName = await getActionUser();
   const orgId = await getOrgId(department);
 
@@ -870,6 +923,8 @@ export async function verifyOnlineRemittance(department: string, data: {
   ay: string;
   term: string;
 }) {
+  await requireTabAccess('tab-remittances'); // GUARD
+
   const officerName = await getActionUser();
   const orgId = await getOrgId(department);
 
@@ -920,6 +975,7 @@ export async function submitOnlineRemittance(department: string, data: {
   ay: string;
   term: string;
 }) {
+  // NO GUARD: This is public-facing for students to submit proofs
   const orgId = await getOrgId(department);
   const submissionId = `SUB-${formatDate(new Date())}-${Math.floor(Math.random() * 1000)}`;
 
@@ -954,6 +1010,8 @@ export async function upsertStudent(department: string, data: {
   fullName: string;
   email: string;
 }) {
+  await requireTabAccess('tab-students'); // GUARD
+
   const officerName = await getActionUser();
   const orgId = await getOrgId(department);
   const cleanStudentId = data.studentId.trim();
@@ -990,6 +1048,8 @@ export async function upsertStudent(department: string, data: {
 
 // 17. Server Action: Delete Student Record
 export async function deleteStudent(department: string, studentId: string) {
+  await requireTabAccess('tab-students'); // GUARD
+
   const officerName = await getActionUser();
   const orgId = await getOrgId(department);
   
@@ -1016,6 +1076,8 @@ export async function settlePenaltyCommunityService(department: string, data: {
   ay: string;
   term: string;
 }) {
+  await requireTabAccess('tab-penalties'); // GUARD
+
   const officerName = await getActionUser();
   const orgId = await getOrgId(department);
 
@@ -1051,7 +1113,9 @@ export async function settlePenaltyCommunityService(department: string, data: {
 // OPTIMIZED FINANCIAL ENGINE: ADAPTIVE TERM & A.Y. DATA FILTERING
 // =========================================================================
 export async function getDepartmentFinancials(organizationId: string, ay: string, term: string) {
-  
+  // Read-only dashboard view - No strict mutation guard needed here, 
+  // but it assumes it's only called on authenticated Server Components.
+
   const [collections, audits, cashAdvances, explicitCollectibles, initialFunds, students] = await Promise.all([
     prisma.collection.findMany({ 
       where: { organizationId, academicYear: ay, term } 

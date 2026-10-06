@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
+import { auth } from '@/auth';
 
 const ROLE_PERMISSIONS_MAP: Record<string, string[]> = {
   admin: [
@@ -23,6 +24,36 @@ const ROLE_PERMISSIONS_MAP: Record<string, string[]> = {
   ]
 };
 
+/**
+ * Validates if the active session has the required tab permission.
+ * Throws an error if unauthorized, halting the server action.
+ */
+export async function requireTabAccess(requiredTab: string) {
+  const session = await auth();
+  
+  if (!session?.user) {
+    throw new Error("401 Unauthorized: Session expired or invalid.");
+  }
+
+  // FIX: Cast to any to bypass the missing type definitions in your existing types folder
+  const customUser = session.user as any;
+
+  const role = customUser.role?.toLowerCase() || 'viewer';
+  const allowedTabs = (customUser.allowedTabs as string[]) || [];
+
+  // Full clearance for administrators overrides tab-level restrictions
+  if (['admin', 'administrator', 'master', 'superadmin'].includes(role)) {
+    return customUser;
+  }
+
+  // Reject if the assigned scope lacks the necessary tab
+  if (!allowedTabs.includes(requiredTab)) {
+    throw new Error(`403 Forbidden: Your account scope lacks permission for the ${requiredTab} module.`);
+  }
+
+  return customUser;
+}
+
 export async function saveTenantUser(formData: {
   id?: string | null;
   userId?: string;
@@ -34,6 +65,9 @@ export async function saveTenantUser(formData: {
   allowedTabs: string[];
   department: string;
 }) {
+  // STRICT GUARD: User must have access to the User Management module
+  await requireTabAccess('tab-users');
+
   const { id, userId, fullName, email, username, role, status, allowedTabs, department } = formData;
 
   if (!email || !username || !fullName) {
@@ -80,7 +114,7 @@ export async function saveTenantUser(formData: {
       },
     });
   } else {
-    // FIX: Generate and explicitly supply userId to satisfy schema requirements
+    // Generate and explicitly supply userId to satisfy schema requirements
     const generatedUserId = userId || 'USR-' + Math.random().toString(36).substring(2, 8).toUpperCase();
 
     await prisma.tenantUser.create({
@@ -102,6 +136,9 @@ export async function saveTenantUser(formData: {
 }
 
 export async function deleteTenantUser(userId: string, department: string) {
+  // STRICT GUARD: User must have access to the User Management module
+  await requireTabAccess('tab-users');
+
   if (!userId) {
     throw new Error('User ID is required.');
   }

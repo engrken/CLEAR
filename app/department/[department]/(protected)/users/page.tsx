@@ -30,9 +30,9 @@ export default async function UserManagementPage({ params }: PageProps) {
   const department = resolvedParams?.department || 'engineering';
   const cleanSubdomain = department.toLowerCase();
 
-  let users: any[] = []; // Explicitly typed to fix TypeScript TS7034/TS7005 errors[cite: 4]
+  let users: any[] = []; 
   try {
-    // 1. Ensure Organization exists (Auto-tenant provisioning)[cite: 4]
+    // 1. Ensure Organization exists (Auto-tenant provisioning)
     let organization = await prisma.organization.findUnique({
       where: { subdomain: cleanSubdomain },
     });
@@ -46,7 +46,7 @@ export default async function UserManagementPage({ params }: PageProps) {
       });
     }
 
-    // 2. Ensure Master Admin is ALWAYS seeded for this tenant[cite: 4]
+    // 2. Ensure Master Admin is ALWAYS seeded for this tenant
     const masterEmail = 'kent.bsece@gmail.com';
     const existingMaster = await prisma.tenantUser.findFirst({
       where: { 
@@ -55,6 +55,7 @@ export default async function UserManagementPage({ params }: PageProps) {
       }
     });
 
+    // If master doesn't exist, create it. If it does, do NOT overwrite its custom allowedTabs.
     if (!existingMaster) {
       await prisma.tenantUser.create({
         data: {
@@ -68,18 +69,9 @@ export default async function UserManagementPage({ params }: PageProps) {
           status: 'Active',
         },
       }).catch(() => {});
-    } else {
-      await prisma.tenantUser.update({
-        where: { id: existingMaster.id },
-        data: {
-          role: 'admin',
-          allowedTabs: JSON.stringify(ROLE_PERMISSIONS_MAP.admin),
-          status: 'Active',
-        }
-      }).catch(() => {});
     }
 
-    // 3. Seed other default officers if needed[cite: 4]
+    // 3. Seed other default officers if needed
     let dbUsers = await prisma.tenantUser.findMany({
       where: { organizationId: organization.id },
       orderBy: { fullName: 'asc' },

@@ -43,11 +43,11 @@ export const {
           ? String(credentials.email)
               .trim()
               .toLowerCase()
-          : null;
+          : undefined;
 
         const code = credentials?.code
           ? String(credentials.code).trim()
-          : null;
+          : undefined;
 
         const department = credentials?.department
           ? decodeURIComponent(
@@ -55,7 +55,7 @@ export const {
             )
               .trim()
               .toLowerCase()
-          : null;
+          : undefined;
 
         console.log("AUTH EMAIL:", email);
         console.log("AUTH DEPARTMENT:", department);
@@ -177,7 +177,7 @@ export const {
           "AUTH OTP EXPIRED:",
           user?.otpExpires
             ? user.otpExpires < new Date()
-            : null
+            : false
         );
 
         if (!user) {
@@ -303,17 +303,11 @@ export const {
       if (user) {
         const authenticatedUser = user as any;
 
-        token.role =
-          authenticatedUser.role ?? null;
-
-        token.organizationId =
-          authenticatedUser.organizationId ?? null;
-
-        token.department =
-          authenticatedUser.department ?? null;
-
-        token.allowedTabs =
-          authenticatedUser.allowedTabs ?? [];
+        // FIX: Removed ?? null to rely on undefined natively
+        if (authenticatedUser.role) token.role = authenticatedUser.role;
+        if (authenticatedUser.organizationId) token.organizationId = authenticatedUser.organizationId;
+        if (authenticatedUser.department) token.department = authenticatedUser.department;
+        token.allowedTabs = authenticatedUser.allowedTabs || [];
       }
 
       return token;
@@ -321,20 +315,13 @@ export const {
 
     async session({ session, token }) {
       if (session.user) {
-        const sessionUser =
-          session.user as any;
+        const sessionUser = session.user as any;
 
-        sessionUser.role =
-          token.role ?? null;
-
-        sessionUser.organizationId =
-          token.organizationId ?? null;
-
-        sessionUser.department =
-          token.department ?? null;
-
-        sessionUser.allowedTabs =
-          token.allowedTabs ?? [];
+        // FIX: Removed ?? null to rely on undefined natively
+        if (token.role) sessionUser.role = token.role;
+        if (token.organizationId) sessionUser.organizationId = token.organizationId;
+        if (token.department) sessionUser.department = token.department;
+        sessionUser.allowedTabs = token.allowedTabs || [];
       }
 
       return session;
