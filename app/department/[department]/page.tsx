@@ -6,6 +6,11 @@ import { fmt } from "@/lib/utils";
 import Link from "next/link";
 import { auth } from "@/auth";
 import OtpModal from "./components/OtpModal";
+import { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Centralized Liquidation of Expense & Audit Records',
+};
 
 export default async function DepartmentOverviewPage({
   params,

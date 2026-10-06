@@ -3,6 +3,11 @@
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import AdminOtpModal from './components/AdminOtpModal';
+import { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Centralized Liquidation of Expense & Audit Records',
+};
 
 export default async function DashboardPage() {
   const departments = await prisma.organization.findMany();

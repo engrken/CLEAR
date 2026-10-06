@@ -338,7 +338,7 @@ export default function SummaryClient({
             <div className="fw-bold border-top border-dark pt-1 d-inline-block px-3">Auditor</div>
           </div>
           <div className="col-3 text-center">
-            <div className="fw-bold text-uppercase text-muted mb-1" style={{ fontSize: '0.75rem' }}>Attested:</div>
+            <div className="fw-bold text-uppercase text-muted mb-1" style={{ fontSize: '0.75rem' }}>Attested by:</div>
             <div style={{ height: '40px' }}></div>
             <div className="fw-bold border-top border-dark pt-1 d-inline-block px-3">Treasurer</div>
           </div>
