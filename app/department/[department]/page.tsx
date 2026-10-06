@@ -97,58 +97,72 @@ export default async function DepartmentOverviewPage({
   );
 
   // =========================================================
-  // UNAUTHENTICATED DEPARTMENT ENTRY
+  // UNAUTHENTICATED DEPARTMENT ENTRY (LANDING PAGE)
   // =========================================================
 
   if (!isAuthenticated) {
     return (
       <>
-        <div className="container py-5">
+        <div className="container py-5 d-flex flex-column align-items-center justify-content-center" style={{ minHeight: '80vh' }}>
           <div
-            className="card border-secondary shadow-lg bg-card p-4 p-md-5 text-center mx-auto"
+            className="card border-secondary shadow-lg bg-card p-4 p-md-5 text-center mx-auto w-100"
             style={{ maxWidth: "650px" }}
           >
             <div className="mb-4">
-              <i className="bi bi-building-lock display-3 text-info"></i>
+              <i className="bi bi-building display-4 text-info mb-3 d-block"></i>
+              <h3 className="fw-bold text-accent mb-2">
+                {organization.name}
+              </h3>
+              <p className="text-secondary mb-0">
+                Welcome to the Centralized Liquidation of Expenses & Audit Records (CLEAR) System.
+              </p>
             </div>
-
-            <h3 className="fw-bold text-accent mb-2">
-              {organization.name}
-            </h3>
-
-            <p className="text-secondary mb-4">
-              Secure departmental access is required
-              to continue to the CLEAR financial
-              management system.
-            </p>
 
             {resolvedSearch.login === "true" && (
               <div className="alert alert-info text-start small">
                 <i className="bi bi-info-circle me-2"></i>
-                Please authenticate using your
-                registered institutional email.
+                Please authenticate using your registered institutional email.
               </div>
             )}
 
             {resolvedSearch.forbidden === "true" && (
               <div className="alert alert-danger text-start small">
                 <i className="bi bi-shield-exclamation me-2"></i>
-                You are not authorized to access
-                this department.
+                You are not authorized to access this department.
               </div>
             )}
 
-            <button
-              type="button"
-              className="btn btn-info fw-bold px-4 py-2"
-              data-bs-toggle="modal"
-              data-bs-target="#otpAuthModal"
-            >
-              <i className="bi bi-shield-lock-fill me-2"></i>
-              Login to {organization.name}
-            </button>
+            <div className="row g-3 mt-2">
+              {/* PUBLIC STUDENT ACCESS BUTTON */}
+              <div className="col-12 col-sm-6">
+                <Link
+                  href={`${basePath}/clearance${queryString}`}
+                  className="btn btn-outline-info w-100 h-100 p-3 d-flex flex-column align-items-center justify-content-center rounded-3"
+                  style={{ transition: 'all 0.2s ease' }}
+                >
+                  <i className="bi bi-person-check fs-2 mb-2"></i>
+                  <span className="fw-bold">Student Clearance</span>
+                  <small className="text-secondary mt-1" style={{ fontSize: '0.75rem' }}>Public Verification</small>
+                </Link>
+              </div>
 
-            <div className="mt-4">
+              {/* OFFICER LOGIN BUTTON */}
+              <div className="col-12 col-sm-6">
+                <button
+                  type="button"
+                  className="btn btn-info w-100 h-100 p-3 d-flex flex-column align-items-center justify-content-center rounded-3 text-dark"
+                  style={{ transition: 'all 0.2s ease' }}
+                  data-bs-toggle="modal"
+                  data-bs-target="#otpAuthModal"
+                >
+                  <i className="bi bi-shield-lock-fill fs-2 mb-2"></i>
+                  <span className="fw-bold">Officer Login</span>
+                  <small className="text-dark opacity-75 mt-1" style={{ fontSize: '0.75rem' }}>Secure Access</small>
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-5 pt-3 border-top border-secondary">
               <Link
                 href="/dashboard"
                 className="text-secondary small text-decoration-none"
