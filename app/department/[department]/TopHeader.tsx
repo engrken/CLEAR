@@ -205,8 +205,8 @@ function TopHeaderContent({
 
           <div>
             {isLoggedIn ? (
-              <span className="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25 px-2 py-1 text-uppercase fw-bold" style={{ fontSize: '0.75rem' }} title={userName}>
-                {role}
+              <span className="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25 px-2 py-1 text-uppercase fw-bold" style={{ fontSize: '0.75rem' }} title={fullName}>
+                {fullName}
               </span>
             ) : (
               <span className="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 px-2 py-1 text-uppercase fw-bold" style={{ fontSize: '0.75rem' }}>
