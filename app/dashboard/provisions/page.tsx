@@ -87,17 +87,21 @@ export default async function ProvisionPage() {
       <div className="row g-5">
 
         {/* PROVISION FORM */}
-        <div className="col-12 col-lg-4">
+<div className="col-12 col-lg-4">
 
-          <div
-            className="card p-4 border-secondary shadow-lg bg-card sticky-top"
-            style={{ top: '2rem' }}
-          >
-
-            <h5 className="fw-bold text-accent mb-1">
-              <i className="bi bi-building-gear me-2"></i>
-              Provision Department
-            </h5>
+  <div
+    className="card p-4 border-secondary shadow-lg bg-card sticky-top"
+    style={{ 
+      top: '2rem',
+      maxHeight: 'calc(100vh - 4rem)', // Constraints height to viewport minus top/bottom margins
+      overflowY: 'auto'                // Adds a vertical scrollbar inside the card when needed
+    }}
+  >
+    
+    <h5 className="fw-bold text-accent mb-1">
+      <i className="bi bi-building-gear me-2"></i>
+      Provision Department
+    </h5>
 
             <p className="text-secondary small mb-4">
               Create a new College or Department.
