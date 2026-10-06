@@ -33,59 +33,24 @@ export default async function ClearancePage({
 }) {
 
   // =======================================================
-  // PARAMETERS
+  // PARAMETERS & DEPARTMENT PATH
   // =======================================================
 
   const { department } = await params;
+  const resolvedSearch = searchParams ? await searchParams : {};
 
-  const resolvedSearch = searchParams
-    ? await searchParams
-    : {};
-
-  const ay =
-    resolvedSearch.ay ||
-    'A.Y. 2026 - 2027';
-
-  const term =
-    resolvedSearch.term ||
-    '1st Sem';
-
-  const q =
-    resolvedSearch.q?.trim();
-
-  const sigParam =
-    resolvedSearch.sig?.trim();
+  const cleanDepartment = decodeURIComponent(department).toLowerCase().trim();
+  const basePath = `/department/${encodeURIComponent(cleanDepartment)}`;
 
   // =======================================================
-  // DEPARTMENT PATH
+  // FIND ORGANIZATION (FETCH THIS FIRST)
   // =======================================================
 
-  const cleanDepartment =
-    decodeURIComponent(department)
-      .toLowerCase()
-      .trim();
-
-  const basePath =
-    `/department/${encodeURIComponent(cleanDepartment)}`;
-
-  // =======================================================
-  // COMMON QUERY STRING
-  // =======================================================
-
-  const queryString =
-    `?ay=${encodeURIComponent(ay)}` +
-    `&term=${encodeURIComponent(term)}`;
-
-  // =======================================================
-  // FIND ORGANIZATION
-  // =======================================================
-
-  const organization =
-    await prisma.organization.findUnique({
-      where: {
-        subdomain: cleanDepartment,
-      },
-    });
+  const organization = await prisma.organization.findUnique({
+    where: {
+      subdomain: cleanDepartment,
+    },
+  });
 
   if (!organization) {
     return (
@@ -101,6 +66,16 @@ export default async function ClearancePage({
       </div>
     );
   }
+
+  // =======================================================
+  // DYNAMIC ACADEMIC YEAR & TERM (DATABASE LINKED)
+  // =======================================================
+  const ay = resolvedSearch.ay || organization.activeAy || 'A.Y. 2026 - 2027';
+  const term = resolvedSearch.term || organization.activeTerm || '1st Sem';
+  const q = resolvedSearch.q?.trim();
+  const sigParam = resolvedSearch.sig?.trim();
+
+  const queryString = `?ay=${encodeURIComponent(ay)}&term=${encodeURIComponent(term)}`;
 
   // =======================================================
   // AUTHENTICATION
@@ -134,19 +109,15 @@ export default async function ClearancePage({
   // CRYPTOGRAPHIC SIGNATURE VERIFICATION (CERTIFICATE VIEW)
   // =======================================================
 
-  const salt =
-    process.env.CLEARANCE_SALT ||
-    'JIECEP_CLEARANCE_KEY_2026';
+  const salt = process.env.CLEARANCE_SALT || 'JIECEP_CLEARANCE_KEY_2026';
 
   if (sigParam && q) {
-    const expectedSig =
-      crypto
-        .createHash('sha256')
-        .update(`${q}|${ay}|${term}|${salt}`)
-        .digest('hex');
+    const expectedSig = crypto
+      .createHash('sha256')
+      .update(`${q}|${ay}|${term}|${salt}`)
+      .digest('hex');
 
-    const isSignatureValid =
-      sigParam.toLowerCase() === expectedSig.toLowerCase();
+    const isSignatureValid = sigParam.toLowerCase() === expectedSig.toLowerCase();
 
     return (
       <div className="d-flex flex-column min-vh-100 bg-canvas">

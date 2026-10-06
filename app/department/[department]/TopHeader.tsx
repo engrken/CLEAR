@@ -7,13 +7,24 @@ import LoginModal from './LoginModal';
 
 // We wrap the main header logic in a component that consumes useSearchParams
 // so we can wrap it in Suspense below (a Next.js best practice for client boundary params)
-function TopHeaderContent({ department, currentUser }: { department: string; currentUser?: any }) {
+function TopHeaderContent({ 
+  department, 
+  currentUser, 
+  defaultAy = 'A.Y. 2026 - 2027', 
+  defaultTerm = '1st Sem' 
+}: { 
+  department: string; 
+  currentUser?: any; 
+  defaultAy?: string; 
+  defaultTerm?: string; 
+}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
 
-  const ay = searchParams.get('ay') || 'A.Y. 2026 - 2027';
-  const term = searchParams.get('term') || '1st Sem';
+  // NOW DYNAMIC
+  const ay = searchParams.get('ay') || defaultAy;
+  const term = searchParams.get('term') || defaultTerm;
 
   const [theme, setTheme] = useState('dark');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -240,7 +251,12 @@ function TopHeaderContent({ department, currentUser }: { department: string; cur
 }
 
 // Wrap in Suspense to prevent entire page from opting into client-side rendering during build
-export default function TopHeader(props: { department: string; currentUser?: any }) {
+export default function TopHeader(props: { 
+department: string;
+currentUser?: any;
+defaultAy?: string;
+defaultTerm?: string
+}) {
   return (
     <Suspense fallback={<div className="p-3 bg-card border-bottom border-secondary">Loading header...</div>}>
       <TopHeaderContent {...props} />

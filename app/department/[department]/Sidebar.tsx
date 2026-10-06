@@ -26,9 +26,13 @@ const PRESET_ROLE_TABS: Record<string, string[]> = {
 export default function DepartmentSidebar({
   department,
   currentUser,
+  defaultAy = 'A.Y. 2026 - 2027',
+  defaultTerm = '1st Sem'
 }: {
   department: string;
   currentUser?: any;
+  defaultAy?: string;
+  defaultTerm?: string;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();

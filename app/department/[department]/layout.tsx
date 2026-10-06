@@ -146,6 +146,8 @@ export default async function ProtectedDepartmentLayout({
       <DepartmentSidebar
         department={cleanDepartment}
         currentUser={currentUser}
+		defaultAy={organization.activeAy}
+        defaultTerm={organization.activeTerm}
       />
 
       <div
@@ -158,6 +160,8 @@ export default async function ProtectedDepartmentLayout({
         <TopHeader
           department={cleanDepartment}
           currentUser={currentUser}
+		  defaultAy={organization.activeAy}
+          defaultTerm={organization.activeTerm}
         />
 
         <main

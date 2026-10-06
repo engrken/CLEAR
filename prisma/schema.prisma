@@ -12,6 +12,10 @@ model Organization {
   subdomain         String   @unique
   name              String
   createdAt         DateTime @default(now())
+  
+  // NEW: System-wide active term settings
+  activeAy          String   @default("A.Y. 2026 - 2027")
+  activeTerm        String   @default("1st Sem")
 
   students          Student[]
   enrollments       Enrollment[]
