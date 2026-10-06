@@ -281,9 +281,9 @@ export default function LoginModal({
           <div className="modal-body p-4">
     {/* DEPARTMENT */}
     <div className="text-center mb-4">
-      <span className="badge bg-secondary px-3 py-2" style={{ textTransform: 'uppercase', textTransform: 'uppercase !important' }}>
+      <span className="badge bg-secondary px-3 py-2 text-uppercase">
         <i className="bi bi-building me-1"></i>
-        {department ? String(department).toUpperCase() : ''}
+        {department}
       </span>
     </div>
 </div>
