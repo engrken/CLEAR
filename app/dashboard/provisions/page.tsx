@@ -106,51 +106,78 @@ export default async function ProvisionPage() {
             <form
               action={async (formData) => {
                 'use server';
-
                 await createDepartment(formData);
               }}
             >
-
               <div className="mb-3">
-
                 <label className="form-label text-secondary small fw-semibold">
                   Department / College Name
                 </label>
-
                 <input
                   type="text"
                   name="name"
-                  placeholder="College of Engineering"
+                  placeholder="College of Nursing"
                   className="form-control bg-body border-secondary"
                   required
                 />
-
               </div>
 
               <div className="mb-3">
-
                 <label className="form-label text-secondary small fw-semibold">
                   Subdomain Prefix
                 </label>
-
                 <input
                   type="text"
                   name="subdomain"
-                  placeholder="engineering"
+                  placeholder="nursing"
                   className="form-control bg-body border-secondary"
                   required
                 />
+              </div>
 
+              <hr className="border-secondary my-3" />
+              <div className="text-accent fw-bold small mb-3">Initial Department Administrator</div>
+
+              <div className="mb-3">
+                <label className="form-label text-secondary small fw-semibold">Admin Full Name</label>
+                <input
+                  type="text"
+                  name="adminName"
+                  placeholder="Dr. Jane Doe"
+                  className="form-control bg-body border-secondary"
+                  required
+                />
+              </div>
+
+              <div className="mb-3">
+                <label className="form-label text-secondary small fw-semibold">Admin Username</label>
+                <input
+                  type="text"
+                  name="adminUsername"
+                  placeholder="nursing_admin"
+                  className="form-control bg-body border-secondary"
+                  required
+                />
+              </div>
+
+              <div className="mb-3">
+                <label className="form-label text-secondary small fw-semibold">Admin Email</label>
+                <input
+                  type="email"
+                  name="adminEmail"
+                  placeholder="admin.nursing@fcu.edu.ph"
+                  className="form-control bg-body border-secondary"
+                  required
+                />
               </div>
 
               <button
                 type="submit"
-                className="btn btn-warning w-100 fw-bold py-2 shadow-sm"
+                className="btn btn-warning w-100 fw-bold py-2 shadow-sm mt-2"
               >
                 <i className="bi bi-plus-circle-fill me-2"></i>
-                Provision Department
+                Provision Department & Admin
               </button>
-
             </form>
 
             {/* SECURITY INFORMATION */}

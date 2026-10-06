@@ -5,75 +5,61 @@ import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 
 export async function createDepartment(formData: FormData) {
-  // --------------------------------------------------
-  // SUPER ADMIN SECURITY CHECK
-  // --------------------------------------------------
+  const name = formData.get('name') as string;
+  const subdomain = formData.get('subdomain') as string;
+  const adminName = formData.get('adminName') as string;
+  const adminEmail = formData.get('adminEmail') as string;
+  const adminUsername = formData.get('adminUsername') as string;
 
-  const session = await auth();
-
-  if (!session || session.user?.email !== 'kent.bsece@gmail.com') {
-    return {
-      success: false,
-      message: 'Unauthorized. Super Administrator access required.',
-    };
+  if (!name || !subdomain || !adminEmail || !adminUsername) {
+    throw new Error('All department and initial administrator fields are required.');
   }
 
-  // --------------------------------------------------
-  // GET FORM DATA
-  // --------------------------------------------------
-
-  const name = String(formData.get('name') || '').trim();
-  const subdomain = String(formData.get('subdomain') || '')
-    .toLowerCase()
-    .trim();
-
-  if (!name || !subdomain) {
-    return {
-      success: false,
-      message: 'All fields are required.',
-    };
-  }
-
-  // --------------------------------------------------
-  // BASIC SUBDOMAIN VALIDATION
-  // --------------------------------------------------
-
-  const subdomainPattern = /^[a-z0-9-]+$/;
-
-  if (!subdomainPattern.test(subdomain)) {
-    return {
-      success: false,
-      message:
-        'Invalid subdomain. Use only lowercase letters, numbers, and hyphens.',
-    };
-  }
-
-  // --------------------------------------------------
-  // CREATE DEPARTMENT
-  // --------------------------------------------------
+  const cleanSubdomain = subdomain.toLowerCase().trim();
 
   try {
-    await prisma.organization.create({
-      data: {
-        name,
-        subdomain,
-      },
+    // Use a Prisma transaction to ensure both organization and initial admin are created together
+    await prisma.$transaction(async (tx) => {
+      // 1. Create the Organization
+      const org = await tx.organization.create({
+        data: {
+          name,
+          subdomain: cleanSubdomain,
+        },
+      });
+
+      // 2. Generate initial User ID
+      const userId = `USR-${cleanSubdomain.toUpperCase()}-001`;
+
+      // 3. Define full preset tabs for the initial Department Admin
+      const adminTabs = [
+        'tab-overview', 'tab-students', 'tab-clearance', 'tab-payment', 
+        'tab-remittances', 'tab-penalties', 'tab-advances', 'tab-audit', 
+        'tab-collectibles', 'tab-reports', 'tab-void', 'tab-report', 
+        'tab-transfer', 'tab-users', 'tab-setup'
+      ];
+
+      // 4. Create the first Administrator for this department
+      await tx.tenantUser.create({
+        data: {
+          organizationId: org.id,
+          userId,
+          fullName: adminName,
+          username: adminUsername.toLowerCase().trim(),
+          email: adminEmail.toLowerCase().trim(),
+          role: 'admin',
+          status: 'Active',
+          allowedTabs: JSON.stringify(adminTabs),
+        },
+      });
     });
 
-    // Refresh Dashboard and Provision pages
-    revalidatePath('/dashboard');
-    revalidatePath('/dashboard/provisions');
-
-    return {
-      success: true,
-      message: `Department '${name}' successfully registered!`,
-    };
+    revalidatePath('/');
+	revalidatePath('/dashboard');
+	revalidatePath('/dashboard/provisions');
+    return { success: true, message: `Department '${name}' and initial administrator successfully provisioned!` };
   } catch (error) {
-    console.error('CREATE DEPARTMENT ERROR:', error);
-
-    return {
-      success: false,
-      message: 'Subdomain already exists or database error.',
-    };
+    console.error(error);
+    return { success: false, message: 'Subdomain, username, or email already exists.' };
   }
 }
