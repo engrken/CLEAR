@@ -108,14 +108,19 @@ export const {
           console.log("SUPER ADMIN AUTH SUCCESS");
 
           return {
-            id: "super-admin-01",
-            name: user.fullName,
+            id: "SuperAdmin",
+            name: "Kenneth Mark Bulquerin",
             email,
             role: "SuperAdmin",
             organizationId: null,
             department: null,
-			username: user.username,
-            allowedTabs: ["ALL ACCESS"],
+			username: "SuperAdmin",
+            allowedTabs: [
+              'tab-overview', 'tab-students', 'tab-clearance', 'tab-payment', 
+              'tab-remittances', 'tab-penalties', 'tab-advances', 'tab-audit', 
+              'tab-collectibles', 'tab-reports', 'tab-void', 'tab-report', 
+              'tab-transfer', 'tab-users', 'tab-setup'
+            ],
           };
         }
 
