@@ -1,371 +1,265 @@
-// app/department/[department]/page.tsx
+import { prisma } from '@/lib/prisma';
+import SummaryClient from './SummaryClient';
 
-import { prisma } from "@/lib/prisma";
-import { getDepartmentFinancials } from "./actions";
-import { fmt } from "@/lib/utils";
-import Link from "next/link";
-import { auth } from "@/auth";
-import OtpModal from "./components/OtpModal";
-
-export default async function DepartmentOverviewPage({
+export default async function SummaryReportPage({
   params,
   searchParams,
 }: {
   params: Promise<{ department: string }>;
-  searchParams?: Promise<{
-    ay?: string;
-    term?: string;
-    subtab?: string;
-    login?: string;
-    forbidden?: string;
-  }>;
+  searchParams?: Promise<{ ay?: string; term?: string }>;
 }) {
   const { department } = await params;
   const resolvedSearch = searchParams ? await searchParams : {};
+  const ay = resolvedSearch.ay || 'A.Y. 2026 - 2027';
+  const term = resolvedSearch.term || '1st Sem';
 
-  // =========================================================
-  // 1. FORMAT DEPARTMENT PATH
-  // =========================================================
-  const cleanSubdomain = decodeURIComponent(department).toLowerCase().trim();
-  const basePath = `/department/${encodeURIComponent(cleanSubdomain)}`;
-
-  // =========================================================
-  // 2. FIND ORGANIZATION (FETCH THIS FIRST)
-  // =========================================================
   const organization = await prisma.organization.findUnique({
-    where: {
-      subdomain: cleanSubdomain,
-    },
+    where: { subdomain: department },
   });
 
   if (!organization) {
-    return (
-      <div className="container p-4">
-        <div className="alert alert-danger shadow-sm border-secondary">
-          <h4 className="fw-bold mb-2">Department Not Found</h4>
-          <p className="small mb-0">
-            The department "{cleanSubdomain}" does not exist in the database.
-          </p>
-        </div>
-      </div>
-    );
+    return <div className="alert alert-danger p-4">Department Not Found</div>;
   }
 
-  // =========================================================
-  // 3. DYNAMIC ACADEMIC YEAR & TERM (DATABASE LINKED)
-  // =========================================================
-  // Uses URL params if present, otherwise falls back to the database defaults!
-  const ay = resolvedSearch.ay || organization.activeAy || "A.Y. 2026 - 2027";
-  const term = resolvedSearch.term || organization.activeTerm || "1st Sem";
-  const subtab = resolvedSearch.subtab || "advances";
+  // Term package configuration (Legacy Parity)
+  const termPackages: Record<string, { total: number; items: { name: string; rate: number; fund: string }[] }> = {
+    "1st Sem": {
+      total: 650.00,
+      items: [
+        { name: "JIECEP FCUSC Membership Fee (Student & Institutional)", rate: 250.00, fund: "JIECEP Membership Fund" },
+        { name: "General Orientation/Acquaintance Party", rate: 200.00, fund: "General Orientation Fund" },
+        { name: "COE FCUSR Activities", rate: 100.00, fund: "FCUSR Activities Fund" },
+        { name: "Sports and Cultural Fund", rate: 100.00, fund: "Sports & Cultural Fund" }
+      ]
+    },
+    "2nd Sem": {
+      total: 900.00,
+      items: [
+        { name: "JIECEP FCUSC Fund", rate: 50.00, fund: "JIECEP FCUSC Fund" },
+        { name: "JIECEP Week Activities (Local & Regional)", rate: 150.00, fund: "JIECEP Week Activities Fund" },
+        { name: "ECE Grand Ball", rate: 650.00, fund: "ECE Grandball Fund" },
+        { name: "Emergency/Calamity Fund", rate: 30.00, fund: "Emergency/Calamity Fund" },
+        { name: "FCUSR Activities & Projects", rate: 20.00, fund: "FCUSR Activities Fund" }
+      ]
+    },
+    "Summer": {
+      total: 200.00,
+      items: [
+        { name: "Summer Departmental Operations", rate: 150.00, fund: "New Accounts (Current Operations)" },
+        { name: "Special Activities Fund", rate: 50.00, fund: "JIECEP Activities Fund" }
+      ]
+    }
+  };
 
-  const queryString = `?ay=${encodeURIComponent(ay)}&term=${encodeURIComponent(term)}`;
+  const otherRates: Record<string, number> = {
+    "Gen Orientation Lunch": 150.00,
+    "Fellowship Night": 160.00,
+    "Departmental Shirt (Officer)": 400.00,
+    "Departmental Shirt (Non - Officer)": 450.00
+  };
 
-  // =========================================================
-  // 4. SESSION
-  // =========================================================
-  const session = await auth();
-  const isAuthenticated = Boolean(session?.user);
+  // Fetch all required database records concurrently
+  const [collections, audits, students, explicitCollectibles] = await Promise.all([
+    prisma.collection.findMany({
+      where: { organizationId: organization.id, academicYear: ay, term },
+    }),
+    prisma.audit.findMany({
+      where: { organizationId: organization.id, academicYear: ay, term },
+    }),
+    prisma.student.findMany({
+      where: { organizationId: organization.id },
+    }),
+    prisma.collectible.findMany({
+      where: { organizationId: organization.id, academicYear: ay, term },
+    }).catch(() => []),
+  ]);
 
-  // =========================================================
-  // 5. UNAUTHENTICATED DEPARTMENT ENTRY (LANDING PAGE)
-  // =========================================================
-  if (!isAuthenticated) {
-    return (
-      <>
-        <div className="container py-5 d-flex flex-column align-items-center justify-content-center" style={{ minHeight: '80vh' }}>
-          <div
-            className="card border-secondary shadow-lg bg-card p-4 p-md-5 text-center mx-auto w-100"
-            style={{ maxWidth: "650px" }}
-          >
-            <div className="mb-4">
-              <i className="bi bi-building display-4 text-info mb-3 d-block"></i>
-              <h3 className="fw-bold text-accent mb-2">
-                {organization.name}
-              </h3>
-              <p className="text-secondary mb-0">
-                Welcome to the Centralized Liquidation of Expenses & Audit Records (CLEAR) System.
-              </p>
-            </div>
+  const validCollections = collections.filter(c => !c.paymentType?.toUpperCase().includes('VOID'));
+  const validAudits = audits.filter(a => !a.status?.includes('Void') && !a.status?.includes('Cancel'));
 
-            {resolvedSearch.login === "true" && (
-              <div className="alert alert-info text-start small">
-                <i className="bi bi-info-circle me-2"></i>
-                Please authenticate using your registered institutional email.
-              </div>
-            )}
+  const termPkg = termPackages[term] || termPackages["1st Sem"];
+  const collectionHierarchy: Record<string, { count: number; total: number }> = {};
+  const distinctStudents: Record<string, Set<string>> = {};
+  let grandCollectionTotal = 0;
 
-            {resolvedSearch.forbidden === "true" && (
-              <div className="alert alert-danger text-start small">
-                <i className="bi bi-shield-exclamation me-2"></i>
-                You are not authorized to access this department.
-              </div>
-            )}
+  // Helper with legacy student identifier matching (Name -> ID -> OR)
+  const addCollectionItem = (itemName: string, amt: number, studentKey: string) => {
+    if (!collectionHierarchy[itemName]) {
+      collectionHierarchy[itemName] = { count: 0, total: 0 };
+      distinctStudents[itemName] = new Set();
+    }
+    collectionHierarchy[itemName].total += amt;
+    if (amt > 0 && studentKey) {
+      distinctStudents[itemName].add(studentKey);
+    }
+  };
 
-            <div className="row g-3 mt-2">
-              {/* PUBLIC STUDENT ACCESS BUTTON */}
-              <div className="col-12 col-sm-6">
-                <Link
-                  href={`${basePath}/clearance${queryString}`}
-                  className="btn btn-outline-info w-100 h-100 p-3 d-flex flex-column align-items-center justify-content-center rounded-3"
-                  style={{ transition: 'all 0.2s ease' }}
-                >
-                  <i className="bi bi-person-check fs-2 mb-2"></i>
-                  <span className="fw-bold">Student Clearance</span>
-                  <small className="text-secondary mt-1" style={{ fontSize: '0.75rem' }}>Public Verification</small>
-                </Link>
-              </div>
+  validCollections.forEach(c => {
+    const itemDesc = c.itemDescription?.trim() || 'General';
+    const amt = Number(c.amountPaid) || 0;
+    const studentKey = c.studentName ? c.studentName.trim().toLowerCase() : (c.studentId && c.studentId !== 'N/A' ? c.studentId.trim().toLowerCase() : c.orNumber);
 
-              {/* OFFICER LOGIN BUTTON */}
-              <div className="col-12 col-sm-6">
-                <button
-                  type="button"
-                  className="btn btn-info w-100 h-100 p-3 d-flex flex-column align-items-center justify-content-center rounded-3 text-dark"
-                  style={{ transition: 'all 0.2s ease' }}
-                  data-bs-toggle="modal"
-                  data-bs-target="#otpAuthModal"
-                >
-                  <i className="bi bi-shield-lock-fill fs-2 mb-2"></i>
-                  <span className="fw-bold">Officer Login</span>
-                  <small className="text-dark opacity-75 mt-1" style={{ fontSize: '0.75rem' }}>Secure Access</small>
-                </button>
-              </div>
-            </div>
+    grandCollectionTotal += amt;
 
-            <div className="mt-5 pt-3 border-top border-secondary">
-              <Link
-                href="/dashboard"
-                className="text-secondary small text-decoration-none"
-              >
-                <i className="bi bi-arrow-left me-1"></i>
-                Back to CLEAR Dashboard
-              </Link>
-            </div>
-          </div>
-        </div>
+    const matchedPkgItem = termPkg.items.find(pi => pi.name.toLowerCase() === itemDesc.toLowerCase());
 
-        <OtpModal
-          department={cleanSubdomain}
-        />
-      </>
-    );
+    if (matchedPkgItem) {
+      addCollectionItem(matchedPkgItem.name, amt, studentKey);
+    } else if (itemDesc === 'Departmental Fee Package' || itemDesc === 'Departmental Fee') {
+      const pkgTotalRate = termPkg.total;
+      termPkg.items.forEach(pi => {
+        const share = (pi.rate / pkgTotalRate) * amt;
+        addCollectionItem(pi.name, share, studentKey);
+      });
+    } else {
+      addCollectionItem(itemDesc, amt, studentKey);
+    }
+  });
+
+  Object.keys(collectionHierarchy).forEach(k => {
+    collectionHierarchy[k].count = distinctStudents[k]?.size || 0;
+  });
+
+  // 2. Expenses Aggregation
+  const expensesByFund: Record<string, number> = {};
+  let grandExpenseTotal = 0;
+  validAudits.forEach(a => {
+    const fund = a.fundSource?.trim() || 'General Fund (Carried Over)';
+    const exp = Number(a.totalExpense) || 0;
+    expensesByFund[fund] = (expensesByFund[fund] || 0) + exp;
+    grandExpenseTotal += exp;
+  });
+
+  // 3. Collectibles & Receivables (Accounting for unpaid & partial installments)
+  const pkgTotal = termPkg.total;
+  const paidPackageMap: Record<string, number> = {};
+
+  // Track specific student obligations to prevent duplicates across tables
+  const studentItemObligations: Record<string, Set<string>> = {}; 
+
+  const addStudentObligation = (studentKey: string, itemName: string) => {
+    if (!studentItemObligations[studentKey]) {
+      studentItemObligations[studentKey] = new Set();
+    }
+    // Returns true if this is the first time we've seen this item for this student
+    if (!studentItemObligations[studentKey].has(itemName)) {
+      studentItemObligations[studentKey].add(itemName);
+      return true; 
+    }
+    return false; // Already counted!
+  };
+
+  validCollections.forEach(c => {
+    if (c.category === 'Departmental Fee' || c.category === 'Departmental Fee - Package' || termPkg.items.some(pi => pi.name.toLowerCase() === (c.itemDescription || '').toLowerCase())) {
+      const sId = c.studentId?.trim().toLowerCase() || '';
+      const sName = c.studentName?.trim().toLowerCase() || '';
+      const paid = Number(c.amountPaid) || 0;
+      const key = sName || (sId && sId !== 'n/a' ? sId : '');
+      if (key) {
+        paidPackageMap[key] = (paidPackageMap[key] || 0) + paid;
+      }
+    }
+  });
+
+  let unpaidOrPartialPackageCount = 0;
+  let totalPackageReceivable = 0;
+
+  students.forEach(s => {
+    const sId = s.studentId?.trim().toLowerCase() || '';
+    const sName = s.fullName?.trim().toLowerCase() || '';
+    const key = sName || sId;
+    const remitted = paidPackageMap[key] || 0;
+    
+    if (remitted < pkgTotal) {
+      unpaidOrPartialPackageCount++;
+      totalPackageReceivable += (pkgTotal - remitted);
+      
+      // Mark package as obligated for this student
+      if (key) addStudentObligation(key, 'Departmental Fee');
+    }
+  });
+
+  const collectiblesMap: Record<string, { category: string; headcount: number; total: number }> = {};
+
+  if (unpaidOrPartialPackageCount > 0) {
+    collectiblesMap[`Unsettled Departmental Fees (${term})`] = {
+      category: `Unsettled Departmental Fees (${term})`,
+      headcount: unpaidOrPartialPackageCount,
+      total: totalPackageReceivable,
+    };
   }
 
-  // =========================================================
-  // 6. AUTHENTICATED USERS (FINANCIAL DASHBOARD)
-  // =========================================================
+  // Parse partial payments from Collections table
+  validCollections.forEach(c => {
+    const balDue = Number(c.balanceDue) || 0;
+    const pType = c.paymentType || '';
+    const orNum = c.orNumber || '';
+    const sId = c.studentId?.trim().toLowerCase() || '';
+    const sName = c.studentName?.trim().toLowerCase() || '';
+    const studentKey = sName || sId || `UNKNOWN-${c.id}`;
+    
+    if ((balDue > 0 || pType.includes('Unpaid') || orNum.startsWith('DUE-')) && 
+        c.category !== 'Departmental Fee' && c.category !== 'Departmental Fee - Package') {
+          
+      const itemName = c.itemDescription || c.category || 'Other Due';
+      
+      // Only count if we haven't already processed this item for this student
+      if (addStudentObligation(studentKey, itemName)) {
+        if (!collectiblesMap[itemName]) {
+          collectiblesMap[itemName] = { category: itemName, headcount: 0, total: 0 };
+        }
+        collectiblesMap[itemName].headcount += 1;
+        collectiblesMap[itemName].total += balDue > 0 ? balDue : Number(c.standardRate || 0);
+      }
+    }
+  });
 
-  const overview = await getDepartmentFinancials(
-    organization.id,
-    ay,
-    term
-  );
+  // Parse explicit records from Collectibles table
+  explicitCollectibles.forEach((ec: any) => {
+    let rawCat = ec.category?.trim() || 'Unassigned';
+    let itemName = rawCat;
+    
+    // Clean up legacy arrears formatting
+    if (rawCat.startsWith('Arrears: ')) {
+      const core = rawCat.substring(9);
+      const dashIdx = core.lastIndexOf(' - ');
+      itemName = dashIdx !== -1 ? core.substring(0, dashIdx).trim() : core;
+    }
+
+    const headcount = ec.headcount || 1;
+    const total = Number(ec.balanceDue) || Number(ec.total) || 0;
+    
+    // For explicit collectibles, we assume they might not have a specific student linked 
+    // in this table, so we use a fallback ID to ensure they get counted if headcount > 0
+    const fakeStudentKey = `EXPLICIT-${ec.id}`;
+
+    if (addStudentObligation(fakeStudentKey, itemName)) {
+      if (!collectiblesMap[itemName]) {
+        collectiblesMap[itemName] = { category: itemName, headcount: 0, total: 0 };
+      }
+      collectiblesMap[itemName].headcount += headcount;
+      collectiblesMap[itemName].total += total;
+    }
+  });
+
+  const collectiblesList = Object.values(collectiblesMap);
+  const totalCollectiblesSum = collectiblesList.reduce((sum, c) => sum + c.total, 0);
 
   return (
-    <div className="module card p-3 p-md-4 border-secondary shadow-sm">
-
-      {/* HEADER */}
-      <div className="d-flex justify-content-between align-items-start align-items-md-center flex-wrap gap-3 mb-4">
-        <div>
-          <h4 className="fw-bold mb-1">
-            Financial Overview Dashboard
-          </h4>
-          <p className="text-secondary small mb-0">
-            Here's an overview of department collections, liquidations, and fund allocations ({ay} | {term}).
-          </p>
-        </div>
-      </div>
-
-      {/* KPI CARDS */}
-      <div className="row g-3 mb-4">
-
-        {/* COLLECTIONS */}
-        <div className="col-6 col-md-4 col-xl">
-          <div className="stat-card">
-            <div className="stat-card-icon bg-info bg-opacity-10 text-info">
-              <i className="bi bi-wallet2"></i>
-            </div>
-            <small className="text-secondary text-uppercase fw-bold d-block mb-1" style={{ fontSize: "0.7rem" }}>
-              Collections
-            </small>
-            <div className="fs-5 fw-bold text-accent">
-              {fmt(overview.grandCollectionTotal)}
-            </div>
-          </div>
-        </div>
-
-        {/* UNLIQUIDATED */}
-        <div className="col-6 col-md-4 col-xl">
-          <div className="stat-card border-warning">
-            <div className="stat-card-icon bg-warning bg-opacity-10 text-warning">
-              <i className="bi bi-journal-arrow-up"></i>
-            </div>
-            <small className="text-secondary text-uppercase fw-bold d-block mb-1" style={{ fontSize: "0.7rem" }}>
-              Unliquidated
-            </small>
-            <div className="fs-5 fw-bold text-warning">
-              {fmt(overview.totalUnliquidated)}
-            </div>
-          </div>
-        </div>
-
-        {/* LIQUIDATED EXPENSES */}
-        <div className="col-6 col-md-4 col-xl">
-          <div className="stat-card">
-            <div className="stat-card-icon bg-danger bg-opacity-10 text-danger">
-              <i className="bi bi-receipt"></i>
-            </div>
-            <small className="text-secondary text-uppercase fw-bold d-block mb-1" style={{ fontSize: "0.7rem" }}>
-              Liquidated Expenses
-            </small>
-            <div className="fs-5 fw-bold text-danger">
-              {fmt(overview.grandExpenseTotal)}
-            </div>
-          </div>
-        </div>
-
-        {/* REMAINING BALANCE */}
-        <div className="col-6 col-md-6 col-xl">
-          <div className="stat-card">
-            <div className="stat-card-icon bg-success bg-opacity-10 text-success">
-              <i className="bi bi-check2-circle"></i>
-            </div>
-            <small className="text-secondary text-uppercase fw-bold d-block mb-1" style={{ fontSize: "0.7rem" }}>
-              Remaining Balance
-            </small>
-            <div className={`fs-5 fw-bold ${overview.remainingBalance >= 0 ? "text-success" : "text-danger"}`}>
-              {fmt(overview.remainingBalance)}
-            </div>
-          </div>
-        </div>
-
-        {/* COLLECTIBLES */}
-        <div className="col-12 col-md-6 col-xl">
-          <div className="stat-card">
-            <div className="stat-card-icon bg-warning bg-opacity-10 text-warning">
-              <i className="bi bi-inbox"></i>
-            </div>
-            <small className="text-secondary text-uppercase fw-bold d-block mb-1" style={{ fontSize: "0.7rem" }}>
-              Collectibles & Receivables
-            </small>
-            <div className="fs-5 fw-bold text-warning">
-              {fmt(overview.totalCollectibles)}
-            </div>
-          </div>
-        </div>
-
-      </div>
-
-      {/* WIDGET PANEL */}
-      <div className="card p-3 border-secondary">
-        <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-          <h6 className="fw-bold text-secondary m-0">
-            {subtab === "funds" ? (
-              <><i className="bi bi-wallet me-1 text-accent"></i> Individual Fund Account Balances</>
-            ) : (
-              <><i className="bi bi-journal-arrow-up me-1 text-warning"></i> Unliquidated Expenses (Active Cash Advances)</>
-            )}
-          </h6>
-
-          <div className="btn-group btn-group-sm" role="group">
-            <Link
-              href={`${basePath}${queryString}&subtab=advances`}
-              className={`btn ${subtab === "advances" ? "btn-outline-info active" : "btn-outline-secondary"}`}
-            >
-              Unliquidated Advances
-            </Link>
-            <Link
-              href={`${basePath}${queryString}&subtab=funds`}
-              className={`btn ${subtab === "funds" ? "btn-outline-info active" : "btn-outline-secondary"}`}
-            >
-              Fund Account Balances
-            </Link>
-          </div>
-        </div>
-
-        {/* FUNDS TABLE */}
-        {subtab === "funds" ? (
-          <div className="table-responsive">
-            <table className="table table-hover align-middle mb-0">
-              <thead>
-                <tr className="text-secondary small">
-                  <th>Account Pool</th>
-                  <th className="text-end">Allocated Collections</th>
-                  <th className="text-end">Disbursed (Unliquidated)</th>
-                  <th className="text-end">Liquidated Expenses</th>
-                  <th className="text-end">Available Balance</th>
-                </tr>
-              </thead>
-              <tbody>
-                {overview.fundsList.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="text-center py-4 text-secondary">
-                      No fund activity recorded for this term.
-                    </td>
-                  </tr>
-                ) : (
-                  overview.fundsList.map((f: any) => (
-                    <tr key={f.name}>
-                      <td><strong>{f.name}</strong></td>
-                      <td className="text-end text-accent">{fmt(f.collected)}</td>
-                      <td className="text-end text-warning">{fmt(f.unliquidated)}</td>
-                      <td className="text-end text-danger">{fmt(f.spent)}</td>
-                      <td className={`text-end fw-bold ${f.balance < 0 ? "text-danger" : "text-success"}`}>
-                        {fmt(f.balance)}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          /* ADVANCES TABLE */
-          <div className="table-responsive">
-            <table className="table table-hover align-middle mb-0">
-              <thead>
-                <tr className="text-secondary small">
-                  <th>Advance ID</th>
-                  <th>Date Issued</th>
-                  <th>Requestor</th>
-                  <th>Fund Source</th>
-                  <th className="text-end">Amount Approved</th>
-                  <th>Status</th>
-                  <th className="text-center">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {overview.unliquidatedAdvances.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="text-center py-4 text-secondary">
-                      No pending unliquidated cash advances for this term.
-                    </td>
-                  </tr>
-                ) : (
-                  overview.unliquidatedAdvances.map((ca: any) => (
-                    <tr key={ca.id}>
-                      <td><strong>{ca.id}</strong></td>
-                      <td>{ca.date}</td>
-                      <td><strong className="text-accent">{ca.requestor}</strong></td>
-                      <td>{ca.fund}</td>
-                      <td className="text-end text-warning fw-bold">{fmt(ca.amount)}</td>
-                      <td><span className="badge bg-warning text-dark">{ca.status}</span></td>
-                      <td className="text-center">
-                        <Link
-                          href={`${basePath}/liquidations?caId=${encodeURIComponent(ca.id)}&ay=${encodeURIComponent(ay)}&term=${encodeURIComponent(term)}`}
-                          className="btn btn-outline-info btn-sm py-0"
-                        >
-                          Liquidate
-                        </Link>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+    <div className="mx-auto" style={{ maxWidth: '1150px', minWidth: 0 }}>
+      <SummaryClient 
+        department={department}
+        ay={ay}
+        term={term}
+        termPkg={termPkg}
+        otherRates={otherRates}
+        collectionHierarchy={collectionHierarchy}
+        grandCollectionTotal={grandCollectionTotal}
+        expensesByFund={expensesByFund}
+        grandExpenseTotal={grandExpenseTotal}
+        collectibles={collectiblesList}
+        totalCollectiblesSum={totalCollectiblesSum}
+      />
     </div>
   );
 }
