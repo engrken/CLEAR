@@ -275,18 +275,18 @@ export default function LoginModal({
           </div>
 
           {/* =================================================
-              BODY
+              BODY (Encloses all inputs, alerts, and forms)
           ================================================= */}
 
           <div className="modal-body p-4">
-    {/* DEPARTMENT */}
-    <div className="text-center mb-4">
-      <span className="badge bg-secondary px-3 py-2 text-uppercase">
-        <i className="bi bi-building me-1"></i>
-        {department}
-      </span>
-    </div>
-</div>
+            
+            {/* DEPARTMENT BADGE */}
+            <div className="text-center mb-4">
+              <span className="badge bg-secondary px-3 py-2 text-uppercase">
+                <i className="bi bi-building me-1"></i>
+                {department}
+              </span>
+            </div>
 
             {/* =================================================
                 ERROR
@@ -300,10 +300,10 @@ export default function LoginModal({
                 {error}
               </div>
             )}
+
             {/* =================================================
                 MESSAGE
             ================================================= */}
-
             {message && (
               <div
                 className="alert alert-secondary bg-dark border-secondary text-light small"
@@ -317,16 +317,11 @@ export default function LoginModal({
             {/* =================================================
                 EMAIL STEP
             ================================================= */}
-
             {step === "email" && (
-              <form
-                onSubmit={handleSendOtp}
-              >
+              <form onSubmit={handleSendOtp}>
                 <p className="text-secondary small mb-3">
-                  Enter your registered
-                  institutional email address.
-                  A 6-digit verification code
-                  will be sent to your inbox.
+                  Enter your registered institutional email address.
+                  A 6-digit verification code will be sent to your inbox.
                 </p>
 
                 <div className="mb-3">
@@ -337,9 +332,7 @@ export default function LoginModal({
                     type="email"
                     value={email}
                     onChange={(e) => {
-                      setEmail(
-                        e.target.value
-                      );
+                      setEmail(e.target.value);
                       setError("");
                     }}
                     className="form-control bg-card text-color border-secondary py-2"
@@ -362,31 +355,23 @@ export default function LoginModal({
                         role="status"
                         aria-hidden="true"
                       />
-
                       Sending Code...
                     </>
                   ) : (
                     <>
                       <i className="bi bi-envelope-fill me-2"></i>
-
                       Send Verification Code
                     </>
                   )}
-
                 </button>
-
               </form>
-
             )}
 
             {/* =================================================
                 OTP STEP
             ================================================= */}
-
             {step === "code" && (
-              <form
-                onSubmit={handleVerifyOtp}
-              >
+              <form onSubmit={handleVerifyOtp}>
                 <div className="text-center mb-3">
                   <p className="text-secondary small mb-1">
                     We sent a verification code to:
@@ -395,6 +380,7 @@ export default function LoginModal({
                     {email}
                   </div>
                 </div>
+
                 <div className="mb-3">
                   <label className="form-label text-secondary small fw-semibold">
                     Enter 6-Digit Code
@@ -425,10 +411,7 @@ export default function LoginModal({
                 <button
                   type="submit"
                   className="btn btn-success w-100 fw-bold py-2 mb-3 text-white"
-                  disabled={
-                    loading ||
-                    code.length !== 6
-                  }
+                  disabled={loading || code.length !== 6}
                 >
                   {loading ? (
                     <>
@@ -460,7 +443,9 @@ export default function LoginModal({
                 </div>
               </form>
             )}
-          </div>
+
+          </div> {/* End of modal-body */}
+
         </div>
       </div>
     </div>
