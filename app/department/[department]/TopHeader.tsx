@@ -4,7 +4,7 @@ import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { useState, useEffect, Suspense, useTransition } from 'react';
 import { signOut } from "next-auth/react";
 import LoginModal from './LoginModal'; 
-import { updateMyEmail } from '../actions'; // IMPORT THE NEW ACTION
+import { updateMyEmail } from './actions';
 
 const MODULE_LABELS: Record<string, string> = {
   'tab-overview': 'Overview',
