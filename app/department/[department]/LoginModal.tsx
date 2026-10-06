@@ -288,11 +288,11 @@ export default function LoginModal({
 
             <div className="text-center mb-4">
 
-              <span className="badge bg-secondary px-3 py-2">
+              <span className="badge bg-secondary px-3 py-2 text-uppercase">
 
                 <i className="bi bi-building me-1"></i>
 
-                {department?.toUpperCase()}
+                {department}
 
               </span>
 
@@ -373,7 +373,7 @@ export default function LoginModal({
                       setError("");
                     }}
                     className="form-control bg-card text-color border-secondary py-2"
-                    placeholder="officer@domain.edu.ph"
+                    placeholder="officer@filamer.edu.ph"
                     required
                     autoComplete="email"
                     disabled={loading}
