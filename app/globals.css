@@ -448,3 +448,9 @@ body {
 [data-bs-theme="light"] .table-hover tbody tr:hover {
   background-color: rgba(2, 132, 199, 0.04);
 }
+
+/* Landing Page Utilities */
+.cursor-pointer { cursor: pointer; }
+.hover-text-white:hover { color: #ffffff !important; }
+.border-dashed { border-style: dashed !important; }
+.tracking-tight { letter-spacing: -0.05em; }
