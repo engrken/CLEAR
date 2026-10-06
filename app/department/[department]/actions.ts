@@ -22,16 +22,11 @@ export async function requireTabAccess(requiredTab: string) {
     throw new Error("401 Unauthorized: Session expired or invalid.");
   }
 
-  // FIX: Cast to any to bypass the missing type definitions in your existing types folder
   const customUser = session.user as any;
-
-  const role = customUser.role?.toLowerCase() || 'viewer';
   const allowedTabs = (customUser.allowedTabs as string[]) || [];
 
-  // Full clearance for administrators overrides tab-level restrictions
-  if (['admin', 'administrator', 'master', 'superadmin'].includes(role)) {
-    return customUser;
-  }
+  // ❌ REMOVED THE HARDCODED ADMIN OVERRIDE HERE
+  // The system will now STRICTLY respect the allowedTabs array for ALL roles.
 
   // Reject if the assigned scope lacks the necessary tab
   if (!allowedTabs.includes(requiredTab)) {

@@ -125,7 +125,8 @@ export default function DepartmentSidebar({
   // =========================================================
 
   const canAccess = (tabId: string) => {
-    if (isAdmin) return true;
+    // FIX: Removed "if (isAdmin) return true;"
+    // The system now STRICTLY respects the checkboxes for everyone.
     return effectiveTabs.includes(tabId);
   };
 
@@ -299,6 +300,7 @@ export default function DepartmentSidebar({
           </Link>
         )}
 
+        {/* System logs remains admin-only as it's not a configurable tab */}
         {isAdmin && (
           <Link href={`${basePath}/logs${queryString}`} onClick={handleNavClick} className={navItemClass('/logs')}>
             <i className="bi bi-journal-text me-3 fs-6"></i>System Logs
