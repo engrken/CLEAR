@@ -236,19 +236,28 @@ export default async function ClearancePage({
     if (studentRecord) {
       [collections, penalties, cashAdvances] = await Promise.all([
         prisma.collection.findMany({
-  where: {
-    organizationId: organization.id,
-    academicYear: ay,
-    term,
-    OR: [
-      { studentId: studentRecord.studentId },
-      { studentName: { equals: studentRecord.fullName, mode: 'insensitive' } }
-    ]
-  },
-  orderBy: { date: 'desc' }
-});
+          where: { 
+            organizationId: organization.id, 
+            academicYear: ay, 
+            term,
+            OR: [
+              { studentId: { equals: studentRecord.studentId, mode: 'insensitive' } },
+              { studentName: { equals: studentRecord.fullName, mode: 'insensitive' } }
+            ]
+          },
+          orderBy: { date: 'desc' }
+        }),
+        prisma.penalty.findMany({
+          where: { organizationId: organization.id, academicYear: ay, term, studentId: studentRecord.studentId },
+          orderBy: { date: 'desc' }
+        }),
+        prisma.cashAdvance.findMany({
+          where: { organizationId: organization.id, academicYear: ay, term, requestor: { contains: studentRecord.studentId } },
+          orderBy: { dateIssued: 'desc' }
+        })
+      ]);
 
-      // Departmental Package Check
+      // 1. Departmental Package Check
       const pkgRate = termPackages[term] || 0;
       const deptFeePaid = collections
         .filter(c => c.category.includes('Departmental Fee') && !c.paymentType.toUpperCase().includes('VOID'))
@@ -258,14 +267,29 @@ export default async function ClearancePage({
         pendingDues.push(`Departmental Fee Package (${fmt(pkgRate - deptFeePaid)} remaining)`);
       }
 
-      // Penalties Check
+      // 2. Standalone & Activity Dues Check (Legacy Collectibles Integration)
+      const nonPackageItems = collections.filter(c => 
+        !c.category.includes('Departmental Fee') && 
+        !c.paymentType.toUpperCase().includes('VOID') && 
+        c.balanceDue > 0
+      );
+      
+      const processedItems = new Set<string>();
+      for (const item of nonPackageItems) {
+        if (!processedItems.has(item.itemDescription)) {
+          processedItems.add(item.itemDescription);
+          pendingDues.push(`${item.itemDescription} (${fmt(item.balanceDue)} remaining)`);
+        }
+      }
+
+      // 3. Penalties Check
       const unsettledPenalties = penalties.filter(p => !p.status.includes('Settled') && !p.status.includes('Voided'));
       if (unsettledPenalties.length > 0) {
         const totalPen = unsettledPenalties.reduce((sum, p) => sum + (p.fineAmount || 0), 0);
         pendingDues.push(`Unpaid Penalty Arrears (${fmt(totalPen)})`);
       }
 
-      // Cash Advances Check
+      // 4. Cash Advances Check
       const activeAdvances = cashAdvances.filter(ca => ca.status.includes('Pending') && !ca.status.includes('Cancel'));
       if (activeAdvances.length > 0) {
         activeAdvances.forEach(ca => {
@@ -276,8 +300,9 @@ export default async function ClearancePage({
       isCleared = pendingDues.length === 0;
 
       if (isCleared) {
+        // CRITICAL FIX: Ensure lowercase ID for cryptographic hash to match legacy Code.gs verification
         const rawStr = `${studentRecord.studentId.toLowerCase()}|${ay}|${term}|${salt}`;
-clearanceSig = crypto.createHash('sha256').update(rawStr).digest('hex');
+        clearanceSig = crypto.createHash('sha256').update(rawStr).digest('hex');
         verifyUrl = `${basePath}/clearance?ay=${encodeURIComponent(ay)}&term=${encodeURIComponent(term)}&q=${encodeURIComponent(studentRecord.studentId)}&sig=${encodeURIComponent(clearanceSig)}`;
       }
     }
