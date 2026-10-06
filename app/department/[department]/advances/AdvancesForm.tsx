@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { fmt } from "@/lib/utils";
-import { issueCashAdvance } from "../../actions";
+import { issueCashAdvance } from "./actions";
 import { ThemedAlert } from '@/lib/alerts';
 
 interface Student { studentId: string; fullName: string; }
