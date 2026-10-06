@@ -2,8 +2,8 @@
 
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { useState, useEffect, Suspense } from 'react';
+import { signOut } from "next-auth/react"; // <-- IMPORT NEXTAUTH SIGNOUT
 import LoginModal from './LoginModal'; 
-// import { logoutAction } from './auth-actions'; 
 
 // We wrap the main header logic in a component that consumes useSearchParams
 // so we can wrap it in Suspense below (a Next.js best practice for client boundary params)
@@ -94,9 +94,14 @@ function TopHeaderContent({ department, currentUser }: { department: string; cur
   const handleAuthAction = async () => {
     if (isLoggedIn) {
       try {
+        // 1. Tell NextAuth to properly destroy the secure HttpOnly session cookie
+        await signOut({ redirect: false });
+
+        // 2. Clear out any legacy local storage data
         localStorage.removeItem('fcu_clear_user');
         localStorage.removeItem('fcu_clear_token');
         
+        // 3. Clear out legacy cookies
         const cookiesToClear = ['fcu_session', 'fcu_otp_hash', 'fcu_otp_email', 'fcu_otp_strikes', 'fcu_lockout'];
         cookiesToClear.forEach(cookie => {
           document.cookie = `${cookie}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
@@ -118,39 +123,39 @@ function TopHeaderContent({ department, currentUser }: { department: string; cur
     <>
       <header className="navbar navbar-expand border-bottom border-secondary px-4 py-3 bg-card shadow-sm flex-column align-items-stretch">
         <div className="d-flex align-items-center justify-content-between w-100">
-  <div className="d-flex align-items-center gap-3">
-    <button 
-      className="btn btn-outline-secondary btn-sm d-lg-none" 
-      type="button" 
-      onClick={() => document.getElementById('appSidebar')?.classList.toggle('show')}
-    >
-      <i className="bi bi-list fs-3"></i>
-    </button>
+          <div className="d-flex align-items-center gap-3">
+            <button 
+              className="btn btn-outline-secondary btn-sm d-lg-none" 
+              type="button" 
+              onClick={() => document.getElementById('appSidebar')?.classList.toggle('show')}
+            >
+              <i className="bi bi-list fs-3"></i>
+            </button>
 
-    <div className="d-flex align-items-center gap-3">
-      {!fcuError ? (
-        <div style={{ width: '96px', flexShrink: 0 }} className="text-center">
-          <img 
-            src={fcuLogoPath} 
-            alt="FCU Logo" 
-            onError={() => setFcuError(true)}
-            style={{ width: '100%', maxHeight: '96px', objectFit: 'contain' }} 
-          />
-        </div>
-      ) : (
-        <div className="bg-accent text-dark rounded px-3 py-2 fw-bold" style={{ fontSize: '2.55rem' }}>
-          FCU
-        </div>
-      )}
+            <div className="d-flex align-items-center gap-3">
+              {!fcuError ? (
+                <div style={{ width: '96px', flexShrink: 0 }} className="text-center">
+                  <img 
+                    src={fcuLogoPath} 
+                    alt="FCU Logo" 
+                    onError={() => setFcuError(true)}
+                    style={{ width: '100%', maxHeight: '96px', objectFit: 'contain' }} 
+                  />
+                </div>
+              ) : (
+                <div className="bg-accent text-dark rounded px-3 py-2 fw-bold" style={{ fontSize: '2.55rem' }}>
+                  FCU
+                </div>
+              )}
 
-      <div>
-        <span className="text-secondary d-none d-md-inline" style={{ fontSize: '2.16rem', lineHeight: '1.2' }}>
-          <b>C</b>entralized <b>L</b>iquidation of <b>E</b>xpenses & <b>A</b>udit <b>R</b>ecords <b>System</b>
-        </span>
-      </div>
-    </div>
-  </div>
-</div>
+              <div>
+                <span className="text-secondary d-none d-md-inline" style={{ fontSize: '2.16rem', lineHeight: '1.2' }}>
+                  <b>C</b>entralized <b>L</b>iquidation of <b>E</b>xpenses & <b>A</b>udit <b>R</b>ecords <b>System</b>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
 
         <div className="d-flex align-items-center justify-content-end flex-wrap gap-3 mt-3 pt-2 border-top border-secondary border-opacity-25 w-100">
           <div className="d-flex align-items-center gap-2">
