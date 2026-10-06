@@ -9,7 +9,7 @@ export default async function RootPage() {
   let dashboardUrl = '/dashboard';
   if (session?.user) {
     if (session.user.role === 'SuperAdmin') {
-      dashboardUrl = '/dashboard/provisions';
+      dashboardUrl = '/dashboard/';
     } else if (session.user.organizationId) {
       const org = await prisma.organization.findUnique({
         where: { id: session.user.organizationId },
@@ -61,8 +61,8 @@ export default async function RootPage() {
               <i className="bi bi-shield-check text-info fs-5"></i>
             </div>
             <div>
-              <span className="fw-bold fs-5 tracking-tight d-block lh-1">CLEAR</span>
-              <small className="text-secondary" style={{ fontSize: '0.65rem' }}>AUDIT & LIQUIDATION ENGINE</small>
+              <span className="fw-bold fs-5 tracking-tight d-block lh-1">CLEAR System</span>
+              <small className="text-secondary" style={{ fontSize: '0.65rem' }}>CENTRALIZED LIQUIDATION OF EXPENSES & AUDIT RECORDS SYSTEM</small>
             </div>
           </div>
 
