@@ -259,13 +259,9 @@ export default function LoginModal({
           ================================================= */}
 
           <div className="modal-header border-secondary">
-
             <h5 className="modal-title text-accent fw-bold">
-
               <i className="bi bi-shield-lock-fill me-2"></i>
-
               Departmental Authorization
-
             </h5>
 
             <button
@@ -283,57 +279,39 @@ export default function LoginModal({
           ================================================= */}
 
           <div className="modal-body p-4">
-
-            {/* DEPARTMENT */}
-
-            <div className="text-center mb-4">
-
-              <span className="badge bg-secondary px-3 py-2 text-uppercase">
-
-                <i className="bi bi-building me-1"></i>
-
-                {department}
-
-              </span>
-
-            </div>
+    {/* DEPARTMENT */}
+    <div className="text-center mb-4">
+      <span className="badge bg-secondary px-3 py-2" style={{ textTransform: 'uppercase', textTransform: 'uppercase !important' }}>
+        <i className="bi bi-building me-1"></i>
+        {department ? String(department).toUpperCase() : ''}
+      </span>
+    </div>
+</div>
 
             {/* =================================================
                 ERROR
             ================================================= */}
-
             {error && (
-
               <div
                 className="alert alert-danger small"
                 role="alert"
               >
-
                 <i className="bi bi-exclamation-triangle-fill me-2"></i>
-
                 {error}
-
               </div>
-
             )}
-
             {/* =================================================
                 MESSAGE
             ================================================= */}
 
             {message && (
-
               <div
                 className="alert alert-secondary bg-dark border-secondary text-light small"
                 role="alert"
               >
-
                 <i className="bi bi-info-circle-fill me-2"></i>
-
                 {message}
-
               </div>
-
             )}
 
             {/* =================================================
@@ -341,28 +319,20 @@ export default function LoginModal({
             ================================================= */}
 
             {step === "email" && (
-
               <form
                 onSubmit={handleSendOtp}
               >
-
                 <p className="text-secondary small mb-3">
-
                   Enter your registered
                   institutional email address.
                   A 6-digit verification code
                   will be sent to your inbox.
-
                 </p>
 
                 <div className="mb-3">
-
                   <label className="form-label text-secondary small fw-semibold">
-
                     Email Address
-
                   </label>
-
                   <input
                     type="email"
                     value={email}
@@ -378,7 +348,6 @@ export default function LoginModal({
                     autoComplete="email"
                     disabled={loading}
                   />
-
                 </div>
 
                 <button
@@ -386,7 +355,6 @@ export default function LoginModal({
                   className="btn btn-info w-100 fw-bold py-2 text-dark"
                   disabled={loading}
                 >
-
                   {loading ? (
                     <>
                       <span
@@ -416,35 +384,21 @@ export default function LoginModal({
             ================================================= */}
 
             {step === "code" && (
-
               <form
                 onSubmit={handleVerifyOtp}
               >
-
                 <div className="text-center mb-3">
-
                   <p className="text-secondary small mb-1">
-
                     We sent a verification code to:
-
                   </p>
-
                   <div className="text-info fw-bold">
-
                     {email}
-
                   </div>
-
                 </div>
-
                 <div className="mb-3">
-
                   <label className="form-label text-secondary small fw-semibold">
-
                     Enter 6-Digit Code
-
                   </label>
-
                   <input
                     type="text"
                     maxLength={6}
@@ -466,7 +420,6 @@ export default function LoginModal({
                     autoFocus
                     disabled={loading}
                   />
-
                 </div>
 
                 <button
@@ -477,7 +430,6 @@ export default function LoginModal({
                     code.length !== 6
                   }
                 >
-
                   {loading ? (
                     <>
                       <span
@@ -485,42 +437,30 @@ export default function LoginModal({
                         role="status"
                         aria-hidden="true"
                       />
-
                       Verifying...
                     </>
                   ) : (
                     <>
                       <i className="bi bi-shield-check me-2"></i>
-
                       Verify & Sign In
                     </>
                   )}
-
                 </button>
 
                 <div className="text-center">
-
                   <button
                     type="button"
                     className="btn btn-link text-secondary text-decoration-none small"
                     onClick={resetLogin}
                     disabled={loading}
                   >
-
                     <i className="bi bi-arrow-left me-1"></i>
-
                     Use a different email
-
                   </button>
-
                 </div>
-
               </form>
-
             )}
-
           </div>
-
         </div>
       </div>
     </div>
