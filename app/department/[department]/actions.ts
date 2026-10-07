@@ -1153,6 +1153,31 @@ export async function getDepartmentFinancials(organizationId: string, ay: string
   };
 	 }
 
+export async function invalidateOnlineRemittance(department: string, remittanceId: string, reason?: string) {
+  await requireTabAccess('tab-remittances');
+
+  const officerName = await getActionUser();
+  const orgId = await getOrgId(department);
+
+  await prisma.onlineRemittance.update({
+    where: { id: remittanceId },
+    data: { 
+      status: 'Invalid / Rejected', 
+      reviewedBy: officerName 
+    }
+  });
+
+  await logSystemAction(
+    orgId, 
+    officerName, 
+    "INVALIDATE_REMITTANCE", 
+    `Rejected online remittance submission [${remittanceId}].`
+  );
+
+  revalidatePath(`/department/${department}/remittances`
+				);
+}
+
 export async function saveInitialFunds(
   department: string, 
   ay: string, 
