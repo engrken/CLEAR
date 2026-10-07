@@ -2,6 +2,11 @@ import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
 import LiquidationsForm from './LiquidationsForm';
 import { redirect } from 'next/navigation';
+import { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Centralized Liquidation of Expenses & Audit Records',
+};
 
 export default async function LiquidationsPage({
   params,

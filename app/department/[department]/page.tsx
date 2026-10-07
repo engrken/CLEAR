@@ -9,7 +9,7 @@ import OtpModal from "./components/OtpModal";
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Centralized Liquidation of Expense & Audit Records',
+  title: 'Centralized Liquidation of Expenses & Audit Records',
 };
 
 export default async function DepartmentOverviewPage({

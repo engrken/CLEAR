@@ -1,5 +1,10 @@
 import { prisma } from '@/lib/prisma';
 import LogsClient from './LogsClient';
+import { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Centralized Liquidation of Expenses & Audit Records',
+};
 
 interface PageProps {
   params: Promise<{ department: string }>;

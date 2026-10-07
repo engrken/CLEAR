@@ -1,5 +1,10 @@
 import { prisma } from '@/lib/prisma';
 import RemittanceVerificationQueue from './RemittanceVerificationQueue';
+import { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Centralized Liquidation of Expenses & Audit Records',
+};
 
 export default async function RemittancesPage({
   params,

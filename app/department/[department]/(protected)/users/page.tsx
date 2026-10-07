@@ -1,5 +1,10 @@
 import { prisma } from '@/lib/prisma';
 import UserManagementClient from './UserManagementClient';
+import { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Centralized Liquidation of Expenses & Audit Records',
+};
 
 const ROLE_PERMISSIONS_MAP: Record<string, string[]> = {
   admin: [

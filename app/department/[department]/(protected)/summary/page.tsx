@@ -1,5 +1,10 @@
 import { prisma } from '@/lib/prisma';
 import SummaryClient from './SummaryClient';
+import { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Centralized Liquidation of Expenses & Audit Records',
+};
 
 export default async function SummaryReportPage({
   params,
