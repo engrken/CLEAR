@@ -1,9 +1,10 @@
 import { prisma } from '@/lib/prisma';
 import ReportsClient from './ReportsClient';
 import { Metadata } from 'next';
+import { getDepartmentFinancials } from '../../actions';
 
 export const metadata: Metadata = {
-  title: 'Centralized Liquidation of Expenses & Audit Records',
+  title: 'Institutional Reports & Audit Roster',
 };
 
 export default async function InstitutionalReportsPage({
@@ -26,29 +27,39 @@ export default async function InstitutionalReportsPage({
     return <div className="alert alert-danger p-4">Department Not Found</div>;
   }
 
-  // 1. Fetch Master Student Roster
+  // 1. Fetch Dynamic Collection Setups
+  const collectionSetups = await prisma.collectionSetup.findMany({
+    where: { organizationId: organization.id, academicYear: ay, term }
+  });
+
+  // 2. CRITICAL FIX: Only sum items where isPackage is NOT false
+  const mandatorySetups = collectionSetups.filter(s => s.isPackage !== false);
+  const calculatedPackageRate = mandatorySetups.length > 0
+    ? mandatorySetups.reduce((sum, s) => sum + s.amount, 0)
+    : 650.00;
+
+  // 3. Fetch Master Financials & Roster
+  const financials = await getDepartmentFinancials(organization.id, ay, term);
   const students = await prisma.student.findMany({
     where: { organizationId: organization.id },
     orderBy: { fullName: 'asc' }
   });
 
-  // 2. Fetch all financial records for the active term
+  const setupCategories = Array.from(new Set(collectionSetups.map(s => s.name)));
+  
   const [collections, liquidations, penalties] = await Promise.all([
     prisma.collection.findMany({
       where: { organizationId: organization.id, academicYear: ay, term },
       orderBy: { timestamp: 'desc' }
     }),
-    // Safe fallback for liquidations to prevent Prisma runtime crashes
-    (prisma as any).liquidation ? (prisma as any).liquidation.findMany({
+    prisma.audit.findMany({
       where: { organizationId: organization.id, academicYear: ay, term }
-    }) : Promise.resolve([]),
+    }).catch(() => []),
     prisma.penalty.findMany({
       where: { organizationId: organization.id, academicYear: ay, term }
     })
   ]);
 
-  // BULLETPROOF SERIALIZATION: Converts all Prisma Date objects to standard strings
-  // This prevents the Next.js "Only plain objects can be passed to Client Components" error.
   const serialize = (data: any[]) => JSON.parse(JSON.stringify(data || []));
 
   return (
@@ -61,7 +72,9 @@ export default async function InstitutionalReportsPage({
         collections={serialize(collections)}
         liquidations={serialize(liquidations)}
         penalties={serialize(penalties)}
+        packageRate={calculatedPackageRate}
+        setupCategories={setupCategories}
       />
     </div>
   );
-}
+                                                                 }
