@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { requireTabAccess } from "@/actions";
+import { requireTabAccess } from "../../actions";
 
 async function getOrgId(department: string) {
   const org = await prisma.organization.findUnique({
