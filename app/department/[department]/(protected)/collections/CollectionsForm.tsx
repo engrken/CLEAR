@@ -15,21 +15,23 @@ export default function CollectionsForm({
   prefillId
 }: any) {
   const router = useRouter();
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [studentId, setStudentId] = useState("");
-  const [studentName, setStudentName] = useState("");
-  const [orNumber, setOrNumber] = useState(nextOr);
+  const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [studentId, setStudentId] = useState<string>("");
+  const [studentName, setStudentName] = useState<string>("");
+  const [orNumber, setOrNumber] = useState<string>(nextOr || "");
   
-  const categories = Array.from(new Set(collectionItems.map((c: any) => c.category)));
-  const [category, setCategory] = useState(categories[0] || "Departmental Fee");
-  const [itemDescription, setItemDescription] = useState("");
+  // Explicitly typing the categories array to prevent TS {}/unknown inference errors
+  const categories: string[] = Array.from(new Set(collectionItems.map((c: any) => String(c.category))));
   
-  const [paymentType, setPaymentType] = useState("Full Payment");
-  const [amountPaid, setAmountPaid] = useState("");
-  const [fundAllocation, setFundAllocation] = useState("");
+  const [category, setCategory] = useState<string>(categories[0] || "Departmental Fee");
+  const [itemDescription, setItemDescription] = useState<string>("");
+  
+  const [paymentType, setPaymentType] = useState<string>("Full Payment");
+  const [amountPaid, setAmountPaid] = useState<string>("");
+  const [fundAllocation, setFundAllocation] = useState<string>("");
 
   const currentCategoryItems = useMemo(() => {
     return collectionItems.filter((c: any) => c.category === category);
@@ -209,4 +211,4 @@ export default function CollectionsForm({
       </div>
     </form>
   );
-        }
+                                                                      }
