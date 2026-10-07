@@ -238,8 +238,7 @@ export default async function ClearancePage({
         organizationId: organization.id,
         OR: [
           { studentId: { equals: q, mode: 'insensitive' } },
-          { email: { equals: q, mode: 'insensitive' } },
-          { fullName: { contains: q, mode: 'insensitive' } }
+          { email: { equals: q, mode: 'insensitive' } }
         ]
       }
     });

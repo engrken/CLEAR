@@ -44,7 +44,7 @@ export default function ClearanceManager({
     e.preventDefault();
     const match = students.find(s => 
       s.studentId.toLowerCase() === searchQuery.toLowerCase() ||
-      s.fullName.toLowerCase().includes(searchQuery.toLowerCase())
+      (s.email && s.email.toLowerCase() === searchQuery.toLowerCase())
     );
     if (match) {
       setActiveStudent(match);
