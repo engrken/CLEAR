@@ -103,7 +103,6 @@ model Collection {
 
   @@unique([organizationId, orNumber, itemDescription])
 }
-
 model CollectionSetup {
   id             String       @id @default(cuid())
   organizationId String
@@ -120,7 +119,6 @@ model CollectionSetup {
   @@index([organizationId, academicYear, term])
 
 }
-
 model Penalty {
   id             String   @id @default(uuid())
   organizationId String
