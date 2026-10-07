@@ -9,19 +9,10 @@ import ClearanceClientView from './ClearanceClientView';
 import Footer from '../components/Footer';
 import DataPrivacyModal from '../components/DataPrivacyModal';
 import { Metadata } from 'next';
+import { getDepartmentFinancials } from '../../actions';
 
 export const metadata: Metadata = {
   title: 'Centralized Liquidation of Expense & Audit Records',
-};
-
-// =========================================================
-// LEGACY TERM PACKAGES MAPPING
-// =========================================================
-
-const termPackages: Record<string, number> = {
-  "1st Sem": 650.00,
-  "2nd Sem": 900.00,
-  "Summer": 200.00
 };
 
 export default async function ClearancePage({
@@ -83,11 +74,15 @@ export default async function ClearancePage({
   const queryString = `?ay=${encodeURIComponent(ay)}&term=${encodeURIComponent(term)}`;
 
   // =======================================================
-  // AUTHENTICATION
+  // AUTHENTICATION & FINANCIAL ENGINE
   // =======================================================
 
   const session = await auth();
   const isOfficer = !!session?.user;
+
+  // Use the centralized engine to fetch exact package rates and item configurations
+  const financials = await getDepartmentFinancials(organization.id, ay, term);
+  const termPkg = financials.termPkg;
 
   // =======================================================
   // REUSABLE PUBLIC HEADER COMPONENT
@@ -123,7 +118,6 @@ export default async function ClearancePage({
   const salt = process.env.CLEARANCE_SALT || 'CLEARANCE_KEY_2026';
 
   if (sigParam && q) {
-    // CRITICAL FIX: Lowercase 'q' to match the legacy Code.gs signature generation
     const expectedSig = crypto
       .createHash('sha256')
       .update(`${q.toLowerCase()}|${ay}|${term}|${salt}`)
@@ -137,32 +131,21 @@ export default async function ClearancePage({
 
     return (
       <div className="d-flex flex-column min-vh-100 bg-canvas">
-        {/* PUBLIC HEADER */}
         {!isOfficer && <PublicHeader />}
 
         <main className="flex-grow-1 p-3 p-md-5 w-100 d-flex align-items-center justify-content-center">
           <div
             className="card p-4 border-secondary text-center shadow-lg w-100"
-            style={{
-              maxWidth: '500px',
-              backgroundColor: '#1e293b'
-            }}
+            style={{ maxWidth: '500px', backgroundColor: '#1e293b' }}
           >
-            <h4 className="text-info fw-bold mb-1">
-              {displayOrgName}
-            </h4>
-
-            <small className="text-secondary d-block mb-4">
-              Centralized Liquidation of Expenses & Audit Records
-            </small>
+            <h4 className="text-info fw-bold mb-1">{displayOrgName}</h4>
+            <small className="text-secondary d-block mb-4">Centralized Liquidation of Expenses & Audit Records</small>
 
             {isSignatureValid ? (
               <>
                 <div className="bg-success text-white p-3 rounded fw-bold fs-5 mb-4 shadow-sm">
-                  <i className="bi bi-check-circle-fill me-2"></i>
-                  OFFICIAL CLEARANCE VALID
+                  <i className="bi bi-check-circle-fill me-2"></i> OFFICIAL CLEARANCE VALID
                 </div>
-
                 <table className="table table-sm table-borderless text-start text-white mb-4">
                   <tbody>
                     <tr className="border-bottom border-secondary">
@@ -175,51 +158,33 @@ export default async function ClearancePage({
                     </tr>
                     <tr className="border-bottom border-secondary">
                       <td className="text-secondary py-2">Verification Time:</td>
-                      <td className="py-2">
-                        {format(new Date(), 'MMM dd, yyyy - hh:mm a')}
-                      </td>
+                      <td className="py-2">{format(new Date(), 'MMM dd, yyyy - hh:mm a')}</td>
                     </tr>
                     <tr>
                       <td className="text-secondary py-2">Crypto Hash:</td>
-                      <td className="font-monospace text-secondary small py-2">
-                        {sigParam.substring(0, 16)}...
-                      </td>
+                      <td className="font-monospace text-secondary small py-2">{sigParam.substring(0, 16)}...</td>
                     </tr>
                   </tbody>
                 </table>
-
                 <p className="text-success small fw-semibold m-0">
-                  This certificate confirms zero financial arrears,
-                  penalties, or unliquidated advances for the
-                  specified period.
+                  This certificate confirms zero financial arrears, penalties, or unliquidated advances for the specified period.
                 </p>
               </>
             ) : (
               <div className="bg-danger text-white p-3 rounded fw-bold fs-5 mb-3 shadow-sm">
-                <i className="bi bi-x-circle-fill me-2"></i>
-                INVALID OR TAMPERED
+                <i className="bi bi-x-circle-fill me-2"></i> INVALID OR TAMPERED
                 <p className="fs-6 fw-normal m-0 mt-2">
-                  This clearance token does not match department
-                  records, or active obligations were logged after
-                  issuance.
+                  This clearance token does not match department records, or active obligations were logged after issuance.
                 </p>
               </div>
             )}
           </div>
         </main>
-
-        {/* PUBLIC FOOTER & PRIVACY */}
-        {!isOfficer && (
-          <>
-            <Footer />
-            <DataPrivacyModal />
-          </>
-        )}
+        {!isOfficer && (<><Footer /><DataPrivacyModal /></>)}
       </div>
     );
   }
-
-  // =======================================================
+    // =======================================================
   // FINANCIAL LEDGER DATA (SEARCH & LEDGER VIEW)
   // =======================================================
 
@@ -267,39 +232,46 @@ export default async function ClearancePage({
         })
       ]);
 
-      // 1. Departmental Package Check
-      const pkgRate = termPackages[term] || 0;
-      const deptFeePaid = collections
-        .filter(c => c.category.includes('Departmental Fee') && !c.paymentType.toUpperCase().includes('VOID'))
-        .reduce((sum, c) => sum + (c.amountPaid || 0), 0);
+      const validCollections = collections.filter(c => !c.paymentType.toUpperCase().includes('VOID'));
 
-      if (pkgRate > 0 && deptFeePaid < pkgRate) {
-        pendingDues.push(`Departmental Fee Package (${fmt(pkgRate - deptFeePaid)} remaining)`);
+      // ====================================================================
+      // THREE-BUCKET CLEARANCE EVALUATION
+      // ====================================================================
+
+      // Bucket 1: Mandatory Package Deficit
+      const packagePaid = validCollections.filter(c => {
+        const descLower = c.itemDescription?.toLowerCase() || '';
+        return termPkg.items.some(pi => pi.name.toLowerCase() === descLower) || descLower.includes('package') || descLower === 'departmental fee';
+      }).reduce((sum, c) => sum + (c.amountPaid || 0), 0);
+
+      const pkgRate = termPkg.total;
+      if (pkgRate > 0 && packagePaid < pkgRate) {
+        pendingDues.push(`Departmental Fee Package (${fmt(pkgRate - packagePaid)} remaining)`);
       }
 
-      // 2. Standalone & Activity Dues Check (Legacy Collectibles Integration)
-      const nonPackageItems = collections.filter(c => 
-        !c.category.includes('Departmental Fee') && 
-        !c.paymentType.toUpperCase().includes('VOID') && 
-        c.balanceDue > 0
-      );
+      // Bucket 2: Standalone / Optional Items Deficit (Merch, Tickets)
+      const standaloneItems = validCollections.filter(c => {
+        const descLower = c.itemDescription?.toLowerCase() || '';
+        const isPackageItem = termPkg.items.some(pi => pi.name.toLowerCase() === descLower) || descLower.includes('package') || descLower === 'departmental fee';
+        return !isPackageItem && c.balanceDue > 0;
+      });
       
       const processedItems = new Set<string>();
-      for (const item of nonPackageItems) {
+      for (const item of standaloneItems) {
         if (!processedItems.has(item.itemDescription)) {
           processedItems.add(item.itemDescription);
           pendingDues.push(`${item.itemDescription} (${fmt(item.balanceDue)} remaining)`);
         }
       }
 
-      // 3. Penalties Check
+      // Bucket 3: Penalties & Fines
       const unsettledPenalties = penalties.filter(p => !p.status.includes('Settled') && !p.status.includes('Voided'));
       if (unsettledPenalties.length > 0) {
         const totalPen = unsettledPenalties.reduce((sum, p) => sum + (p.fineAmount || 0), 0);
         pendingDues.push(`Unpaid Penalty Arrears (${fmt(totalPen)})`);
       }
 
-      // 4. Cash Advances Check
+      // Cash Advances Check (Only blocks clearance for specific requestors)
       const activeAdvances = cashAdvances.filter(ca => ca.status.includes('Pending') && !ca.status.includes('Cancel'));
       if (activeAdvances.length > 0) {
         activeAdvances.forEach(ca => {
@@ -307,10 +279,10 @@ export default async function ClearancePage({
         });
       }
 
+      // Final Evaluation
       isCleared = pendingDues.length === 0;
 
       if (isCleared) {
-        // CRITICAL FIX: Ensure lowercase ID for cryptographic hash to match legacy Code.gs verification
         const rawStr = `${studentRecord.studentId.toLowerCase()}|${ay}|${term}|${salt}`;
         clearanceSig = crypto.createHash('sha256').update(rawStr).digest('hex');
         verifyUrl = `${basePath}/clearance?ay=${encodeURIComponent(ay)}&term=${encodeURIComponent(term)}&q=${encodeURIComponent(studentRecord.studentId)}&sig=${encodeURIComponent(clearanceSig)}`;
@@ -323,22 +295,15 @@ export default async function ClearancePage({
   // =======================================================
   return (
     <div className="d-flex flex-column min-vh-100 bg-canvas">
-      
-      {/* PUBLIC HEADER */}
       {!isOfficer && <PublicHeader />}
 
       <main className={`flex-grow-1 ${isOfficer ? 'p-0' : 'p-3 p-md-5'} mx-auto w-100`} style={{ maxWidth: isOfficer ? '100%' : '1200px' }}>
-        
         <div className="module card p-3 p-md-4 border-secondary shadow-sm h-100">
-
           <h5 className="text-accent mb-2">
-            <i className="bi bi-person-check me-2"></i>
-            Student Financial Clearance Verification
+            <i className="bi bi-person-check me-2"></i> Student Financial Clearance Verification
           </h5>
-
           <p className="text-secondary small mb-3">
             Verification requires your exact <strong>Student ID</strong> or registered <strong>Email Address</strong>.
-            Officers must sign in to view itemized ledgers.
           </p>
 
           <form method="GET" action={`${basePath}/clearance`} className="mb-4">
@@ -369,7 +334,6 @@ export default async function ClearancePage({
             </div>
           </form>
 
-          {/* SEARCH RESULT MODAL */}
           {q && (
             <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.75)' }}>
               <div className="modal-dialog modal-dialog-centered modal-lg">
@@ -389,7 +353,6 @@ export default async function ClearancePage({
                         <strong className="fs-5">RECORD NOT FOUND</strong>
                         <div className="small mt-1 text-secondary">
                           No enrolled record matches <code>{q}</code> for {term} ({ay}).
-                          Please verify your entry or visit the department treasury office.
                         </div>
                       </div>
                     )}
@@ -407,18 +370,10 @@ export default async function ClearancePage({
 
                           {isCleared ? (
                             <div className="alert alert-success py-3 mb-0 text-center border-success shadow-sm">
-                              <div className="fw-bold fs-5 mb-2">
-                                <i className="bi bi-patch-check-fill me-2 text-success"></i> CLEARED FOR SIGNING
-                              </div>
-                              <div className="small text-secondary mb-3">
-                                Present this official QR code to the department adviser or custodian for digital sign-off.
-                              </div>
+                              <div className="fw-bold fs-5 mb-2"><i className="bi bi-patch-check-fill me-2 text-success"></i> CLEARED FOR SIGNING</div>
+                              <div className="small text-secondary mb-3">Present this official QR code to the department adviser for digital sign-off.</div>
                               <div className="d-inline-block p-2 bg-white rounded border border-success shadow-sm mb-2">
-                                <Image
-                                  src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(verifyUrl)}`}
-                                  alt="Clearance QR Code"
-                                  width={140} height={140} unoptimized
-                                />
+                                <Image src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(verifyUrl)}`} alt="Clearance QR Code" width={140} height={140} unoptimized />
                               </div>
                               <div>
                                 <a href={verifyUrl} target="_blank" rel="noopener noreferrer" className="btn btn-outline-success btn-sm fw-bold mt-1">
@@ -428,17 +383,8 @@ export default async function ClearancePage({
                             </div>
                           ) : (
                             <div className="alert alert-danger py-3 mb-0 text-center border-danger shadow-sm">
-                              <div className="fw-bold fs-5 mb-1">
-                                <i className="bi bi-exclamation-triangle-fill me-2"></i> CLEARANCE HOLD ACTIVE
-                              </div>
-                              <div className="small text-secondary">
-                                This student has <strong>{pendingDues.length}</strong> pending obligation(s).
-                              </div>
-                              {!isOfficer && (
-                                <div className="small text-secondary mt-1">
-                                  Please visit the department treasurer or auditor to settle your account.
-                                </div>
-                              )}
+                              <div className="fw-bold fs-5 mb-1"><i className="bi bi-exclamation-triangle-fill me-2"></i> CLEARANCE HOLD ACTIVE</div>
+                              <div className="small text-secondary">This student has <strong>{pendingDues.length}</strong> pending obligation(s).</div>
                             </div>
                           )}
                         </div>
@@ -446,9 +392,7 @@ export default async function ClearancePage({
                         {/* OFFICER LEDGER BREAKDOWN */}
                         {isOfficer && (
                           <div className="card p-3 border-secondary shadow-sm bg-card">
-                            <h6 className="fw-bold mb-3 text-accent">
-                              <i className="bi bi-shield-lock-fill me-2"></i> Officer Ledger Breakdown
-                            </h6>
+                            <h6 className="fw-bold mb-3 text-accent"><i className="bi bi-shield-lock-fill me-2"></i> Officer Ledger Breakdown</h6>
 
                             {!isCleared && (
                               <div className="mb-3 p-2 bg-danger bg-opacity-10 border border-danger rounded">
@@ -461,9 +405,7 @@ export default async function ClearancePage({
 
                             {collections.length > 0 && (
                               <>
-                                <span className="text-secondary small fw-bold d-block mb-1">
-                                  <i className="bi bi-receipt me-1 text-info"></i> Payment Remittance History
-                                </span>
+                                <span className="text-secondary small fw-bold d-block mb-1"><i className="bi bi-receipt me-1 text-info"></i> Payment Remittance History</span>
                                 <div className="table-responsive mb-3">
                                   <table className="table table-sm align-middle text-white small">
                                     <thead>
@@ -489,9 +431,7 @@ export default async function ClearancePage({
 
                             {penalties.length > 0 && (
                               <>
-                                <span className="text-secondary small fw-bold d-block mb-1">
-                                  <i className="bi bi-exclamation-octagon me-1 text-danger"></i> Penalties & Late Fines
-                                </span>
+                                <span className="text-secondary small fw-bold d-block mb-1"><i className="bi bi-exclamation-octagon me-1 text-danger"></i> Penalties & Late Fines</span>
                                 <div className="table-responsive mb-3">
                                   <table className="table table-sm align-middle text-white small">
                                     <thead>
@@ -522,43 +462,11 @@ export default async function ClearancePage({
                                 </div>
                               </>
                             )}
-
-                            {cashAdvances.length > 0 && (
-                              <>
-                                <span className="text-secondary small fw-bold d-block mb-1">
-                                  <i className="bi bi-journal-arrow-up me-1 text-warning"></i> Cash Advance & Liquidation Status
-                                </span>
-                                <div className="table-responsive mb-0">
-                                  <table className="table table-sm align-middle text-white small">
-                                    <thead>
-                                      <tr className="text-secondary border-bottom border-secondary">
-                                        <th>Date Issued</th><th>CA ID</th><th>Fund Source</th><th className="text-end">Amount</th><th>Status</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {cashAdvances.map(ca => {
-                                        const isPending = ca.status.includes('Pending');
-                                        return (
-                                          <tr key={ca.id}>
-                                            <td>{format(new Date(ca.dateIssued), 'yyyy-MM-dd')}</td>
-                                            <td className="font-monospace">{ca.advanceId}</td>
-                                            <td>{ca.fundSource}</td>
-                                            <td className={`text-end fw-bold ${isPending ? 'text-warning' : 'text-success'}`}>{fmt(ca.amountApproved)}</td>
-                                            <td><span className={`badge ${isPending ? 'bg-warning text-dark' : 'bg-success'}`}>{ca.status}</span></td>
-                                          </tr>
-                                        );
-                                      })}
-                                    </tbody>
-                                  </table>
-                                </div>
-                              </>
-                            )}
                           </div>
                         )}
                       </>
                     )}
                   </div>
-
                   <div className="modal-footer border-secondary">
                     <Link href={`${basePath}/clearance${queryString}`} className="btn btn-secondary btn-sm">Close</Link>
                   </div>
@@ -578,7 +486,6 @@ export default async function ClearancePage({
         </div>
       </main>
 
-      {/* PUBLIC FOOTER & PRIVACY */}
       {!isOfficer && (
         <>
           <Footer />
@@ -587,4 +494,4 @@ export default async function ClearancePage({
       )}
     </div>
   );
-}
+              }
