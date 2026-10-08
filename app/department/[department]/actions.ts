@@ -2,132 +2,648 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import crypto from 'node:crypto';
-import { cookies } from 'next/headers';
-import nodemailer from 'nodemailer';
-import { auth } from '@/auth';
-import { logSystemAction } from '@/lib/logger';
+import crypto from "node:crypto";
+import { cookies } from "next/headers";
+import nodemailer from "nodemailer";
+import { auth } from "@/auth";
+import { logSystemAction } from "@/lib/logger";
 
 // =========================================================================
-// AUTHORIZATION GUARD
+// GENERAL HELPERS
 // =========================================================================
+
+function formatDate(date: Date) {
+  const pad = (n: number) => n.toString().padStart(2, "0");
+
+  return `${date.getFullYear()}${pad(
+    date.getMonth() + 1
+  )}${pad(date.getDate())}-${pad(date.getHours())}${pad(
+    date.getMinutes()
+  )}${pad(date.getSeconds())}`;
+}
+
+function normalizeDepartment(department: string) {
+  const clean = String(department || "")
+    .trim()
+    .toLowerCase();
+
+  if (!clean) {
+    throw new Error("Department is required.");
+  }
+
+  return clean;
+}
+
+function parseAllowedTabs(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.filter(
+      (v): v is string => typeof v === "string"
+    );
+  }
+
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+
+      if (Array.isArray(parsed)) {
+        return parsed.filter(
+          (v): v is string => typeof v === "string"
+        );
+      }
+    } catch {
+      return [];
+    }
+  }
+
+  return [];
+}
+
+function parseDate(value: string, fieldName: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    throw new Error(`Invalid ${fieldName}.`);
+  }
+
+  return date;
+}
+
+function money(value: unknown, fieldName = "Amount") {
+  const amount = Number(value);
+
+  if (!Number.isFinite(amount)) {
+    throw new Error(`${fieldName} must be a valid number.`);
+  }
+
+  if (amount < 0) {
+    throw new Error(`${fieldName} cannot be negative.`);
+  }
+
+  return Math.round(amount * 100) / 100;
+}
+
+function generateReference(prefix: string) {
+  return `${prefix}-${formatDate(new Date())}-${crypto
+    .randomBytes(4)
+    .toString("hex")
+    .toUpperCase()}`;
+}
+
+function isVoidedRecord(row: {
+  paymentType?: unknown;
+  status?: unknown;
+}) {
+  const paymentType = String(row.paymentType || "").toUpperCase();
+  const status = String(row.status || "").toUpperCase();
+
+  return (
+    paymentType.includes("VOID") ||
+    status.includes("VOID") ||
+    status.includes("CANCEL")
+  );
+}
+
+/**
+ * IMPORTANT:
+ * Collection.studentId references Student.id (UUID),
+ * NOT Student.studentId.
+ *
+ * Therefore the financial engine should primarily use
+ * the database student ID.
+ */
+function getStudentKey(
+  studentDbId?: unknown,
+  studentName?: unknown,
+  fallback = ""
+) {
+  const id = String(studentDbId || "")
+    .trim()
+    .toLowerCase();
+
+  const name = String(studentName || "")
+    .trim()
+    .toLowerCase();
+
+  if (id) {
+    return `ID:${id}`;
+  }
+
+  if (name) {
+    return `NAME:${name}`;
+  }
+
+  return fallback;
+}
+
+// =========================================================================
+// AUTHORIZATION
+// =========================================================================
+
 export async function requireTabAccess(requiredTab: string) {
   const session = await auth();
-  
+
   if (!session?.user) {
-    throw new Error("401 Unauthorized: Session expired or invalid.");
+    throw new Error(
+      "401 Unauthorized: Session expired or invalid."
+    );
   }
 
   const customUser = session.user as any;
-  const allowedTabs = (customUser.allowedTabs as string[]) || [];
+
+  const allowedTabs = parseAllowedTabs(
+    customUser.allowedTabs
+  );
 
   if (!allowedTabs.includes(requiredTab)) {
-    throw new Error(`403 Forbidden: Your account scope lacks permission for the ${requiredTab} module.`);
+    throw new Error(
+      `403 Forbidden: Your account scope lacks permission for the ${requiredTab} module.`
+    );
   }
 
   return customUser;
 }
 
-function formatDate(date: Date) {
-  const pad = (n: number) => n.toString().padStart(2, '0');
-  return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
+async function requireSuperAdmin() {
+  const session = await auth();
+
+  if (!session?.user) {
+    throw new Error(
+      "401 Unauthorized: Session expired or invalid."
+    );
+  }
+
+  const user = session.user as any;
+
+  const role = String(user.role || "")
+    .trim()
+    .toLowerCase();
+
+  const allowedTabs = parseAllowedTabs(
+    user.allowedTabs
+  );
+
+  const configuredSuperAdminEmail =
+    String(process.env.SUPER_ADMIN_EMAIL || "")
+      .trim()
+      .toLowerCase();
+
+  const sessionEmail =
+    String(user.email || "")
+      .trim()
+      .toLowerCase();
+
+  const roleIsAdmin =
+    role === "admin" ||
+    role === "administrator" ||
+    role === "superadmin" ||
+    role === "super admin" ||
+    role === "super_admin";
+
+  const hasProvisionPermission =
+    allowedTabs.includes("tab-provision");
+
+  const matchesConfiguredEmail =
+    configuredSuperAdminEmail !== "" &&
+    sessionEmail === configuredSuperAdminEmail;
+
+  if (
+    !roleIsAdmin &&
+    !hasProvisionPermission &&
+    !matchesConfiguredEmail
+  ) {
+    throw new Error(
+      "403 Forbidden: Super administrator privileges are required."
+    );
+  }
+
+  return user;
 }
 
-async function getOrgId(department: string) {
-  const org = await prisma.organization.findUnique({
-    where: { subdomain: department },
-  });
-  if (!org) throw new Error("Department organization not found.");
+// =========================================================================
+// ORGANIZATION / TENANT
+// =========================================================================
+
+/**
+ * Public resolver.
+ *
+ * Do NOT require a session here.
+ *
+ * Used by:
+ * - requestOtp()
+ * - verifyOtp()
+ * - submitOnlineRemittance()
+ */
+async function resolveOrganizationId(
+  department: string
+) {
+  const cleanDepartment =
+    normalizeDepartment(department);
+
+  const org =
+    await prisma.organization.findUnique({
+      where: {
+        subdomain: cleanDepartment,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+  if (!org) {
+    throw new Error(
+      "Department organization not found."
+    );
+  }
+
   return org.id;
+}
+
+/**
+ * Verifies that the authenticated user belongs
+ * to the requested organization.
+ */
+async function requireOrganizationAccess(
+  organizationId: string
+) {
+  const session = await auth();
+
+  if (!session?.user) {
+    throw new Error(
+      "401 Unauthorized: Session expired or invalid."
+    );
+  }
+
+  const email = String(
+    session.user.email || ""
+  )
+    .trim()
+    .toLowerCase();
+
+  if (!email) {
+    throw new Error(
+      "401 Unauthorized: Session has no email."
+    );
+  }
+
+  const user =
+    await prisma.tenantUser.findFirst({
+      where: {
+        organizationId,
+        email,
+        status: "Active",
+      },
+    });
+
+  if (!user) {
+    throw new Error(
+      "403 Forbidden: You do not have access to this department."
+    );
+  }
+
+  return user;
+}
+
+/**
+ * Authenticated organization resolver.
+ *
+ * Normal protected actions use this.
+ */
+async function getOrgId(
+  department: string
+) {
+  const organizationId =
+    await resolveOrganizationId(
+      department
+    );
+
+  await requireOrganizationAccess(
+    organizationId
+  );
+
+  return organizationId;
 }
 
 async function getActionUser(): Promise<string> {
   const session = await auth();
-  const userWithRole = session?.user as { fullName?: string; email?: string } | undefined;
-  return userWithRole?.fullName || userWithRole?.email || "System";
+
+  const user =
+    session?.user as
+      | {
+          fullName?: string;
+          email?: string;
+        }
+      | undefined;
+
+  return (
+    user?.fullName ||
+    user?.email ||
+    "System"
+  );
 }
 
-export async function createDepartment(formData: FormData) {
-  const name = formData.get('name') as string;
-  const subdomain = formData.get('subdomain') as string;
-  const code = formData.get('code') as string;
+// =========================================================================
+// DEPARTMENT PROVISIONING
+// =========================================================================
 
-  if (!name || !subdomain || !code) {
-    throw new Error('All fields are required.');
+export async function createDepartment(
+  formData: FormData
+) {
+  await requireSuperAdmin();
+
+  const name = String(
+    formData.get("name") || ""
+  ).trim();
+
+  const subdomain = String(
+    formData.get("subdomain") || ""
+  )
+    .trim()
+    .toLowerCase();
+
+  if (!name || !subdomain) {
+    throw new Error(
+      "Department name and subdomain are required."
+    );
+  }
+
+  if (!/^[a-z0-9-]+$/.test(subdomain)) {
+    throw new Error(
+      "Subdomain may contain only lowercase letters, numbers, and hyphens."
+    );
   }
 
   try {
     await prisma.organization.create({
       data: {
         name,
-        subdomain: subdomain.toLowerCase().trim(),
+        subdomain,
       },
     });
-    revalidatePath('/');
-    return { success: true, message: `Department '${name}' successfully registered!` };
+
+    revalidatePath("/");
+    revalidatePath("/dashboard");
+
+    return {
+      success: true,
+      message: `Department '${name}' successfully registered!`,
+    };
   } catch (error) {
-    console.error(error);
-    return { success: false, message: 'Subdomain or code already exists.' };
+    console.error(
+      "createDepartment error:",
+      error
+    );
+
+    return {
+      success: false,
+      message:
+        "Subdomain already exists or the department could not be created.",
+    };
   }
 }
 
-export async function assessStudentDue(department: string, payload: {
-  studentId: string;
-  studentName: string;
-  category: string;
-  itemDescription: string;
-  amountDue: number;
-  fundAllocation: string;
-  date: string;
-  ay: string;
-  term: string;
-}) {
-  await requireTabAccess('tab-collectibles');
-  const orgId = await getOrgId(department);
+// =========================================================================
+// COLLECTIBLES
+// =========================================================================
 
+export async function assessStudentDue(
+  department: string,
+  payload: {
+    studentId: string;
+    studentName: string;
+    category: string;
+    itemDescription: string;
+    amountDue: number;
+    fundAllocation: string;
+    date: string;
+    ay: string;
+    term: string;
+  }
+) {
+  await requireTabAccess(
+    "tab-collectibles"
+  );
+
+  const orgId =
+    await getOrgId(department);
+
+  const amountDue = money(
+    payload.amountDue,
+    "Amount due"
+  );
+
+  if (amountDue <= 0) {
+    throw new Error(
+      "Amount due must be greater than zero."
+    );
+  }
+
+  /*
+   * Collectible schema currently contains only:
+   * id, organizationId, category, AY, term,
+   * headcount, balanceDue, status, encodedBy.
+   *
+   * Therefore studentId, studentName, itemDescription,
+   * fundAllocation and date are intentionally NOT written
+   * here because those fields do not exist in the model.
+   */
   await prisma.collectible.create({
     data: {
       organizationId: orgId,
       academicYear: payload.ay,
       term: payload.term,
-      category: payload.category,
-      balanceDue: payload.amountDue, 
-      status: 'Unpaid',
+      category: String(
+        payload.category || ""
+      ).trim(),
+      balanceDue: amountDue,
+      status: "Unpaid",
+      encodedBy: await getActionUser(),
     },
   });
 
-  revalidatePath(`/department/${department}/collectibles`);
-  return { success: true, message: 'Student due successfully assessed.' };
+  revalidatePath(
+    `/department/${department}/collectibles`
+  );
+
+  return {
+    success: true,
+    message:
+      "Student due successfully assessed.",
+  };
 }
 
-export async function deletePenalty(department: string, penaltyId: string) {
-  await requireTabAccess('tab-void');
-  const orgId = await getOrgId(department);
+export async function saveBulkCollectibles(
+  department: string,
+  records: any[],
+  ay: string,
+  term: string
+) {
+  await requireTabAccess(
+    "tab-collectibles"
+  );
 
-  // FIXED: Changed .delete() to .deleteMany() to safely combine id and organizationId
-  await prisma.penalty.deleteMany({
-    where: { id: penaltyId, organizationId: orgId },
-  });
+  const officerName =
+    await getActionUser();
 
-  revalidatePath(`/department/${department}/penalties`);
-  return { success: true, message: "Penalty record deleted successfully." };
+  const orgId =
+    await getOrgId(department);
+
+  if (!Array.isArray(records)) {
+    throw new Error(
+      "Invalid collectible records."
+    );
+  }
+
+  const prepared =
+    records
+      .map((r: any) => ({
+        organizationId:
+          orgId,
+        academicYear: ay,
+        term,
+        category: String(
+          r?.category || ""
+        ).trim(),
+        headcount: Math.max(
+          1,
+          parseInt(
+            r?.headcount,
+            10
+          ) || 1
+        ),
+        balanceDue: Math.max(
+          0,
+          Number.parseFloat(
+            r?.total
+          ) || 0
+        ),
+        status:
+          "Outstanding",
+        encodedBy:
+          officerName,
+      }))
+      .filter(
+        (r) => r.category !== ""
+      );
+
+  if (prepared.length > 0) {
+    await prisma.collectible.createMany(
+      {
+        data: prepared,
+      }
+    );
+  }
+
+  await logSystemAction(
+    orgId,
+    officerName,
+    "SAVE_COLLECTIBLES",
+    `Assessed bulk collectibles across ${prepared.length} categories.`
+  );
+
+  revalidatePath(
+    `/department/${department}/collectibles`
+  );
 }
 
-export async function recordPenalty(department: string, data: {
-  date: string;
-  studentId: string;
-  studentName?: string;
-  activity: string;
-  hoursLate: number;
-  ratePerHour: number;
-  fineAmount: number;
-  ay: string;
-  term: string;
-}) {
-  await requireTabAccess('tab-penalties');
-  const officerName = await getActionUser();
-  const orgId = await getOrgId(department);
-  const penaltyId = `PEN-${formatDate(new Date())}-${Math.floor(Math.random() * 1000)}`;
+// =========================================================================
+// PENALTIES
+// =========================================================================
+
+export async function deletePenalty(
+  department: string,
+  penaltyId: string
+) {
+  await requireTabAccess("tab-void");
+
+  const orgId =
+    await getOrgId(department);
+
+  const result =
+    await prisma.penalty.deleteMany({
+      where: {
+        id: penaltyId,
+        organizationId: orgId,
+      },
+    });
+
+  if (result.count === 0) {
+    throw new Error(
+      "Penalty record not found."
+    );
+  }
+
+  revalidatePath(
+    `/department/${department}/penalties`
+  );
+
+  return {
+    success: true,
+    message:
+      "Penalty record deleted successfully.",
+  };
+}
+
+export async function recordPenalty(
+  department: string,
+  data: {
+    date: string;
+    studentId: string;
+    studentName?: string;
+    activity: string;
+    hoursLate: number;
+    ratePerHour: number;
+    fineAmount: number;
+    ay: string;
+    term: string;
+  }
+) {
+  await requireTabAccess(
+    "tab-penalties"
+  );
+
+  const officerName =
+    await getActionUser();
+
+  const orgId =
+    await getOrgId(department);
+
+  const date = parseDate(
+    data.date,
+    "penalty date"
+  );
+
+  const hoursLate =
+    Number(data.hoursLate);
+
+  const ratePerHour =
+    money(
+      data.ratePerHour,
+      "Rate per hour"
+    );
+
+  const fineAmount =
+    money(
+      data.fineAmount,
+      "Fine amount"
+    );
+
+  if (
+    !Number.isFinite(hoursLate) ||
+    hoursLate < 0
+  ) {
+    throw new Error(
+      "Hours late must be a valid non-negative number."
+    );
+  }
+
+  if (fineAmount <= 0) {
+    throw new Error(
+      "Fine amount must be greater than zero."
+    );
+  }
+
+  const penaltyId =
+    generateReference("PEN");
 
   await prisma.penalty.create({
     data: {
@@ -135,38 +651,222 @@ export async function recordPenalty(department: string, data: {
       penaltyId,
       academicYear: data.ay,
       term: data.term,
-      date: new Date(data.date),
-      studentId: data.studentId,
-      studentName: data.studentName || "Unknown",
-      activity: data.activity,
-      hoursLate: data.hoursLate,
-      ratePerHour: data.ratePerHour,
-      fineAmount: data.fineAmount,
+      date,
+      studentId:
+        String(
+          data.studentId || ""
+        ).trim() || null,
+      studentName:
+        String(
+          data.studentName || ""
+        ).trim() || "Unknown",
+      activity:
+        String(
+          data.activity || ""
+        ).trim(),
+      hoursLate,
+      ratePerHour,
+      fineAmount,
       status: "Unsettled",
-      encodedBy: officerName
-    }
+      encodedBy: officerName,
+    },
   });
 
-  await logSystemAction(orgId, officerName, "RECORD_PENALTY", `Assessed ₱${data.fineAmount} fine (${data.hoursLate} hrs) to ${data.studentName || "Unknown"} for ${data.activity}.`);
+  await logSystemAction(
+    orgId,
+    officerName,
+    "RECORD_PENALTY",
+    `Assessed ₱${fineAmount.toFixed(
+      2
+    )} fine (${hoursLate} hrs) to ${
+      data.studentName || "Unknown"
+    } for ${data.activity}.`
+  );
 
-  revalidatePath(`/department/${department}/penalties`);
-  revalidatePath(`/department/${department}`);
+  revalidatePath(
+    `/department/${department}/penalties`
+  );
+  revalidatePath(
+    `/department/${department}`
+  );
 }
 
-export async function issueCashAdvance(department: string, data: {
-  requestor: string;
-  purpose: string;
-  fundSource: string;
-  amount: number;
-  dateIssued: string;
-  expectedReturnDate: string;
-  ay: string;
-  term: string;
-}) {
-  await requireTabAccess('tab-advances');
-  const officerName = await getActionUser();
-  const orgId = await getOrgId(department);
-  const advanceId = `CA-${formatDate(new Date())}-${Math.floor(Math.random() * 1000)}`;
+export async function settlePenaltyCommunityService(
+  department: string,
+  data: {
+    penaltyId: string;
+    hoursRendered: number;
+    ay: string;
+    term: string;
+  }
+) {
+  await requireTabAccess(
+    "tab-penalties"
+  );
+
+  const officerName =
+    await getActionUser();
+
+  const orgId =
+    await getOrgId(department);
+
+  const hoursRendered =
+    Number(
+      data.hoursRendered
+    );
+
+  if (
+    !Number.isFinite(
+      hoursRendered
+    ) ||
+    hoursRendered <= 0
+  ) {
+    throw new Error(
+      "Hours rendered must be greater than zero."
+    );
+  }
+
+  const targetPen =
+    await prisma.penalty.findFirst({
+      where: {
+        penaltyId:
+          data.penaltyId,
+        organizationId:
+          orgId,
+      },
+    });
+
+  if (!targetPen) {
+    throw new Error(
+      "Penalty record not found."
+    );
+  }
+
+  const existingFine =
+    Math.max(
+      0,
+      Number(
+        targetPen.fineAmount
+      ) || 0
+    );
+
+  if (existingFine <= 0) {
+    throw new Error(
+      "This penalty has already been fully settled."
+    );
+  }
+
+  const rate = Math.max(
+    0,
+    Number(
+      targetPen.ratePerHour
+    ) || 50
+  );
+
+  const deductionPesos =
+    Math.round(
+      hoursRendered *
+        rate *
+        100
+    ) / 100;
+
+  const remainingFine =
+    Math.max(
+      0,
+      Math.round(
+        (existingFine -
+          deductionPesos) *
+          100
+      ) / 100
+    );
+
+  const newStatus =
+    remainingFine === 0
+      ? `Settled (Community Service - ${hoursRendered} hrs rendered)`
+      : `Partially Served (${hoursRendered} hrs served, ₱${deductionPesos.toFixed(
+          2
+        )} deducted)`;
+
+  await prisma.penalty.update({
+    where: {
+      id: targetPen.id,
+    },
+    data: {
+      fineAmount:
+        remainingFine,
+      status:
+        newStatus,
+    },
+  });
+
+  await logSystemAction(
+    orgId,
+    officerName,
+    "SETTLE_PENALTY_SERVICE",
+    `Applied ${hoursRendered} hrs community service to penalty [${data.penaltyId}]. Status: ${newStatus}`
+  );
+
+  revalidatePath(
+    `/department/${department}/penalties`
+  );
+  revalidatePath(
+    `/department/${department}`
+  );
+}
+
+// =========================================================================
+// CASH ADVANCE
+// =========================================================================
+
+export async function issueCashAdvance(
+  department: string,
+  data: {
+    requestor: string;
+    purpose: string;
+    fundSource: string;
+    amount: number;
+    dateIssued: string;
+    expectedReturnDate: string;
+    ay: string;
+    term: string;
+  }
+) {
+  await requireTabAccess(
+    "tab-advances"
+  );
+
+  const officerName =
+    await getActionUser();
+
+  const orgId =
+    await getOrgId(department);
+
+  const amount =
+    money(
+      data.amount,
+      "Cash advance amount"
+    );
+
+  if (amount <= 0) {
+    throw new Error(
+      "Cash advance amount must be greater than zero."
+    );
+  }
+
+  const dateIssued =
+    parseDate(
+      data.dateIssued,
+      "date issued"
+    );
+
+  const expectedReturnDate =
+    parseDate(
+      data.expectedReturnDate,
+      "expected return date"
+    );
+
+  const advanceId =
+    generateReference("CA");
 
   await prisma.cashAdvance.create({
     data: {
@@ -174,218 +874,726 @@ export async function issueCashAdvance(department: string, data: {
       advanceId,
       academicYear: data.ay,
       term: data.term,
-      requestor: data.requestor,
-      purpose: data.purpose,
-      fundSource: data.fundSource,
-      amountApproved: data.amount,
-      dateIssued: new Date(data.dateIssued),
-      expectedReturnDate: new Date(data.expectedReturnDate),
-      status: "Pending Liquidation",
-      encodedBy: officerName
-    }
+      requestor:
+        String(
+          data.requestor || ""
+        ).trim(),
+      purpose:
+        String(
+          data.purpose || ""
+        ).trim() || null,
+      fundSource:
+        String(
+          data.fundSource || ""
+        ).trim(),
+      amountApproved:
+        amount,
+      dateIssued,
+      expectedReturnDate,
+      status:
+        "Pending Liquidation",
+      encodedBy:
+        officerName,
+    },
   });
 
-  await logSystemAction(orgId, officerName, "ISSUE_ADVANCE", `Issued ₱${data.amount} cash advance [${advanceId}] to ${data.requestor} from ${data.fundSource}.`);
+  await logSystemAction(
+    orgId,
+    officerName,
+    "ISSUE_ADVANCE",
+    `Issued ₱${amount.toFixed(
+      2
+    )} cash advance [${advanceId}] to ${data.requestor} from ${data.fundSource}.`
+  );
 
-  revalidatePath(`/department/${department}/advances`);
-  revalidatePath(`/department/${department}`);
+  revalidatePath(
+    `/department/${department}/advances`
+  );
+  revalidatePath(
+    `/department/${department}`
+  );
 }
 
-export async function recordCollection(department: string, data: {
-  orNumber: string;
-  studentId: string;
-  studentName: string;
-  category: string;
-  itemDescription: string;
-  paymentType: string;
-  amountPaid: number;
-  standardRate: number;
-  fundAllocation: string;
-  ay: string;
-  term: string;
-}) {
-  await requireTabAccess('tab-payment');
-  const officerName = await getActionUser();
-  const orgId = await getOrgId(department);
-  const balanceDue = Math.max(0, data.standardRate - data.amountPaid);
+// =========================================================================
+// PAYMENT HELPER
+// =========================================================================
+
+async function validateStudentOwnership(
+  organizationId: string,
+  studentDbId?: string | null
+) {
+  const cleanId =
+    String(
+      studentDbId || ""
+    ).trim();
+
+  if (!cleanId) {
+    return null;
+  }
+
+  const student =
+    await prisma.student.findFirst({
+      where: {
+        id: cleanId,
+        organizationId,
+      },
+      select: {
+        id: true,
+        studentId: true,
+        fullName: true,
+        email: true,
+      },
+    });
+
+  if (!student) {
+    throw new Error(
+      "Selected student does not belong to this department."
+    );
+  }
+
+  return student;
+}
+
+/**
+ * Calculates historical valid payments for the same student + item.
+ *
+ * Collection.studentId is the Student.id foreign key.
+ */
+async function getPreviouslyPaid(
+  organizationId: string,
+  studentDbId: string | null | undefined,
+  studentName: string,
+  academicYear: string,
+  term: string,
+  itemDescription: string
+) {
+  const cleanStudentId =
+    String(
+      studentDbId || ""
+    ).trim();
+
+  const cleanStudentName =
+    String(
+      studentName || ""
+    ).trim();
+
+  const cleanDescription =
+    String(
+      itemDescription || ""
+    ).trim();
+
+  if (!cleanDescription) {
+    return 0;
+  }
+
+  const rows =
+    await prisma.collection.findMany({
+      where: {
+        organizationId,
+        academicYear,
+        term,
+        itemDescription:
+          cleanDescription,
+        ...(cleanStudentId
+          ? {
+              studentId:
+                cleanStudentId,
+            }
+          : {
+              studentId: null,
+              studentName:
+                cleanStudentName,
+            }),
+      },
+      select: {
+        amountPaid: true,
+        paymentType: true,
+        status: true,
+      },
+    });
+
+  return rows
+    .filter(
+      (row) =>
+        !isVoidedRecord(row)
+    )
+    .reduce(
+      (sum, row) =>
+        sum +
+        (Number(
+          row.amountPaid
+        ) || 0),
+      0
+    );
+}
+
+// =========================================================================
+// COLLECTION
+// =========================================================================
+
+export async function recordCollection(
+  department: string,
+  data: {
+    orNumber: string;
+    studentId: string;
+    studentName: string;
+    category: string;
+    itemDescription: string;
+    paymentType: string;
+    amountPaid: number;
+    standardRate: number;
+    fundAllocation: string;
+    ay: string;
+    term: string;
+  }
+) {
+  await requireTabAccess(
+    "tab-payment"
+  );
+
+  const officerName =
+    await getActionUser();
+
+  const orgId =
+    await getOrgId(department);
+
+  const studentDbId =
+    String(
+      data.studentId || ""
+    ).trim() || null;
+
+  await validateStudentOwnership(
+    orgId,
+    studentDbId
+  );
+
+  const paid =
+    money(
+      data.amountPaid,
+      "Payment amount"
+    );
+
+  const rate =
+    money(
+      data.standardRate,
+      "Standard rate"
+    );
+
+  if (paid <= 0) {
+    throw new Error(
+      "Payment amount must be greater than zero."
+    );
+  }
+
+  if (rate <= 0) {
+    throw new Error(
+      "The payment has no valid standard rate."
+    );
+  }
+
+  const itemDescription =
+    String(
+      data.itemDescription || ""
+    ).trim();
+
+  const category =
+    String(
+      data.category || ""
+    ).trim();
+
+  if (!itemDescription) {
+    throw new Error(
+      "Item description is required."
+    );
+  }
+
+  const alreadyPaid =
+    await getPreviouslyPaid(
+      orgId,
+      studentDbId,
+      data.studentName,
+      data.ay,
+      data.term,
+      itemDescription
+    );
+
+  const remainingBeforePayment =
+    Math.max(
+      0,
+      Math.round(
+        (rate - alreadyPaid) *
+          100
+      ) / 100
+    );
+
+  if (
+    remainingBeforePayment <=
+    0
+  ) {
+    throw new Error(
+      `This assessment has already been fully paid at ₱${rate.toFixed(
+        2
+      )}.`
+    );
+  }
+
+  if (
+    paid >
+    remainingBeforePayment
+  ) {
+    throw new Error(
+      `Payment amount ₱${paid.toFixed(
+        2
+      )} exceeds the remaining balance of ₱${remainingBeforePayment.toFixed(
+        2
+      )}.`
+    );
+  }
+
+  const newTotalPaid =
+    alreadyPaid + paid;
+
+  const balanceDue =
+    Math.max(
+      0,
+      Math.round(
+        (rate -
+          newTotalPaid) *
+          100
+      ) / 100
+    );
+
+  const actualPaymentType =
+    balanceDue === 0
+      ? "Full Payment"
+      : String(
+          data.paymentType ||
+            ""
+        ).trim() ||
+        "Partial Payment";
 
   await prisma.collection.create({
     data: {
-      organizationId: orgId,
-      academicYear: data.ay,
-      term: data.term,
-      orNumber: data.orNumber,
-      studentId: data.studentId,
-      studentName: data.studentName,
-      category: data.category,
-      itemDescription: data.itemDescription,
-      paymentType: data.paymentType,
-      standardRate: data.standardRate,
-      amountPaid: data.amountPaid,
-      balanceDue,
-      fundAllocation: data.fundAllocation,
-      status: "Valid",
-      encodedBy: officerName
-    }
-  });
-
-  await logSystemAction(orgId, officerName, "RECORD_COLLECTION", `Collected ₱${data.amountPaid} from ${data.studentName} for ${data.itemDescription} [OR: ${data.orNumber}].`);
-
-  revalidatePath(`/department/${department}/collections`);
-  revalidatePath(`/department/${department}`);
-}
-
-export async function recordPayment(department: string, data: {
-  orNumber: string;
-  date: string;
-  studentId: string;
-  studentName: string;
-  studentEmail?: string;
-  category: string;
-  itemDescription: string;
-  paymentType: string;
-  standardRate: number;
-  amountPaid: number;
-  fundAllocation: string;
-  ay: string;
-  term: string;
-}) {
-  await requireTabAccess('tab-payment');
-  const officerName = await getActionUser();
-  const orgId = await getOrgId(department);
-
-  const paid = Math.max(0, Number(data.amountPaid) || 0);
-  const rate = Math.max(0, Number(data.standardRate) || 0);
-
-  if (paid <= 0) throw new Error("Payment amount must be greater than zero.");
-  if (rate <= 0) throw new Error("The payment has no valid standard rate.");
-  if (paid > rate) throw new Error(`Payment amount ₱${paid.toFixed(2)} cannot exceed the assessed amount of ₱${rate.toFixed(2)}.`);
-
-  const balanceDue = Math.max(0, Math.round((rate - paid) * 100) / 100);
-  const actualPaymentType = balanceDue === 0 ? "Full Payment" : data.paymentType;
-  const category = String(data.category || "").trim();
-  const itemDescription = String(data.itemDescription || "").trim();
-
-  await prisma.collection.create({
-    data: {
-      organizationId: orgId,
-      academicYear: data.ay,
-      term: data.term,
-      date: new Date(data.date),
-      studentId: data.studentId,
-      studentName: data.studentName,
-      orNumber: data.orNumber,
+      organizationId:
+        orgId,
+      academicYear:
+        data.ay,
+      term:
+        data.term,
+      orNumber:
+        String(
+          data.orNumber || ""
+        ).trim(),
+      studentId:
+        studentDbId,
+      studentName:
+        String(
+          data.studentName || ""
+        ).trim(),
       category,
       itemDescription,
-      paymentType: actualPaymentType,
-      standardRate: rate,
-      amountPaid: paid,
+      paymentType:
+        actualPaymentType,
+      standardRate:
+        rate,
+      amountPaid:
+        paid,
       balanceDue,
-      fundAllocation: data.fundAllocation,
+      fundAllocation:
+        String(
+          data.fundAllocation ||
+            ""
+        ).trim(),
       status: "Valid",
-      encodedBy: officerName
-    }
+      encodedBy:
+        officerName,
+    },
   });
 
-  await logSystemAction(orgId, officerName, "RECORD_PAYMENT", `Recorded payment of ₱${paid.toFixed(2)} from ${data.studentName} [OR: ${data.orNumber}] for ${itemDescription}.`);
+  await logSystemAction(
+    orgId,
+    officerName,
+    "RECORD_COLLECTION",
+    `Collected ₱${paid.toFixed(
+      2
+    )} from ${data.studentName} for ${itemDescription} [OR: ${data.orNumber}].`
+  );
 
-  revalidatePath(`/department/${department}/collections`);
-  revalidatePath(`/department/${department}/clearance`);
-  revalidatePath(`/department/${department}`);
+  revalidatePath(
+    `/department/${department}/collections`
+  );
+  revalidatePath(
+    `/department/${department}/clearance`
+  );
+  revalidatePath(
+    `/department/${department}`
+  );
 }
 
-export async function invalidateOnlineRemittance(department: string, remittanceId: string) {
-  await requireTabAccess('tab-remittances');
-  const officerName = await getActionUser();
-  const orgId = await getOrgId(department);
+// =========================================================================
+// PAYMENT
+// =========================================================================
 
-  // FIXED: Changed .findUnique() to .findFirst()
-  const remittance = await prisma.onlineRemittance.findFirst({ 
-    where: { id: remittanceId, organizationId: orgId } 
-  });
+export async function recordPayment(
+  department: string,
+  data: {
+    orNumber: string;
+    date: string;
+    studentId: string;
+    studentName: string;
+    studentEmail?: string;
+    category: string;
+    itemDescription: string;
+    paymentType: string;
+    standardRate: number;
+    amountPaid: number;
+    fundAllocation: string;
+    ay: string;
+    term: string;
+  }
+) {
+  await requireTabAccess(
+    "tab-payment"
+  );
 
-  // FIXED: Changed .delete() to .deleteMany()
-  await prisma.onlineRemittance.deleteMany({
-    where: { id: remittanceId, organizationId: orgId },
-  });
+  const officerName =
+    await getActionUser();
 
-  if (remittance) {
-    await logSystemAction(orgId, officerName, "INVALIDATE_REMITTANCE", `Invalidated remittance [Ref: ${remittance.referenceNumber}] from ${remittance.studentName}.`);
+  const orgId =
+    await getOrgId(department);
+
+  const studentDbId =
+    String(
+      data.studentId || ""
+    ).trim() || null;
+
+  await validateStudentOwnership(
+    orgId,
+    studentDbId
+  );
+
+  const paid =
+    money(
+      data.amountPaid,
+      "Payment amount"
+    );
+
+  const rate =
+    money(
+      data.standardRate,
+      "Standard rate"
+    );
+
+  if (paid <= 0) {
+    throw new Error(
+      "Payment amount must be greater than zero."
+    );
   }
 
-  revalidatePath(`/department/${department}/remittances`);
-  return { success: true, message: 'Remittance submission marked as invalid and removed from queue.' };
+  if (rate <= 0) {
+    throw new Error(
+      "The payment has no valid standard rate."
+    );
+  }
+
+  const date =
+    parseDate(
+      data.date,
+      "payment date"
+    );
+
+  const category =
+    String(
+      data.category || ""
+    ).trim();
+
+  const itemDescription =
+    String(
+      data.itemDescription || ""
+    ).trim();
+
+  const studentName =
+    String(
+      data.studentName || ""
+    ).trim();
+
+  if (!studentDbId) {
+    throw new Error(
+      "A valid student record is required for payment."
+    );
+  }
+
+  if (!itemDescription) {
+    throw new Error(
+      "Item description is required."
+    );
+  }
+
+  const alreadyPaid =
+    await getPreviouslyPaid(
+      orgId,
+      studentDbId,
+      studentName,
+      data.ay,
+      data.term,
+      itemDescription
+    );
+
+  const remainingBeforePayment =
+    Math.max(
+      0,
+      Math.round(
+        (rate -
+          alreadyPaid) *
+          100
+      ) / 100
+    );
+
+  if (
+    remainingBeforePayment <=
+    0
+  ) {
+    throw new Error(
+      `This assessment has already been fully paid at ₱${rate.toFixed(
+        2
+      )}.`
+    );
+  }
+
+  if (
+    paid >
+    remainingBeforePayment
+  ) {
+    throw new Error(
+      `Payment amount ₱${paid.toFixed(
+        2
+      )} cannot exceed the remaining balance of ₱${remainingBeforePayment.toFixed(
+        2
+      )}.`
+    );
+  }
+
+  const newTotalPaid =
+    alreadyPaid + paid;
+
+  const balanceDue =
+    Math.max(
+      0,
+      Math.round(
+        (rate -
+          newTotalPaid) *
+          100
+      ) / 100
+    );
+
+  const actualPaymentType =
+    balanceDue === 0
+      ? "Full Payment"
+      : String(
+          data.paymentType ||
+            ""
+        ).trim() ||
+        "Partial Payment";
+
+  await prisma.collection.create({
+    data: {
+      organizationId:
+        orgId,
+      academicYear:
+        data.ay,
+      term:
+        data.term,
+      date,
+      studentId:
+        studentDbId,
+      studentName,
+      orNumber:
+        String(
+          data.orNumber || ""
+        ).trim(),
+      category,
+      itemDescription,
+      paymentType:
+        actualPaymentType,
+      standardRate:
+        rate,
+      amountPaid:
+        paid,
+      balanceDue,
+      fundAllocation:
+        String(
+          data.fundAllocation ||
+            ""
+        ).trim(),
+      status:
+        "Valid",
+      encodedBy:
+        officerName,
+    },
+  });
+
+  await logSystemAction(
+    orgId,
+    officerName,
+    "RECORD_PAYMENT",
+    `Recorded payment of ₱${paid.toFixed(
+      2
+    )} from ${studentName} [OR: ${data.orNumber}] for ${itemDescription}.`
+  );
+
+  revalidatePath(
+    `/department/${department}/collections`
+  );
+  revalidatePath(
+    `/department/${department}/clearance`
+  );
+  revalidatePath(
+    `/department/${department}`
+  );
 }
 
-export async function saveBulkCollectibles(department: string, records: any[], ay: string, term: string) {
-  await requireTabAccess('tab-collectibles');
-  const officerName = await getActionUser();
-  const orgId = await getOrgId(department);
+// =========================================================================
+// OTP LOGIN
+// =========================================================================
 
-  for (const r of records) {
-    await prisma.collectible.create({
-      data: {
-        organizationId: orgId,
-        academicYear: ay,
-        term,
-        category: r.category,
-        headcount: parseInt(r.headcount) || 1,
-        balanceDue: parseFloat(r.total) || 0,
-        status: "Outstanding",
-        encodedBy: officerName
-      }
+export async function requestOtp(
+  department: string,
+  email: string
+) {
+  const cleanDepartment =
+    normalizeDepartment(
+      department
+    );
+
+  const cleanEmail =
+    String(
+      email || ""
+    )
+      .trim()
+      .toLowerCase();
+
+  if (
+    !cleanEmail ||
+    !cleanEmail.includes("@")
+  ) {
+    throw new Error(
+      "Please provide a valid email address."
+    );
+  }
+
+  // PUBLIC LOGIN FLOW:
+  // No authenticated session is required here.
+  const orgId =
+    await resolveOrganizationId(
+      cleanDepartment
+    );
+
+  const user =
+    await prisma.tenantUser.findFirst({
+      where: {
+        organizationId:
+          orgId,
+        email:
+          cleanEmail,
+      },
     });
+
+  if (!user) {
+    throw new Error(
+      "This account is not registered or does not belong to this department."
+    );
   }
 
-  await logSystemAction(orgId, officerName, "SAVE_COLLECTIBLES", `Assessed bulk collectibles across ${records.length} categories.`);
-  revalidatePath(`/department/${department}/collectibles`);
-}
+  if (user.status !== "Active") {
+    throw new Error(
+      "This account is currently inactive."
+    );
+  }
 
-export async function requestOtp(department: string, email: string) {
-  const cleanDepartment = department.trim().toLowerCase();
-  const cleanEmail = email.trim().toLowerCase();
-  const orgId = await getOrgId(cleanDepartment);
+  const cookieStore =
+    await cookies();
 
-  const user = await prisma.tenantUser.findFirst({
-    where: { organizationId: orgId, email: cleanEmail },
-  });
-
-  if (!user) throw new Error("This account is not registered or does not belong to this department.");
-  if (user.status !== 'Active') throw new Error("This account is currently inactive.");
-
-  const cookieStore = await cookies();
-  const lockoutCookie = cookieStore.get('fcu_lockout');
+  const lockoutCookie =
+    cookieStore.get(
+      "fcu_lockout"
+    );
 
   if (lockoutCookie) {
-    const lockoutTime = parseInt(lockoutCookie.value, 10);
-    if (Date.now() < lockoutTime) {
-      const remainingMinutes = Math.ceil((lockoutTime - Date.now()) / 60000);
-      throw new Error(`Too many failed attempts. Account temporarily locked. Try again in ${remainingMinutes} minute(s).`);
+    const lockoutTime =
+      Number.parseInt(
+        lockoutCookie.value,
+        10
+      );
+
+    if (
+      Number.isFinite(
+        lockoutTime
+      ) &&
+      Date.now() <
+        lockoutTime
+    ) {
+      const remainingMinutes =
+        Math.ceil(
+          (lockoutTime -
+            Date.now()) /
+            60000
+        );
+
+      throw new Error(
+        `Too many failed attempts. Account temporarily locked. Try again in ${remainingMinutes} minute(s).`
+      );
     }
   }
 
-  const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-  const hashedCode = crypto.createHash('sha256').update(otpCode).digest('hex');
-  const expiresAt = Date.now() + 5 * 60 * 1000;
+  const otpCode =
+    crypto
+      .randomInt(
+        100000,
+        1000000
+      )
+      .toString();
 
-  cookieStore.set('fcu_otp_hash', `${hashedCode}:${expiresAt}`, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', maxAge: 300 });
-  cookieStore.set('fcu_otp_email', cleanEmail, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', maxAge: 300 });
-  cookieStore.set('fcu_otp_strikes', '0', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', maxAge: 300 });
+  const hashedCode =
+    crypto
+      .createHash(
+        "sha256"
+      )
+      .update(otpCode)
+      .digest("hex");
 
-  const smtpUser = process.env.SMTP_USER;
-  const smtpPass = process.env.SMTP_PASS;
+  const expiresAt =
+    Date.now() +
+    5 * 60 * 1000;
+
+  const smtpUser =
+    process.env.SMTP_USER;
+
+  const smtpPass =
+    process.env.SMTP_PASS;
 
   if (!smtpUser || !smtpPass) {
-    throw new Error('Email service is not configured.');
+    throw new Error(
+      "Email service is not configured."
+    );
   }
 
-  const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port: Number(process.env.SMTP_PORT || 465),
-    secure: true,
-    auth: { user: smtpUser, pass: smtpPass },
-  });
+  const transporter =
+    nodemailer.createTransport({
+      host:
+        process.env.SMTP_HOST ||
+        "smtp.gmail.com",
+      port: Number(
+        process.env.SMTP_PORT ||
+          465
+      ),
+      secure: true,
+      auth: {
+        user: smtpUser,
+        pass: smtpPass,
+      },
+    });
 
+  // Send first. Only store the OTP if sending succeeds.
   try {
     await transporter.sendMail({
       from: `"CLEAR System" <${smtpUser}>`,
@@ -394,791 +1602,3186 @@ export async function requestOtp(department: string, email: string) {
       text: `Your 6-digit One-Time PIN is: ${otpCode}\n\nThis code will expire in 5 minutes.`,
     });
   } catch (error) {
-    console.error('Gmail SMTP Error:', error);
-    throw new Error('Failed to dispatch verification email.');
+    console.error(
+      "SMTP Error:",
+      error
+    );
+
+    throw new Error(
+      "Failed to dispatch verification email."
+    );
   }
 
-  return { success: true, message: 'Verification code sent successfully.' };
-}
-
-export async function verifyOtp(department: string, email: string, submittedOtp: string) {
-  const cleanEmail = email.trim().toLowerCase();
-  const cookieStore = await cookies();
-
-  const otpCookie = cookieStore.get('fcu_otp_hash');
-  const emailCookie = cookieStore.get('fcu_otp_email');
-  const strikesCookie = cookieStore.get('fcu_otp_strikes');
-
-  if (!otpCookie || !emailCookie) throw new Error("Verification session expired. Please request a new code.");
-  if (emailCookie.value !== cleanEmail) throw new Error("Email mismatch. Please request a new code.");
-
-  let currentStrikes = strikesCookie ? parseInt(strikesCookie.value, 10) : 0;
-
-  if (currentStrikes >= 5) {
-    const lockoutUntil = Date.now() + 10 * 60 * 1000;
-    cookieStore.set('fcu_lockout', lockoutUntil.toString(), { httpOnly: true, secure: process.env.NODE_ENV === 'production', path: '/', maxAge: 600 });
-    throw new Error("Maximum verification attempts exceeded. Account locked for 10 minutes.");
-  }
-
-  const [storedHash, expiryStr] = otpCookie.value.split(':');
-  const expiresAt = parseInt(expiryStr, 10);
-
-  if (Date.now() > expiresAt) throw new Error("Verification code has expired. Please request a new one.");
-
-  const submittedHash = crypto.createHash('sha256').update(submittedOtp.trim()).digest('hex');
-  if (submittedHash !== storedHash) {
-    currentStrikes += 1;
-    cookieStore.set('fcu_otp_strikes', currentStrikes.toString(), { httpOnly: true, secure: process.env.NODE_ENV === 'production', path: '/', maxAge: 300 });
-    const remainingAttempts = 5 - currentStrikes;
-    throw new Error(`Invalid verification code. ${remainingAttempts} attempt(s) remaining.`);
-  }
-
-  const orgId = await getOrgId(department);
-
-  const user = await prisma.tenantUser.findFirst({
-    where: { organizationId: orgId, email: cleanEmail }
-  });
-
-  if (!user) throw new Error("User record not found.");
-
-  cookieStore.delete('fcu_otp_hash');
-  cookieStore.delete('fcu_otp_email');
-  cookieStore.delete('fcu_otp_strikes');
-
-  cookieStore.set('fcu_session', user.id, {
+  const cookieOptions = {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    path: '/',
-    maxAge: 86400 
-  });
+    secure:
+      process.env.NODE_ENV ===
+      "production",
+    sameSite:
+      "lax" as const,
+    path: "/",
+    maxAge: 300,
+  };
+
+  cookieStore.set(
+    "fcu_otp_hash",
+    `${hashedCode}:${expiresAt}`,
+    cookieOptions
+  );
+
+  cookieStore.set(
+    "fcu_otp_email",
+    cleanEmail,
+    cookieOptions
+  );
+
+  cookieStore.set(
+    "fcu_otp_department",
+    cleanDepartment,
+    cookieOptions
+  );
+
+  cookieStore.set(
+    "fcu_otp_strikes",
+    "0",
+    cookieOptions
+  );
 
   return {
     success: true,
-    user: { id: user.id, fullName: user.fullName, email: user.email, role: user.role, allowedTabs: JSON.parse(user.allowedTabs || '[]') }
+    message:
+      "Verification code sent successfully.",
   };
 }
 
-export async function recordAudit(department: string, data: {
-  date: string;
-  advanceId: string;
-  requestor: string;
-  fundSource: string;
-  budgetRequested: number;
-  totalExpense: number;
-  items: { qty: number; orsi: string; desc: string; subTotal: number }[];
-  ay: string;
-  term: string;
-}) {
-  await requireTabAccess('tab-audit');
-  const officerName = await getActionUser();
-  const orgId = await getOrgId(department);
-  const auditId = `AUD-${formatDate(new Date())}`;
-  const variance = data.budgetRequested - data.totalExpense;
-  const cashReturn = variance > 0 ? variance : 0;
-  const reimbursement = variance < 0 ? Math.abs(variance) : 0;
-  const caRef = data.advanceId || "Direct Expense (No CA)";
+export async function verifyOtp(
+  department: string,
+  email: string,
+  submittedOtp: string
+) {
+  const cleanDepartment =
+    normalizeDepartment(
+      department
+    );
 
-  await prisma.audit.create({
-    data: {
-      organizationId: orgId,
-      auditId,
-      academicYear: data.ay,
-      term: data.term,
-      date: new Date(data.date),
-      referenceCaId: caRef,
-      requestor: data.requestor,
-      fundSource: data.fundSource,
-      budgetRequested: data.budgetRequested,
-      totalExpense: data.totalExpense,
-      varianceReturn: cashReturn,
-      reimbursementDue: reimbursement,
-      status: "Audited & Verified",
-      encodedBy: officerName
-    }
-  });
+  const cleanEmail =
+    String(
+      email || ""
+    )
+      .trim()
+      .toLowerCase();
 
-  for (const item of data.items) {
-    await prisma.expenseItem.create({
-      data: {
-        organizationId: orgId,
-        auditId,
-        orSiNumber: item.orsi || null,
-        qty: item.qty,
-        description: item.desc,
-        subTotal: item.subTotal
+  const cleanOtp =
+    String(
+      submittedOtp || ""
+    ).trim();
+
+  if (!/^\d{6}$/.test(cleanOtp)) {
+    throw new Error(
+      "Verification code must be exactly 6 digits."
+    );
+  }
+
+  const cookieStore =
+    await cookies();
+
+  const otpCookie =
+    cookieStore.get(
+      "fcu_otp_hash"
+    );
+
+  const emailCookie =
+    cookieStore.get(
+      "fcu_otp_email"
+    );
+
+  const departmentCookie =
+    cookieStore.get(
+      "fcu_otp_department"
+    );
+
+  const strikesCookie =
+    cookieStore.get(
+      "fcu_otp_strikes"
+    );
+
+  if (
+    !otpCookie ||
+    !emailCookie ||
+    !departmentCookie
+  ) {
+    throw new Error(
+      "Verification session expired. Please request a new code."
+    );
+  }
+
+  if (
+    emailCookie.value !==
+    cleanEmail
+  ) {
+    throw new Error(
+      "Email mismatch. Please request a new code."
+    );
+  }
+
+  if (
+    departmentCookie.value !==
+    cleanDepartment
+  ) {
+    throw new Error(
+      "Department mismatch. Please request a new verification code."
+    );
+  }
+
+  let currentStrikes =
+    strikesCookie
+      ? Number.parseInt(
+          strikesCookie.value,
+          10
+        )
+      : 0;
+
+  if (
+    !Number.isFinite(
+      currentStrikes
+    )
+  ) {
+    currentStrikes = 0;
+  }
+
+  if (currentStrikes >= 5) {
+    const lockoutUntil =
+      Date.now() +
+      10 * 60 * 1000;
+
+    cookieStore.set(
+      "fcu_lockout",
+      lockoutUntil.toString(),
+      {
+        httpOnly: true,
+        secure:
+          process.env.NODE_ENV ===
+          "production",
+        sameSite: "lax",
+        path: "/",
+        maxAge: 600,
       }
-    });
+    );
+
+    throw new Error(
+      "Maximum verification attempts exceeded. Account locked for 10 minutes."
+    );
   }
 
-  if (data.advanceId) {
-    await prisma.cashAdvance.updateMany({
-      where: { organizationId: orgId, advanceId: data.advanceId },
-      data: { status: "Liquidated" }
-    });
+  const [
+    storedHash,
+    expiryStr,
+  ] =
+    otpCookie.value.split(
+      ":"
+    );
+
+  const expiresAt =
+    Number.parseInt(
+      expiryStr,
+      10
+    );
+
+  if (
+    !storedHash ||
+    !Number.isFinite(
+      expiresAt
+    )
+  ) {
+    throw new Error(
+      "Invalid verification session. Please request a new code."
+    );
   }
 
-  await logSystemAction(orgId, officerName, "RECORD_LIQUIDATION", `Verified liquidation [${auditId}] for ${data.requestor} totaling ₱${data.totalExpense}.`);
+  if (
+    Date.now() >
+    expiresAt
+  ) {
+    cookieStore.delete(
+      "fcu_otp_hash"
+    );
+    cookieStore.delete(
+      "fcu_otp_email"
+    );
+    cookieStore.delete(
+      "fcu_otp_department"
+    );
+    cookieStore.delete(
+      "fcu_otp_strikes"
+    );
 
-  revalidatePath(`/department/${department}/liquidations`);
-  revalidatePath(`/department/${department}`);
-}
+    throw new Error(
+      "Verification code has expired. Please request a new one."
+    );
+  }
 
-export async function transferFunds(department: string, data: {
-  fromFund: string;
-  toFund: string;
-  amount: number;
-  reason: string;
-  ay: string;
-  term: string;
-}) {
-  await requireTabAccess('tab-transfer');
-  const officerName = await getActionUser();
-  const orgId = await getOrgId(department);
+  const submittedHash =
+    crypto
+      .createHash(
+        "sha256"
+      )
+      .update(cleanOtp)
+      .digest("hex");
 
-  await prisma.fundTransfer.create({
-    data: {
-      organizationId: orgId,
-      academicYear: data.ay,
-      term: data.term,
-      sourceFund: data.fromFund,
-      destinationFund: data.toFund,
-      amount: data.amount,
-      reason: data.reason,
-      encodedBy: officerName
+  const storedBuffer =
+    Buffer.from(
+      storedHash,
+      "utf8"
+    );
+
+  const submittedBuffer =
+    Buffer.from(
+      submittedHash,
+      "utf8"
+    );
+
+  let valid = false;
+
+  if (
+    storedBuffer.length ===
+    submittedBuffer.length
+  ) {
+    valid =
+      crypto.timingSafeEqual(
+        storedBuffer,
+        submittedBuffer
+      );
+  }
+
+  if (!valid) {
+    currentStrikes += 1;
+
+    cookieStore.set(
+      "fcu_otp_strikes",
+      currentStrikes.toString(),
+      {
+        httpOnly: true,
+        secure:
+          process.env.NODE_ENV ===
+          "production",
+        sameSite: "lax",
+        path: "/",
+        maxAge: 300,
+      }
+    );
+
+    if (
+      currentStrikes >=
+      5
+    ) {
+      const lockoutUntil =
+        Date.now() +
+        10 * 60 * 1000;
+
+      cookieStore.set(
+        "fcu_lockout",
+        lockoutUntil.toString(),
+        {
+          httpOnly: true,
+          secure:
+            process.env.NODE_ENV ===
+            "production",
+          sameSite: "lax",
+          path: "/",
+          maxAge: 600,
+        }
+      );
+
+      throw new Error(
+        "Maximum verification attempts exceeded. Account locked for 10 minutes."
+      );
     }
-  });
 
-  await logSystemAction(orgId, officerName, "TRANSFER_FUNDS", `Realigned ₱${data.amount} from ${data.fromFund} to ${data.toFund}.`);
-  revalidatePath(`/department/${department}/realign`);
-  revalidatePath(`/department/${department}`);
-}
+    throw new Error(
+      `Invalid verification code. ${
+        5 - currentStrikes
+      } attempt(s) remaining.`
+    );
+  }
 
-export async function carryOverTermBalance(department: string, data: {
-  sourceAY: string;
-  sourceTerm: string;
-  destAY: string;
-  destTerm: string;
-  amount: number;
-  reason: string;
-}) {
-  await requireTabAccess('tab-transfer');
-  const officerName = await getActionUser();
-  const orgId = await getOrgId(department);
+  // Still pre-authentication.
+  const orgId =
+    await resolveOrganizationId(
+      cleanDepartment
+    );
 
-  await prisma.fundTransfer.create({
-    data: {
-      organizationId: orgId,
-      academicYear: data.destAY,
-      term: data.destTerm,
-      sourceFund: `${data.sourceTerm} (${data.sourceAY}) Rollover`,
-      destinationFund: "General Fund (Carried Over)",
-      amount: data.amount,
-      reason: data.reason,
-      encodedBy: officerName
+  const user =
+    await prisma.tenantUser.findFirst({
+      where: {
+        organizationId:
+          orgId,
+        email:
+          cleanEmail,
+      },
+    });
+
+  if (!user) {
+    throw new Error(
+      "User record not found."
+    );
+  }
+
+  if (user.status !== "Active") {
+    throw new Error(
+      "This account is currently inactive."
+    );
+  }
+
+  cookieStore.delete(
+    "fcu_otp_hash"
+  );
+  cookieStore.delete(
+    "fcu_otp_email"
+  );
+  cookieStore.delete(
+    "fcu_otp_department"
+  );
+  cookieStore.delete(
+    "fcu_otp_strikes"
+  );
+  cookieStore.delete(
+    "fcu_lockout"
+  );
+
+  // Preserved because your existing application uses it.
+  cookieStore.set(
+    "fcu_session",
+    user.id,
+    {
+      httpOnly: true,
+      secure:
+        process.env.NODE_ENV ===
+        "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 86400,
     }
-  });
+  );
 
-  await logSystemAction(orgId, officerName, "CARRY_OVER", `Carried over ₱${data.amount} from ${data.sourceTerm} into ${data.destTerm} General Fund.`);
-  revalidatePath(`/department/${department}/realign`);
-  revalidatePath(`/department/${department}`);
-}
-
-export async function submitRemittanceBatch(department: string, data: {
-  collectionIds: string[];
-  depositSlipOr: string;
-  remitDate: string;
-  depositedBy: string;
-  remarks: string;
-  ay: string;
-  term: string;
-}) {
-  await requireTabAccess('tab-remittances');
-  const officerName = await getActionUser();
-  const orgId = await getOrgId(department);
-
-  await prisma.collection.updateMany({
-    where: {
-      organizationId: orgId,
-      id: { in: data.collectionIds }
+  return {
+    success: true,
+    user: {
+      id: user.id,
+      fullName: user.fullName,
+      email: user.email,
+      role: user.role,
+      allowedTabs:
+        parseAllowedTabs(
+          user.allowedTabs
+        ),
     },
-    data: {
-      status: `Remitted (Slip #${data.depositSlipOr})`
+  };
+}
+
+// =========================================================================
+// ONLINE REMITTANCE
+// =========================================================================
+
+export async function invalidateOnlineRemittance(
+  department: string,
+  remittanceId: string
+) {
+  await requireTabAccess(
+    "tab-remittances"
+  );
+
+  const officerName =
+    await getActionUser();
+
+  const orgId =
+    await getOrgId(department);
+
+  const remittance =
+    await prisma.onlineRemittance.findFirst(
+      {
+        where: {
+          id: remittanceId,
+          organizationId: orgId,
+        },
+      }
+    );
+
+  if (!remittance) {
+    throw new Error(
+      "Online remittance record not found."
+    );
+  }
+
+  const status =
+    String(
+      remittance.status || ""
+    ).toUpperCase();
+
+  if (
+    status === "VERIFIED"
+  ) {
+    throw new Error(
+      "A verified remittance cannot be invalidated from the pending queue."
+    );
+  }
+
+  await prisma.onlineRemittance.deleteMany(
+    {
+      where: {
+        id: remittance.id,
+        organizationId:
+          orgId,
+      },
     }
-  });
+  );
 
-  await logSystemAction(orgId, officerName, "SUBMIT_REMITTANCE_BATCH", `Marked ${data.collectionIds.length} collections as remitted (Slip: ${data.depositSlipOr}).`);
-  revalidatePath(`/department/${department}/remittances`);
-  revalidatePath(`/department/${department}/collections`);
-  revalidatePath(`/department/${department}`);
+  await logSystemAction(
+    orgId,
+    officerName,
+    "INVALIDATE_REMITTANCE",
+    `Invalidated remittance [Ref: ${remittance.referenceNumber}] from ${remittance.studentName}.`
+  );
+
+  revalidatePath(
+    `/department/${department}/remittances`
+  );
+
+  return {
+    success: true,
+    message:
+      "Remittance submission marked as invalid and removed from queue.",
+  };
 }
 
-export async function verifyOnlineRemittance(department: string, data: {
-  remittanceId: string;
-  orNumber: string;
-  studentId: string;
-  studentName: string;
-  particulars: string;
-  amount: number;
-  ay: string;
-  term: string;
-}) {
-  await requireTabAccess('tab-remittances');
-  const officerName = await getActionUser();
-  const orgId = await getOrgId(department);
+export async function verifyOnlineRemittance(
+  department: string,
+  data: {
+    remittanceId: string;
+    orNumber: string;
+    studentId: string;
+    studentName: string;
+    particulars: string;
+    amount: number;
+    ay: string;
+    term: string;
+  }
+) {
+  await requireTabAccess(
+    "tab-remittances"
+  );
 
-  await prisma.onlineRemittance.update({
-    where: { id: data.remittanceId, organizationId: orgId },
-    data: { status: 'Verified', reviewedBy: officerName, orNumber: data.orNumber }
-  });
+  const officerName =
+    await getActionUser();
 
-  await prisma.collection.create({
-    data: {
-      organizationId: orgId,
-      academicYear: data.ay,
-      term: data.term,
-      date: new Date(),
-      studentId: data.studentId,
-      studentName: data.studentName,
-      orNumber: data.orNumber,
-      category: 'Online Remittance',
-      itemDescription: data.particulars,
-      paymentType: 'Full Payment',
-      standardRate: data.amount,
-      amountPaid: data.amount,
-      balanceDue: 0,
-      fundAllocation: 'New Accounts (Current Operations)',
-      status: 'Valid',
-      encodedBy: officerName
+  const orgId =
+    await getOrgId(department);
+
+  const orNumber =
+    String(
+      data.orNumber || ""
+    ).trim();
+
+  if (!orNumber) {
+    throw new Error(
+      "OR number is required."
+    );
+  }
+
+  await prisma.$transaction(
+    async (tx) => {
+      const remittance =
+        await tx.onlineRemittance.findFirst(
+          {
+            where: {
+              id:
+                data.remittanceId,
+              organizationId:
+                orgId,
+            },
+          }
+        );
+
+      if (!remittance) {
+        throw new Error(
+          "Online remittance record not found."
+        );
+      }
+
+      const currentStatus =
+        String(
+          remittance.status ||
+            ""
+        ).toUpperCase();
+
+      if (
+        currentStatus ===
+        "VERIFIED"
+      ) {
+        throw new Error(
+          "This remittance has already been verified."
+        );
+      }
+
+      const amount =
+        Math.max(
+          0,
+          Number(
+            remittance.amountPaid
+          ) || 0
+        );
+
+      if (amount <= 0) {
+        throw new Error(
+          "The remittance contains an invalid amount."
+        );
+      }
+
+      // Collection.studentId is FK -> Student.id.
+      const studentDbId =
+        remittance.studentId
+          ? String(
+              remittance.studentId
+            ).trim()
+          : null;
+
+      if (studentDbId) {
+        const student =
+          await tx.student.findFirst(
+            {
+              where: {
+                id:
+                  studentDbId,
+                organizationId:
+                  orgId,
+              },
+              select: {
+                id: true,
+              },
+            }
+          );
+
+        if (!student) {
+          throw new Error(
+            "The remittance student does not belong to this department."
+          );
+        }
+      }
+
+      await tx.onlineRemittance.update(
+        {
+          where: {
+            id:
+              remittance.id,
+          },
+          data: {
+            status:
+              "Verified",
+            reviewedBy:
+              officerName,
+            orNumber,
+          },
+        }
+      );
+
+      await tx.collection.create(
+        {
+          data: {
+            organizationId:
+              orgId,
+            academicYear:
+              remittance.academicYear,
+            term:
+              remittance.term,
+            date:
+              new Date(),
+            studentId:
+              studentDbId,
+            studentName:
+              remittance.studentName,
+            orNumber,
+            category:
+              remittance.category ||
+              "Online Remittance",
+            itemDescription:
+              remittance.itemDescription,
+            paymentType:
+              "Full Payment",
+            standardRate:
+              amount,
+            amountPaid:
+              amount,
+            balanceDue:
+              0,
+            fundAllocation:
+              "New Accounts (Current Operations)",
+            status:
+              "Valid",
+            encodedBy:
+              officerName,
+          },
+        }
+      );
     }
-  });
+  );
 
-  await logSystemAction(orgId, officerName, "VERIFY_REMITTANCE", `Verified online remittance for ${data.studentName} and issued OR: ${data.orNumber}.`);
-  revalidatePath(`/department/${department}/remittances`);
-  revalidatePath(`/department/${department}/collections`);
-  revalidatePath(`/department/${department}/clearance`);
-  revalidatePath(`/department/${department}`);
+  await logSystemAction(
+    orgId,
+    officerName,
+    "VERIFY_REMITTANCE",
+    `Verified online remittance for remittance [${data.remittanceId}] and issued OR: ${orNumber}.`
+  );
+
+  revalidatePath(
+    `/department/${department}/remittances`
+  );
+  revalidatePath(
+    `/department/${department}/collections`
+  );
+  revalidatePath(
+    `/department/${department}/clearance`
+  );
+  revalidatePath(
+    `/department/${department}`
+  );
 }
 
-export async function submitOnlineRemittance(department: string, data: {
-  studentId: string;
-  studentName: string;
-  email: string;
-  paymentChannel: string;
-  referenceNo: string;
-  particulars: string;
-  amount: number;
-  proofBase64: string | null;
-  ay: string;
-  term: string;
-}) {
-  const orgId = await getOrgId(department);
-  const submissionId = `SUB-${formatDate(new Date())}-${Math.floor(Math.random() * 1000)}`;
+export async function submitOnlineRemittance(
+  department: string,
+  data: {
+    studentId: string;
+    studentName: string;
+    email: string;
+    paymentChannel: string;
+    referenceNo: string;
+    particulars: string;
+    amount: number;
+    proofBase64: string | null;
+    ay: string;
+    term: string;
+  }
+) {
+  // PUBLIC:
+  // Do not use getOrgId().
+  const orgId =
+    await resolveOrganizationId(
+      department
+    );
 
-  await prisma.onlineRemittance.create({
-    data: {
-      organizationId: orgId,
-      submissionId,
-      academicYear: data.ay,
-      term: data.term,
-      studentId: data.studentId,
-      studentName: data.studentName,
-      paymentChannel: data.paymentChannel,
-      referenceNumber: data.referenceNo,
-      category: "Online Remittance", 
-      itemDescription: `${data.particulars} (${data.email})`,
-      paymentMode: "Online",
-      amountPaid: data.amount,
-      proofUrl: data.proofBase64,
-      status: 'Pending Verification'
+  const cleanEmail =
+    String(
+      data.email || ""
+    )
+      .trim()
+      .toLowerCase();
+
+  if (
+    !cleanEmail ||
+    !cleanEmail.includes("@")
+  ) {
+    throw new Error(
+      "Please provide a valid email address."
+    );
+  }
+
+  const amount =
+    money(
+      data.amount,
+      "Online remittance amount"
+    );
+
+  if (amount <= 0) {
+    throw new Error(
+      "Amount must be greater than zero."
+    );
+  }
+
+  const submissionId =
+    generateReference("SUB");
+
+  await prisma.onlineRemittance.create(
+    {
+      data: {
+        organizationId:
+          orgId,
+        submissionId,
+        academicYear:
+          data.ay,
+        term:
+          data.term,
+        studentId:
+          String(
+            data.studentId || ""
+          ).trim() || null,
+        studentName:
+          String(
+            data.studentName || ""
+          ).trim(),
+        studentEmail:
+          cleanEmail,
+        paymentChannel:
+          String(
+            data.paymentChannel ||
+              ""
+          ).trim(),
+        referenceNumber:
+          String(
+            data.referenceNo || ""
+          ).trim(),
+        category:
+          "Online Remittance",
+        itemDescription:
+          String(
+            data.particulars ||
+              ""
+          ).trim(),
+        paymentMode:
+          "Online",
+        amountPaid:
+          amount,
+        proofUrl:
+          data.proofBase64 ||
+          null,
+        status:
+          "Pending Verification",
+      },
     }
-  });
+  );
 
-  await logSystemAction(orgId, "Public Submission", "SUBMIT_REMITTANCE", `Received ₱${data.amount} online payment proof from ${data.studentName} via ${data.paymentChannel}.`);
-  revalidatePath(`/department/${department}/remittances`);
-  revalidatePath(`/department/${department}/clearance`);
+  await logSystemAction(
+    orgId,
+    "Public Submission",
+    "SUBMIT_REMITTANCE",
+    `Received ₱${amount.toFixed(
+      2
+    )} online payment proof from ${data.studentName} via ${data.paymentChannel}.`
+  );
+
+  revalidatePath(
+    `/department/${department}/remittances`
+  );
+  revalidatePath(
+    `/department/${department}/clearance`
+  );
 }
 
-export async function submitOnlineRemittanceDirect(department: string, payload: {
-  studentId: string;
-  studentName: string;
-  email: string;
-  channel: string;
-  referenceNo: string;
-  collectionType: string;
-  paymentMode: string;
-  amount: number;
-  proofBase64: string;
-  ay: string;
-  term: string;
-}) {
-  return submitOnlineRemittance(department, {
-    studentId: payload.studentId,
-    studentName: payload.studentName,
-    email: payload.email,
-    paymentChannel: payload.channel,
-    referenceNo: payload.referenceNo,
-    particulars: payload.collectionType,
-    amount: payload.amount,
-    proofBase64: payload.proofBase64,
-    ay: payload.ay,
-    term: payload.term
-  });
+export async function submitOnlineRemittanceDirect(
+  department: string,
+  payload: {
+    studentId: string;
+    studentName: string;
+    email: string;
+    channel: string;
+    referenceNo: string;
+    collectionType: string;
+    paymentMode: string;
+    amount: number;
+    proofBase64: string;
+    ay: string;
+    term: string;
+  }
+) {
+  return submitOnlineRemittance(
+    department,
+    {
+      studentId:
+        payload.studentId,
+      studentName:
+        payload.studentName,
+      email:
+        payload.email,
+      paymentChannel:
+        payload.channel,
+      referenceNo:
+        payload.referenceNo,
+      particulars:
+        payload.collectionType,
+      amount:
+        payload.amount,
+      proofBase64:
+        payload.proofBase64,
+      ay:
+        payload.ay,
+      term:
+        payload.term,
+    }
+  );
 }
 
-export async function upsertStudent(department: string, data: {
-  studentId: string;
-  fullName: string;
-  email: string;
-}) {
-  await requireTabAccess('tab-students');
-  const officerName = await getActionUser();
-  const orgId = await getOrgId(department);
-  const cleanStudentId = data.studentId.trim();
+// =========================================================================
+// REMITTANCE BATCH
+// =========================================================================
 
-  const existing = await prisma.student.findFirst({
-    where: { organizationId: orgId, studentId: cleanStudentId }
-  });
+export async function submitRemittanceBatch(
+  department: string,
+  data: {
+    collectionIds: string[];
+    depositSlipOr: string;
+    remitDate: string;
+    depositedBy: string;
+    remarks: string;
+    ay: string;
+    term: string;
+  }
+) {
+  await requireTabAccess(
+    "tab-remittances"
+  );
+
+  const officerName =
+    await getActionUser();
+
+  const orgId =
+    await getOrgId(department);
+
+  if (
+    !Array.isArray(
+      data.collectionIds
+    ) ||
+    data.collectionIds.length === 0
+  ) {
+    throw new Error(
+      "No collection records were selected."
+    );
+  }
+
+  const depositSlipOr =
+    String(
+      data.depositSlipOr || ""
+    ).trim();
+
+  if (!depositSlipOr) {
+    throw new Error(
+      "Deposit slip / OR number is required."
+    );
+  }
+
+  parseDate(
+    data.remitDate,
+    "remittance date"
+  );
+
+  const collections =
+    await prisma.collection.findMany(
+      {
+        where: {
+          organizationId:
+            orgId,
+          academicYear:
+            data.ay,
+          term:
+            data.term,
+          id: {
+            in:
+              data.collectionIds,
+          },
+        },
+        select: {
+          id: true,
+          status: true,
+        },
+      }
+    );
+
+  if (
+    collections.length !==
+    data.collectionIds.length
+  ) {
+    throw new Error(
+      "One or more selected collection records are invalid or belong to another accounting period."
+    );
+  }
+
+  const alreadyRemitted =
+    collections.some(
+      (row) =>
+        String(
+          row.status || ""
+        )
+          .toUpperCase()
+          .includes("REMITTED")
+    );
+
+  if (alreadyRemitted) {
+    throw new Error(
+      "One or more selected collections have already been remitted."
+    );
+  }
+
+  await prisma.collection.updateMany(
+    {
+      where: {
+        organizationId:
+          orgId,
+        academicYear:
+          data.ay,
+        term:
+          data.term,
+        id: {
+          in:
+            data.collectionIds,
+        },
+      },
+      data: {
+        status: `Remitted (Slip #${depositSlipOr})`,
+      },
+    }
+  );
+
+  await logSystemAction(
+    orgId,
+    officerName,
+    "SUBMIT_REMITTANCE_BATCH",
+    `Marked ${data.collectionIds.length} collections as remitted (Slip: ${depositSlipOr}).`
+  );
+
+  revalidatePath(
+    `/department/${department}/remittances`
+  );
+  revalidatePath(
+    `/department/${department}/collections`
+  );
+  revalidatePath(
+    `/department/${department}`
+  );
+}
+
+// =========================================================================
+// STUDENTS
+// =========================================================================
+
+export async function upsertStudent(
+  department: string,
+  data: {
+    studentId: string;
+    fullName: string;
+    email: string;
+  }
+) {
+  await requireTabAccess(
+    "tab-students"
+  );
+
+  const officerName =
+    await getActionUser();
+
+  const orgId =
+    await getOrgId(department);
+
+  const cleanStudentId =
+    String(
+      data.studentId || ""
+    ).trim();
+
+  const cleanFullName =
+    String(
+      data.fullName || ""
+    ).trim();
+
+  const cleanEmail =
+    String(
+      data.email || ""
+    ).trim();
+
+  if (!cleanStudentId) {
+    throw new Error(
+      "Student ID is required."
+    );
+  }
+
+  if (!cleanFullName) {
+    throw new Error(
+      "Student name is required."
+    );
+  }
+
+  const existing =
+    await prisma.student.findFirst(
+      {
+        where: {
+          organizationId:
+            orgId,
+          studentId:
+            cleanStudentId,
+        },
+      }
+    );
 
   if (existing) {
     await prisma.student.update({
-      where: { id: existing.id },
+      where: {
+        id:
+          existing.id,
+      },
       data: {
-        fullName: data.fullName.trim(),
-        email: data.email.trim() || null,
+        fullName:
+          cleanFullName,
+        email:
+          cleanEmail || null,
       },
     });
   } else {
     await prisma.student.create({
       data: {
-        organizationId: orgId,
-        studentId: cleanStudentId,
-        fullName: data.fullName.trim(),
-        email: data.email.trim() || null,
-        yearLevel: "N/A", 
+        organizationId:
+          orgId,
+        studentId:
+          cleanStudentId,
+        fullName:
+          cleanFullName,
+        email:
+          cleanEmail || null,
+        yearLevel:
+          "N/A",
       },
     });
   }
 
-  await logSystemAction(orgId, officerName, existing ? "UPDATE_STUDENT" : "ADD_STUDENT", `${existing ? 'Modified' : 'Registered'} profile for ${data.fullName} (${cleanStudentId}).`);
-  revalidatePath(`/department/${department}/students`);
-  revalidatePath(`/department/${department}/clearance`);
+  await logSystemAction(
+    orgId,
+    officerName,
+    existing
+      ? "UPDATE_STUDENT"
+      : "ADD_STUDENT",
+    `${
+      existing
+        ? "Modified"
+        : "Registered"
+    } profile for ${cleanFullName} (${cleanStudentId}).`
+  );
+
+  revalidatePath(
+    `/department/${department}/students`
+  );
+  revalidatePath(
+    `/department/${department}/clearance`
+  );
 }
 
-export async function deleteStudent(department: string, studentId: string) {
-  await requireTabAccess('tab-students');
-  const officerName = await getActionUser();
-  const orgId = await getOrgId(department);
-  
-  const existing = await prisma.student.findFirst({
-    where: { organizationId: orgId, studentId: studentId.trim() }
-  });
+export async function deleteStudent(
+  department: string,
+  studentId: string
+) {
+  await requireTabAccess(
+    "tab-students"
+  );
+
+  const officerName =
+    await getActionUser();
+
+  const orgId =
+    await getOrgId(department);
+
+  const cleanStudentId =
+    String(
+      studentId || ""
+    ).trim();
+
+  if (!cleanStudentId) {
+    throw new Error(
+      "Student ID is required."
+    );
+  }
+
+  const existing =
+    await prisma.student.findFirst(
+      {
+        where: {
+          organizationId:
+            orgId,
+          studentId:
+            cleanStudentId,
+        },
+      }
+    );
 
   if (existing) {
     await prisma.student.delete({
-      where: { id: existing.id }
+      where: {
+        id:
+          existing.id,
+      },
     });
-    
-    await logSystemAction(orgId, officerName, "DELETE_STUDENT", `Permanently removed student record for ${existing.fullName} (${existing.studentId}).`);
+
+    await logSystemAction(
+      orgId,
+      officerName,
+      "DELETE_STUDENT",
+      `Permanently removed student record for ${existing.fullName} (${existing.studentId}).`
+    );
   }
 
-  revalidatePath(`/department/${department}/students`);
-  revalidatePath(`/department/${department}/clearance`);
+  revalidatePath(
+    `/department/${department}/students`
+  );
+  revalidatePath(
+    `/department/${department}/clearance`
+  );
 }
 
-export async function settlePenaltyCommunityService(department: string, data: {
-  penaltyId: string;
-  hoursRendered: number;
-  ay: string;
-  term: string;
-}) {
-  await requireTabAccess('tab-penalties');
-  const officerName = await getActionUser();
-  const orgId = await getOrgId(department);
+// =========================================================================
+// AUDIT / LIQUIDATION
+// =========================================================================
 
-  // FIXED: Changed .findUnique() to .findFirst()
-  const targetPen = await prisma.penalty.findFirst({
-    where: { penaltyId: data.penaltyId, organizationId: orgId }
-  });
+export async function recordAudit(
+  department: string,
+  data: {
+    date: string;
+    advanceId: string;
+    requestor: string;
+    fundSource: string;
+    budgetRequested: number;
+    totalExpense: number;
+    items: {
+      qty: number;
+      orsi: string;
+      desc: string;
+      subTotal: number;
+    }[];
+    ay: string;
+    term: string;
+  }
+) {
+  await requireTabAccess(
+    "tab-audit"
+  );
 
-  if (!targetPen) throw new Error("Penalty record not found.");
+  const officerName =
+    await getActionUser();
 
-  const rate = targetPen.ratePerHour || 50.00;
-  const deductionPesos = Math.round(data.hoursRendered * rate * 100) / 100;
-  const remainingFine = Math.max(0, Math.round((targetPen.fineAmount - deductionPesos) * 100) / 100);
+  const orgId =
+    await getOrgId(department);
 
-  const newStatus = remainingFine === 0 
-    ? `Settled (Community Service - ${data.hoursRendered} hrs rendered)`
-    : `Partially Served (${data.hoursRendered} hrs served, ₱${deductionPesos.toFixed(2)} deducted)`;
+  const date =
+    parseDate(
+      data.date,
+      "audit date"
+    );
 
-  await prisma.penalty.update({
-    where: { id: targetPen.id },
-    data: {
-      fineAmount: remainingFine,
-      status: newStatus
+  const budgetRequested =
+    money(
+      data.budgetRequested,
+      "Budget requested"
+    );
+
+  const totalExpense =
+    money(
+      data.totalExpense,
+      "Total expense"
+    );
+
+  if (totalExpense <= 0) {
+    throw new Error(
+      "Total expense must be greater than zero."
+    );
+  }
+
+  if (
+    !Array.isArray(
+      data.items
+    )
+  ) {
+    throw new Error(
+      "Expense items are invalid."
+    );
+  }
+
+  let itemTotal = 0;
+
+  for (const item of data.items) {
+    const qty =
+      Number(item.qty);
+
+    const subTotal =
+      money(
+        item.subTotal,
+        "Expense subtotal"
+      );
+
+    if (
+      !Number.isInteger(
+        qty
+      ) ||
+      qty <= 0
+    ) {
+      throw new Error(
+        "Expense quantity must be a positive whole number."
+      );
     }
-  });
 
-  await logSystemAction(orgId, officerName, "SETTLE_PENALTY_SERVICE", `Applied ${data.hoursRendered} hrs community service to penalty [${data.penaltyId}]. Status: ${newStatus}`);
-  revalidatePath(`/department/${department}/penalties`);
-  revalidatePath(`/department/${department}`);
+    itemTotal +=
+      subTotal;
+  }
+
+  itemTotal =
+    Math.round(
+      itemTotal * 100
+    ) / 100;
+
+  if (
+    Math.abs(
+      itemTotal -
+        totalExpense
+    ) > 0.01
+  ) {
+    throw new Error(
+      `Expense item total ₱${itemTotal.toFixed(
+        2
+      )} does not match total expense ₱${totalExpense.toFixed(
+        2
+      )}.`
+    );
+  }
+
+  const auditId =
+    generateReference("AUD");
+
+  const variance =
+    Math.round(
+      (budgetRequested -
+        totalExpense) *
+        100
+    ) / 100;
+
+  const cashReturn =
+    variance > 0
+      ? variance
+      : 0;
+
+  const reimbursement =
+    variance < 0
+      ? Math.abs(variance)
+      : 0;
+
+  const caRef =
+    data.advanceId ||
+    "Direct Expense (No CA)";
+
+  await prisma.$transaction(
+    async (tx) => {
+      if (data.advanceId) {
+        const advance =
+          await tx.cashAdvance.findFirst(
+            {
+              where: {
+                organizationId:
+                  orgId,
+                advanceId:
+                  data.advanceId,
+              },
+            }
+          );
+
+        if (!advance) {
+          throw new Error(
+            "Cash advance record not found."
+          );
+        }
+
+        const status =
+          String(
+            advance.status ||
+              ""
+          ).toUpperCase();
+
+        if (
+          status.includes(
+            "LIQUIDATED"
+          )
+        ) {
+          throw new Error(
+            "This cash advance has already been liquidated."
+          );
+        }
+      }
+
+      await tx.audit.create({
+        data: {
+          organizationId:
+            orgId,
+          auditId,
+          academicYear:
+            data.ay,
+          term:
+            data.term,
+          date,
+          referenceCaId:
+            caRef,
+          requestor:
+            String(
+              data.requestor ||
+                ""
+            ).trim(),
+          fundSource:
+            String(
+              data.fundSource ||
+                ""
+            ).trim(),
+          budgetRequested,
+          totalExpense,
+          varianceReturn:
+            cashReturn,
+          reimbursementDue:
+            reimbursement,
+          status:
+            "Audited & Verified",
+          encodedBy:
+            officerName,
+        },
+      });
+
+      for (const item of data.items) {
+        await tx.expenseItem.create({
+          data: {
+            organizationId:
+              orgId,
+            auditId,
+            orSiNumber:
+              String(
+                item.orsi || ""
+              ).trim() ||
+              null,
+            qty: Number(
+              item.qty
+            ),
+            description:
+              String(
+                item.desc ||
+                  ""
+              ).trim(),
+            subTotal:
+              money(
+                item.subTotal,
+                "Expense subtotal"
+              ),
+          },
+        });
+      }
+
+      if (data.advanceId) {
+        const advance =
+          await tx.cashAdvance.findFirst(
+            {
+              where: {
+                organizationId:
+                  orgId,
+                advanceId:
+                  data.advanceId,
+              },
+            }
+          );
+
+        if (!advance) {
+          throw new Error(
+            "Cash advance record not found."
+          );
+        }
+
+        await tx.cashAdvance.update(
+          {
+            where: {
+              id:
+                advance.id,
+            },
+            data: {
+              status:
+                "Liquidated",
+            },
+          }
+        );
+      }
+    }
+  );
+
+  await logSystemAction(
+    orgId,
+    officerName,
+    "RECORD_LIQUIDATION",
+    `Verified liquidation [${auditId}] for ${data.requestor} totaling ₱${totalExpense.toFixed(
+      2
+    )}.`
+  );
+
+  revalidatePath(
+    `/department/${department}/liquidations`
+  );
+  revalidatePath(
+    `/department/${department}`
+  );
 }
 
-export async function updateMyEmail(department: string, newEmail: string) {
+// =========================================================================
+// FUND TRANSFERS
+// =========================================================================
+
+export async function transferFunds(
+  department: string,
+  data: {
+    fromFund: string;
+    toFund: string;
+    amount: number;
+    reason: string;
+    ay: string;
+    term: string;
+  }
+) {
+  await requireTabAccess(
+    "tab-transfer"
+  );
+
+  const officerName =
+    await getActionUser();
+
+  const orgId =
+    await getOrgId(department);
+
+  const fromFund =
+    String(
+      data.fromFund || ""
+    ).trim();
+
+  const toFund =
+    String(
+      data.toFund || ""
+    ).trim();
+
+  const amount =
+    money(
+      data.amount,
+      "Transfer amount"
+    );
+
+  if (!fromFund || !toFund) {
+    throw new Error(
+      "Both source and destination funds are required."
+    );
+  }
+
+  if (
+    fromFund.toLowerCase() ===
+    toFund.toLowerCase()
+  ) {
+    throw new Error(
+      "Source and destination funds must be different."
+    );
+  }
+
+  if (amount <= 0) {
+    throw new Error(
+      "Transfer amount must be greater than zero."
+    );
+  }
+
+  await prisma.fundTransfer.create(
+    {
+      data: {
+        organizationId:
+          orgId,
+        academicYear:
+          data.ay,
+        term:
+          data.term,
+        sourceFund:
+          fromFund,
+        destinationFund:
+          toFund,
+        amount,
+        reason:
+          String(
+            data.reason || ""
+          ).trim(),
+        encodedBy:
+          officerName,
+      },
+    }
+  );
+
+  await logSystemAction(
+    orgId,
+    officerName,
+    "TRANSFER_FUNDS",
+    `Realigned ₱${amount.toFixed(
+      2
+    )} from ${fromFund} to ${toFund}.`
+  );
+
+  revalidatePath(
+    `/department/${department}/realign`
+  );
+  revalidatePath(
+    `/department/${department}`
+  );
+}
+
+export async function carryOverTermBalance(
+  department: string,
+  data: {
+    sourceAY: string;
+    sourceTerm: string;
+    destAY: string;
+    destTerm: string;
+    amount: number;
+    reason: string;
+  }
+) {
+  await requireTabAccess(
+    "tab-transfer"
+  );
+
+  const officerName =
+    await getActionUser();
+
+  const orgId =
+    await getOrgId(department);
+
+  const amount =
+    money(
+      data.amount,
+      "Carry-over amount"
+    );
+
+  if (amount <= 0) {
+    throw new Error(
+      "Carry-over amount must be greater than zero."
+    );
+  }
+
+  if (
+    data.sourceAY ===
+      data.destAY &&
+    data.sourceTerm ===
+      data.destTerm
+  ) {
+    throw new Error(
+      "Source and destination accounting periods must be different."
+    );
+  }
+
+  await prisma.fundTransfer.create(
+    {
+      data: {
+        organizationId:
+          orgId,
+        academicYear:
+          data.destAY,
+        term:
+          data.destTerm,
+        sourceFund: `${String(
+          data.sourceTerm
+        ).trim()} (${String(
+          data.sourceAY
+        ).trim()}) Rollover`,
+        destinationFund:
+          "General Fund (Carried Over)",
+        amount,
+        reason:
+          String(
+            data.reason || ""
+          ).trim(),
+        encodedBy:
+          officerName,
+      },
+    }
+  );
+
+  await logSystemAction(
+    orgId,
+    officerName,
+    "CARRY_OVER",
+    `Carried over ₱${amount.toFixed(
+      2
+    )} from ${data.sourceTerm} into ${data.destTerm} General Fund.`
+  );
+
+  revalidatePath(
+    `/department/${department}/realign`
+  );
+  revalidatePath(
+    `/department/${department}`
+  );
+}
+
+// =========================================================================
+// UPDATE MY EMAIL
+// =========================================================================
+
+export async function updateMyEmail(
+  department: string,
+  newEmail: string
+) {
   const session = await auth();
-  const sessionUser = session?.user as { email?: string } | undefined;
+
+  const sessionUser =
+    session?.user as
+      | {
+          email?: string;
+        }
+      | undefined;
 
   if (!sessionUser?.email) {
-    throw new Error("Unauthorized: No active session found.");
+    throw new Error(
+      "Unauthorized: No active session found."
+    );
   }
 
-  const orgId = await getOrgId(department);
-  const cleanNewEmail = newEmail.trim().toLowerCase();
+  const orgId =
+    await getOrgId(department);
 
-  if (!cleanNewEmail || !cleanNewEmail.includes('@')) {
-    throw new Error("Please provide a valid email address.");
+  const cleanCurrentEmail =
+    sessionUser.email
+      .trim()
+      .toLowerCase();
+
+  const cleanNewEmail =
+    String(
+      newEmail || ""
+    )
+      .trim()
+      .toLowerCase();
+
+  if (
+    !cleanNewEmail ||
+    !cleanNewEmail.includes("@")
+  ) {
+    throw new Error(
+      "Please provide a valid email address."
+    );
   }
 
-  const user = await prisma.tenantUser.findFirst({
-    where: { organizationId: orgId, email: sessionUser.email }
-  });
+  const user =
+    await prisma.tenantUser.findFirst(
+      {
+        where: {
+          organizationId:
+            orgId,
+          email:
+            cleanCurrentEmail,
+        },
+      }
+    );
 
   if (!user) {
-    throw new Error("User record not found in this department.");
+    throw new Error(
+      "User record not found in this department."
+    );
   }
 
-  const existing = await prisma.tenantUser.findFirst({
-    where: { organizationId: orgId, email: cleanNewEmail }
-  });
+  const existing =
+    await prisma.tenantUser.findFirst(
+      {
+        where: {
+          organizationId:
+            orgId,
+          email:
+            cleanNewEmail,
+        },
+      }
+    );
 
-  if (existing && existing.id !== user.id) {
-    throw new Error("This email is already registered by another account.");
+  if (
+    existing &&
+    existing.id !== user.id
+  ) {
+    throw new Error(
+      "This email is already registered by another account."
+    );
   }
 
   await prisma.tenantUser.update({
-    where: { id: user.id },
-    data: { email: cleanNewEmail }
+    where: {
+      id:
+        user.id,
+    },
+    data: {
+      email:
+        cleanNewEmail,
+    },
   });
 
-  revalidatePath(`/department/${department}`);
-  return { success: true, message: "Email updated successfully! Please sign out and sign back in to apply changes fully." };
+  revalidatePath(
+    `/department/${department}`
+  );
+
+  return {
+    success: true,
+    message:
+      "Email updated successfully! Please sign out and sign back in to apply changes fully.",
+  };
 }
 
 // =========================================================================
-// OPTIMIZED FINANCIAL ENGINE: ADAPTIVE TERM & A.Y. DATA FILTERING
+// FINANCIAL ENGINE
 // =========================================================================
-export async function getDepartmentFinancials(organizationId: string, ay: string, term: string) {
-  const [collections, audits, cashAdvances, explicitCollectibles, initialFunds, students, collectionSetups] = await Promise.all([
-    prisma.collection.findMany({ 
-      where: { organizationId, academicYear: ay, term } 
+
+export async function getDepartmentFinancials(
+  organizationId: string,
+  ay: string,
+  term: string
+) {
+  await requireOrganizationAccess(
+    organizationId
+  );
+
+  const [
+    collections,
+    audits,
+    cashAdvances,
+    explicitCollectibles,
+    initialFunds,
+    students,
+    enrollments,
+    collectionSetups,
+    fundTransfers,
+  ] = await Promise.all([
+    prisma.collection.findMany({
+      where: {
+        organizationId,
+        academicYear: ay,
+        term,
+      },
+      include: {
+        student: {
+          select: {
+            id: true,
+            studentId: true,
+            fullName: true,
+          },
+        },
+      },
     }),
-    prisma.audit.findMany({ 
-      where: { organizationId, academicYear: ay, term } 
+
+    prisma.audit.findMany({
+      where: {
+        organizationId,
+        academicYear: ay,
+        term,
+      },
     }),
-    prisma.cashAdvance.findMany({ 
-      where: { organizationId, academicYear: ay, term }, 
-      orderBy: { dateIssued: 'desc' } 
+
+    prisma.cashAdvance.findMany({
+      where: {
+        organizationId,
+        academicYear: ay,
+        term,
+      },
+      orderBy: {
+        dateIssued:
+          "desc",
+      },
     }),
-    prisma.collectible.findMany({ 
-      where: { organizationId, academicYear: ay, term } 
-    }).catch(() => []),
-    prisma.fund.findMany({ 
-      where: { organizationId, academicYear: ay, term } 
+
+    prisma.collectible.findMany({
+      where: {
+        organizationId,
+        academicYear: ay,
+        term,
+      },
     }),
-    prisma.student.findMany({ 
-      where: { organizationId } 
+
+    prisma.fund.findMany({
+      where: {
+        organizationId,
+        academicYear: ay,
+        term,
+      },
     }),
-    prisma.collectionSetup.findMany({ 
-      where: { organizationId, academicYear: ay, term } 
-    }).catch(() => []) 
+
+    prisma.student.findMany({
+      where: {
+        organizationId,
+      },
+    }),
+
+    prisma.enrollment.findMany({
+      where: {
+        organizationId,
+        academicYear: ay,
+        term,
+      },
+      include: {
+        student: {
+          select: {
+            id: true,
+            studentId: true,
+            fullName: true,
+          },
+        },
+      },
+    }),
+
+    prisma.collectionSetup.findMany({
+      where: {
+        organizationId,
+        academicYear: ay,
+        term,
+      },
+    }),
+
+    prisma.fundTransfer.findMany({
+      where: {
+        organizationId,
+        academicYear: ay,
+        term,
+      },
+    }),
   ]);
 
-  const validCollections = collections.filter((c: any) => !String(c.paymentType || '').toUpperCase().includes('VOID'));
-  const validAudits = Array.isArray(audits) ? audits.filter((a: any) => !String(a.status || '').includes('VOID') && !String(a.status || '').includes('CANCEL')) : [];
+  // =========================================================================
+  // VALID COLLECTIONS / AUDITS
+  // =========================================================================
 
-  const legacyTermPackages: Record<string, { total: number; items: { name: string; rate: number; fund: string }[] }> = {
-    "1st Sem": {
-      total: 650.00,
-      items: [
-        { name: "JIECEP FCUSC Membership Fee (Student & Institutional)", rate: 250.00, fund: "JIECEP Membership Fund" },
-        { name: "General Orientation/Acquaintance Party", rate: 200.00, fund: "General Orientation Fund" },
-        { name: "COE FCUSR Activities", rate: 100.00, fund: "FCUSR Activities Fund" },
-        { name: "Sports and Cultural Fund", rate: 100.00, fund: "Sports & Cultural Fund" }
-      ]
-    },
-    "2nd Sem": {
-      total: 900.00,
-      items: [
-        { name: "JIECEP FCUSC Fund", rate: 50.00, fund: "JIECEP FCUSC Fund" },
-        { name: "JIECEP Week Activities (Local & Regional)", rate: 150.00, fund: "JIECEP Week Activities Fund" },
-        { name: "ECE Grand Ball", rate: 650.00, fund: "ECE Grandball Fund" },
-        { name: "Emergency/Calamity Fund", rate: 30.00, fund: "Emergency/Calamity Fund" },
-        { name: "FCUSR Activities & Projects", rate: 20.00, fund: "FCUSR Activities Fund" }
-      ]
-    },
-    "Summer": {
-      total: 200.00,
-      items: [
-        { name: "Summer Departmental Operations", rate: 150.00, fund: "New Accounts (Current Operations)" },
-        { name: "Special Activities Fund", rate: 50.00, fund: "JIECEP Activities Fund" }
-      ]
+  const validCollections =
+    collections.filter(
+      (c: any) =>
+        !isVoidedRecord(c)
+    );
+
+  const validAudits =
+    audits.filter(
+      (a: any) => {
+        const status =
+          String(
+            a.status || ""
+          ).toUpperCase();
+
+        return (
+          !status.includes(
+            "VOID"
+          ) &&
+          !status.includes(
+            "CANCEL"
+          )
+        );
+      }
+    );
+
+  // =========================================================================
+  // LEGACY PACKAGE DEFINITIONS
+  // =========================================================================
+
+  const legacyTermPackages: Record<
+    string,
+    {
+      total: number;
+      items: {
+        name: string;
+        rate: number;
+        fund: string;
+      }[];
     }
+  > = {
+    "1st Sem": {
+      total: 650,
+      items: [
+        {
+          name:
+            "JIECEP FCUSC Membership Fee (Student & Institutional)",
+          rate: 250,
+          fund:
+            "JIECEP Membership Fund",
+        },
+        {
+          name:
+            "General Orientation/Acquaintance Party",
+          rate: 200,
+          fund:
+            "General Orientation Fund",
+        },
+        {
+          name:
+            "COE FCUSR Activities",
+          rate: 100,
+          fund:
+            "FCUSR Activities Fund",
+        },
+        {
+          name:
+            "Sports and Cultural Fund",
+          rate: 100,
+          fund:
+            "Sports & Cultural Fund",
+        },
+      ],
+    },
+
+    "2nd Sem": {
+      total: 900,
+      items: [
+        {
+          name:
+            "JIECEP FCUSC Fund",
+          rate: 50,
+          fund:
+            "JIECEP FCUSC Fund",
+        },
+        {
+          name:
+            "JIECEP Week Activities (Local & Regional)",
+          rate: 150,
+          fund:
+            "JIECEP Week Activities Fund",
+        },
+        {
+          name:
+            "ECE Grand Ball",
+          rate: 650,
+          fund:
+            "ECE Grandball Fund",
+        },
+        {
+          name:
+            "Emergency/Calamity Fund",
+          rate: 30,
+          fund:
+            "Emergency/Calamity Fund",
+        },
+        {
+          name:
+            "FCUSR Activities & Projects",
+          rate: 20,
+          fund:
+            "FCUSR Activities Fund",
+        },
+      ],
+    },
+
+    Summer: {
+      total: 200,
+      items: [
+        {
+          name:
+            "Summer Departmental Operations",
+          rate: 150,
+          fund:
+            "New Accounts (Current Operations)",
+        },
+        {
+          name:
+            "Special Activities Fund",
+          rate: 50,
+          fund:
+            "JIECEP Activities Fund",
+        },
+      ],
+    },
   };
+
+  // =========================================================================
+  // PACKAGE SETUP
+  // =========================================================================
 
   let pkgTotal = 0;
-  const currentPkgItems: { name: string; rate: number; fund: string }[] = [];
-  const packageItems = (collectionSetups || []).filter((c: any) => c.isPackage !== false);
 
-  if (packageItems.length > 0) {
-    packageItems.forEach((s: any) => {
-      pkgTotal += s.amount;
-      currentPkgItems.push({ name: s.name, rate: s.amount, fund: s.targetFund });
-    });
+  const currentPkgItems: {
+    name: string;
+    rate: number;
+    fund: string;
+  }[] = [];
+
+  const packageItems =
+    collectionSetups.filter(
+      (c: any) =>
+        c.isPackage !==
+        false
+    );
+
+  if (
+    packageItems.length >
+    0
+  ) {
+    packageItems.forEach(
+      (s: any) => {
+        const amount =
+          Number(
+            s.amount
+          ) || 0;
+
+        pkgTotal +=
+          amount;
+
+        currentPkgItems.push(
+          {
+            name: String(
+              s.name || ""
+            ).trim(),
+            rate: amount,
+            fund: String(
+              s.targetFund ||
+                ""
+            ).trim(),
+          }
+        );
+      }
+    );
   } else {
-    const fallbackPkg = legacyTermPackages[term] || legacyTermPackages["1st Sem"];
-    pkgTotal = fallbackPkg.total;
-    currentPkgItems.push(...fallbackPkg.items);
+    const fallbackPkg =
+      legacyTermPackages[
+        term
+      ] ||
+      legacyTermPackages[
+        "1st Sem"
+      ];
+
+    pkgTotal =
+      fallbackPkg.total;
+
+    currentPkgItems.push(
+      ...fallbackPkg.items
+    );
   }
 
-  const termPkg = { total: pkgTotal, items: currentPkgItems };
-
-  const getFundName = (row: any) => {
-    const raw = String(row.fundAllocation || row.fundSource || row.fundName || row.fund || '').trim();
-    return (raw === '' || raw === 'undefined' || raw === 'null') ? 'General Fund (Carried Over)' : raw;
+  const termPkg = {
+    total: pkgTotal,
+    items:
+      currentPkgItems,
   };
 
-  let grandCollectionTotal = 0;
-  const collectionHierarchy: Record<string, { count: number; total: number }> = {};
-  const distinctStudents: Record<string, Set<string>> = {};
-  const collectionsByFund: Record<string, number> = {};
+  // =========================================================================
+  // FUND NAME
+  // =========================================================================
 
-  const addCollectionItem = (itemName: string, amt: number, studentKey: string, fund: string) => {
-    grandCollectionTotal += amt;
-    collectionsByFund[fund] = (collectionsByFund[fund] || 0) + amt;
+  const getFundName =
+    (row: any) => {
+      const raw =
+        String(
+          row.fundAllocation ||
+            row.fundSource ||
+            row.fundName ||
+            row.fund ||
+            ""
+        ).trim();
 
-    if (!collectionHierarchy[itemName]) {
-      collectionHierarchy[itemName] = { count: 0, total: 0 };
-      distinctStudents[itemName] = new Set();
+      return raw === "" ||
+        raw === "undefined" ||
+        raw === "null"
+        ? "General Fund (Carried Over)"
+        : raw;
+    };
+
+  // =========================================================================
+  // COLLECTION TOTALS
+  // =========================================================================
+
+  let grandCollectionTotal =
+    0;
+
+  const collectionHierarchy: Record<
+    string,
+    {
+      count: number;
+      total: number;
     }
-    collectionHierarchy[itemName].total += amt;
-    if (amt > 0 && studentKey) {
-      distinctStudents[itemName].add(studentKey);
-    }
-  };
+  > = {};
 
-  validCollections.forEach((c: any) => {
-    const itemDesc = String(c.itemDescription || c.category || 'General').trim();
-    const amt = Number(c.amountPaid) || 0;
-    const studentKey = c.studentName ? String(c.studentName).trim().toLowerCase() : (c.studentId && c.studentId !== 'N/A' ? String(c.studentId).trim().toLowerCase() : String(c.orNumber));
-    const fund = getFundName(c);
+  const distinctStudents: Record<
+    string,
+    Set<string>
+  > = {};
 
-    const matchedPkgItem = termPkg.items.find((pi: any) => pi.name.toLowerCase() === itemDesc.toLowerCase());
+  const collectionsByFund: Record<
+    string,
+    number
+  > = {};
 
-    if (matchedPkgItem) {
-      addCollectionItem(matchedPkgItem.name, amt, studentKey, matchedPkgItem.fund);
-    } else if (itemDesc === 'Departmental Fee Package' || itemDesc === 'Departmental Fee' || itemDesc === 'Departmental Fee Package (All Items)') {
-      const pkgToUse = termPkg.items.length > 0 ? termPkg : (legacyTermPackages[term] || legacyTermPackages["1st Sem"]);
-      const pkgTotalRate = pkgToUse.total;
-      if (pkgTotalRate > 0) {
-        pkgToUse.items.forEach((pi: any) => {
-          const share = (pi.rate / pkgTotalRate) * amt;
-          addCollectionItem(pi.name, share, studentKey, pi.fund);
-        });
-      } else {
-        addCollectionItem(itemDesc, amt, studentKey, fund);
-      }
-    } else {
-      addCollectionItem(itemDesc, amt, studentKey, fund);
-    }
-  });
+  const addCollectionItem = (
+    itemName: string,
+    amt: number,
+    studentKey: string,
+    fund: string
+  ) => {
+    grandCollectionTotal +=
+      amt;
 
-  Object.keys(collectionHierarchy).forEach(k => {
-    collectionHierarchy[k].count = distinctStudents[k]?.size || 0;
-  });
+    collectionsByFund[
+      fund
+    ] =
+      (collectionsByFund[
+        fund
+      ] || 0) + amt;
 
-  let grandExpenseTotal = 0;
-  const expensesByFund: Record<string, number> = {};
-
-  validAudits.forEach((a: any) => {
-    const amt = Number(a.totalExpense) || 0;
-    grandExpenseTotal += amt;
-    const fund = getFundName(a);
-    expensesByFund[fund] = (expensesByFund[fund] || 0) + amt;
-  });
-
-  let totalUnliquidated = 0;
-  const unliquidatedAdvances: any[] = [];
-  const unliquidatedByFund: Record<string, number> = {};
-
-  cashAdvances.forEach((ca: any) => {
-    const status = String(ca.status || '').toUpperCase();
-    if (status.includes('PENDING') && !status.includes('CANCEL')) {
-      const amt = Number(ca.amountApproved) || 0;
-      totalUnliquidated += amt;
-      const fund = getFundName(ca);
-      
-      unliquidatedByFund[fund] = (unliquidatedByFund[fund] || 0) + amt;
-      
-      unliquidatedAdvances.push({
-        id: ca.advanceId,
-        date: ca.dateIssued ? new Date(ca.dateIssued).toISOString().split('T')[0] : '',
-        requestor: ca.requestor,
-        fund: fund,
-        amount: amt,
-        due: ca.expectedReturnDate ? new Date(ca.expectedReturnDate).toISOString().split('T')[0] : '',
-        status: ca.status,
-      });
-    }
-  });
-
-  const paidMap: Record<string, number> = {};
-  const studentItemObligations: Record<string, Set<string>> = {}; 
-
-  const addStudentObligation = (studentKey: string, itemName: string) => {
-    if (!studentItemObligations[studentKey]) {
-      studentItemObligations[studentKey] = new Set();
-    }
-    if (!studentItemObligations[studentKey].has(itemName)) {
-      studentItemObligations[studentKey].add(itemName);
-      return true; 
-    }
-    return false; 
-  };
-
-  validCollections.forEach((c: any) => {
-    const catLower = String(c.category || '').toLowerCase();
-    const descLower = String(c.itemDescription || '').toLowerCase();
-    
     if (
-      catLower.includes('fee') || 
-      catLower.includes('package') || 
-      termPkg.items.some((pi: any) => pi.name.toLowerCase() === descLower)
+      !collectionHierarchy[
+        itemName
+      ]
     ) {
-      const sId = String(c.studentId || '').trim().toLowerCase();
-      const sName = String(c.studentName || '').trim().toLowerCase();
-      const paid = Number(c.amountPaid) || 0;
-      const key = sName || (sId && sId !== 'n/a' ? sId : '');
-      if (key) {
-        paidMap[key] = (paidMap[key] || 0) + paid;
+      collectionHierarchy[
+        itemName
+      ] = {
+        count: 0,
+        total: 0,
+      };
+
+      distinctStudents[
+        itemName
+      ] = new Set();
+    }
+
+    collectionHierarchy[
+      itemName
+    ].total += amt;
+
+    if (
+      amt > 0 &&
+      studentKey
+    ) {
+      distinctStudents[
+        itemName
+      ].add(studentKey);
+    }
+  };
+
+  validCollections.forEach(
+    (c: any) => {
+      const itemDesc =
+        String(
+          c.itemDescription ||
+            c.category ||
+            "General"
+        ).trim();
+
+      const amt =
+        Number(
+          c.amountPaid
+        ) || 0;
+
+      /*
+       * Because Collection.studentId is Student.id,
+       * use c.studentId or the included student.id.
+       */
+      const studentKey =
+        getStudentKey(
+          c.studentId ||
+            c.student?.id,
+          c.student?.fullName ||
+            c.studentName,
+          String(
+            c.orNumber || ""
+          )
+            .trim()
+            .toLowerCase()
+        );
+
+      const fund =
+        getFundName(c);
+
+      const matchedPkgItem =
+        termPkg.items.find(
+          (pi: any) =>
+            String(
+              pi.name || ""
+            )
+              .trim()
+              .toLowerCase() ===
+            itemDesc.toLowerCase()
+        );
+
+      if (matchedPkgItem) {
+        addCollectionItem(
+          matchedPkgItem.name,
+          amt,
+          studentKey,
+          matchedPkgItem.fund
+        );
+      } else if (
+        itemDesc.toLowerCase() ===
+          "departmental fee package" ||
+        itemDesc.toLowerCase() ===
+          "departmental fee" ||
+        itemDesc.toLowerCase() ===
+          "departmental fee package (all items)"
+      ) {
+        const pkgToUse =
+          termPkg.items.length >
+          0
+            ? termPkg
+            : (
+                legacyTermPackages[
+                  term
+                ] ||
+                legacyTermPackages[
+                  "1st Sem"
+                ]
+              );
+
+        const pkgTotalRate =
+          Number(
+            pkgToUse.total
+          ) || 0;
+
+        if (
+          pkgTotalRate > 0
+        ) {
+          pkgToUse.items.forEach(
+            (pi: any) => {
+              const share =
+                (Number(
+                  pi.rate
+                ) /
+                  pkgTotalRate) *
+                amt;
+
+              addCollectionItem(
+                pi.name,
+                share,
+                studentKey,
+                pi.fund
+              );
+            }
+          );
+        } else {
+          addCollectionItem(
+            itemDesc,
+            amt,
+            studentKey,
+            fund
+          );
+        }
+      } else {
+        addCollectionItem(
+          itemDesc,
+          amt,
+          studentKey,
+          fund
+        );
       }
     }
-  });
+  );
 
-  let unpaidOrPartialPackageCount = 0;
-  let totalPackageReceivable = 0;
-
-  students.forEach((s: any) => {
-    const sId = String(s.studentId || '').trim().toLowerCase();
-    const sName = String(s.fullName || '').trim().toLowerCase();
-    const key = sName || sId;
-    const remitted = paidMap[key] || 0;
-    if (remitted < pkgTotal) {
-      unpaidOrPartialPackageCount++;
-      totalPackageReceivable += (pkgTotal - remitted);
-      if (key) addStudentObligation(key, 'Departmental Fee');
+  Object.keys(
+    collectionHierarchy
+  ).forEach(
+    (key) => {
+      collectionHierarchy[
+        key
+      ].count =
+        distinctStudents[
+          key
+        ]?.size || 0;
     }
-  });
+  );
 
-  const collectiblesMap: Record<string, { category: string; headcount: number; total: number }> = {};
+  // =========================================================================
+  // EXPENSES
+  // =========================================================================
 
-  if (unpaidOrPartialPackageCount > 0) {
-    collectiblesMap[`Unsettled Departmental Fees (${term})`] = {
-      category: `Unsettled Departmental Fees (${term})`,
-      headcount: unpaidOrPartialPackageCount,
-      total: totalPackageReceivable,
+  let grandExpenseTotal =
+    0;
+
+  const expensesByFund: Record<
+    string,
+    number
+  > = {};
+
+  validAudits.forEach(
+    (a: any) => {
+      const amt =
+        Number(
+          a.totalExpense
+        ) || 0;
+
+      grandExpenseTotal +=
+        amt;
+
+      const fund =
+        getFundName(a);
+
+      expensesByFund[
+        fund
+      ] =
+        (expensesByFund[
+          fund
+        ] || 0) + amt;
+    }
+  );
+
+  // =========================================================================
+  // UNLIQUIDATED ADVANCES
+  // =========================================================================
+
+  let totalUnliquidated =
+    0;
+
+  const unliquidatedAdvances: any[] =
+    [];
+
+  const unliquidatedByFund: Record<
+    string,
+    number
+  > = {};
+
+  cashAdvances.forEach(
+    (ca: any) => {
+      const status =
+        String(
+          ca.status || ""
+        ).toUpperCase();
+
+      /*
+       * Supports both:
+       * - Active (Unliquidated)
+       * - Pending Liquidation
+       *
+       * because your schema default and action-created
+       * status values are different.
+       */
+      const isPending =
+        status.includes(
+          "PENDING"
+        ) ||
+        status.includes(
+          "UNLIQUIDATED"
+        ) ||
+        status === "ACTIVE";
+
+      if (
+        isPending &&
+        !status.includes(
+          "CANCEL"
+        ) &&
+        !status.includes(
+          "LIQUIDATED"
+        )
+      ) {
+        const amt =
+          Number(
+            ca.amountApproved
+          ) || 0;
+
+        totalUnliquidated +=
+          amt;
+
+        const fund =
+          getFundName(ca);
+
+        unliquidatedByFund[
+          fund
+        ] =
+          (unliquidatedByFund[
+            fund
+          ] || 0) + amt;
+
+        unliquidatedAdvances.push(
+          {
+            id:
+              ca.advanceId,
+            date:
+              ca.dateIssued
+                ? new Date(
+                    ca.dateIssued
+                  )
+                    .toISOString()
+                    .split(
+                      "T"
+                    )[0]
+                : "",
+            requestor:
+              ca.requestor,
+            fund,
+            amount:
+              amt,
+            due:
+              ca.expectedReturnDate
+                ? new Date(
+                    ca.expectedReturnDate
+                  )
+                    .toISOString()
+                    .split(
+                      "T"
+                    )[0]
+                : "",
+            status:
+              ca.status,
+          }
+        );
+      }
+    }
+  );
+
+  // =========================================================================
+  // PACKAGE PAYMENT MAP
+  // =========================================================================
+
+  const paidMap: Record<
+    string,
+    number
+  > = {};
+
+  const studentItemObligations: Record<
+    string,
+    Set<string>
+  > = {};
+
+  const addStudentObligation = (
+    studentKey: string,
+    itemName: string
+  ) => {
+    if (
+      !studentItemObligations[
+        studentKey
+      ]
+    ) {
+      studentItemObligations[
+        studentKey
+      ] = new Set();
+    }
+
+    if (
+      !studentItemObligations[
+        studentKey
+      ].has(itemName)
+    ) {
+      studentItemObligations[
+        studentKey
+      ].add(itemName);
+
+      return true;
+    }
+
+    return false;
+  };
+
+  validCollections.forEach(
+    (c: any) => {
+      const descLower =
+        String(
+          c.itemDescription ||
+            ""
+        )
+          .trim()
+          .toLowerCase();
+
+      const isPackageItem =
+        termPkg.items.some(
+          (pi: any) =>
+            String(
+              pi.name || ""
+            )
+              .trim()
+              .toLowerCase() ===
+            descLower
+        );
+
+      const isDepartmentalPackage =
+        descLower ===
+          "departmental fee package" ||
+        descLower ===
+          "departmental fee" ||
+        descLower ===
+          "departmental fee package (all items)";
+
+      /*
+       * IMPORTANT:
+       * Do not use category.includes("fee").
+       *
+       * This prevents unrelated things such as:
+       * - Laboratory Fee
+       * - Penalty Fee
+       * - Replacement Fee
+       * from being treated as package payments.
+       */
+      if (
+        isPackageItem ||
+        isDepartmentalPackage
+      ) {
+        const studentKey =
+          getStudentKey(
+            c.studentId ||
+              c.student?.id,
+            c.student?.fullName ||
+              c.studentName
+          );
+
+        const paid =
+          Number(
+            c.amountPaid
+          ) || 0;
+
+        if (
+          studentKey &&
+          paid > 0
+        ) {
+          paidMap[
+            studentKey
+          ] =
+            (paidMap[
+              studentKey
+            ] || 0) + paid;
+        }
+      }
+    }
+  );
+
+  // =========================================================================
+  // CURRENT STUDENTS / ENROLLED STUDENTS
+  // =========================================================================
+
+  const enrollmentStudents =
+    enrollments
+      .filter(
+        (e: any) => {
+          const status =
+            String(
+              e.enrollmentStatus ||
+                ""
+            )
+              .trim()
+              .toUpperCase();
+
+          return (
+            status !==
+              "DROPPED" &&
+            status !==
+              "CANCELLED" &&
+            status !==
+              "INACTIVE"
+          );
+        }
+      )
+      .map(
+        (e: any) =>
+          e.student
+      )
+      .filter(
+        Boolean
+      );
+
+  const uniqueStudentMap =
+    new Map<
+      string,
+      any
+    >();
+
+  /*
+   * Prefer current AY/term enrollment records.
+   * If there are no enrollment records for this term,
+   * fall back to all students so legacy deployments
+   * still work.
+   */
+  if (
+    enrollmentStudents.length >
+    0
+  ) {
+    enrollmentStudents.forEach(
+      (student: any) => {
+        uniqueStudentMap.set(
+          student.id,
+          student
+        );
+      }
+    );
+  } else {
+    students.forEach(
+      (student: any) => {
+        uniqueStudentMap.set(
+          student.id,
+          student
+        );
+      }
+    );
+  }
+
+  const packageStudents =
+    Array.from(
+      uniqueStudentMap.values()
+    );
+
+  // =========================================================================
+  // PACKAGE RECEIVABLES
+  // =========================================================================
+
+  let unpaidOrPartialPackageCount =
+    0;
+
+  let totalPackageReceivable =
+    0;
+
+  packageStudents.forEach(
+    (student: any) => {
+      const key =
+        getStudentKey(
+          student.id,
+          student.fullName
+        );
+
+      if (!key) {
+        return;
+      }
+
+      const remitted =
+        paidMap[key] || 0;
+
+      if (
+        remitted < pkgTotal
+      ) {
+        const remaining =
+          Math.max(
+            0,
+            Math.round(
+              (pkgTotal -
+                remitted) *
+                100
+            ) / 100
+          );
+
+        unpaidOrPartialPackageCount +=
+          1;
+
+        totalPackageReceivable +=
+          remaining;
+
+        addStudentObligation(
+          key,
+          "Departmental Fee"
+        );
+      }
+    }
+  );
+
+  // =========================================================================
+  // OTHER COLLECTION OBLIGATIONS
+  // =========================================================================
+
+  const collectiblesMap: Record<
+    string,
+    {
+      category: string;
+      headcount: number;
+      total: number;
+    }
+  > = {};
+
+  if (
+    unpaidOrPartialPackageCount >
+    0
+  ) {
+    collectiblesMap[
+      `Unsettled Departmental Fees (${term})`
+    ] = {
+      category:
+        `Unsettled Departmental Fees (${term})`,
+      headcount:
+        unpaidOrPartialPackageCount,
+      total:
+        totalPackageReceivable,
     };
   }
 
-  validCollections.forEach((c: any) => {
-    const balDue = Number(c.balanceDue) || 0;
-    const pType = String(c.paymentType || '');
-    const orNum = String(c.orNumber || '');
-    const sId = String(c.studentId || '').trim().toLowerCase();
-    const sName = String(c.studentName || '').trim().toLowerCase();
-    const studentKey = sName || sId || `UNKNOWN-${c.id}`;
+  /*
+   * Aggregate non-package obligations by student + item.
+   *
+   * This fixes an important problem in the previous engine:
+   * an old partial-payment row could retain balanceDue even
+   * after a later payment fully settled the item.
+   */
+  const obligationGroups = new Map<
+    string,
+    {
+      studentKey: string;
+      itemName: string;
+      assessedAmount: number;
+      paidAmount: number;
+      hasOutstandingMarker: boolean;
+    }
+  >();
 
-    if ((balDue > 0 || pType.includes('Unpaid') || orNum.startsWith('DUE-')) && c.category !== 'Departmental Fee' && c.category !== 'Departmental Fee - Package') {
-      const itemName = String(c.itemDescription || c.category || 'Other Due');
-      
-      if (addStudentObligation(studentKey, itemName)) {
-        if (!collectiblesMap[itemName]) {
-          collectiblesMap[itemName] = { category: itemName, headcount: 0, total: 0 };
+  validCollections.forEach(
+    (c: any) => {
+      const desc =
+        String(
+          c.itemDescription ||
+            ""
+        ).trim();
+
+      const descLower =
+        desc.toLowerCase();
+
+      const isPackageItem =
+        termPkg.items.some(
+          (pi: any) =>
+            String(
+              pi.name || ""
+            )
+              .trim()
+              .toLowerCase() ===
+            descLower
+        );
+
+      const isDepartmentalPackage =
+        descLower ===
+          "departmental fee package" ||
+        descLower ===
+          "departmental fee" ||
+        descLower ===
+          "departmental fee package (all items)";
+
+      if (
+        isPackageItem ||
+        isDepartmentalPackage
+      ) {
+        return;
+      }
+
+      const category =
+        String(
+          c.category ||
+            ""
+        ).trim();
+
+      const itemName =
+        desc ||
+        category ||
+        "Other Due";
+
+      const studentKey =
+        getStudentKey(
+          c.studentId ||
+            c.student?.id,
+          c.student?.fullName ||
+            c.studentName,
+          `UNKNOWN-${c.id}`
+        );
+
+      const groupKey =
+        `${studentKey}|${itemName
+          .trim()
+          .toLowerCase()}`;
+
+      const assessed =
+        Number(
+          c.standardRate
+        ) || 0;
+
+      const paid =
+        Number(
+          c.amountPaid
+        ) || 0;
+
+      const balance =
+        Number(
+          c.balanceDue
+        ) || 0;
+
+      const paymentType =
+        String(
+          c.paymentType || ""
+        );
+
+      const orNumber =
+        String(
+          c.orNumber || ""
+        );
+
+      const outstandingMarker =
+        balance > 0 ||
+        paymentType
+          .toLowerCase()
+          .includes("unpaid") ||
+        orNumber
+          .toUpperCase()
+          .startsWith("DUE-");
+
+      const existing =
+        obligationGroups.get(
+          groupKey
+        );
+
+      if (existing) {
+        existing.assessedAmount =
+          Math.max(
+            existing.assessedAmount,
+            assessed
+          );
+
+        existing.paidAmount +=
+          paid;
+
+        existing.hasOutstandingMarker =
+          existing.hasOutstandingMarker ||
+          outstandingMarker;
+      } else {
+        obligationGroups.set(
+          groupKey,
+          {
+            studentKey,
+            itemName,
+            assessedAmount:
+              assessed,
+            paidAmount:
+              paid,
+            hasOutstandingMarker:
+              outstandingMarker,
+          }
+        );
+      }
+    }
+  );
+
+  obligationGroups.forEach(
+    (group) => {
+      const remaining =
+        Math.max(
+          0,
+          Math.round(
+            (group.assessedAmount -
+              group.paidAmount) *
+              100
+          ) / 100
+        );
+
+      if (
+        remaining <= 0 &&
+        !group.hasOutstandingMarker
+      ) {
+        return;
+      }
+
+      const hasExistingStudentObligation =
+        addStudentObligation(
+          group.studentKey,
+          group.itemName
+        );
+
+      if (
+        !hasExistingStudentObligation
+      ) {
+        return;
+      }
+
+      if (
+        !collectiblesMap[
+          group.itemName
+        ]
+      ) {
+        collectiblesMap[
+          group.itemName
+        ] = {
+          category:
+            group.itemName,
+          headcount: 0,
+          total: 0,
+        };
+      }
+
+      collectiblesMap[
+        group.itemName
+      ].headcount +=
+        1;
+
+      collectiblesMap[
+        group.itemName
+      ].total +=
+        remaining > 0
+          ? remaining
+          : group.assessedAmount;
+    }
+  );
+
+  // =========================================================================
+  // EXPLICIT COLLECTIBLES
+  // =========================================================================
+
+  explicitCollectibles.forEach(
+    (ec: any) => {
+      let rawCat =
+        String(
+          ec.category ||
+            "Unassigned"
+        ).trim();
+
+      let itemName =
+        rawCat;
+
+      if (
+        rawCat.startsWith(
+          "Arrears: "
+        )
+      ) {
+        const core =
+          rawCat.substring(
+            9
+          );
+
+        const dashIdx =
+          core.lastIndexOf(
+            " - "
+          );
+
+        itemName =
+          dashIdx !== -1
+            ? core
+                .substring(
+                  0,
+                  dashIdx
+                )
+                .trim()
+            : core;
+      }
+
+      const headcount =
+        Number(
+          ec.headcount
+        ) || 1;
+
+      const total =
+        Number(
+          ec.balanceDue
+        ) ||
+        0;
+
+      if (
+        !collectiblesMap[
+          itemName
+        ]
+      ) {
+        collectiblesMap[
+          itemName
+        ] = {
+          category:
+            itemName,
+          headcount:
+            0,
+          total:
+            0,
+        };
+      }
+
+      collectiblesMap[
+        itemName
+      ].headcount +=
+        headcount;
+
+      collectiblesMap[
+        itemName
+      ].total +=
+        total;
+    }
+  );
+
+  const collectiblesList =
+    Object.values(
+      collectiblesMap
+    );
+
+  const totalCollectiblesSum =
+    collectiblesList.reduce(
+      (sum, c) =>
+        sum + c.total,
+      0
+    );
+
+  // =========================================================================
+  // INITIAL FUNDS
+  // =========================================================================
+
+  let totalInitialAlloc =
+    0;
+
+  const initialAllocMap: Record<
+    string,
+    number
+  > = {};
+
+  initialFunds.forEach(
+    (f: any) => {
+      const fundName =
+        String(
+          f.fundName || ""
+        ).trim();
+
+      if (!fundName) {
+        return;
+      }
+
+      const initAmt =
+        Number(
+          f.initialAllocation
+        ) || 0;
+
+      initialAllocMap[
+        fundName
+      ] =
+        (initialAllocMap[
+          fundName
+        ] || 0) + initAmt;
+
+      totalInitialAlloc +=
+        initAmt;
+    }
+  );
+
+  // =========================================================================
+  // FUND TRANSFERS
+  // =========================================================================
+
+  const transferEffects: Record<
+    string,
+    number
+  > = {};
+
+  let carryOverInboundTotal =
+    0;
+
+  fundTransfers.forEach(
+    (transfer: any) => {
+      const amount =
+        Number(
+          transfer.amount
+        ) || 0;
+
+      if (amount <= 0) {
+        return;
+      }
+
+      const source =
+        String(
+          transfer.sourceFund ||
+            ""
+        ).trim();
+
+      const destination =
+        String(
+          transfer.destinationFund ||
+            ""
+        ).trim();
+
+      /*
+       * carryOverTermBalance() stores records in the destination
+       * accounting period and encodes the old period into sourceFund.
+       *
+       * Treat that as an inbound opening balance for this period,
+       * not as a same-period transfer that nets back to zero.
+       */
+      const isCarryOver =
+        source
+          .toLowerCase()
+          .includes(
+            "rollover"
+          );
+
+      if (isCarryOver) {
+        if (destination) {
+          transferEffects[
+            destination
+          ] =
+            (transferEffects[
+              destination
+            ] || 0) + amount;
         }
-        collectiblesMap[itemName].headcount += 1;
-        collectiblesMap[itemName].total += balDue > 0 ? balDue : Number(c.standardRate || 0);
+
+        carryOverInboundTotal +=
+          amount;
+        return;
+      }
+
+      if (source) {
+        transferEffects[
+          source
+        ] =
+          (transferEffects[
+            source
+          ] || 0) - amount;
+      }
+
+      if (destination) {
+        transferEffects[
+          destination
+        ] =
+          (transferEffects[
+            destination
+          ] || 0) + amount;
       }
     }
-  });
+  );
 
-  (explicitCollectibles as any[]).forEach((ec: any) => {
-    let rawCat = String(ec.category || 'Unassigned').trim();
-    let itemName = rawCat;
-    if (rawCat.startsWith('Arrears: ')) {
-      const core = rawCat.substring(9);
-      const dashIdx = core.lastIndexOf(' - ');
-      itemName = dashIdx !== -1 ? core.substring(0, dashIdx).trim() : core;
-    }
-    const headcount = Number(ec.headcount) || 1;
-    const total = Number(ec.balanceDue) || Number(ec.total) || 0;
+  const allFundNames =
+    Array.from(
+      new Set([
+        ...Object.keys(
+          collectionsByFund
+        ),
+        ...Object.keys(
+          expensesByFund
+        ),
+        ...Object.keys(
+          initialAllocMap
+        ),
+        ...Object.keys(
+          unliquidatedByFund
+        ),
+        ...Object.keys(
+          transferEffects
+        ),
+      ])
+    ).sort((a, b) =>
+      a.localeCompare(b)
+    );
 
-    const sId = String(ec.studentId || '').trim().toLowerCase();
-    const sName = String(ec.studentName || ec.fullName || '').trim().toLowerCase();
+  const fundsList =
+    allFundNames.map(
+      (name) => {
+        const collected =
+          collectionsByFund[
+            name
+          ] || 0;
 
-    if (sId || sName) {
-      const studentKey = sName || sId;
-      if (addStudentObligation(studentKey, itemName)) {
-        if (!collectiblesMap[itemName]) {
-          collectiblesMap[itemName] = { category: itemName, headcount: 0, total: 0 };
-        }
-        collectiblesMap[itemName].headcount += headcount;
-        collectiblesMap[itemName].total += total;
+        const spent =
+          expensesByFund[
+            name
+          ] || 0;
+
+        const init =
+          initialAllocMap[
+            name
+          ] || 0;
+
+        const unliquidated =
+          unliquidatedByFund[
+            name
+          ] || 0;
+
+        const transferEffect =
+          transferEffects[
+            name
+          ] || 0;
+
+        const balance =
+          init +
+          collected -
+          spent -
+          unliquidated +
+          transferEffect;
+
+        return {
+          name,
+          collected,
+          spent,
+          unliquidated,
+          balance,
+        };
       }
-    } else {
-      if (!collectiblesMap[itemName]) {
-        collectiblesMap[itemName] = { category: itemName, headcount: 0, total: 0 };
-        collectiblesMap[itemName].headcount += headcount;
-        collectiblesMap[itemName].total += total;
-      }
-    }
-  });
+    );
 
-  const collectiblesList = Object.values(collectiblesMap);
-  const totalCollectiblesSum = collectiblesList.reduce((sum, c) => sum + c.total, 0);
+  /*
+   * Same-period transfers net to zero globally.
+   * Carry-over is different: it belongs to this period,
+   * so it is an actual inbound balance.
+   */
+  const remainingBalance =
+    totalInitialAlloc +
+    grandCollectionTotal -
+    grandExpenseTotal -
+    totalUnliquidated +
+    carryOverInboundTotal;
 
-  let totalInitialAlloc = 0;
-  const initialAllocMap: Record<string, number> = {};
-  initialFunds.forEach((f: any) => {
-    if (f.fundName) { 
-      const initAmt = Number(f.initialAllocation) || 0; 
-      initialAllocMap[f.fundName] = initAmt;
-      totalInitialAlloc += initAmt;
-    }
-  });
-
-  const allFundNames = Array.from(new Set([
-    ...Object.keys(collectionsByFund),
-    ...Object.keys(expensesByFund),
-    ...Object.keys(initialAllocMap),
-    ...Object.keys(unliquidatedByFund)
-  ])).sort((a, b) => a.localeCompare(b));
-
-  const fundsList = allFundNames.map(name => {
-    const collected = collectionsByFund[name] || 0;
-    const spent = expensesByFund[name] || 0;
-    const init = initialAllocMap[name] || 0;
-    const unliquidated = unliquidatedByFund[name] || 0;
-    
-    const balance = init + collected - spent - unliquidated;
-    
-    return { name, collected, spent, unliquidated, balance };
-  });
-
-  const remainingBalance = totalInitialAlloc + grandCollectionTotal - grandExpenseTotal - totalUnliquidated;
+  // =========================================================================
+  // RETURN
+  // =========================================================================
 
   return {
     grandCollectionTotal,
     grandExpenseTotal,
     totalUnliquidated,
-    totalCollectibles: totalCollectiblesSum,
+    totalCollectibles:
+      totalCollectiblesSum,
     remainingBalance,
     unliquidatedAdvances,
     collectionHierarchy,
@@ -1189,46 +4792,130 @@ export async function getDepartmentFinancials(organizationId: string, ay: string
   };
 }
 
+// =========================================================================
+// INITIAL FUNDS
+// =========================================================================
+
 export async function saveInitialFunds(
-  department: string, 
-  ay: string, 
-  term: string, 
-  funds: { fundName: string, amount: number }[]
+  department: string,
+  ay: string,
+  term: string,
+  funds: {
+    fundName: string;
+    amount: number;
+  }[]
 ) {
-  const officerName = await getActionUser();
-  const orgId = await getOrgId(department);
+  await requireTabAccess(
+    "tab-setup"
+  );
 
-  const validFunds = funds.filter(f => f.fundName.trim() !== "");
+  const officerName =
+    await getActionUser();
 
-  await prisma.$transaction(async (tx) => {
-    await tx.fund.deleteMany({
-      where: { organizationId: orgId, academicYear: ay, term }
-    });
+  const orgId =
+    await getOrgId(department);
 
-    if (validFunds.length > 0) {
-      await tx.fund.createMany({
-        data: validFunds.map(f => ({
-          organizationId: orgId,
-          academicYear: ay,
-          term: term,
-          fundName: f.fundName.trim(),
-          initialAllocation: f.amount,
-          encodedBy: officerName
-        }))
-      });
+  if (!Array.isArray(funds)) {
+    throw new Error(
+      "Invalid fund configuration."
+    );
+  }
+
+  const combinedFunds =
+    new Map<
+      string,
+      number
+    >();
+
+  for (const fund of funds) {
+    const fundName =
+      String(
+        fund.fundName || ""
+      ).trim();
+
+    if (!fundName) {
+      continue;
     }
-  });
+
+    const amount =
+      money(
+        fund.amount,
+        `Initial allocation for ${fundName}`
+      );
+
+    combinedFunds.set(
+      fundName,
+      (combinedFunds.get(
+        fundName
+      ) || 0) + amount
+    );
+  }
+
+  const validFunds =
+    Array.from(
+      combinedFunds.entries()
+    ).map(
+      ([fundName, amount]) => ({
+        fundName,
+        amount,
+      })
+    );
+
+  await prisma.$transaction(
+    async (tx) => {
+      await tx.fund.deleteMany({
+        where: {
+          organizationId:
+            orgId,
+          academicYear:
+            ay,
+          term,
+        },
+      });
+
+      if (
+        validFunds.length >
+        0
+      ) {
+        await tx.fund.createMany(
+          {
+            data: validFunds.map(
+              (f) => ({
+                organizationId:
+                  orgId,
+                academicYear:
+                  ay,
+                term,
+                fundName:
+                  f.fundName,
+                initialAllocation:
+                  f.amount,
+              })
+            ),
+          }
+        );
+      }
+    }
+  );
 
   await logSystemAction(
-    orgId, 
-    officerName, 
-    "SETUP_FUNDS", 
+    orgId,
+    officerName,
+    "SETUP_FUNDS",
     `Configured ${validFunds.length} target funds for ${term} (${ay}).`
   );
 
-  revalidatePath(`/department/${department}/setup`);
-  revalidatePath(`/department/${department}`);
+  revalidatePath(
+    `/department/${department}/setup`
+  );
+  revalidatePath(
+    `/department/${department}`
+  );
 }
+
+// =========================================================================
+// COLLECTION SETUP
+// =========================================================================
 
 export async function saveCollectionSetupItem(
   department: string,
@@ -1242,71 +4929,188 @@ export async function saveCollectionSetupItem(
     term: string;
   }
 ) {
-  await requireTabAccess("tab-setup");
-  const orgId = await getOrgId(department);
-  const cleanCategory = payload.category.trim();
-  const cleanName = payload.name.trim();
+  await requireTabAccess(
+    "tab-setup"
+  );
 
-  const existing = await prisma.collectionSetup.findFirst({
-    where: {
-      organizationId: orgId,
-      academicYear: payload.ay,
-      term: payload.term,
-      name: cleanName,
-    },
-  });
+  const orgId =
+    await getOrgId(department);
 
-  if (existing) {
-    await prisma.collectionSetup.update({
-      where: { id: existing.id },
-      data: {
-        category: cleanCategory,
-        amount: Number(payload.amount) || 0,
-        targetFund: payload.targetFund,
-        isPackage: Boolean(payload.isPackage),
-      },
-    });
-  } else {
-    await prisma.collectionSetup.create({
-      data: {
-        organizationId: orgId,
-        academicYear: payload.ay,
-        term: payload.term,
-        category: cleanCategory,
-        name: cleanName,
-        amount: Number(payload.amount) || 0,
-        targetFund: payload.targetFund,
-        isPackage: Boolean(payload.isPackage),
-      },
-    });
+  const cleanCategory =
+    String(
+      payload.category || ""
+    ).trim();
+
+  const cleanName =
+    String(
+      payload.name || ""
+    ).trim();
+
+  const targetFund =
+    String(
+      payload.targetFund || ""
+    ).trim();
+
+  const amount =
+    money(
+      payload.amount,
+      "Collection setup amount"
+    );
+
+  if (!cleanName) {
+    throw new Error(
+      "Collection setup name is required."
+    );
   }
 
-  revalidatePath(`/department/${department}/setup/collections`);
-  revalidatePath(`/department/${department}/collections`);
-  revalidatePath(`/department/${department}/reports`);
-  revalidatePath(`/department/${department}/clearance`);
-  revalidatePath(`/department/${department}`);
+  if (!targetFund) {
+    throw new Error(
+      "Target fund is required."
+    );
+  }
 
-  return { success: true, message: `Configured '${cleanName}' successfully.` };
+  const existing =
+    await prisma.collectionSetup.findFirst(
+      {
+        where: {
+          organizationId:
+            orgId,
+          academicYear:
+            payload.ay,
+          term:
+            payload.term,
+          name:
+            cleanName,
+        },
+      }
+    );
+
+  if (existing) {
+    await prisma.collectionSetup.update(
+      {
+        where: {
+          id:
+            existing.id,
+        },
+        data: {
+          category:
+            cleanCategory,
+          amount,
+          targetFund,
+          isPackage:
+            Boolean(
+              payload.isPackage
+            ),
+        },
+      }
+    );
+  } else {
+    await prisma.collectionSetup.create(
+      {
+        data: {
+          organizationId:
+            orgId,
+          academicYear:
+            payload.ay,
+          term:
+            payload.term,
+          category:
+            cleanCategory,
+          name:
+            cleanName,
+          amount,
+          targetFund,
+          isPackage:
+            Boolean(
+              payload.isPackage
+            ),
+        },
+      }
+    );
+  }
+
+  revalidatePath(
+    `/department/${department}/setup/collections`
+  );
+  revalidatePath(
+    `/department/${department}/collections`
+  );
+  revalidatePath(
+    `/department/${department}/reports`
+  );
+  revalidatePath(
+    `/department/${department}/clearance`
+  );
+  revalidatePath(
+    `/department/${department}`
+  );
+
+  return {
+    success: true,
+    message:
+      `Configured '${cleanName}' successfully.`,
+  };
 }
 
-export async function deleteCollectionSetupItem(department: string, setupId: string) {
-  await requireTabAccess("tab-setup");
-  const orgId = await getOrgId(department);
+export async function deleteCollectionSetupItem(
+  department: string,
+  setupId: string
+) {
+  await requireTabAccess(
+    "tab-setup"
+  );
 
-  // FIXED: Changed .delete() to .deleteMany()
-  await prisma.collectionSetup.deleteMany({
-    where: {
-      id: setupId,
-      organizationId: orgId,
-    },
-  });
+  const orgId =
+    await getOrgId(department);
 
-  revalidatePath(`/department/${department}/setup/collections`);
-  revalidatePath(`/department/${department}/collections`);
-  revalidatePath(`/department/${department}/reports`);
-  revalidatePath(`/department/${department}/clearance`);
-  revalidatePath(`/department/${department}`);
+  const existing =
+    await prisma.collectionSetup.findFirst(
+      {
+        where: {
+          id:
+            setupId,
+          organizationId:
+            orgId,
+        },
+      }
+    );
 
-  return { success: true, message: "Configuration item removed successfully." };
+  if (!existing) {
+    throw new Error(
+      "Collection setup item not found."
+    );
+  }
+
+  await prisma.collectionSetup.deleteMany(
+    {
+      where: {
+        id:
+          existing.id,
+        organizationId:
+          orgId,
+      },
+    }
+  );
+
+  revalidatePath(
+    `/department/${department}/setup/collections`
+  );
+  revalidatePath(
+    `/department/${department}/collections`
+  );
+  revalidatePath(
+    `/department/${department}/reports`
+  );
+  revalidatePath(
+    `/department/${department}/clearance`
+  );
+  revalidatePath(
+    `/department/${department}`
+  );
+
+  return {
+    success: true,
+    message:
+      "Configuration item removed successfully.",
+  };
 }
