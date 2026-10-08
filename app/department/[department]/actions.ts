@@ -2231,28 +2231,59 @@ export async function verifyOnlineRemittance(
   );
 }
 
-export async function submitOnlineRemittance(department: string, formData: FormData) {
-  // 1. Reconstruct the 'data' object to ensure all your existing validation and DB logic works
-  const data = {
-    studentId: formData.get('studentId') as string,
-    studentName: formData.get('studentName') as string,
-    email: formData.get('email') as string,
-    paymentChannel: formData.get('paymentChannel') as string,
-    referenceNo: formData.get('referenceNo') as string,
-    particulars: formData.get('particulars') as string,
-    amount: parseFloat(formData.get('amount') as string),
-    ay: formData.get('ay') as string,
-    term: formData.get('term') as string,
-    proofBase64: null as string | null,
-  };
+export async function submitOnlineRemittance(
+  department: string,
+  payload: FormData | {
+    studentId: string;
+    studentName: string;
+    email: string;
+    paymentChannel: string;
+    referenceNo: string;
+    particulars: string;
+    amount: number;
+    proofBase64: string | null;
+    ay: string;
+    term: string;
+  }
+) {
+  // 1. Normalize the payload to support BOTH Client FormData and Server Object Literals
+  let data;
 
-  // 2. Safely extract and process the file
-  const receiptFile = formData.get('receipt') as File | null;
-  if (receiptFile) {
-    const arrayBuffer = await receiptFile.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    // Convert back to base64 on the server to maintain compatibility with your database schema
-    data.proofBase64 = `data:${receiptFile.type};base64,${buffer.toString('base64')}`;
+  if (typeof (payload as FormData).get === 'function') {
+    const formData = payload as FormData;
+    data = {
+      studentId: formData.get('studentId') as string,
+      studentName: formData.get('studentName') as string,
+      email: formData.get('email') as string,
+      paymentChannel: formData.get('paymentChannel') as string,
+      referenceNo: formData.get('referenceNo') as string,
+      particulars: formData.get('particulars') as string,
+      amount: parseFloat(formData.get('amount') as string),
+      ay: formData.get('ay') as string,
+      term: formData.get('term') as string,
+      proofBase64: null as string | null,
+    };
+
+    const receiptFile = formData.get('receipt') as File | null;
+    if (receiptFile) {
+      const arrayBuffer = await receiptFile.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      data.proofBase64 = `data:${receiptFile.type};base64,${buffer.toString('base64')}`;
+    }
+  } else {
+    // Treat as standard object if called internally by another server function
+    data = payload as {
+      studentId: string;
+      studentName: string;
+      email: string;
+      paymentChannel: string;
+      referenceNo: string;
+      particulars: string;
+      amount: number;
+      proofBase64: string | null;
+      ay: string;
+      term: string;
+    };
   }
 
   // PUBLIC:
