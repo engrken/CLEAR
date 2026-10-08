@@ -104,7 +104,8 @@ export async function deletePenalty(department: string, penaltyId: string) {
   await requireTabAccess('tab-void');
   const orgId = await getOrgId(department);
 
-  await prisma.penalty.delete({
+  // FIXED: Changed .delete() to .deleteMany() to safely combine id and organizationId
+  await prisma.penalty.deleteMany({
     where: { id: penaltyId, organizationId: orgId },
   });
 
@@ -298,9 +299,13 @@ export async function invalidateOnlineRemittance(department: string, remittanceI
   const officerName = await getActionUser();
   const orgId = await getOrgId(department);
 
-  const remittance = await prisma.onlineRemittance.findUnique({ where: { id: remittanceId, organizationId: orgId }});
+  // FIXED: Changed .findUnique() to .findFirst()
+  const remittance = await prisma.onlineRemittance.findFirst({ 
+    where: { id: remittanceId, organizationId: orgId } 
+  });
 
-  await prisma.onlineRemittance.delete({
+  // FIXED: Changed .delete() to .deleteMany()
+  await prisma.onlineRemittance.deleteMany({
     where: { id: remittanceId, organizationId: orgId },
   });
 
@@ -790,7 +795,8 @@ export async function settlePenaltyCommunityService(department: string, data: {
   const officerName = await getActionUser();
   const orgId = await getOrgId(department);
 
-  const targetPen = await prisma.penalty.findUnique({
+  // FIXED: Changed .findUnique() to .findFirst()
+  const targetPen = await prisma.penalty.findFirst({
     where: { penaltyId: data.penaltyId, organizationId: orgId }
   });
 
@@ -1288,7 +1294,8 @@ export async function deleteCollectionSetupItem(department: string, setupId: str
   await requireTabAccess("tab-setup");
   const orgId = await getOrgId(department);
 
-  await prisma.collectionSetup.delete({
+  // FIXED: Changed .delete() to .deleteMany()
+  await prisma.collectionSetup.deleteMany({
     where: {
       id: setupId,
       organizationId: orgId,

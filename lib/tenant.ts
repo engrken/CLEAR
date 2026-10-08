@@ -1,6 +1,5 @@
 import { prisma } from './prisma';
 
-// Models that require multi-tenant isolation
 const TENANT_MODELS = [
   'Student', 'Collection', 'Penalty', 'CashAdvance',
   'Audit', 'ExpenseItem', 'Collectible', 'CollectionSetup',
@@ -12,13 +11,12 @@ export function withTenant(organizationId: string) {
     query: {
       $allModels: {
         async $allOperations({ model, operation, args, query }) {
-          // Only intercept department-scoped models
           if (model && TENANT_MODELS.includes(model)) {
-            
-            // Safely inject organizationId into read and search queries
             if (['findMany', 'findFirst', 'count', 'aggregate', 'groupBy'].includes(operation)) {
-              args = args || {};
-              args.where = { ...args.where, organizationId };
+              // Ensure args and args.where are safely initialized as objects
+              const safeArgs = args || {};
+              safeArgs.where = { ...(safeArgs.where || {}), organizationId };
+              return query(safeArgs);
             }
           }
           
