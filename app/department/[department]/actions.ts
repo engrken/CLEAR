@@ -2232,128 +2232,76 @@ export async function verifyOnlineRemittance(
 }
 
 export async function submitOnlineRemittance(department: string, formData: FormData) {
-  // Extract standard string/number fields from FormData
-  const studentId = formData.get('studentId') as string;
-  const studentName = formData.get('studentName') as string;
-  const email = formData.get('email') as string;
-  const paymentChannel = formData.get('paymentChannel') as string;
-  const referenceNo = formData.get('referenceNo') as string;
-  const particulars = formData.get('particulars') as string;
-  const amount = parseFloat(formData.get('amount') as string);
-  const ay = formData.get('ay') as string;
-  const term = formData.get('term') as string;
-  
+  // 1. Reconstruct the 'data' object to ensure all your existing validation and DB logic works
+  const data = {
+    studentId: formData.get('studentId') as string,
+    studentName: formData.get('studentName') as string,
+    email: formData.get('email') as string,
+    paymentChannel: formData.get('paymentChannel') as string,
+    referenceNo: formData.get('referenceNo') as string,
+    particulars: formData.get('particulars') as string,
+    amount: parseFloat(formData.get('amount') as string),
+    ay: formData.get('ay') as string,
+    term: formData.get('term') as string,
+    proofBase64: null as string | null,
+  };
+
+  // 2. Safely extract and process the file
+  const receiptFile = formData.get('receipt') as File | null;
   if (receiptFile) {
     const arrayBuffer = await receiptFile.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
     // Convert back to base64 on the server to maintain compatibility with your database schema
-    proofBase64 = `data:${receiptFile.type};base64,${buffer.toString('base64')}`;
+    data.proofBase64 = `data:${receiptFile.type};base64,${buffer.toString('base64')}`;
   }
+
   // PUBLIC:
   // Do not use getOrgId().
-  const orgId =
-    await resolveOrganizationId(
-      department
-    );
-const receiptFile = formData.get('receipt') as File | null;
-  let proofBase64: string | null = null;
-  
+  const orgId = await resolveOrganizationId(department);
 
-  const cleanEmail =
-    String(
-      data.email || ""
-    )
-      .trim()
-      .toLowerCase();
+  const cleanEmail = String(data.email || "").trim().toLowerCase();
 
-  if (
-    !cleanEmail ||
-    !cleanEmail.includes("@")
-  ) {
-    throw new Error(
-      "Please provide a valid email address."
-    );
+  if (!cleanEmail || !cleanEmail.includes("@")) {
+    throw new Error("Please provide a valid email address.");
   }
 
-  const amount =
-    money(
-      data.amount,
-      "Online remittance amount"
-    );
+  const amount = money(data.amount, "Online remittance amount");
 
   if (amount <= 0) {
-    throw new Error(
-      "Amount must be greater than zero."
-    );
+    throw new Error("Amount must be greater than zero.");
   }
 
-  const submissionId =
-    generateReference("SUB");
+  const submissionId = generateReference("SUB");
 
-  await prisma.onlineRemittance.create(
-    {
-      data: {
-        organizationId:
-          orgId,
-        submissionId,
-        academicYear:
-          data.ay,
-        term:
-          data.term,
-        studentId:
-          String(
-            data.studentId || ""
-          ).trim() || null,
-        studentName:
-          String(
-            data.studentName || ""
-          ).trim(),
-        studentEmail:
-          cleanEmail,
-        paymentChannel:
-          String(
-            data.paymentChannel ||
-              ""
-          ).trim(),
-        referenceNumber:
-          String(
-            data.referenceNo || ""
-          ).trim(),
-        category:
-          "Online Remittance",
-        itemDescription:
-          String(
-            data.particulars ||
-              ""
-          ).trim(),
-        paymentMode:
-          "Online",
-        amountPaid:
-          amount,
-        proofUrl:
-          data.proofBase64 ||
-          null,
-        status:
-          "Pending Verification",
-      },
-    }
-  );
+  await prisma.onlineRemittance.create({
+    data: {
+      organizationId: orgId,
+      submissionId,
+      academicYear: data.ay,
+      term: data.term,
+      studentId: String(data.studentId || "").trim() || null,
+      studentName: String(data.studentName || "").trim(),
+      studentEmail: cleanEmail,
+      paymentChannel: String(data.paymentChannel || "").trim(),
+      referenceNumber: String(data.referenceNo || "").trim(),
+      category: "Online Remittance",
+      itemDescription: String(data.particulars || "").trim(),
+      paymentMode: "Online",
+      amountPaid: amount,
+      proofUrl: data.proofBase64 || null,
+      status: "Pending Verification",
+    },
+  });
 
   await logSystemAction(
     orgId,
     "Public Submission",
     "SUBMIT_REMITTANCE",
-    `Received ₱${amount.toFixed(
-      2
-    )} online payment proof from ${data.studentName} via ${data.paymentChannel}.`
+    `Received ₱${amount.toFixed(2)} online payment proof from ${data.studentName} via ${data.paymentChannel}.`
   );
 
-  revalidatePath(
-    `/department/${department}/remittances`
-  );
-  revalidatePath(
-    `/department/${department}/clearance`
-  );
+  revalidatePath(`/department/${department}/remittances`);
+  revalidatePath(`/department/${department}/clearance`);
 }
 
 export async function submitOnlineRemittanceDirect(
