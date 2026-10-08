@@ -46,6 +46,9 @@ model Student {
   organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   enrollments      Enrollment[]
   collections      Collection[]
+
+  // ADD THIS LINE:
+  @@unique([organizationId, studentId])
 }
 
 model Enrollment {
@@ -102,6 +105,7 @@ model Collection {
   student         Student?     @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, orNumber, itemDescription])
+  @@index([organizationId, academicYear, term]) 
 }
 
 model CollectionSetup {
