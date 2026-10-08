@@ -32,11 +32,7 @@ model Organization {
   tenantUsers       TenantUser[]
   voidTransactions  VoidTransaction[]
   realignments      FundRealignment[]
-<<<<<<< HEAD
-  collectionSetups CollectionSetup[]
-=======
-  collectionSetups  CollectionSetup[]
->>>>>>> dc3342478df5e964dfd885561dcded74d852d051
+collectionSetups  CollectionSetup[]
 }
 
 model Student {
@@ -118,18 +114,10 @@ model CollectionSetup {
   targetFund     String
   academicYear   String
   term           String
-<<<<<<< HEAD
-  isPackage      Boolean      @default(true) // <--- TRUE = Mandatory Package Fee, FALSE = Optional / Standalone Item
-  createdAt      DateTime     @default(now())
-
-  @@index([organizationId, academicYear, term])
-=======
   isPackage      Boolean      @default(true) 
   createdAt      DateTime     @default(now())
 
   @@index([organizationId, academicYear, term])
-
->>>>>>> dc3342478df5e964dfd885561dcded74d852d051
 }
 
 model Penalty {
