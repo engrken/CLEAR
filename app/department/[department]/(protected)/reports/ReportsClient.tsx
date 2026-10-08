@@ -26,7 +26,7 @@ interface ReportsClientProps {
   penalties?: any[];
   packageRate: number;
   setupCategories: string[];
-  termPkgItems: { name: string; rate: number; fund: string }[]; // Added to match dynamic items
+  termPkgItems: { name: string; rate: number; fund: string }[];
 }
 
 interface ReportRow {
@@ -63,7 +63,7 @@ export default function ReportsClient({
   penalties = [],
   packageRate,
   setupCategories,
-  termPkgItems = [] // Used for mapping
+  termPkgItems = []
 }: ReportsClientProps) {
   const [reportCategory, setReportCategory] = useState("Activity & Item Dues (Unpaid)");
   const [statusFilter, setStatusFilter] = useState("All Students (Master Roster)");
@@ -91,11 +91,23 @@ export default function ReportsClient({
 
     let results: ReportRow[] = [];
 
-    const getStudentData = (sId: string, sName: string) => {
-      const s = students.find(st => 
-        (sId && String(st.studentId || '').toLowerCase() === String(sId || '').toLowerCase()) || 
-        (sName && String(st.fullName || '').toLowerCase() === String(sName || '').toLowerCase())
+    // ROBUST STUDENT MATCHER: Handles UUIDs, human-readable student IDs, and names safely
+    const matchStudent = (cStudentId: unknown, cStudentName: unknown, student: any) => {
+      const cleanRef = String(cStudentId || "").trim().toLowerCase();
+      const sUuid = String(student?.id || "").trim().toLowerCase();
+      const sNum = String(student?.studentId || "").trim().toLowerCase();
+      
+      const sName = String(student?.fullName || "").trim().toLowerCase().replace(/\s+/g, " ");
+      const cName = String(cStudentName || "").trim().toLowerCase().replace(/\s+/g, " ");
+
+      return (
+        (cleanRef && (cleanRef === sUuid || cleanRef === sNum)) ||
+        (cName && cName === sName)
       );
+    };
+
+    const getStudentData = (sId: string, sName: string) => {
+      const s = students.find(st => matchStudent(sId, sName, st));
       const uniqueKey = (s?.fullName || sName || s?.studentId || sId || "unknown").trim().toLowerCase();
       
       return {
@@ -110,15 +122,12 @@ export default function ReportsClient({
     if (reportCategory === "Departmental Fee (Package)") {
       const uniformRate = packageRate; 
       results = students.map(student => {
-        // DYNAMIC FIX: We now check if the collected item is structurally part of the termPkgItems
         const studentPayments = validCollections.filter(c => {
-          const isMatchStudent = (String(c.studentId || '').toLowerCase() === String(student.studentId || '').toLowerCase() || 
-                                 String(c.studentName || '').toLowerCase() === String(student.fullName || '').toLowerCase());
-          
+          const isMatch = matchStudent(c.studentId, c.studentName, student);
           const descLower = String(c.itemDescription || '').toLowerCase();
           const isPackageItem = termPkgItems.some(pi => pi.name.toLowerCase() === descLower) || descLower.includes('package') || descLower === 'departmental fee';
           
-          return isMatchStudent && isPackageItem;
+          return isMatch && isPackageItem;
         });
 
         let amountPaid = 0;
@@ -203,7 +212,6 @@ export default function ReportsClient({
       });
 
     } else {
-      // Dynamic setup categories
       const itemPayers = new Map();
       validCollections.forEach(c => {
         if (c.itemDescription === reportCategory || c.category === reportCategory) {
@@ -253,7 +261,6 @@ export default function ReportsClient({
   const isPenaltyReport = reportCategory === "Penalty Fee";
   const isLiquidationReport = reportCategory === "Liquidation / Audited Expenses";
 
-  // --- CSV EXPORT LOGIC ---
   const handleExportCsv = () => {
     let csv = "";
     

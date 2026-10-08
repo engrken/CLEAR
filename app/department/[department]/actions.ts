@@ -134,7 +134,12 @@ function getStudentKey(
 
   return fallback;
 }
-
+function normalizeItemKey(value: unknown) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
 // =========================================================================
 // AUTHORIZATION
 // =========================================================================
@@ -3996,245 +4001,471 @@ export async function getDepartmentFinancials(
     }
   );
 
-  // =========================================================================
-  // PACKAGE PAYMENT MAP
-  // =========================================================================
+ // =========================================================================
+// PACKAGE PAYMENT MAP
+// =========================================================================
+// Collection.studentId SHOULD contain Student.id (UUID).
+//
+// However, older records may contain Student.studentId instead,
+// such as "20-C0524".
+//
+// This implementation supports BOTH:
+//
+// 1. Collection.studentId = Student.id
+// 2. Collection.studentId = Student.studentId
+// 3. Collection.studentName = unique Student.fullName
+//
+// Matching priority:
+//    Student.id
+//    -> Student.studentId
+//    -> unique Student.fullName
+//
+// Each collection record is counted only once.
+// =========================================================================
 
-  const paidMap: Record<
-    string,
-    number
-  > = {};
+const paidByDbStudentId: Record<string, number> = {};
+const paidByStudentNumber: Record<string, number> = {};
+const paidByUniqueStudentName: Record<string, number> = {};
 
-  const studentItemObligations: Record<
-    string,
-    Set<string>
-  > = {};
+// =========================================================================
+// BUILD STUDENT LOOKUP MAPS
+// =========================================================================
 
-  const addStudentObligation = (
-    studentKey: string,
-    itemName: string
-  ) => {
-    if (
-      !studentItemObligations[
-        studentKey
-      ]
-    ) {
-      studentItemObligations[
-        studentKey
-      ] = new Set();
-    }
+const studentsByDbId = new Map<string, any>();
+const studentsByStudentNumber = new Map<string, any>();
+const studentNameCounts = new Map<string, number>();
 
-    if (
-      !studentItemObligations[
-        studentKey
-      ].has(itemName)
-    ) {
-      studentItemObligations[
-        studentKey
-      ].add(itemName);
+students.forEach((student: any) => {
+  if (!student?.id) {
+    return;
+  }
 
-      return true;
-    }
+  const dbId = String(student.id)
+    .trim()
+    .toLowerCase();
 
-    return false;
-  };
+  const studentNumber = String(
+    student.studentId || ""
+  )
+    .trim()
+    .toLowerCase();
 
-  validCollections.forEach(
-    (c: any) => {
-      const descLower =
-        String(
-          c.itemDescription ||
-            ""
-        )
-          .trim()
-          .toLowerCase();
+  const studentName = String(
+    student.fullName || ""
+  )
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
 
-      const isPackageItem =
-        termPkg.items.some(
-          (pi: any) =>
-            String(
-              pi.name || ""
-            )
-              .trim()
-              .toLowerCase() ===
-            descLower
-        );
-
-      const isDepartmentalPackage =
-        descLower ===
-          "departmental fee package" ||
-        descLower ===
-          "departmental fee" ||
-        descLower ===
-          "departmental fee package (all items)";
-
-      /*
-       * IMPORTANT:
-       * Do not use category.includes("fee").
-       *
-       * This prevents unrelated things such as:
-       * - Laboratory Fee
-       * - Penalty Fee
-       * - Replacement Fee
-       * from being treated as package payments.
-       */
-      if (
-        isPackageItem ||
-        isDepartmentalPackage
-      ) {
-        const studentKey =
-          getStudentKey(
-            c.studentId ||
-              c.student?.id,
-            c.student?.fullName ||
-              c.studentName
-          );
-
-        const paid =
-          Number(
-            c.amountPaid
-          ) || 0;
-
-        if (
-          studentKey &&
-          paid > 0
-        ) {
-          paidMap[
-            studentKey
-          ] =
-            (paidMap[
-              studentKey
-            ] || 0) + paid;
-        }
-      }
-    }
+  studentsByDbId.set(
+    dbId,
+    student
   );
 
-  // =========================================================================
-  // CURRENT STUDENTS / ENROLLED STUDENTS
-  // =========================================================================
-
-  const enrollmentStudents =
-    enrollments
-      .filter(
-        (e: any) => {
-          const status =
-            String(
-              e.enrollmentStatus ||
-                ""
-            )
-              .trim()
-              .toUpperCase();
-
-          return (
-            status !==
-              "DROPPED" &&
-            status !==
-              "CANCELLED" &&
-            status !==
-              "INACTIVE"
-          );
-        }
-      )
-      .map(
-        (e: any) =>
-          e.student
-      )
-      .filter(
-        Boolean
-      );
-
-  const uniqueStudentMap =
-    new Map<
-      string,
-      any
-    >();
-
-  /*
-   * Prefer current AY/term enrollment records.
-   * If there are no enrollment records for this term,
-   * fall back to all students so legacy deployments
-   * still work.
-   */
-  if (
-    enrollmentStudents.length >
-    0
-  ) {
-    enrollmentStudents.forEach(
-      (student: any) => {
-        uniqueStudentMap.set(
-          student.id,
-          student
-        );
-      }
-    );
-  } else {
-    students.forEach(
-      (student: any) => {
-        uniqueStudentMap.set(
-          student.id,
-          student
-        );
-      }
+  if (studentNumber) {
+    studentsByStudentNumber.set(
+      studentNumber,
+      student
     );
   }
 
-  const packageStudents =
-    Array.from(
-      uniqueStudentMap.values()
+  if (studentName) {
+    studentNameCounts.set(
+      studentName,
+      (studentNameCounts.get(
+        studentName
+      ) || 0) + 1
+    );
+  }
+});
+
+// =========================================================================
+// READ PACKAGE PAYMENTS
+// =========================================================================
+
+validCollections.forEach((c: any) => {
+  const descLower = String(
+    c.itemDescription || ""
+  )
+    .trim()
+    .toLowerCase();
+
+  // -----------------------------------------------------------------------
+  // Determine whether this collection belongs to the departmental package.
+  // -----------------------------------------------------------------------
+
+  const isPackageItem =
+    termPkg.items.some(
+      (pi: any) =>
+        String(pi.name || "")
+          .trim()
+          .toLowerCase() ===
+        descLower
     );
 
-  // =========================================================================
-  // PACKAGE RECEIVABLES
-  // =========================================================================
+  const isDepartmentalPackage =
+    descLower ===
+      "departmental fee package" ||
+    descLower ===
+      "departmental fee" ||
+    descLower ===
+      "departmental fee package (all items)";
 
-  let unpaidOrPartialPackageCount =
-    0;
+  // Ignore unrelated collections such as:
+  // Laboratory Fee
+  // Penalty Fee
+  // Replacement Fee
+  // etc.
+  if (
+    !isPackageItem &&
+    !isDepartmentalPackage
+  ) {
+    return;
+  }
 
-  let totalPackageReceivable =
-    0;
+  const paid =
+    Number(c.amountPaid) || 0;
 
-  packageStudents.forEach(
-    (student: any) => {
-      const key =
-        getStudentKey(
-          student.id,
-          student.fullName
-        );
+  if (paid <= 0) {
+    return;
+  }
 
-      if (!key) {
-        return;
-      }
+  // =======================================================================
+  // 1. BEST MATCH: Prisma Student relation
+  //
+  // If c.student exists, c.student.id is definitely Student.id.
+  // =======================================================================
 
-      const remitted =
-        paidMap[key] || 0;
+  const relationDbId = String(
+    c.student?.id || ""
+  )
+    .trim()
+    .toLowerCase();
 
-      if (
-        remitted < pkgTotal
-      ) {
-        const remaining =
-          Math.max(
-            0,
-            Math.round(
-              (pkgTotal -
-                remitted) *
-                100
-            ) / 100
-          );
+  if (
+    relationDbId &&
+    studentsByDbId.has(
+      relationDbId
+    )
+  ) {
+    paidByDbStudentId[
+      relationDbId
+    ] =
+      (paidByDbStudentId[
+        relationDbId
+      ] || 0) + paid;
 
-        unpaidOrPartialPackageCount +=
-          1;
+    return;
+  }
 
-        totalPackageReceivable +=
-          remaining;
+  // =======================================================================
+  // 2. CORRECT SCHEMA MATCH:
+  // Collection.studentId = Student.id
+  // =======================================================================
 
-        addStudentObligation(
-          key,
-          "Departmental Fee"
-        );
-      }
+  const rawStudentReference =
+    String(
+      c.studentId || ""
+    )
+      .trim()
+      .toLowerCase();
+
+  if (
+    rawStudentReference &&
+    studentsByDbId.has(
+      rawStudentReference
+    )
+  ) {
+    paidByDbStudentId[
+      rawStudentReference
+    ] =
+      (paidByDbStudentId[
+        rawStudentReference
+      ] || 0) + paid;
+
+    return;
+  }
+
+  // =======================================================================
+  // 3. LEGACY MATCH:
+  // Collection.studentId = Student.studentId
+  //
+  // Example:
+  // Collection.studentId = "20-C0524"
+  // Student.studentId    = "20-C0524"
+  // =======================================================================
+
+  if (
+    rawStudentReference &&
+    studentsByStudentNumber.has(
+      rawStudentReference
+    )
+  ) {
+    paidByStudentNumber[
+      rawStudentReference
+    ] =
+      (paidByStudentNumber[
+        rawStudentReference
+      ] || 0) + paid;
+
+    return;
+  }
+
+  // =======================================================================
+  // 4. LAST RESORT:
+  // Match by unique student name only.
+  //
+  // This is intentionally NOT used when multiple students have
+  // the same name.
+  // =======================================================================
+
+  const collectionStudentName =
+    String(
+      c.student?.fullName ||
+        c.studentName ||
+        ""
+    )
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, " ");
+
+  if (
+    collectionStudentName &&
+    studentNameCounts.get(
+      collectionStudentName
+    ) === 1
+  ) {
+    paidByUniqueStudentName[
+      collectionStudentName
+    ] =
+      (paidByUniqueStudentName[
+        collectionStudentName
+      ] || 0) + paid;
+  }
+});
+
+// =========================================================================
+// STUDENT ITEM OBLIGATIONS
+// =========================================================================
+
+const studentItemObligations: Record<
+  string,
+  Set<string>
+> = {};
+
+const addStudentObligation = (
+  studentKey: string,
+  itemName: string
+) => {
+  if (
+    !studentItemObligations[
+      studentKey
+    ]
+  ) {
+    studentItemObligations[
+      studentKey
+    ] = new Set();
+  }
+
+  if (
+    !studentItemObligations[
+      studentKey
+    ].has(itemName)
+  ) {
+    studentItemObligations[
+      studentKey
+    ].add(itemName);
+
+    return true;
+  }
+
+  return false;
+};
+
+// =========================================================================
+// PACKAGE STUDENT POPULATION
+// =========================================================================
+// Combine:
+// - all students in the organization
+// - valid students appearing in the selected AY/term enrollment
+//
+// Deduplicate by Student.id.
+// =========================================================================
+
+const packageStudentMap =
+  new Map<string, any>();
+
+// Add all organization students.
+students.forEach((student: any) => {
+  if (student?.id) {
+    packageStudentMap.set(
+      String(student.id),
+      student
+    );
+  }
+});
+
+// Add valid enrolled students for the selected AY/term.
+enrollments
+  .filter((enrollment: any) => {
+    const status = String(
+      enrollment.enrollmentStatus || ""
+    )
+      .trim()
+      .toUpperCase();
+
+    return (
+      status !== "DROPPED" &&
+      status !== "CANCELLED" &&
+      status !== "INACTIVE"
+    );
+  })
+  .forEach((enrollment: any) => {
+    const student =
+      enrollment?.student;
+
+    if (student?.id) {
+      packageStudentMap.set(
+        String(student.id),
+        student
+      );
     }
+  });
+
+const packageStudents =
+  Array.from(
+    packageStudentMap.values()
   );
+
+// =========================================================================
+// PACKAGE RECEIVABLES
+// =========================================================================
+
+let unpaidOrPartialPackageCount =
+  0;
+
+let totalPackageReceivable =
+  0;
+
+packageStudents.forEach(
+  (student: any) => {
+    if (!student?.id) {
+      return;
+    }
+
+    const dbId = String(
+      student.id
+    )
+      .trim()
+      .toLowerCase();
+
+    const studentNumber =
+      String(
+        student.studentId || ""
+      )
+        .trim()
+        .toLowerCase();
+
+    const studentName =
+      String(
+        student.fullName || ""
+      )
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, " ");
+
+    // =====================================================================
+    // DETERMINE PAYMENT TOTAL
+    // =====================================================================
+
+    let remitted = 0;
+
+    // 1. Student.id
+    if (
+      dbId &&
+      paidByDbStudentId[
+        dbId
+      ] !== undefined
+    ) {
+      remitted =
+        paidByDbStudentId[
+          dbId
+        ];
+    }
+
+    // 2. Human-readable student number
+    else if (
+      studentNumber &&
+      paidByStudentNumber[
+        studentNumber
+      ] !== undefined
+    ) {
+      remitted =
+        paidByStudentNumber[
+          studentNumber
+        ];
+    }
+
+    // 3. Unique name
+    else if (
+      studentName &&
+      paidByUniqueStudentName[
+        studentName
+      ] !== undefined
+    ) {
+      remitted =
+        paidByUniqueStudentName[
+          studentName
+        ];
+    }
+
+    remitted =
+      Math.round(
+        remitted * 100
+      ) / 100;
+
+    // =====================================================================
+    // CALCULATE REMAINING PACKAGE BALANCE
+    // =====================================================================
+
+    const remaining =
+      Math.max(
+        0,
+        Math.round(
+          (pkgTotal -
+            remitted) *
+            100
+        ) / 100
+      );
+
+    // =====================================================================
+    // ONLY UNPAID / PARTIAL STUDENTS APPEAR IN THE SUMMARY
+    // =====================================================================
+
+    if (remaining > 0) {
+      unpaidOrPartialPackageCount +=
+        1;
+
+      totalPackageReceivable +=
+        remaining;
+
+      addStudentObligation(
+        `ID:${dbId}`,
+        "Departmental Fee"
+      );
+    }
+  }
+);
+
+// =========================================================================
+// FINAL PACKAGE RECEIVABLE TOTAL
+// =========================================================================
+
+totalPackageReceivable =
+  Math.round(
+    totalPackageReceivable *
+      100
+  ) / 100;
 
   // =========================================================================
   // OTHER COLLECTION OBLIGATIONS
@@ -4264,7 +4495,32 @@ export async function getDepartmentFinancials(
         totalPackageReceivable,
     };
   }
+const explicitCollectibleItemKeys = new Set<string>();
 
+explicitCollectibles.forEach((ec: any) => {
+  let rawCat = String(
+    ec.category || "Unassigned"
+  ).trim();
+
+  let itemName = rawCat;
+
+  if (rawCat.startsWith("Arrears: ")) {
+    const core = rawCat.substring(9);
+
+    const dashIdx = core.lastIndexOf(" - ");
+
+    itemName =
+      dashIdx !== -1
+        ? core.substring(0, dashIdx).trim()
+        : core;
+  }
+
+  const key = normalizeItemKey(itemName);
+
+  if (key) {
+    explicitCollectibleItemKeys.add(key);
+  }
+});
   /*
    * Aggregate non-package obligations by student + item.
    *
@@ -4284,52 +4540,59 @@ export async function getDepartmentFinancials(
   >();
 
   validCollections.forEach(
-    (c: any) => {
-      const desc =
-        String(
-          c.itemDescription ||
-            ""
-        ).trim();
+  (c: any) => {
+    const desc =
+      String(
+        c.itemDescription ||
+          ""
+      ).trim();
 
-      const descLower =
-        desc.toLowerCase();
+    const descLower =
+      desc.toLowerCase();
 
-      const isPackageItem =
-        termPkg.items.some(
-          (pi: any) =>
-            String(
-              pi.name || ""
-            )
-              .trim()
-              .toLowerCase() ===
-            descLower
-        );
+    const isPackageItem =
+      termPkg.items.some(
+        (pi: any) =>
+          String(
+            pi.name || ""
+          )
+            .trim()
+            .toLowerCase() ===
+          descLower
+      );
 
-      const isDepartmentalPackage =
-        descLower ===
-          "departmental fee package" ||
-        descLower ===
-          "departmental fee" ||
-        descLower ===
-          "departmental fee package (all items)";
+    const isDepartmentalPackage =
+      descLower ===
+        "departmental fee package" ||
+      descLower ===
+        "departmental fee" ||
+      descLower ===
+        "departmental fee package (all items)";
 
-      if (
-        isPackageItem ||
-        isDepartmentalPackage
-      ) {
-        return;
-      }
+    if (
+      isPackageItem ||
+      isDepartmentalPackage
+    ) {
+      return;
+    }
 
-      const category =
-        String(
-          c.category ||
-            ""
-        ).trim();
+    const category =
+      String(
+        c.category ||
+          ""
+      ).trim();
 
-      const itemName =
-        desc ||
-        category ||
-        "Other Due";
+    const itemName =
+      desc ||
+      category ||
+      "Other Due";
+	  if (
+    explicitCollectibleItemKeys.has(
+      normalizeItemKey(itemName)
+    )
+  ) {
+    return;
+  }
 
       const studentKey =
         getStudentKey(
