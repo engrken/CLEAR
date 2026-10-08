@@ -16,7 +16,7 @@ model Organization {
   // NEW: System-wide active term settings
   activeAy          String   @default("A.Y. 2026 - 2027")
   activeTerm        String   @default("1st Sem")
-
+  type              String   @default("Department")
   students          Student[]
   enrollments       Enrollment[]
   funds             Fund[]
