@@ -109,7 +109,7 @@ export default async function RootPage() {
                   className="btn btn-warning fw-bold px-4 py-2 shadow-sm d-flex align-items-center gap-2"
                 >
                   <i className="bi bi-box-arrow-in-right"></i>
-                  <span>{isLoggedIn ? 'Open Your Portal' : 'Enter Department Portal'}</span>
+                  <span>{isLoggedIn ? 'Open Your Portal' : 'Enter Organization Portal'}</span>
                 </Link>
                 <a 
                   href="#features" 

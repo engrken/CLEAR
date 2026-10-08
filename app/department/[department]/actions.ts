@@ -1465,43 +1465,30 @@ export async function requestOtp(
   department: string,
   email: string
 ) {
-  const cleanDepartment =
-    normalizeDepartment(
-      department
-    );
+  const cleanDepartment = normalizeDepartment(department);
+  const cleanEmail = String(email || "").trim().toLowerCase();
 
-  const cleanEmail =
-    String(
-      email || ""
-    )
-      .trim()
-      .toLowerCase();
-
-  if (
-    !cleanEmail ||
-    !cleanEmail.includes("@")
-  ) {
-    throw new Error(
-      "Please provide a valid email address."
-    );
+  if (!cleanEmail || !cleanEmail.includes("@")) {
+    throw new Error("Please provide a valid email address.");
   }
 
-  // PUBLIC LOGIN FLOW:
-  // No authenticated session is required here.
-  const orgId =
-    await resolveOrganizationId(
-      cleanDepartment
-    );
+  // NEW: Fetch the full organization record, not just the ID
+  const org = await prisma.organization.findUnique({
+    where: { subdomain: cleanDepartment }
+  });
 
-  const user =
-    await prisma.tenantUser.findFirst({
-      where: {
-        organizationId:
-          orgId,
-        email:
-          cleanEmail,
-      },
-    });
+  if (!org) {
+    throw new Error("Department or Organization not found.");
+  }
+
+  const orgId = org.id;
+
+  const user = await prisma.tenantUser.findFirst({
+    where: {
+      organizationId: orgId,
+      email: cleanEmail,
+    },
+  });
 
   if (!user) {
     throw new Error(
@@ -1594,8 +1581,7 @@ export async function requestOtp(
       secure: true,
       auth: {
         user: smtpUser,
-        pass: smtpPass,
-      },
+        pass: smtpPass,},
     });
 
   // Send first. Only store the OTP if sending succeeds.
@@ -1603,18 +1589,13 @@ export async function requestOtp(
     await transporter.sendMail({
       from: `"CLEAR System" <${smtpUser}>`,
       to: cleanEmail,
-      subject: `[CLEAR System] OTP CODE FOR COLLEGE OF ${cleanDepartment.toUpperCase()}`,
+      // NEW: Dynamically use the true organization name from the database!
+      subject: `[CLEAR System] OTP CODE FOR ${org.name.toUpperCase()}`,
       text: `Your 6-digit One-Time PIN is: ${otpCode}\n\nThis code will expire in 5 minutes.`,
     });
   } catch (error) {
-    console.error(
-      "SMTP Error:",
-      error
-    );
-
-    throw new Error(
-      "Failed to dispatch verification email."
-    );
+    console.error("SMTP Error:", error);
+    throw new Error("Failed to dispatch verification email.");
   }
 
   const cookieOptions = {

@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   title: 'Centralized Liquidation of Expenses & Audit Records',
 };
 
-export default async function DepartmentOverviewPage({
+export default async function EntityOverviewPage({
   params,
   searchParams,
 }: {
@@ -29,7 +29,7 @@ export default async function DepartmentOverviewPage({
   const resolvedSearch = searchParams ? await searchParams : {};
 
   // =========================================================
-  // 1. FORMAT DEPARTMENT PATH
+  // 1. FORMAT PATH
   // =========================================================
   const cleanSubdomain = decodeURIComponent(department).toLowerCase().trim();
   const basePath = `/department/${encodeURIComponent(cleanSubdomain)}`;
@@ -47,9 +47,9 @@ export default async function DepartmentOverviewPage({
     return (
       <div className="container p-4">
         <div className="alert alert-danger shadow-sm border-secondary">
-          <h4 className="fw-bold mb-2">Department Not Found</h4>
+          <h4 className="fw-bold mb-2">Entity Not Found</h4>
           <p className="small mb-0">
-            The department "{cleanSubdomain}" does not exist in the database.
+            The registered entity "{cleanSubdomain}" does not exist in the database.
           </p>
         </div>
       </div>
@@ -59,7 +59,6 @@ export default async function DepartmentOverviewPage({
   // =========================================================
   // 3. DYNAMIC ACADEMIC YEAR & TERM (DATABASE LINKED)
   // =========================================================
-  // Uses URL params if present, otherwise falls back to the database defaults!
   const ay = resolvedSearch.ay || organization.activeAy || "A.Y. 2026 - 2027";
   const term = resolvedSearch.term || organization.activeTerm || "1st Sem";
   const subtab = resolvedSearch.subtab || "advances";
@@ -73,7 +72,7 @@ export default async function DepartmentOverviewPage({
   const isAuthenticated = Boolean(session?.user);
 
   // =========================================================
-  // 5. UNAUTHENTICATED DEPARTMENT ENTRY (LANDING PAGE)
+  // 5. UNAUTHENTICATED ENTRY (LANDING PAGE)
   // =========================================================
   if (!isAuthenticated) {
     return (
@@ -84,7 +83,9 @@ export default async function DepartmentOverviewPage({
             style={{ maxWidth: "650px" }}
           >
             <div className="mb-4">
-              <i className="bi bi-building display-4 text-info mb-3 d-block"></i>
+              {/* NEW: Dynamically render icon based on Entity Type */}
+              <i className={`display-4 mb-3 d-block ${organization.type === 'Organization' ? 'bi bi-people-fill text-warning' : 'bi bi-building text-info'}`}></i>
+              
               <h3 className="fw-bold text-accent mb-2">
                 {organization.name}
               </h3>
@@ -103,7 +104,8 @@ export default async function DepartmentOverviewPage({
             {resolvedSearch.forbidden === "true" && (
               <div className="alert alert-danger text-start small">
                 <i className="bi bi-shield-exclamation me-2"></i>
-                You are not authorized to access this department.
+                {/* NEW: Dynamically reference the entity type in error message */}
+                You are not authorized to access this {organization.type.toLowerCase()}.
               </div>
             )}
 
@@ -175,8 +177,9 @@ export default async function DepartmentOverviewPage({
           <h4 className="fw-bold mb-1">
             Financial Overview Dashboard
           </h4>
+          {/* NEW: Scrubbed hardcoded "department" */}
           <p className="text-secondary small mb-0">
-            Here's an overview of department collections, liquidations, and fund allocations ({ay} | {term}).
+            Here's an overview of collections, liquidations, and fund allocations ({ay} | {term}).
           </p>
         </div>
       </div>
