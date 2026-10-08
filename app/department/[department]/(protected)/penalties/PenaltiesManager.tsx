@@ -9,6 +9,7 @@ import {
   deletePenalty
 } from "../../actions";
 import Link from "next/link";
+import { useRouter } from "next/navigation"; // 1. ADDED THIS IMPORT
 
 interface Student {
   studentId: string;
@@ -42,6 +43,7 @@ export default function PenaltiesManager({
   students: Student[];
   penalties: Penalty[];
 }) {
+  const router = useRouter(); // 2. INITIALIZED ROUTER
   const todayStr = new Date().toISOString().split("T")[0];
 
   // =========================================================
@@ -174,7 +176,10 @@ export default function PenaltiesManager({
     try {
       await deletePenalty(department, id);
       alert("Penalty record removed successfully.");
-	  revalidatePath(`/department/${department}/penalties`);
+      
+      // 3. REPLACED revalidatePath WITH router.refresh()
+      router.refresh(); 
+      
     } catch (err: any) {
       alert("Error: " + err.message);
     }
