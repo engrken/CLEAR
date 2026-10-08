@@ -2231,28 +2231,33 @@ export async function verifyOnlineRemittance(
   );
 }
 
-export async function submitOnlineRemittance(
-  department: string,
-  data: {
-    studentId: string;
-    studentName: string;
-    email: string;
-    paymentChannel: string;
-    referenceNo: string;
-    particulars: string;
-    amount: number;
-    proofBase64: string | null;
-    ay: string;
-    term: string;
-  }
-) {
+export async function submitOnlineRemittance(department: string, formData: FormData) {
+  // Extract standard string/number fields from FormData
+  const studentId = formData.get('studentId') as string;
+  const studentName = formData.get('studentName') as string;
+  const email = formData.get('email') as string;
+  const paymentChannel = formData.get('paymentChannel') as string;
+  const referenceNo = formData.get('referenceNo') as string;
+  const particulars = formData.get('particulars') as string;
+  const amount = parseFloat(formData.get('amount') as string);
+  const ay = formData.get('ay') as string;
+  const term = formData.get('term') as string;
+}) {
   // PUBLIC:
   // Do not use getOrgId().
   const orgId =
     await resolveOrganizationId(
       department
     );
-
+const receiptFile = formData.get('receipt') as File | null;
+  let proofBase64: string | null = null;
+  
+  if (receiptFile) {
+    const arrayBuffer = await receiptFile.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    // Convert back to base64 on the server to maintain compatibility with your database schema
+    proofBase64 = `data:${receiptFile.type};base64,${buffer.toString('base64')}`;
+  }
   const cleanEmail =
     String(
       data.email || ""
