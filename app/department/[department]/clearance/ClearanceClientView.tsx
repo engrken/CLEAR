@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-// FIXED 1: Corrected import name and path to point to your main actions.ts
 import { submitOnlineRemittance } from "../actions"; 
 import { ThemedAlert } from '@/lib/alerts';
 
@@ -31,48 +30,47 @@ export default function ClearanceClientView({
   const [channel, setChannel] = useState("GCash");
   const [referenceNo, setReferenceNo] = useState("");
   const [collectionType, setCollectionType] = useState(feeOptions[0] || "Departmental Fee");
-  const [paymentModeUI, setPaymentModeUI] = useState("Full Payment"); // Only used for UI now
+  const [paymentModeUI, setPaymentModeUI] = useState("Full Payment"); 
   const [amount, setAmount] = useState<number>(packageRate);
-  const [proofBase64, setProofBase64] = useState<string | null>(null);
+  
+  // FIX: Storing the raw File instead of a Base64 string to prevent Payload Too Large errors
+  const [proofFile, setProofFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setProofBase64(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      setProofFile(file);
     }
   };
 
   const handleProofSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!studentId || !referenceNo || !proofBase64 || amount <= 0) {
+    if (!studentId || !referenceNo || !proofFile || amount <= 0) {
       return alert("Please complete all required fields and attach a receipt file.");
     }
 
     setIsSubmitting(true);
     try {
-      await submitOnlineRemittance(department, {
-        studentId,
-        studentName: fullName || "Student",
-        email: email || "student@example.com",
-        paymentChannel: channel, // FIXED 2: Mapped to actions.ts signature
-        referenceNo,
-        particulars: collectionType, // FIXED 2: Mapped to actions.ts signature
-        amount,
-        proofBase64: proofBase64,
-        ay,
-        term
-        // FIXED 3: Removed paymentMode as actions.ts handles it internally
-      });
+      // FIX: Append payload to FormData to correctly stream the file through Next.js Server Actions
+      const formData = new FormData();
+      formData.append("studentId", studentId);
+      formData.append("studentName", fullName || "Student");
+      formData.append("email", email || "student@example.com");
+      formData.append("paymentChannel", channel);
+      formData.append("referenceNo", referenceNo);
+      formData.append("particulars", collectionType);
+      formData.append("amount", amount.toString());
+      formData.append("ay", ay);
+      formData.append("term", term);
+      formData.append("receipt", proofFile);
+
+      await submitOnlineRemittance(department, formData);
 
       alert("Payment proof submitted successfully! Pending officer verification in Remittance Queue.");
       setShowProofModal(false);
       setReferenceNo("");
-      setProofBase64(null);
+      setProofFile(null);
     } catch (err: any) {
       alert("Error: " + err.message);
     } finally {

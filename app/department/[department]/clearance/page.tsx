@@ -1,7 +1,8 @@
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/auth';
 import { fmt, formatHoursAndMinutes } from '@/lib/utils';
-import { format } from 'date-fns';
+import { formatInTimeZone } from 'date-fns-tz';
+import { headers } from 'next/headers';
 import crypto from 'crypto';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -16,6 +17,25 @@ export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: 'Centralized Liquidation of Expense & Audit Records',
+};
+
+// FIX: Extracted PublicHeader outside the main page component to prevent re-renders
+const PublicHeader = ({ organizationName }: { organizationName: string }) => {
+  const displayOrgName = organizationName.toLowerCase().startsWith('college of') 
+    ? organizationName : `College of ${organizationName}`;
+  return (
+    <header className="navbar border-bottom border-secondary px-4 py-3 bg-card shadow-sm d-print-none">
+      <div className="d-flex align-items-center gap-3 w-100">
+        <img src="/fcu.png" alt="FCU Logo" style={{ width: '55px', objectFit: 'contain' }} />
+        <div>
+          <h5 className="mb-0 fw-bold text-accent">CLEAR System</h5>
+          <small className="text-secondary text-uppercase fw-semibold" style={{ letterSpacing: '0.05em' }}>
+            {displayOrgName}
+          </small>
+        </div>
+      </div>
+    </header>
+  );
 };
 
 export default async function ClearancePage({
@@ -36,6 +56,12 @@ export default async function ClearancePage({
   const cleanDepartment = decodeURIComponent(department).toLowerCase().trim();
   const basePath = `/department/${encodeURIComponent(cleanDepartment)}`;
 
+  // FIX: Resolve headers to build an absolute URL for the QR Code
+  const headersList = await headers();
+  const host = headersList.get('host') || 'localhost:3000';
+  const protocol = process.env.NODE_ENV === 'development' ? 'http' : 'https';
+  const absoluteBaseUrl = `${protocol}://${host}`;
+
   const organization = await prisma.organization.findUnique({
     where: { subdomain: cleanDepartment },
   });
@@ -45,8 +71,8 @@ export default async function ClearancePage({
       <div className="d-flex flex-column min-vh-100 bg-canvas">
         <main className="flex-grow-1 p-4 d-flex align-items-center justify-content-center">
           <div className="alert alert-danger p-4 shadow-sm border-secondary text-center">
-            <h4 className="fw-bold mb-2">Entity Not Found</h4>
-            <p className="small mb-0">The registered entity '{decodeURIComponent(department)}' does not exist.</p>
+            <h4 className="fw-bold mb-2">Department Not Found</h4>
+            <p className="small mb-0">The department '{decodeURIComponent(department)}' does not exist.</p>
           </div>
         </main>
       </div>
@@ -62,10 +88,7 @@ export default async function ClearancePage({
   const session = await auth();
   const isOfficer = !!session?.user;
 
-  // =======================================================
-  // CENTRALIZED DYNAMIC FINANCIAL ENGINE
-  // =======================================================
-  const financials = await getDepartmentFinancials(organization.id, ay, term);
+  const financials = await getDepartmentFinancials(organization.id, ay, term, !isOfficer);
   const termPkg = financials.termPkg;
 
   const collectionSetups = await prisma.collectionSetup.findMany({
@@ -77,41 +100,19 @@ export default async function ClearancePage({
     ? collectionSetups.map(c => c.name) 
     : ["Departmental Fee (Package)"];
 
-  // =======================================================
-  // REUSABLE PUBLIC HEADER COMPONENT
-  // =======================================================
-  const PublicHeader = () => {
-    return (
-      <header className="navbar border-bottom border-secondary px-4 py-3 bg-card shadow-sm d-print-none">
-        <div className="d-flex align-items-center gap-3 w-100">
-          <img src="/fcu.png" alt="FCU Logo" style={{ width: '55px', objectFit: 'contain' }} />
-          <div>
-            <h5 className="mb-0 fw-bold text-accent">CLEAR System</h5>
-            {/* SCRUBBED: Dynamic org name instead of forced College prefix */}
-            <small className="text-secondary text-uppercase fw-semibold" style={{ letterSpacing: '0.05em' }}>
-              {organization.name}
-            </small>
-          </div>
-        </div>
-      </header>
-    );
-  };
-
   const salt = process.env.CLEARANCE_SALT || 'CLEARANCE_KEY_2026';
 
-  // =======================================================
-  // CRYPTO SIGNATURE VERIFICATION (CERTIFICATE VIEW)
-  // =======================================================
   if (sigParam && q) {
     const expectedSig = crypto.createHash('sha256').update(`${q.toLowerCase()}|${ay}|${term}|${salt}`).digest('hex');
     const isSignatureValid = sigParam.toLowerCase() === expectedSig.toLowerCase();
+    const displayOrgName = organization.name.toLowerCase().startsWith('college of') ? organization.name : `College of ${organization.name}`;
 
     return (
       <div className="d-flex flex-column min-vh-100 bg-canvas">
-        {!isOfficer && <PublicHeader />}
+        {!isOfficer && <PublicHeader organizationName={organization.name} />}
         <main className="flex-grow-1 p-3 p-md-5 w-100 d-flex align-items-center justify-content-center">
           <div className="card p-4 border-secondary text-center shadow-lg w-100" style={{ maxWidth: '500px', backgroundColor: '#1e293b' }}>
-            <h4 className="text-info fw-bold mb-1">{organization.name}</h4>
+            <h4 className="text-info fw-bold mb-1">{displayOrgName}</h4>
             <small className="text-secondary d-block mb-4">Centralized Liquidation of Expenses & Audit Records</small>
 
             {isSignatureValid ? (
@@ -121,7 +122,11 @@ export default async function ClearancePage({
                   <tbody>
                     <tr className="border-bottom border-secondary"><td className="text-secondary py-2">Student ID:</td><td className="fw-bold text-info py-2">{q}</td></tr>
                     <tr className="border-bottom border-secondary"><td className="text-secondary py-2">Academic Term:</td><td className="py-2">{term} ({ay})</td></tr>
-                    <tr className="border-bottom border-secondary"><td className="text-secondary py-2">Verification Time:</td><td className="py-2">{format(new Date(), 'MMM dd, yyyy - hh:mm a')}</td></tr>
+                    <tr className="border-bottom border-secondary">
+                      <td className="text-secondary py-2">Verification Time:</td>
+                      {/* FIX: Forced Manila timezone mapping for server accuracy */}
+                      <td className="py-2">{formatInTimeZone(new Date(), 'Asia/Manila', 'MMM dd, yyyy - hh:mm a')}</td>
+                    </tr>
                     <tr><td className="text-secondary py-2">Crypto Hash:</td><td className="font-monospace text-secondary small py-2">{sigParam.substring(0, 16)}...</td></tr>
                   </tbody>
                 </table>
@@ -130,7 +135,7 @@ export default async function ClearancePage({
             ) : (
               <div className="bg-danger text-white p-3 rounded fw-bold fs-5 mb-3 shadow-sm">
                 <i className="bi bi-x-circle-fill me-2"></i>INVALID OR TAMPERED
-                <p className="fs-6 fw-normal m-0 mt-2">This clearance token does not match system records, or active obligations were logged after issuance.</p>
+                <p className="fs-6 fw-normal m-0 mt-2">This clearance token does not match department records, or active obligations were logged after issuance.</p>
               </div>
             )}
           </div>
@@ -140,9 +145,6 @@ export default async function ClearancePage({
     );
   }
 
-  // =======================================================
-  // OFFICER DASHBOARD (SERVES CLEARANCE MANAGER)
-  // =======================================================
   if (isOfficer && !sigParam) {
     const [allStudents, allCollections, allPenalties, allAdvances] = await Promise.all([
       prisma.student.findMany({ where: { organizationId: organization.id }, orderBy: { fullName: 'asc' } }),
@@ -222,8 +224,12 @@ export default async function ClearancePage({
           <div className="module card p-3 p-md-4 border-secondary shadow-sm h-100">
             <h5 className="text-accent mb-3"><i className="bi bi-shield-check me-2"></i> Officer Clearance Dashboard</h5>
             <ClearanceManager 
-              department={department} ay={ay} term={term}
-              students={clearanceRoster} feeOptions={feeOptions} packageRate={termPkg.total}
+              department={cleanDepartment} /* FIX: Pass decoded URL param */
+              ay={ay} 
+              term={term}
+              students={clearanceRoster} 
+              feeOptions={feeOptions} 
+              packageRate={termPkg.total}
             />
           </div>
         </main>
@@ -231,9 +237,6 @@ export default async function ClearancePage({
     );
   }
 
-  // =======================================================
-  // PUBLIC STUDENT SEARCH (SERVES CLEARANCE CLIENT VIEW)
-  // =======================================================
   let studentRecord = null;
   let isCleared = false;
   const pendingDues: string[] = [];
@@ -305,14 +308,15 @@ export default async function ClearancePage({
       if (isCleared) {
         const rawStr = `${studentRecord.studentId.toLowerCase()}|${ay}|${term}|${salt}`;
         clearanceSig = crypto.createHash('sha256').update(rawStr).digest('hex');
-        verifyUrl = `${basePath}/clearance?ay=${encodeURIComponent(ay)}&term=${encodeURIComponent(term)}&q=${encodeURIComponent(studentRecord.studentId)}&sig=${encodeURIComponent(clearanceSig)}`;
+        // FIX: Construct the URL securely with the domain included so mobile phone scanners process it as a hyperlink
+        verifyUrl = `${absoluteBaseUrl}${basePath}/clearance?ay=${encodeURIComponent(ay)}&term=${encodeURIComponent(term)}&q=${encodeURIComponent(studentRecord.studentId)}&sig=${encodeURIComponent(clearanceSig)}`;
       }
     }
   }
 
   return (
     <div className="d-flex flex-column min-vh-100 bg-canvas">
-      <PublicHeader />
+      <PublicHeader organizationName={organization.name} />
       <main className="flex-grow-1 p-3 p-md-5 mx-auto w-100" style={{ maxWidth: '1200px' }}>
         <div className="module card p-3 p-md-4 border-secondary shadow-sm h-100">
           <h5 className="text-accent mb-2"><i className="bi bi-person-check me-2"></i>Student Financial Clearance Verification</h5>
@@ -348,7 +352,7 @@ export default async function ClearancePage({
                       <div className="alert alert-warning py-4 text-center border-warning shadow-sm m-0">
                         <i className="bi bi-person-x-fill fs-3 d-block mb-2 text-warning"></i>
                         <strong className="fs-5">RECORD NOT FOUND</strong>
-                        <div className="small mt-1 text-secondary">No enrolled record matches <code>{q}</code> for {term} ({ay}). Please verify your entry or visit the treasury office.</div>
+                        <div className="small mt-1 text-secondary">No enrolled record matches <code>{q}</code> for {term} ({ay}). Please verify your entry or visit the department treasury office.</div>
                       </div>
                     ) : (
                       <div className="card p-3 border-secondary shadow-sm mb-3 bg-card">
@@ -361,7 +365,7 @@ export default async function ClearancePage({
                         {isCleared ? (
                           <div className="alert alert-success py-3 mb-0 text-center border-success shadow-sm">
                             <div className="fw-bold fs-5 mb-2"><i className="bi bi-patch-check-fill me-2 text-success"></i> CLEARED FOR SIGNING</div>
-                            <div className="small text-secondary mb-3">Present this official QR code to an authorized adviser or custodian for digital sign-off.</div>
+                            <div className="small text-secondary mb-3">Present this official QR code to the department adviser or custodian for digital sign-off.</div>
                             <div className="d-inline-block p-2 bg-white rounded border border-success shadow-sm mb-2">
                               <Image src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(verifyUrl)}`} alt="Clearance QR Code" width={140} height={140} unoptimized />
                             </div>
@@ -371,7 +375,7 @@ export default async function ClearancePage({
                           <div className="alert alert-danger py-3 mb-0 text-center border-danger shadow-sm">
                             <div className="fw-bold fs-5 mb-1"><i className="bi bi-exclamation-triangle-fill me-2"></i> CLEARANCE HOLD ACTIVE</div>
                             <div className="small text-secondary">This student has <strong>{pendingDues.length}</strong> pending obligation(s).</div>
-                            <div className="small text-secondary mt-1">Please visit the treasurer or auditor to settle your account.</div>
+                            <div className="small text-secondary mt-1">Please visit the department treasurer or auditor to settle your account.</div>
                           </div>
                         )}
                       </div>
@@ -386,7 +390,7 @@ export default async function ClearancePage({
           )}
 
           <ClearanceClientView
-            department={department}
+            department={cleanDepartment} /* FIX: Pass decoded URL param */
             ay={ay}
             term={term}
             defaultStudentId={studentRecord?.studentId || q || ""}

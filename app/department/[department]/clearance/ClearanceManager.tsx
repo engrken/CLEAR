@@ -31,7 +31,6 @@ export default function ClearanceManager({
   const [searchQuery, setSearchQuery] = useState("");
   const [activeStudent, setActiveStudent] = useState<StudentClearance | null>(null);
 
-  // GCash / Maya Proof Modal State
   const [showProofModal, setShowProofModal] = useState(false);
   const [studentId, setStudentId] = useState("");
   const [fullName, setFullName] = useState("");
@@ -41,7 +40,9 @@ export default function ClearanceManager({
   const [collectionType, setCollectionType] = useState(feeOptions[0] || "Departmental Fee");
   const [paymentMode, setPaymentMode] = useState("Full Payment");
   const [amount, setAmount] = useState<number>(packageRate);
-  const [proofBase64, setProofBase64] = useState<string | null>(null);
+  
+  // FIX: Storing the raw File instead of a Base64 string
+  const [proofFile, setProofFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSearch = (e: React.FormEvent) => {
@@ -63,39 +64,37 @@ export default function ClearanceManager({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setProofBase64(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      setProofFile(file);
     }
   };
 
   const handleProofSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!studentId || !referenceNo || amount <= 0) {
-      return alert("Please complete all required fields and enter a valid reference number.");
+    if (!studentId || !referenceNo || !proofFile || amount <= 0) {
+      return alert("Please complete all required fields and upload a valid receipt file.");
     }
 
     setIsSubmitting(true);
     try {
-      await submitOnlineRemittance(department, {
-        studentId,
-        studentName: fullName,
-        email: email || "student@example.com",
-        paymentChannel: channel,
-        referenceNo,
-        particulars: collectionType,
-        amount,
-        proofBase64,
-        ay,
-        term
-      });
+      // FIX: Append payload to FormData
+      const formData = new FormData();
+      formData.append("studentId", studentId);
+      formData.append("studentName", fullName);
+      formData.append("email", email || "student@example.com");
+      formData.append("paymentChannel", channel);
+      formData.append("referenceNo", referenceNo);
+      formData.append("particulars", collectionType);
+      formData.append("amount", amount.toString());
+      formData.append("ay", ay);
+      formData.append("term", term);
+      formData.append("receipt", proofFile);
+
+      await submitOnlineRemittance(department, formData);
 
       alert("Payment proof submitted successfully! Pending officer verification in Remittance Queue.");
       setShowProofModal(false);
       setReferenceNo("");
-      setProofBase64(null);
+      setProofFile(null);
     } catch (err: any) {
       alert("Error: " + err.message);
     } finally {

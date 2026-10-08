@@ -3301,11 +3301,13 @@ export async function updateMyEmail(
 export async function getDepartmentFinancials(
   organizationId: string,
   ay: string,
-  term: string
+  term: string,
+  isPublic: boolean = false
 ) {
-  await requireOrganizationAccess(
-    organizationId
-  );
+	if (!isPublic) {
+    await requireOrganizationAccess(organizationId); // Or however it is formatted internally
+  }
+
 
   const [
     collections,
