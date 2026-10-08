@@ -1,7 +1,6 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { withTenant } from "@/lib/tenant";
 import { revalidatePath } from "next/cache";
 import crypto from 'node:crypto';
 import { cookies } from 'next/headers';
@@ -85,10 +84,10 @@ export async function assessStudentDue(department: string, payload: {
 }) {
   await requireTabAccess('tab-collectibles');
   const orgId = await getOrgId(department);
-  const tenantDb = withTenant(orgId);
 
-  await tenantDb.collectible.create({
+  await prisma.collectible.create({
     data: {
+      organizationId: orgId,
       academicYear: payload.ay,
       term: payload.term,
       category: payload.category,
@@ -104,10 +103,9 @@ export async function assessStudentDue(department: string, payload: {
 export async function deletePenalty(department: string, penaltyId: string) {
   await requireTabAccess('tab-void');
   const orgId = await getOrgId(department);
-  const tenantDb = withTenant(orgId);
 
-  await tenantDb.penalty.deleteMany({
-    where: { id: penaltyId },
+  await prisma.penalty.delete({
+    where: { id: penaltyId, organizationId: orgId },
   });
 
   revalidatePath(`/department/${department}/penalties`);
@@ -128,11 +126,11 @@ export async function recordPenalty(department: string, data: {
   await requireTabAccess('tab-penalties');
   const officerName = await getActionUser();
   const orgId = await getOrgId(department);
-  const tenantDb = withTenant(orgId);
   const penaltyId = `PEN-${formatDate(new Date())}-${Math.floor(Math.random() * 1000)}`;
 
-  await tenantDb.penalty.create({
+  await prisma.penalty.create({
     data: {
+      organizationId: orgId,
       penaltyId,
       academicYear: data.ay,
       term: data.term,
@@ -167,11 +165,11 @@ export async function issueCashAdvance(department: string, data: {
   await requireTabAccess('tab-advances');
   const officerName = await getActionUser();
   const orgId = await getOrgId(department);
-  const tenantDb = withTenant(orgId);
   const advanceId = `CA-${formatDate(new Date())}-${Math.floor(Math.random() * 1000)}`;
 
-  await tenantDb.cashAdvance.create({
+  await prisma.cashAdvance.create({
     data: {
+      organizationId: orgId,
       advanceId,
       academicYear: data.ay,
       term: data.term,
@@ -208,11 +206,11 @@ export async function recordCollection(department: string, data: {
   await requireTabAccess('tab-payment');
   const officerName = await getActionUser();
   const orgId = await getOrgId(department);
-  const tenantDb = withTenant(orgId);
   const balanceDue = Math.max(0, data.standardRate - data.amountPaid);
 
-  await tenantDb.collection.create({
+  await prisma.collection.create({
     data: {
+      organizationId: orgId,
       academicYear: data.ay,
       term: data.term,
       orNumber: data.orNumber,
@@ -254,7 +252,6 @@ export async function recordPayment(department: string, data: {
   await requireTabAccess('tab-payment');
   const officerName = await getActionUser();
   const orgId = await getOrgId(department);
-  const tenantDb = withTenant(orgId);
 
   const paid = Math.max(0, Number(data.amountPaid) || 0);
   const rate = Math.max(0, Number(data.standardRate) || 0);
@@ -268,8 +265,9 @@ export async function recordPayment(department: string, data: {
   const category = String(data.category || "").trim();
   const itemDescription = String(data.itemDescription || "").trim();
 
-  await tenantDb.collection.create({
+  await prisma.collection.create({
     data: {
+      organizationId: orgId,
       academicYear: data.ay,
       term: data.term,
       date: new Date(data.date),
@@ -299,12 +297,11 @@ export async function invalidateOnlineRemittance(department: string, remittanceI
   await requireTabAccess('tab-remittances');
   const officerName = await getActionUser();
   const orgId = await getOrgId(department);
-  const tenantDb = withTenant(orgId);
 
-  const remittance = await tenantDb.onlineRemittance.findFirst({ where: { id: remittanceId }});
+  const remittance = await prisma.onlineRemittance.findUnique({ where: { id: remittanceId, organizationId: orgId }});
 
-  await tenantDb.onlineRemittance.deleteMany({
-    where: { id: remittanceId },
+  await prisma.onlineRemittance.delete({
+    where: { id: remittanceId, organizationId: orgId },
   });
 
   if (remittance) {
@@ -319,11 +316,11 @@ export async function saveBulkCollectibles(department: string, records: any[], a
   await requireTabAccess('tab-collectibles');
   const officerName = await getActionUser();
   const orgId = await getOrgId(department);
-  const tenantDb = withTenant(orgId);
 
   for (const r of records) {
-    await tenantDb.collectible.create({
+    await prisma.collectible.create({
       data: {
+        organizationId: orgId,
         academicYear: ay,
         term,
         category: r.category,
@@ -343,10 +340,9 @@ export async function requestOtp(department: string, email: string) {
   const cleanDepartment = department.trim().toLowerCase();
   const cleanEmail = email.trim().toLowerCase();
   const orgId = await getOrgId(cleanDepartment);
-  const tenantDb = withTenant(orgId);
 
-  const user = await tenantDb.tenantUser.findFirst({
-    where: { email: cleanEmail },
+  const user = await prisma.tenantUser.findFirst({
+    where: { organizationId: orgId, email: cleanEmail },
   });
 
   if (!user) throw new Error("This account is not registered or does not belong to this department.");
@@ -433,10 +429,9 @@ export async function verifyOtp(department: string, email: string, submittedOtp:
   }
 
   const orgId = await getOrgId(department);
-  const tenantDb = withTenant(orgId);
 
-  const user = await tenantDb.tenantUser.findFirst({
-    where: { email: cleanEmail }
+  const user = await prisma.tenantUser.findFirst({
+    where: { organizationId: orgId, email: cleanEmail }
   });
 
   if (!user) throw new Error("User record not found.");
@@ -472,15 +467,15 @@ export async function recordAudit(department: string, data: {
   await requireTabAccess('tab-audit');
   const officerName = await getActionUser();
   const orgId = await getOrgId(department);
-  const tenantDb = withTenant(orgId);
   const auditId = `AUD-${formatDate(new Date())}`;
   const variance = data.budgetRequested - data.totalExpense;
   const cashReturn = variance > 0 ? variance : 0;
   const reimbursement = variance < 0 ? Math.abs(variance) : 0;
   const caRef = data.advanceId || "Direct Expense (No CA)";
 
-  await tenantDb.audit.create({
+  await prisma.audit.create({
     data: {
+      organizationId: orgId,
       auditId,
       academicYear: data.ay,
       term: data.term,
@@ -498,8 +493,9 @@ export async function recordAudit(department: string, data: {
   });
 
   for (const item of data.items) {
-    await tenantDb.expenseItem.create({
+    await prisma.expenseItem.create({
       data: {
+        organizationId: orgId,
         auditId,
         orSiNumber: item.orsi || null,
         qty: item.qty,
@@ -510,8 +506,8 @@ export async function recordAudit(department: string, data: {
   }
 
   if (data.advanceId) {
-    await tenantDb.cashAdvance.updateMany({
-      where: { advanceId: data.advanceId },
+    await prisma.cashAdvance.updateMany({
+      where: { organizationId: orgId, advanceId: data.advanceId },
       data: { status: "Liquidated" }
     });
   }
@@ -533,10 +529,10 @@ export async function transferFunds(department: string, data: {
   await requireTabAccess('tab-transfer');
   const officerName = await getActionUser();
   const orgId = await getOrgId(department);
-  const tenantDb = withTenant(orgId);
 
-  await tenantDb.fundTransfer.create({
+  await prisma.fundTransfer.create({
     data: {
+      organizationId: orgId,
       academicYear: data.ay,
       term: data.term,
       sourceFund: data.fromFund,
@@ -563,10 +559,10 @@ export async function carryOverTermBalance(department: string, data: {
   await requireTabAccess('tab-transfer');
   const officerName = await getActionUser();
   const orgId = await getOrgId(department);
-  const tenantDb = withTenant(orgId);
 
-  await tenantDb.fundTransfer.create({
+  await prisma.fundTransfer.create({
     data: {
+      organizationId: orgId,
       academicYear: data.destAY,
       term: data.destTerm,
       sourceFund: `${data.sourceTerm} (${data.sourceAY}) Rollover`,
@@ -594,10 +590,10 @@ export async function submitRemittanceBatch(department: string, data: {
   await requireTabAccess('tab-remittances');
   const officerName = await getActionUser();
   const orgId = await getOrgId(department);
-  const tenantDb = withTenant(orgId);
 
-  await tenantDb.collection.updateMany({
+  await prisma.collection.updateMany({
     where: {
+      organizationId: orgId,
       id: { in: data.collectionIds }
     },
     data: {
@@ -624,15 +620,15 @@ export async function verifyOnlineRemittance(department: string, data: {
   await requireTabAccess('tab-remittances');
   const officerName = await getActionUser();
   const orgId = await getOrgId(department);
-  const tenantDb = withTenant(orgId);
 
-  await tenantDb.onlineRemittance.updateMany({
-    where: { id: data.remittanceId },
+  await prisma.onlineRemittance.update({
+    where: { id: data.remittanceId, organizationId: orgId },
     data: { status: 'Verified', reviewedBy: officerName, orNumber: data.orNumber }
   });
 
-  await tenantDb.collection.create({
+  await prisma.collection.create({
     data: {
+      organizationId: orgId,
       academicYear: data.ay,
       term: data.term,
       date: new Date(),
@@ -671,11 +667,11 @@ export async function submitOnlineRemittance(department: string, data: {
   term: string;
 }) {
   const orgId = await getOrgId(department);
-  const tenantDb = withTenant(orgId);
   const submissionId = `SUB-${formatDate(new Date())}-${Math.floor(Math.random() * 1000)}`;
 
-  await tenantDb.onlineRemittance.create({
+  await prisma.onlineRemittance.create({
     data: {
+      organizationId: orgId,
       submissionId,
       academicYear: data.ay,
       term: data.term,
@@ -732,15 +728,14 @@ export async function upsertStudent(department: string, data: {
   await requireTabAccess('tab-students');
   const officerName = await getActionUser();
   const orgId = await getOrgId(department);
-  const tenantDb = withTenant(orgId);
   const cleanStudentId = data.studentId.trim();
 
-  const existing = await tenantDb.student.findFirst({
-    where: { studentId: cleanStudentId }
+  const existing = await prisma.student.findFirst({
+    where: { organizationId: orgId, studentId: cleanStudentId }
   });
 
   if (existing) {
-    await tenantDb.student.updateMany({
+    await prisma.student.update({
       where: { id: existing.id },
       data: {
         fullName: data.fullName.trim(),
@@ -748,8 +743,9 @@ export async function upsertStudent(department: string, data: {
       },
     });
   } else {
-    await tenantDb.student.create({
+    await prisma.student.create({
       data: {
+        organizationId: orgId,
         studentId: cleanStudentId,
         fullName: data.fullName.trim(),
         email: data.email.trim() || null,
@@ -767,14 +763,13 @@ export async function deleteStudent(department: string, studentId: string) {
   await requireTabAccess('tab-students');
   const officerName = await getActionUser();
   const orgId = await getOrgId(department);
-  const tenantDb = withTenant(orgId);
   
-  const existing = await tenantDb.student.findFirst({
-    where: { studentId: studentId.trim() }
+  const existing = await prisma.student.findFirst({
+    where: { organizationId: orgId, studentId: studentId.trim() }
   });
 
   if (existing) {
-    await tenantDb.student.deleteMany({
+    await prisma.student.delete({
       where: { id: existing.id }
     });
     
@@ -794,10 +789,9 @@ export async function settlePenaltyCommunityService(department: string, data: {
   await requireTabAccess('tab-penalties');
   const officerName = await getActionUser();
   const orgId = await getOrgId(department);
-  const tenantDb = withTenant(orgId);
 
-  const targetPen = await tenantDb.penalty.findFirst({
-    where: { penaltyId: data.penaltyId }
+  const targetPen = await prisma.penalty.findUnique({
+    where: { penaltyId: data.penaltyId, organizationId: orgId }
   });
 
   if (!targetPen) throw new Error("Penalty record not found.");
@@ -810,7 +804,7 @@ export async function settlePenaltyCommunityService(department: string, data: {
     ? `Settled (Community Service - ${data.hoursRendered} hrs rendered)`
     : `Partially Served (${data.hoursRendered} hrs served, ₱${deductionPesos.toFixed(2)} deducted)`;
 
-  await tenantDb.penalty.updateMany({
+  await prisma.penalty.update({
     where: { id: targetPen.id },
     data: {
       fineAmount: remainingFine,
@@ -832,30 +826,29 @@ export async function updateMyEmail(department: string, newEmail: string) {
   }
 
   const orgId = await getOrgId(department);
-  const tenantDb = withTenant(orgId);
   const cleanNewEmail = newEmail.trim().toLowerCase();
 
   if (!cleanNewEmail || !cleanNewEmail.includes('@')) {
     throw new Error("Please provide a valid email address.");
   }
 
-  const user = await tenantDb.tenantUser.findFirst({
-    where: { email: sessionUser.email }
+  const user = await prisma.tenantUser.findFirst({
+    where: { organizationId: orgId, email: sessionUser.email }
   });
 
   if (!user) {
     throw new Error("User record not found in this department.");
   }
 
-  const existing = await tenantDb.tenantUser.findFirst({
-    where: { email: cleanNewEmail }
+  const existing = await prisma.tenantUser.findFirst({
+    where: { organizationId: orgId, email: cleanNewEmail }
   });
 
   if (existing && existing.id !== user.id) {
     throw new Error("This email is already registered by another account.");
   }
 
-  await tenantDb.tenantUser.updateMany({
+  await prisma.tenantUser.update({
     where: { id: user.id },
     data: { email: cleanNewEmail }
   });
@@ -868,28 +861,28 @@ export async function updateMyEmail(department: string, newEmail: string) {
 // OPTIMIZED FINANCIAL ENGINE: ADAPTIVE TERM & A.Y. DATA FILTERING
 // =========================================================================
 export async function getDepartmentFinancials(organizationId: string, ay: string, term: string) {
-  const tenantDb = withTenant(organizationId);
-
   const [collections, audits, cashAdvances, explicitCollectibles, initialFunds, students, collectionSetups] = await Promise.all([
-    tenantDb.collection.findMany({ 
-      where: { academicYear: ay, term } 
+    prisma.collection.findMany({ 
+      where: { organizationId, academicYear: ay, term } 
     }),
-    tenantDb.audit.findMany({ 
-      where: { academicYear: ay, term } 
+    prisma.audit.findMany({ 
+      where: { organizationId, academicYear: ay, term } 
     }),
-    tenantDb.cashAdvance.findMany({ 
-      where: { academicYear: ay, term }, 
+    prisma.cashAdvance.findMany({ 
+      where: { organizationId, academicYear: ay, term }, 
       orderBy: { dateIssued: 'desc' } 
     }),
-    tenantDb.collectible.findMany({ 
-      where: { academicYear: ay, term } 
+    prisma.collectible.findMany({ 
+      where: { organizationId, academicYear: ay, term } 
     }).catch(() => []),
-    tenantDb.fund.findMany({ 
-      where: { academicYear: ay, term } 
+    prisma.fund.findMany({ 
+      where: { organizationId, academicYear: ay, term } 
     }),
-    tenantDb.student.findMany(),
-    tenantDb.collectionSetup.findMany({ 
-      where: { academicYear: ay, term } 
+    prisma.student.findMany({ 
+      where: { organizationId } 
+    }),
+    prisma.collectionSetup.findMany({ 
+      where: { organizationId, academicYear: ay, term } 
     }).catch(() => []) 
   ]);
 
@@ -1201,8 +1194,6 @@ export async function saveInitialFunds(
 
   const validFunds = funds.filter(f => f.fundName.trim() !== "");
 
-  // Note: We use the raw prisma client for interactive transactions to ensure stability,
-  // so we safely pass organizationId manually here.
   await prisma.$transaction(async (tx) => {
     await tx.fund.deleteMany({
       where: { organizationId: orgId, academicYear: ay, term }
@@ -1247,12 +1238,12 @@ export async function saveCollectionSetupItem(
 ) {
   await requireTabAccess("tab-setup");
   const orgId = await getOrgId(department);
-  const tenantDb = withTenant(orgId);
   const cleanCategory = payload.category.trim();
   const cleanName = payload.name.trim();
 
-  const existing = await tenantDb.collectionSetup.findFirst({
+  const existing = await prisma.collectionSetup.findFirst({
     where: {
+      organizationId: orgId,
       academicYear: payload.ay,
       term: payload.term,
       name: cleanName,
@@ -1260,7 +1251,7 @@ export async function saveCollectionSetupItem(
   });
 
   if (existing) {
-    await tenantDb.collectionSetup.updateMany({
+    await prisma.collectionSetup.update({
       where: { id: existing.id },
       data: {
         category: cleanCategory,
@@ -1270,8 +1261,9 @@ export async function saveCollectionSetupItem(
       },
     });
   } else {
-    await tenantDb.collectionSetup.create({
+    await prisma.collectionSetup.create({
       data: {
+        organizationId: orgId,
         academicYear: payload.ay,
         term: payload.term,
         category: cleanCategory,
@@ -1295,10 +1287,12 @@ export async function saveCollectionSetupItem(
 export async function deleteCollectionSetupItem(department: string, setupId: string) {
   await requireTabAccess("tab-setup");
   const orgId = await getOrgId(department);
-  const tenantDb = withTenant(orgId);
 
-  await tenantDb.collectionSetup.deleteMany({
-    where: { id: setupId },
+  await prisma.collectionSetup.delete({
+    where: {
+      id: setupId,
+      organizationId: orgId,
+    },
   });
 
   revalidatePath(`/department/${department}/setup/collections`);
