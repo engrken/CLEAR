@@ -26,6 +26,7 @@ interface ReportsClientProps {
   penalties?: any[];
   packageRate: number;
   setupCategories: string[];
+  termPkgItems: { name: string; rate: number; fund: string }[]; // Added to match dynamic items
 }
 
 interface ReportRow {
@@ -61,7 +62,8 @@ export default function ReportsClient({
   liquidations = [],
   penalties = [],
   packageRate,
-  setupCategories
+  setupCategories,
+  termPkgItems = [] // Used for mapping
 }: ReportsClientProps) {
   const [reportCategory, setReportCategory] = useState("Activity & Item Dues (Unpaid)");
   const [statusFilter, setStatusFilter] = useState("All Students (Master Roster)");
@@ -71,12 +73,10 @@ export default function ReportsClient({
   const validCollections = collections.filter(c => !String(c.paymentType || "").toUpperCase().includes("VOID"));
   const validLiquidations = liquidations.filter(l => !String(l.status || "").includes("Voided"));
 
-  // Find any miscellaneous fees recorded in collections that aren't explicitly in the setup
   const dynamicCategories = Array.from(
-    new Set(validCollections.map(c => c.category).filter(cat => cat && cat !== "Departmental Fee" && cat !== "Departmental Fee - Package"))
+    new Set(validCollections.map(c => String(c.category || '')).filter(cat => cat && cat !== "Departmental Fee" && cat !== "Departmental Fee - Package"))
   );
   
-  // Base system categories that should always be available
   const systemCategories = [
     "Departmental Fee (Package)",
     "Activity & Item Dues (Unpaid)",
@@ -84,7 +84,6 @@ export default function ReportsClient({
     "Liquidation / Audited Expenses"
   ];
 
-  // Merge System + Dynamic Setup Fees + Any stray recorded fees
   const allCategories = Array.from(new Set([...systemCategories, ...setupCategories, ...dynamicCategories]));
 
   const computedRoster = useMemo(() => {
@@ -94,8 +93,8 @@ export default function ReportsClient({
 
     const getStudentData = (sId: string, sName: string) => {
       const s = students.find(st => 
-        (sId && st.studentId?.toLowerCase() === sId.toLowerCase()) || 
-        (sName && st.fullName?.toLowerCase() === sName.toLowerCase())
+        (sId && String(st.studentId || '').toLowerCase() === String(sId || '').toLowerCase()) || 
+        (sName && String(st.fullName || '').toLowerCase() === String(sName || '').toLowerCase())
       );
       const uniqueKey = (s?.fullName || sName || s?.studentId || sId || "unknown").trim().toLowerCase();
       
@@ -109,18 +108,26 @@ export default function ReportsClient({
     };
 
     if (reportCategory === "Departmental Fee (Package)") {
-      const uniformRate = packageRate; // Replaced hardcoded termPackages logic
+      const uniformRate = packageRate; 
       results = students.map(student => {
-        const studentPayments = validCollections.filter(c => 
-          (c.studentId?.toLowerCase() === student.studentId?.toLowerCase() || c.studentName?.toLowerCase() === student.fullName?.toLowerCase()) &&
-          (c.category === "Departmental Fee" || c.category === "Departmental Fee - Package")
-        );
+        // DYNAMIC FIX: We now check if the collected item is structurally part of the termPkgItems
+        const studentPayments = validCollections.filter(c => {
+          const isMatchStudent = (String(c.studentId || '').toLowerCase() === String(student.studentId || '').toLowerCase() || 
+                                 String(c.studentName || '').toLowerCase() === String(student.fullName || '').toLowerCase());
+          
+          const descLower = String(c.itemDescription || '').toLowerCase();
+          const isPackageItem = termPkgItems.some(pi => pi.name.toLowerCase() === descLower) || descLower.includes('package') || descLower === 'departmental fee';
+          
+          return isMatchStudent && isPackageItem;
+        });
+
         let amountPaid = 0;
         let orNumbers: string[] = [];
         studentPayments.forEach(c => {
           amountPaid += Number(c.amountPaid);
           if (c.orNumber && !orNumbers.includes(c.orNumber)) orNumbers.push(c.orNumber);
         });
+
         const balanceDue = Math.max(0, uniformRate - amountPaid);
         let status = "Unpaid";
         if (amountPaid > 0 && amountPaid >= uniformRate) status = "Fully Paid";
@@ -220,7 +227,7 @@ export default function ReportsClient({
     }
 
     return results.sort((a, b) => a.fullName.localeCompare(b.fullName));
-  }, [students, validCollections, penalties, reportCategory, term, packageRate]);
+  }, [students, validCollections, penalties, reportCategory, term, packageRate, termPkgItems]);
 
   const filteredRoster = computedRoster.filter(row => {
     if (statusFilter === "Fully Paid Only" && row.status !== "Fully Paid" && row.status !== "Settled (Service)") return false;
@@ -285,7 +292,6 @@ export default function ReportsClient({
     document.body.removeChild(link);
   };
 
-  // --- ANALYTICS CHARTS SETUP ---
   const pieData = {
     labels: ['Fully Paid / Cleared', 'Partially Paid', 'Unpaid / Deficit'],
     datasets: [{
@@ -314,12 +320,9 @@ export default function ReportsClient({
 
   return (
     <div>
-      {/* Header Toolbar */}
       <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
         <div>
-          <h5 className="text-info fw-bold mb-0">
-            <i className="bi bi-bar-chart-fill me-2"></i>Institutional Collections & Liquidation Reports
-          </h5>
+          <h5 className="text-info fw-bold mb-0"><i className="bi bi-bar-chart-fill me-2"></i>Institutional Collections & Liquidation Reports</h5>
         </div>
         <div className="btn-group btn-group-sm border border-secondary rounded">
           <button className={`btn ${viewMode === 'Table' ? 'btn-info text-dark fw-bold' : 'btn-outline-secondary'}`} onClick={() => setViewMode('Table')}>
@@ -334,7 +337,6 @@ export default function ReportsClient({
         </div>
       </div>
 
-      {/* Filters Area */}
       <div className="row g-3 mb-3">
         <div className="col-12 col-md-4">
           <label className="form-label text-secondary small mb-1">Report Category</label>
@@ -388,17 +390,13 @@ export default function ReportsClient({
         </div>
       )}
 
-      {/* --- ANALYTICS VIEW --- */}
       {viewMode === "Analytics" && !isLiquidationReport && (
         <div className="row g-3 mb-4">
           <div className="col-12 col-md-6">
             <div className="card p-3 border-secondary bg-card shadow-sm h-100">
               <h6 className="text-accent fw-bold mb-3">Collection Status Breakdown</h6>
               <div style={{ position: 'relative', height: '280px' }}>
-                <Doughnut 
-                  data={pieData} 
-                  options={{ ...chartOptionsBase, plugins: { legend: { position: 'bottom', labels: { color: '#f8fafc' } } } }} 
-                />
+                <Doughnut data={pieData} options={{ ...chartOptionsBase, plugins: { legend: { position: 'bottom', labels: { color: '#f8fafc' } } } }} />
               </div>
             </div>
           </div>
@@ -406,17 +404,7 @@ export default function ReportsClient({
             <div className="card p-3 border-secondary bg-card shadow-sm h-100">
               <h6 className="text-accent fw-bold mb-3">Collections by Year Level</h6>
               <div style={{ position: 'relative', height: '280px' }}>
-                <Bar 
-                  data={barData} 
-                  options={{ 
-                    ...chartOptionsBase, 
-                    plugins: { legend: { display: false } },
-                    scales: { 
-                      x: { grid: { color: '#334155' }, ticks: { color: '#94a3b8' } }, 
-                      y: { grid: { color: '#334155' }, ticks: { color: '#94a3b8' } } 
-                    } 
-                  }} 
-                />
+                <Bar data={barData} options={{ ...chartOptionsBase, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#334155' }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#334155' }, ticks: { color: '#94a3b8' } } } }} />
               </div>
             </div>
           </div>
@@ -430,7 +418,6 @@ export default function ReportsClient({
         </div>
       )}
 
-      {/* --- TABLE VIEW (ROSTER) --- */}
       {!isLiquidationReport && viewMode === "Table" && (
         <div className="report-groups-container">
           {sortedYearLevels.length === 0 ? (
@@ -479,7 +466,6 @@ export default function ReportsClient({
         </div>
       )}
 
-      {/* --- TABLE VIEW (LIQUIDATIONS) --- */}
       {isLiquidationReport && viewMode === "Table" && (
         <div>
           <div className="bg-dark border border-secondary rounded p-2 mb-3 shadow-sm px-3">
