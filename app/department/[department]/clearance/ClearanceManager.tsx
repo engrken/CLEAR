@@ -17,12 +17,16 @@ export default function ClearanceManager({
   department,
   ay,
   term,
-  students
+  students,
+  feeOptions,
+  packageRate
 }: {
   department: string;
   ay: string;
   term: string;
   students: StudentClearance[];
+  feeOptions: string[];
+  packageRate: number;
 }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeStudent, setActiveStudent] = useState<StudentClearance | null>(null);
@@ -34,9 +38,9 @@ export default function ClearanceManager({
   const [email, setEmail] = useState("");
   const [channel, setChannel] = useState("GCash");
   const [referenceNo, setReferenceNo] = useState("");
-  const [collectionType, setCollectionType] = useState("Departmental Fee (Package)");
+  const [collectionType, setCollectionType] = useState(feeOptions[0] || "Departmental Fee");
   const [paymentMode, setPaymentMode] = useState("Full Payment");
-  const [amount, setAmount] = useState<number>(650.00);
+  const [amount, setAmount] = useState<number>(packageRate);
   const [proofBase64, setProofBase64] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -79,7 +83,7 @@ export default function ClearanceManager({
         studentId,
         studentName: fullName,
         email: email || "student@example.com",
-        paymentChannel: channel, // Fixed: Matches expected action argument signature
+        paymentChannel: channel,
         referenceNo,
         particulars: collectionType,
         amount,
@@ -211,12 +215,11 @@ export default function ClearanceManager({
 
                   <div className="row g-2 mb-3">
                     <div className="col-md-6">
-                      <label className="form-label text-secondary small fw-semibold">Collection Type</label>
+                      <label className="form-label text-secondary small fw-semibold">Collection Type / Particulars</label>
                       <select className="form-select bg-card text-color border-secondary" value={collectionType} onChange={e => setCollectionType(e.target.value)}>
-                        <option value="Departmental Fee (Package)">Departmental Fee (Package)</option>
-                        <option value="General Assembly Fine">General Assembly Fine</option>
-                        <option value="ID Replacement / Miscellaneous">ID Replacement / Miscellaneous</option>
-                        <option value="Event Registration">Event Registration</option>
+                        {feeOptions.map((fee, idx) => (
+                          <option key={idx} value={fee}>{fee}</option>
+                        ))}
                       </select>
                     </div>
                     <div className="col-md-6">

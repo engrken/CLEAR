@@ -19,7 +19,6 @@ export default function SummaryClient({
   ay,
   term,
   termPkg,
-  otherRates,
   collectionHierarchy,
   grandCollectionTotal,
   expensesByFund,
@@ -31,7 +30,6 @@ export default function SummaryClient({
   ay: string;
   term: string;
   termPkg: { total: number; items: { name: string; rate: number; fund: string }[] };
-  otherRates: Record<string, number>;
   collectionHierarchy: Record<string, CollectionItem>;
   grandCollectionTotal: number;
   expensesByFund: Record<string, number>;
@@ -62,67 +60,20 @@ export default function SummaryClient({
             size: 8.5in 13in;
             margin: 0.5in; 
           }
-          
-          /* Hide UI clutter */
-          aside, nav, header, .sidebar, .d-print-none {
-            display: none !important;
-          }
-          
-          /* Reset layout margins */
+          aside, nav, header, .sidebar, .d-print-none { display: none !important; }
           html, body, main, #__next, .layout-wrapper {
-            margin: 0 !important;
-            padding: 0 !important;
-            width: 100% !important;
-            max-width: 100% !important;
-            background-color: white !important;
+            margin: 0 !important; padding: 0 !important; width: 100% !important; max-width: 100% !important; background-color: white !important;
           }
-
-          /* Detach print container from Next.js centering wrappers */
           .print-container {
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
-            width: 100% !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            border: none !important;
-            box-shadow: none !important;
-            background-color: white !important;
+            position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important;
+            margin: 0 !important; padding: 0 !important; border: none !important; box-shadow: none !important; background-color: white !important;
           }
-
-          /* Strip colors */
-          .print-container * {
-            color: #000000 !important;
-            background-color: transparent !important;
-          }
-          
-          /* FORCE STRICT BORDERS TO PREVENT BROWSER INK-SAVING REMOVAL */
-          .print-container table { 
-            border-collapse: collapse !important; 
-            margin-bottom: 15px !important; 
-            width: 100% !important; 
-            border: 1.5px solid #000000 !important; 
-          }
-          .print-container th, 
-          .print-container td {
-            border: 1px solid #000000 !important;
-            padding: 5px 8px !important; 
-          }
-
-          /* Retain dark background for subtotals */
-          .print-container .bg-dark {
-            background-color: #f8f9fa !important;
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-          }
-          
+          .print-container * { color: #000000 !important; background-color: transparent !important; }
+          .print-container table { border-collapse: collapse !important; margin-bottom: 15px !important; width: 100% !important; border: 1.5px solid #000000 !important; }
+          .print-container th, .print-container td { border: 1px solid #000000 !important; padding: 5px 8px !important; }
+          .print-container .bg-dark { background-color: #f8f9fa !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           h6 { margin-top: 15px !important; margin-bottom: 5px !important; }
-          
-          /* Keep signatures together */
-          .signature-block { 
-            margin-top: 40px !important; 
-            page-break-inside: avoid !important; 
-          }
+          .signature-block { margin-top: 40px !important; page-break-inside: avoid !important; }
         }
       `}} />
 
@@ -140,48 +91,24 @@ export default function SummaryClient({
 
         {/* ISO / INSTITUTIONAL PRINT HEADER */}
         <div className="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom border-dark border-opacity-50">
-          
-          {/* LEFT LOGO (FCU) */}
           <div style={{ width: '90px', flexShrink: 0 }} className="text-center">
-            <img 
-              src={getAssetUrl('fcu.png')} 
-              alt="FCU Logo" 
-              style={{ width: '100%', maxHeight: '90px', objectFit: 'contain' }} 
-            />
+            <img src={getAssetUrl('fcu.png')} alt="FCU Logo" style={{ width: '100%', maxHeight: '90px', objectFit: 'contain' }} />
           </div>
-          
-          {/* CENTER TEXT */}
           <div className="text-center flex-grow-1 px-3">
-            <div className="fw-bold text-uppercase" style={{ fontSize: '0.9rem', letterSpacing: '0.5px' }}>
-              Filamer Christian University
-            </div>
-            <div className="fw-bold text-uppercase text-accent" style={{ fontSize: '1.1rem' }}>
-              College of {decodeURIComponent(department)}
-            </div>
-            <div className="text-muted small">
-              Roxas Avenue, Roxas City, Capiz, Philippines 5800
-            </div>
-            <div className="mt-3 fw-bold text-uppercase" style={{ fontSize: '0.95rem' }}>
-              Departmental Financial Audit & Liquidation Summary Report
-            </div>
-            <div className="text-muted small fst-italic mt-1">
-              {ay} &nbsp;|&nbsp; {term}
-            </div>
+            <div className="fw-bold text-uppercase" style={{ fontSize: '0.9rem', letterSpacing: '0.5px' }}>Filamer Christian University</div>
+            <div className="fw-bold text-uppercase text-accent" style={{ fontSize: '1.1rem' }}>College of {decodeURIComponent(department)}</div>
+            <div className="text-muted small">Roxas Avenue, Roxas City, Capiz, Philippines 5800</div>
+            <div className="mt-3 fw-bold text-uppercase" style={{ fontSize: '0.95rem' }}>Departmental Financial Audit & Liquidation Summary Report</div>
+            <div className="text-muted small fst-italic mt-1">{ay} &nbsp;|&nbsp; {term}</div>
           </div>
-
-          {/* RIGHT LOGO (Department) */}
           <div style={{ width: '90px', flexShrink: 0 }} className="text-center">
             <img 
               src={getAssetUrl(`${decodeURIComponent(department).toLowerCase().replace(/\s+/g, '')}_logo.png`)} 
               alt="Department Logo" 
-              onError={(e) => { 
-                e.currentTarget.onerror = null; 
-                e.currentTarget.src = getAssetUrl('engineering_logo.png');
-              }} 
+              onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = getAssetUrl('engineering_logo.png'); }} 
               style={{ width: '100%', maxHeight: '90px', objectFit: 'contain' }} 
             />
           </div>
-
         </div>
 
         {/* COLLECTIONS SECTION */}
@@ -210,14 +137,14 @@ export default function SummaryClient({
                 );
               })}
 
-              <tr><td colSpan={4} className="fw-bold text-accent py-2 pt-3">Other Fees / Merchandise</td></tr>
+              <tr><td colSpan={4} className="fw-bold text-accent py-2 pt-3">Other Fees / Merchandise / Penalties</td></tr>
               {Object.keys(collectionHierarchy).map((k, idx) => {
                 if (!termPkg.items.some(pi => pi.name === k) && k !== "General Fund (Carried Over)" && k !== "New Accounts Inflow") {
-                  const rateVal = otherRates[k] !== undefined ? fmt(otherRates[k]) : "-";
                   return (
                     <tr key={idx}>
                       <td className="ps-3">{k}</td>
-                      <td className="text-end">{rateVal}</td>
+                      {/* Rate column left as dash since this aggregates dynamic unpredictable payments */}
+                      <td className="text-end">-</td>
                       <td className="text-end">{collectionHierarchy[k].count}</td>
                       <td className="text-end">{fmt(collectionHierarchy[k].total)}</td>
                     </tr>
@@ -354,7 +281,6 @@ export default function SummaryClient({
           </div>
         </div>
 
-        {/* CC FOOTER */}
         <div className="mt-5 pt-3 small fw-bold text-end text-muted" style={{ fontSize: '0.75rem' }}>
           cc: VPAA, VPF, OSA
         </div>

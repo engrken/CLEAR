@@ -61,7 +61,7 @@ export default function RemittanceVerificationQueue({
         orNumber,
         studentId: verifyingItem.studentId,
         studentName: verifyingItem.studentName,
-        particulars: verifyingItem.itemDescription || "Departmental Fee",
+        particulars: verifyingItem.itemDescription || "Online Payment",
         amount: verifyingItem.amountPaid,
         ay,
         term

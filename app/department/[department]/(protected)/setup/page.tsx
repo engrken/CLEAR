@@ -26,9 +26,25 @@ export default async function SetupPage({
     );
   }
 
+  // Fetch distinct fund names previously used by this department
+  const existingFunds = await prisma.fund.findMany({
+    where: { organizationId: organization.id },
+    distinct: ['fundName'],
+    select: { fundName: true }
+  });
+
+  // Provide a generic fallback if the department is brand new
+  const initialFunds = existingFunds.length > 0
+    ? existingFunds.map(f => f.fundName)
+    : ["General Fund", "Current Operations", "Others"];
+
   return (
     <div className="module card p-3 p-md-4 border-secondary shadow-sm">
-      <SetupClient department={department} organizationId={organization.id} />
+      <SetupClient 
+        department={department} 
+        organizationId={organization.id} 
+        initialFundNames={initialFunds} 
+      />
     </div>
   );
 }

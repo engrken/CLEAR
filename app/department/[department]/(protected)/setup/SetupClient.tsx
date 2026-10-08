@@ -2,23 +2,8 @@
 
 import { useState } from "react";
 import { fmt } from "@/lib/utils";
-import { ThemedAlert } from '@/lib/alerts';
-
-const DEFAULT_FUNDS = [
-  "General Fund (Carried Over)",
-  "New Accounts (Current Operations)",
-  "Collectibles Pool",
-  "JIECEP Membership Fund",
-  "General Orientation Fund",
-  "FCUSR Activities Fund",
-  "Sports & Cultural Fund",
-  "JIECEP FCUSC Fund",
-  "JIECEP Week Activities Fund",
-  "ECE Grandball Fund",
-  "Emergency/Calamity Fund",
-  "JIECEP Activities Fund",
-  "Others"
-];
+import Link from "next/link";
+import { saveInitialFunds } from "../../actions";
 
 interface RolloverRecord {
   id: string;
@@ -31,11 +16,29 @@ interface RolloverRecord {
   encodedBy: string;
 }
 
-export default function SetupClient({ department, organizationId }: { department: string, organizationId: string }) {
+interface FundItem {
+  fundName: string;
+  amount: number;
+}
+
+export default function SetupClient({ 
+  department, 
+  organizationId,
+  initialFundNames 
+}: { 
+  department: string, 
+  organizationId: string,
+  initialFundNames: string[] 
+}) {
   const [targetAy, setTargetAy] = useState("A.Y. 2026 - 2027");
   const [targetTerm, setTargetTerm] = useState("2nd Sem");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPresetModal, setShowPresetModal] = useState(false);
+  
+  // Replace DEFAULT_FUNDS with a dynamic array of objects
+  const [fundList, setFundList] = useState<FundItem[]>(
+    initialFundNames.map(name => ({ fundName: name, amount: 0 }))
+  );
   const [presetData, setPresetData] = useState<{name: string, amount: number}[]>([]);
 
   const [rolloverLogs, setRolloverLogs] = useState<RolloverRecord[]>([
@@ -51,59 +54,60 @@ export default function SetupClient({ department, organizationId }: { department
     }
   ]);
 
-  const [fundBalances, setFundBalances] = useState<Record<string, number>>(
-    DEFAULT_FUNDS.reduce((acc, fund) => ({ ...acc, [fund]: 0 }), {})
-  );
+  const totalAllocation = fundList.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
 
-  const totalAllocation = Object.values(fundBalances).reduce((sum, val) => sum + (Number(val) || 0), 0);
+  // Dynamic handlers for adding, editing, and removing funds
+  const handleFundChange = (index: number, field: keyof FundItem, value: string) => {
+    const newList = [...fundList];
+    if (field === 'amount') {
+      newList[index][field] = parseFloat(value) || 0;
+    } else {
+      newList[index][field] = value as string;
+    }
+    setFundList(newList);
+  };
 
-  const handleFundChange = (fundName: string, value: string) => {
-    setFundBalances(prev => ({
-      ...prev,
-      [fundName]: parseFloat(value) || 0
-    }));
+  const handleAddFund = () => {
+    setFundList([...fundList, { fundName: "", amount: 0 }]);
+  };
+
+  const handleRemoveFund = (index: number) => {
+    setFundList(fundList.filter((_, i) => i !== index));
   };
 
   const handleResetZero = () => {
     if (confirm("Are you sure you want to reset all input fields to zero?")) {
-      setFundBalances(DEFAULT_FUNDS.reduce((acc, fund) => ({ ...acc, [fund]: 0 }), {}));
+      setFundList(fundList.map(f => ({ ...f, amount: 0 })));
     }
   };
 
   const handleOpenPreset = () => {
+    // Placeholder data - this would eventually be fetched via API based on the previous term's closing balances
     setPresetData([
       { name: "General Fund (Carried Over)", amount: 16645.00 },
-      { name: "FCUSR Activities Fund", amount: 7700.00 },
-      { name: "General Orientation Fund", amount: 383.40 },
-      { name: "JIECEP Membership Fund", amount: 5250.00 },
-      { name: "Sports & Cultural Fund", amount: 31.50 }
+      { name: "Current Operations", amount: 7700.00 }
     ]);
     setShowPresetModal(true);
   };
 
   const handlePresetApply = () => {
-    const newBalances = { ...fundBalances };
+    const mergedList = [...fundList];
     presetData.forEach(p => {
-      if (newBalances[p.name] !== undefined) {
-        newBalances[p.name] = p.amount;
+      const existingIndex = mergedList.findIndex(f => f.fundName.toLowerCase() === p.name.toLowerCase());
+      if (existingIndex >= 0) {
+        mergedList[existingIndex].amount = p.amount;
+      } else {
+        mergedList.push({ fundName: p.name, amount: p.amount });
       }
     });
-    setFundBalances(newBalances);
+    setFundList(mergedList);
     setShowPresetModal(false);
   };
 
   const handleReverseRollover = async (recordId: string, reference: string, amount: number) => {
-    if (!confirm(`Are you sure you want to REVERSE rollover reference [${reference}] amounting to ${fmt(amount)}? This will deduct the funds back out of the destination pool.`)) {
-      return;
-    }
-
+    if (!confirm(`Are you sure you want to REVERSE rollover reference [${reference}] amounting to ${fmt(amount)}?`)) return;
     try {
-      setRolloverLogs(prev => prev.map(log => {
-        if (log.id === recordId) {
-          return { ...log, status: "Reversed / Voided" };
-        }
-        return log;
-      }));
+      setRolloverLogs(prev => prev.map(log => log.id === recordId ? { ...log, status: "Reversed / Voided" } : log));
       alert(`Rollover ${reference} successfully reversed and voided.`);
     } catch (error: any) {
       alert("Error reversing rollover: " + error.message);
@@ -112,17 +116,21 @@ export default function SetupClient({ department, organizationId }: { department
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Prevent submitting unnamed funds
+    if (fundList.some(f => f.fundName.trim() === "")) {
+      return alert("Please ensure all target funds have a valid name.");
+    }
     if (totalAllocation <= 0 && !confirm("Total allocation is ₱0.00. Do you still want to save?")) return;
 
     setIsSubmitting(true);
-    try {
-      await new Promise(res => setTimeout(res, 800));
-      alert(`Initial fund allocations for ${targetTerm} (${targetAy}) saved successfully!`);
-    } catch (error: any) {
-      alert("Error saving funds: " + error.message);
-    } finally {
-      setIsSubmitting(false);
-    }
+try {
+  await saveInitialFunds(department, targetAy, targetTerm, fundList); // <-- Replace the Promise
+  alert(`Initial fund allocations for ${targetTerm} (${targetAy}) saved successfully!`);
+} catch (error: any) {
+  alert("Error saving funds: " + error.message);
+} finally {
+  setIsSubmitting(false);
+}
   };
 
   return (
@@ -134,6 +142,9 @@ export default function SetupClient({ department, organizationId }: { department
           <small className="text-secondary">Initialize opening balances and carry over funds for upcoming academic terms.</small>
         </div>
         <div className="d-flex gap-2 flex-wrap">
+          <Link href={`/department/${department}/setup/collections`} className="btn btn-outline-primary btn-sm fw-bold">
+            <i className="bi bi-list-check me-1"></i>Setup Collection Fees
+          </Link>
           <button className="btn btn-outline-success btn-sm fw-bold" onClick={handleOpenPreset}>
             <i className="bi bi-box-arrow-in-right me-1"></i>Prepare Target Term (Rollover & Init)
           </button>
@@ -174,14 +185,29 @@ export default function SetupClient({ department, organizationId }: { department
         <span className="fs-5 fw-bold text-accent">{fmt(totalAllocation)}</span>
       </div>
 
-      {/* Fund Inputs Form - Bounded width per column */}
+      {/* Dynamic Fund Inputs Form */}
       <form onSubmit={handleSubmit} className="mb-4">
         <div className="row g-3 mb-3">
-          {DEFAULT_FUNDS.map((fund, idx) => (
+          {fundList.map((fund, idx) => (
             <div className="col-12 col-md-4" key={idx}>
-              <label className="form-label text-secondary mb-1 text-truncate w-100" style={{ fontSize: '0.78rem' }} title={fund}>
-                {fund}
-              </label>
+              <div className="d-flex justify-content-between align-items-center mb-1">
+                <input
+                  type="text"
+                  className="form-control form-control-sm border-0 bg-transparent text-secondary p-0 text-truncate fw-bold"
+                  style={{ fontSize: '0.78rem', boxShadow: 'none' }}
+                  value={fund.fundName}
+                  onChange={e => handleFundChange(idx, 'fundName', e.target.value)}
+                  placeholder="Enter Fund Name..."
+                  required
+                />
+                <button
+                  type="button"
+                  className="btn-close btn-close-white"
+                  style={{ fontSize: '0.5rem' }}
+                  onClick={() => handleRemoveFund(idx)}
+                  title="Remove Fund"
+                ></button>
+              </div>
               <div className="input-group input-group-sm">
                 <span className="input-group-text bg-dark border-secondary text-secondary px-2">₱</span>
                 <input 
@@ -189,13 +215,19 @@ export default function SetupClient({ department, organizationId }: { department
                   step="0.01" 
                   min="0"
                   className="form-control form-control-sm bg-card text-white border-secondary fw-semibold" 
-                  value={fundBalances[fund] === 0 ? "" : fundBalances[fund]}
-                  onChange={e => handleFundChange(fund, e.target.value)}
+                  value={fund.amount === 0 ? "" : fund.amount}
+                  onChange={e => handleFundChange(idx, 'amount', e.target.value)}
                   placeholder="0.00"
                 />
               </div>
             </div>
           ))}
+          
+          <div className="col-12 col-md-4 d-flex align-items-end">
+             <button type="button" className="btn btn-outline-secondary btn-sm w-100" style={{ height: '31px' }} onClick={handleAddFund}>
+               <i className="bi bi-plus-lg me-1"></i> Add Target Fund
+             </button>
+          </div>
         </div>
 
         <button type="submit" className="btn btn-info fw-bold w-100 btn-sm py-2" disabled={isSubmitting}>
@@ -292,10 +324,6 @@ export default function SetupClient({ department, organizationId }: { department
                     <strong>Total Pool: {fmt(presetData.reduce((sum, item) => sum + item.amount, 0))}</strong>
                   </div>
                 </div>
-
-                <p className="text-secondary small mb-0">
-                  You can review and edit the values on the form before clicking 'Save Initial Fund Allocations to Target Term'.
-                </p>
               </div>
               <div className="modal-footer border-secondary">
                 <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowPresetModal(false)}>Cancel</button>

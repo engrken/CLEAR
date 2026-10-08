@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { submitOnlineRemittanceDirect } from "./actions";
+// FIXED 1: Corrected import name and path to point to your main actions.ts
+import { submitOnlineRemittance } from "../actions"; 
 import { ThemedAlert } from '@/lib/alerts';
 
 export default function ClearanceClientView({
@@ -10,7 +11,9 @@ export default function ClearanceClientView({
   term,
   defaultStudentId,
   defaultFullName,
-  defaultEmail
+  defaultEmail,
+  feeOptions,
+  packageRate
 }: {
   department: string;
   ay: string;
@@ -18,6 +21,8 @@ export default function ClearanceClientView({
   defaultStudentId: string;
   defaultFullName: string;
   defaultEmail: string;
+  feeOptions: string[];
+  packageRate: number;
 }) {
   const [showProofModal, setShowProofModal] = useState(false);
   const [studentId, setStudentId] = useState(defaultStudentId);
@@ -25,9 +30,9 @@ export default function ClearanceClientView({
   const [email, setEmail] = useState(defaultEmail);
   const [channel, setChannel] = useState("GCash");
   const [referenceNo, setReferenceNo] = useState("");
-  const [collectionType, setCollectionType] = useState("Departmental Fee (Package)");
-  const [paymentMode, setPaymentMode] = useState("Full Payment");
-  const [amount, setAmount] = useState<number>(650.00);
+  const [collectionType, setCollectionType] = useState(feeOptions[0] || "Departmental Fee");
+  const [paymentModeUI, setPaymentModeUI] = useState("Full Payment"); // Only used for UI now
+  const [amount, setAmount] = useState<number>(packageRate);
   const [proofBase64, setProofBase64] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -50,18 +55,18 @@ export default function ClearanceClientView({
 
     setIsSubmitting(true);
     try {
-      await submitOnlineRemittanceDirect(department, {
+      await submitOnlineRemittance(department, {
         studentId,
         studentName: fullName || "Student",
         email: email || "student@example.com",
-        channel, // Fixed: Matches the expected type signature
+        paymentChannel: channel, // FIXED 2: Mapped to actions.ts signature
         referenceNo,
-        collectionType,
-        paymentMode,
+        particulars: collectionType, // FIXED 2: Mapped to actions.ts signature
         amount,
         proofBase64: proofBase64,
         ay,
         term
+        // FIXED 3: Removed paymentMode as actions.ts handles it internally
       });
 
       alert("Payment proof submitted successfully! Pending officer verification in Remittance Queue.");
@@ -102,38 +107,17 @@ export default function ClearanceClientView({
                   <div className="row g-2 mb-3">
                     <div className="col-md-6">
                       <label className="form-label text-secondary small fw-semibold">Student ID</label>
-                      <input 
-                        type="text" 
-                        className="form-control bg-card text-color border-secondary font-monospace" 
-                        placeholder="e.g. 22-CECE1-001" 
-                        value={studentId} 
-                        onChange={e => setStudentId(e.target.value)} 
-                        required 
-                      />
+                      <input type="text" className="form-control bg-card text-color border-secondary font-monospace" placeholder="e.g. 22-CECE1-001" value={studentId} onChange={e => setStudentId(e.target.value)} required />
                     </div>
                     <div className="col-md-6">
                       <label className="form-label text-secondary small fw-semibold">Full Name</label>
-                      <input 
-                        type="text" 
-                        className="form-control bg-card text-color border-secondary" 
-                        placeholder="SURNAME, FIRSTNAME" 
-                        value={fullName} 
-                        onChange={e => setFullName(e.target.value)} 
-                        required 
-                      />
+                      <input type="text" className="form-control bg-card text-color border-secondary" placeholder="SURNAME, FIRSTNAME" value={fullName} onChange={e => setFullName(e.target.value)} required />
                     </div>
                   </div>
 
                   <div className="mb-3">
                     <label className="form-label text-secondary small fw-semibold">Receipt Notification Email</label>
-                    <input 
-                      type="email" 
-                      className="form-control bg-card text-color border-secondary" 
-                      placeholder="student@example.com" 
-                      value={email} 
-                      onChange={e => setEmail(e.target.value)} 
-                      required 
-                    />
+                    <input type="email" className="form-control bg-card text-color border-secondary" placeholder="student@example.com" value={email} onChange={e => setEmail(e.target.value)} required />
                   </div>
 
                   <div className="row g-2 mb-3">
@@ -147,42 +131,27 @@ export default function ClearanceClientView({
                     </div>
                     <div className="col-md-6">
                       <label className="form-label text-secondary small fw-semibold">Reference Number</label>
-                      <input 
-                        type="text" 
-                        className="form-control bg-card text-color border-secondary font-monospace" 
-                        placeholder="Ref #" 
-                        value={referenceNo} 
-                        onChange={e => setReferenceNo(e.target.value)} 
-                        required 
-                      />
+                      <input type="text" className="form-control bg-card text-color border-secondary font-monospace" placeholder="Ref #" value={referenceNo} onChange={e => setReferenceNo(e.target.value)} required />
                     </div>
                   </div>
 
                   <div className="row g-2 mb-3">
                     <div className="col-md-6">
-                      <label className="form-label text-secondary small fw-semibold">Collection Type</label>
+                      <label className="form-label text-secondary small fw-semibold">Collection Type / Particulars</label>
                       <select className="form-select bg-card text-color border-secondary" value={collectionType} onChange={e => setCollectionType(e.target.value)}>
-                        <option value="Departmental Fee (Package)">Departmental Fee (Package)</option>
-                        <option value="General Assembly Fine">General Assembly Fine</option>
-                        <option value="ID Replacement / Miscellaneous">ID Replacement / Miscellaneous</option>
-                        <option value="Event Registration">Event Registration</option>
+                        {feeOptions.map((fee, idx) => (
+                          <option key={idx} value={fee}>{fee}</option>
+                        ))}
                       </select>
                     </div>
                     <div className="col-md-6">
                       <label className="form-label text-secondary small fw-semibold">Payment Mode & Amount</label>
                       <div className="input-group">
-                        <select className="form-select bg-card text-color border-secondary" style={{ maxWidth: '130px' }} value={paymentMode} onChange={e => setPaymentMode(e.target.value)}>
+                        <select className="form-select bg-card text-color border-secondary" style={{ maxWidth: '130px' }} value={paymentModeUI} onChange={e => setPaymentModeUI(e.target.value)}>
                           <option value="Full Payment">Full</option>
                           <option value="Installment">Installment</option>
                         </select>
-                        <input 
-                          type="number" 
-                          step="0.01" 
-                          className="form-control bg-card text-color border-secondary" 
-                          value={amount} 
-                          onChange={e => setAmount(parseFloat(e.target.value) || 0)} 
-                          required 
-                        />
+                        <input type="number" step="0.01" className="form-control bg-card text-color border-secondary" value={amount} onChange={e => setAmount(parseFloat(e.target.value) || 0)} required />
                       </div>
                     </div>
                   </div>

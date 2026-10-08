@@ -3,60 +3,28 @@
 import { useState, useMemo, useEffect } from "react";
 import { fmt } from "@/lib/utils";
 import { recordPayment } from "../../actions";
-import { ThemedAlert } from '@/lib/alerts';
 
-interface Student { studentId: string; fullName: string; email: string | null; }
-interface Fund { id: string; fundName: string; }
+interface Student {
+  studentId: string;
+  fullName: string;
+  email: string | null;
+}
 
-// Term Packages & Catalogs (Migrated from legacy config.js)[cite: 36]
-const termPackages: Record<string, { total: number; items: { name: string; rate: number; fund: string }[] }> = {
-  "1st Sem": {
-    total: 650.00,
-    items: [
-      { name: "JIECEP FCUSC Membership Fee (Student & Institutional)", rate: 250.00, fund: "JIECEP Membership Fund" },
-      { name: "General Orientation/Acquaintance Party", rate: 200.00, fund: "General Orientation Fund" },
-      { name: "COE FCUSR Activities", rate: 100.00, fund: "FCUSR Activities Fund" },
-      { name: "Sports and Cultural Fund", rate: 100.00, fund: "Sports & Cultural Fund" }
-    ]
-  },
-  "2nd Sem": {
-    total: 900.00,
-    items: [
-      { name: "JIECEP FCUSC Fund", rate: 50.00, fund: "JIECEP FCUSC Fund" },
-      { name: "JIECEP Week Activities (Local & Regional)", rate: 150.00, fund: "JIECEP Week Activities Fund" },
-      { name: "ECE Grand Ball", rate: 650.00, fund: "ECE Grandball Fund" },
-      { name: "Emergency/Calamity Fund", rate: 30.00, fund: "Emergency/Calamity Fund" },
-      { name: "FCUSR Activities & Projects", rate: 20.00, fund: "FCUSR Activities Fund" }
-    ]
-  },
-  "Summer": {
-    total: 200.00,
-    items: [
-      { name: "Summer Departmental Operations", rate: 150.00, fund: "New Accounts (Current Operations)" },
-      { name: "Special Activities Fund", rate: 50.00, fund: "JIECEP Activities Fund" }
-    ]
-  }
-};
+interface Fund {
+  id: string;
+  fundName: string;
+}
 
-const otherFees: Record<string, { name: string; rate: number; fund: string }[]> = {
-  "Single Fee": [
-    { name: "Gen Orientation Lunch", rate: 150.00, fund: "General Orientation Fund" },
-    { name: "Fellowship Night", rate: 160.00, fund: "General Orientation Fund" }
-  ],
-  "Merchandise": [
-    { name: "Departmental Shirt (Officer)", rate: 400.00, fund: "New Accounts (Current Operations)" },
-    { name: "Departmental Shirt (Non - Officer)", rate: 450.00, fund: "New Accounts (Current Operations)" }
-  ],
-  "General Fund": [
-    { name: "General Fund (Carried Over)", rate: 0.00, fund: "General Fund (Carried Over)" },
-    { name: "New Accounts Inflow", rate: 0.00, fund: "New Accounts (Current Operations)" }
-  ],
-  "Others": [
-    { name: "Penalty / Fines", rate: 0.00, fund: "Others" },
-    { name: "Sponsorship / Donation", rate: 0.00, fund: "Others" },
-    { name: "Miscellaneous Other Fee", rate: 0.00, fund: "Others" }
-  ]
-};
+interface CollectionSetup {
+  id: string;
+  category: string;
+  name: string;
+  amount: number;
+  targetFund: string;
+  isPackage?: boolean;
+}
+
+const DEPARTMENTAL_PACKAGE_NAME = "Departmental Fee Package (All Items)";
 
 export default function CollectionsForm({
   department,
@@ -64,59 +32,95 @@ export default function CollectionsForm({
   term,
   students,
   funds,
+  collectionItems,
   nextOr,
-  prefillId
+  prefillId,
 }: {
   department: string;
   ay: string;
   term: string;
   students: Student[];
   funds: Fund[];
+  collectionItems: CollectionSetup[];
   nextOr: string;
   prefillId: string;
 }) {
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = new Date().toISOString().split("T")[0];
+
+  const categories: string[] = useMemo(() => {
+    return Array.from(new Set(collectionItems.map((item) => String(item.category))));
+  }, [collectionItems]);
 
   const [date, setDate] = useState(todayStr);
   const [orNumber, setOrNumber] = useState(nextOr);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [studentId, setStudentId] = useState("");
   const [studentName, setStudentName] = useState("");
   const [studentEmail, setStudentEmail] = useState("");
-  
-  const [category, setCategory] = useState("Departmental Fee - Package");
-  const [itemDescription, setItemDescription] = useState("Departmental Fee Package");
+
+  const [category, setCategory] = useState(categories[0] || "");
+  const [itemDescription, setItemDescription] = useState("");
+
   const [paymentType, setPaymentType] = useState("Full Payment");
   const [amountPaid, setAmountPaid] = useState("");
-  const [fundAllocation, setFundAllocation] = useState("Multi-Fund Allocation");
+  const [fundAllocation, setFundAllocation] = useState("");
+
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Handle prefill if redirected from penalties page
+  // Filter items belonging to the currently selected category drop-down
+  const currentCategoryItems = useMemo(() => {
+    return collectionItems.filter((item) => item.category === category);
+  }, [category, collectionItems]);
+
+  // Use the NEW architecture: Filter by isPackage boolean instead of strings!
+  const packageItems = useMemo(() => {
+    return currentCategoryItems.filter((item) => item.isPackage !== false);
+  }, [currentCategoryItems]);
+
+  const packageTotal = useMemo(() => {
+    return packageItems.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  }, [packageItems]);
+
   useEffect(() => {
-    if (prefillId) {
-      const match = students.find(s => s.studentId.toLowerCase() === prefillId.toLowerCase());
-      if (match) {
-        setSearchQuery(`${match.fullName} (${match.studentId})`);
-        setStudentId(match.studentId);
-        setStudentName(match.fullName);
-        setStudentEmail(match.email || "");
-      }
-      setCategory("Others");
-      setItemDescription("Penalty / Fines");
+    if (currentCategoryItems.length === 0) {
+      setItemDescription("");
+      setFundAllocation("");
+      return;
     }
-  }, [prefillId, students]);
 
-  // Active Package or Catalog Rate Calculation
+    // Default to the "Choose All" package if there are multiple mandatory items in this category
+    if (packageItems.length > 1) {
+      setItemDescription(DEPARTMENTAL_PACKAGE_NAME);
+      setFundAllocation("Multiple Funds (Package Split)");
+      return;
+    }
+
+    setItemDescription(currentCategoryItems[0].name);
+    setFundAllocation(currentCategoryItems[0].targetFund);
+  }, [category, currentCategoryItems, packageItems]);
+
+  useEffect(() => {
+    if (!prefillId) return;
+
+    const match = students.find((s) => s.studentId.toLowerCase() === prefillId.toLowerCase());
+    if (match) {
+      setSearchQuery(`${match.fullName} (${match.studentId})`);
+      setStudentId(match.studentId);
+      setStudentName(match.fullName);
+      setStudentEmail(match.email || "");
+    }
+
+    const penaltyCategory = categories.find((c) => c.toLowerCase().includes("penalty"));
+    if (penaltyCategory) setCategory(penaltyCategory);
+  }, [prefillId, students, categories]);
+
   const standardRate = useMemo(() => {
-    if (category === "Departmental Fee - Package") {
-      return (termPackages[term] || termPackages["1st Sem"]).total;
-    }
-    const list = otherFees[category] || [];
-    const found = list.find(i => i.name === itemDescription);
-    return found ? found.rate : 0;
-  }, [category, itemDescription, term]);
+    if (itemDescription === DEPARTMENTAL_PACKAGE_NAME) return packageTotal;
+    const found = currentCategoryItems.find((item) => item.name === itemDescription);
+    return found ? Number(found.amount || 0) : 0;
+  }, [itemDescription, currentCategoryItems, packageTotal]);
 
-  // Set default amount when category/item changes
   useEffect(() => {
     if (paymentType === "Full Payment" || paymentType === "Balance") {
       setAmountPaid(standardRate.toFixed(2));
@@ -125,14 +129,13 @@ export default function CollectionsForm({
 
   const remainingBalance = Math.max(0, standardRate - (parseFloat(amountPaid) || 0));
 
-  // Student Search Handler
   const handleStudentSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setSearchQuery(val);
-    const match = students.find(s => 
-      `${s.fullName} (${s.studentId})`.toLowerCase() === val.toLowerCase() ||
-      s.studentId.toLowerCase() === val.toLowerCase() ||
-      s.fullName.toLowerCase() === val.toLowerCase()
+    const match = students.find((s) => 
+        `${s.fullName} (${s.studentId})`.toLowerCase().includes(val.toLowerCase()) ||
+        s.studentId.toLowerCase() === val.toLowerCase() ||
+        s.fullName.toLowerCase() === val.toLowerCase()
     );
     if (match) {
       setStudentId(match.studentId);
@@ -141,37 +144,26 @@ export default function CollectionsForm({
     }
   };
 
-  // Category Change Handler
-  const handleCategoryChange = (cat: string) => {
-    setCategory(cat);
-    if (cat === "Departmental Fee - Package") {
-      setItemDescription("Departmental Fee Package");
-      setFundAllocation("Multi-Fund Allocation");
-    } else {
-      const items = otherFees[cat] || [];
-      if (items.length > 0) {
-        setItemDescription(items[0].name);
-        setFundAllocation(items[0].fund);
-      }
-    }
-  };
-
-  // Item Change Handler
   const handleItemChange = (itemName: string) => {
     setItemDescription(itemName);
-    const item = (otherFees[category] || []).find(i => i.name === itemName);
-    if (item) {
-      setFundAllocation(item.fund);
+    if (itemName === DEPARTMENTAL_PACKAGE_NAME) {
+      setFundAllocation("Multiple Funds (Package Split)");
+      return;
     }
+    const item = currentCategoryItems.find((i) => i.name === itemName);
+    if (item) setFundAllocation(item.targetFund);
   };
 
-  // Submit Handler
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const paid = parseFloat(amountPaid) || 0;
 
-    if (!studentId || paid <= 0) {
-      return alert("Please select a valid student and enter an amount greater than ₱0.00.");
+    if (!studentId) return alert("Please select a valid student.");
+    if (paid <= 0) return alert("Please enter an amount greater than ₱0.00.");
+    if (paid > standardRate) return alert(`Amount paid cannot exceed the standard rate of ${fmt(standardRate)}.`);
+
+    if (itemDescription === DEPARTMENTAL_PACKAGE_NAME && packageTotal <= 0) {
+      return alert("The Package has no configured mandatory items for this category.");
     }
 
     setIsSubmitting(true);
@@ -189,127 +181,167 @@ export default function CollectionsForm({
         amountPaid: paid,
         fundAllocation,
         ay,
-        term
+        term,
       });
 
       alert(`Payment successfully recorded under OR #${orNumber}! Digital receipt dispatched.`);
-      // Reset form partially
       setAmountPaid("");
       setSearchQuery("");
       setStudentId("");
       setStudentName("");
       setStudentEmail("");
+
+      // Increment OR Number locally for quick successive entries
+      const parts = orNumber.split("-");
+      if (parts.length > 1) {
+        const numPart = parseInt(parts[1].replace(/[^0-9]/g, ""), 10);
+        if (!isNaN(numPart)) {
+          const nextNum = numPart + 1;
+          setOrNumber(`${parts[0]}-${nextNum < 1000 ? String(nextNum).padStart(3, "0") : nextNum}`);
+        }
+      }
+
     } catch (err: any) {
-      alert("Error recording payment: " + err.message);
+      alert("Error recording payment: " + (err?.message || "Unknown error"));
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  if (collectionItems.length === 0) {
+    return (
+      <div className="alert alert-warning py-3 small">
+        <i className="bi bi-exclamation-triangle me-2"></i>
+        No collections have been setup for this department yet. Please visit the Setup module to configure fees.
+      </div>
+    );
+  }
 
   return (
     <form onSubmit={handleSubmit}>
       <div className="row g-2 mb-2">
         <div className="col-md-6">
           <label className="form-label text-secondary small fw-semibold">Date</label>
-          <input type="date" className="form-control" value={date} onChange={e => setDate(e.target.value)} required />
+          <input type="date" className="form-control" value={date} onChange={(e) => setDate(e.target.value)} required />
         </div>
         <div className="col-md-6">
           <label className="form-label text-secondary small fw-semibold">OR Number</label>
-          <input type="text" className="form-control font-monospace" value={orNumber} onChange={e => setOrNumber(e.target.value)} required />
+          <input type="text" className="form-control font-monospace border-warning" value={orNumber} onChange={(e) => setOrNumber(e.target.value)} required />
         </div>
       </div>
 
       <div className="mb-2">
         <label className="form-label text-secondary small fw-semibold">Search Student (ID or Name)</label>
-        <input 
-          list="collectionStudentList" 
-          className="form-control" 
-          placeholder="Start typing student name or ID..."
-          value={searchQuery}
-          onChange={handleStudentSearch}
-          required 
-        />
+        <input list="collectionStudentList" className="form-control border-info" placeholder="Start typing student name or ID..." value={searchQuery} onChange={handleStudentSearch} required />
         <datalist id="collectionStudentList">
-          {students.map(s => <option key={s.studentId} value={`${s.fullName} (${s.studentId})`} />)}
+          {students.map((s) => (
+            <option key={s.studentId} value={`${s.fullName} (${s.studentId})`} />
+          ))}
         </datalist>
       </div>
 
       <div className="row g-2 mb-2">
         <div className="col-md-4">
           <label className="form-label text-secondary small fw-semibold">Student ID</label>
-          <input type="text" className="form-control text-secondary" value={studentId} readOnly />
+          <input type="text" className="form-control text-secondary bg-dark" value={studentId} readOnly />
         </div>
         <div className="col-md-4">
           <label className="form-label text-secondary small fw-semibold">Full Name</label>
-          <input type="text" className="form-control" value={studentName} onChange={e => setStudentName(e.target.value)} required />
+          <input type="text" className="form-control bg-dark text-white" value={studentName} onChange={(e) => setStudentName(e.target.value)} required />
         </div>
         <div className="col-md-4">
           <label className="form-label text-secondary small fw-semibold">Notification Email</label>
-          <input type="email" className="form-control" value={studentEmail} onChange={e => setStudentEmail(e.target.value)} placeholder="student@example.com" />
+          <input type="email" className="form-control bg-dark text-white" value={studentEmail} onChange={(e) => setStudentEmail(e.target.value)} placeholder="student@example.com" />
         </div>
       </div>
 
       <div className="mb-2">
-        <label className="form-label text-secondary small fw-semibold">Collection Type</label>
-        <select className="form-select" value={category} onChange={e => handleCategoryChange(e.target.value)} required>
-          <option value="Departmental Fee - Package">Departmental Fee (Package)</option>
-          <option value="Single Fee">Individual Fee</option>
-          <option value="Merchandise">Merchandise</option>
-          <option value="General Fund">General Fund</option>
-          <option value="Others">Others</option>
+        <label className="form-label text-secondary small fw-semibold">Collection Category</label>
+        <select className="form-select" value={category} onChange={(e) => setCategory(e.target.value)} required>
+          {categories.map((cat) => {
+            const hasPackageItems = collectionItems.some(i => i.category === cat && i.isPackage !== false);
+            return (
+              <option key={cat} value={cat}>
+                {cat} {hasPackageItems ? " — (Contains Mandatory Items)" : " — (Optional / Standalone)"}
+              </option>
+            );
+          })}
         </select>
       </div>
 
-      {category !== "Departmental Fee - Package" ? (
-        <div className="mb-2">
-          <label className="form-label text-secondary small fw-semibold">Item Description</label>
-          <select className="form-select" value={itemDescription} onChange={e => handleItemChange(e.target.value)}>
-            {(otherFees[category] || []).map(i => <option key={i.name} value={i.name}>{i.name} (₱{i.rate.toFixed(2)})</option>)}
-          </select>
-        </div>
-      ) : (
-        <div className="alert alert-info py-2 small mb-2">
-          <strong>{term} Breakdown (Total: {fmt((termPackages[term] || termPackages["1st Sem"]).total)}):</strong><br />
-          {(termPackages[term] || termPackages["1st Sem"]).items.map((i, idx) => (
-            <span key={idx}>• {i.name}: {fmt(i.rate)} &rarr; <em>{i.fund}</em><br /></span>
+      <div className="mb-2">
+        <label className="form-label text-secondary small fw-semibold">Item Description</label>
+        <select className="form-select" value={itemDescription} onChange={(e) => handleItemChange(e.target.value)} required>
+          {packageItems.length > 1 && (
+            <option value={DEPARTMENTAL_PACKAGE_NAME}>
+              ⭐ {DEPARTMENTAL_PACKAGE_NAME} — {fmt(packageTotal)}
+            </option>
+          )}
+          {currentCategoryItems.map((item) => (
+            <option key={item.id} value={item.name}>
+              {item.name} ({fmt(item.amount)}) {item.isPackage === false ? " [Optional]" : ""}
+            </option>
           ))}
+        </select>
+      </div>
+
+      {itemDescription === DEPARTMENTAL_PACKAGE_NAME && (
+        <div className="alert alert-info py-2 small mb-2 border-info">
+          <div className="fw-bold mb-1">Mandatory Clearance Package Breakdown</div>
+          <div className="mb-1 text-secondary">This package auto-splits the payment into the following target funds:</div>
+          <div className="mt-2">
+            {packageItems.map((item) => (
+              <div key={item.id} className="d-flex justify-content-between text-info">
+                <span>{item.name}</span>
+                <span className="fw-semibold">{fmt(item.amount)}</span>
+              </div>
+            ))}
+          </div>
+          <hr className="my-2 border-info border-opacity-50" />
+          <div className="d-flex justify-content-between fw-bold text-info">
+            <span>MANDATORY TOTAL</span>
+            <span>{fmt(packageTotal)}</span>
+          </div>
         </div>
       )}
 
       <div className="row g-2 mb-2">
         <div className="col-md-4">
           <label className="form-label text-secondary small fw-semibold">Payment Mode</label>
-          <select className="form-select" value={paymentType} onChange={e => setPaymentType(e.target.value)} required>
+          <select className="form-select" value={paymentType} onChange={(e) => setPaymentType(e.target.value)} required>
             <option value="Full Payment">Full Payment</option>
             <option value="Partial Payment">Partial Payment / Installment</option>
             <option value="Balance">Balance</option>
           </select>
         </div>
         <div className="col-md-4">
-          <label className="form-label text-secondary small fw-semibold">Standard Rate / Balance (₱)</label>
-          <input type="number" step="0.01" className="form-control text-secondary" readOnly value={standardRate.toFixed(2)} />
+          <label className="form-label text-secondary small fw-semibold">Standard Rate (₱)</label>
+          <input type="number" step="0.01" className="form-control text-white bg-dark" readOnly value={standardRate.toFixed(2)} />
         </div>
         <div className="col-md-4">
-          <label className="form-label text-secondary small fw-semibold">Amount Paid Now (₱)</label>
-          <input type="number" step="0.01" className="form-control" value={amountPaid} onChange={e => setAmountPaid(e.target.value)} required />
+          <label className="form-label text-info fw-bold small">Amount Paid Now (₱)</label>
+          <input type="number" step="0.01" min="0" className="form-control border-info fw-bold text-info" value={amountPaid} onChange={(e) => setAmountPaid(e.target.value)} required />
         </div>
       </div>
 
       {paymentType !== "Full Payment" && parseFloat(amountPaid) > 0 && standardRate > 0 && (
-        <div className="alert alert-danger py-2 small fw-bold mb-2">
+        <div className="alert alert-danger py-2 small fw-bold mb-2 border-danger">
           REMAINING BALANCE DUE: {fmt(remainingBalance)}
         </div>
       )}
 
-      {category !== "Departmental Fee - Package" && (
-        <div className="mb-3">
-          <label className="form-label text-secondary small fw-semibold">Target Fund Allocation</label>
-          <select className="form-select" value={fundAllocation} onChange={e => setFundAllocation(e.target.value)}>
-            {funds.map(f => <option key={f.id} value={f.fundName}>{f.fundName}</option>)}
-            <option value="Others">Others</option>
-          </select>
-        </div>
-      )}
+      <div className="mb-3">
+        <label className="form-label text-secondary small fw-semibold">Target Fund Allocation</label>
+        <select className="form-select text-white bg-dark" value={fundAllocation} onChange={(e) => setFundAllocation(e.target.value)} required>
+          {fundAllocation === "Multiple Funds (Package Split)" && (
+            <option value="Multiple Funds (Package Split)">Multiple Funds (Package Split)</option>
+          )}
+          {funds.map((fund) => (
+            <option key={fund.id} value={fund.fundName}>{fund.fundName}</option>
+          ))}
+          <option value="Others">Others</option>
+        </select>
+      </div>
 
       <button type="submit" className="btn btn-info fw-bold w-100" disabled={isSubmitting}>
         {isSubmitting ? "Recording Payment..." : "Post Payment & Send Digital Receipt"}

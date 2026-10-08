@@ -14,7 +14,6 @@ import {
 } from 'chart.js';
 import { Doughnut, Bar } from 'react-chartjs-2';
 
-// Register Chart.js elements
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title);
 
 interface ReportsClientProps {
@@ -25,6 +24,8 @@ interface ReportsClientProps {
   collections?: any[];
   liquidations?: any[];
   penalties?: any[];
+  packageRate: number;
+  setupCategories: string[];
 }
 
 interface ReportRow {
@@ -39,12 +40,6 @@ interface ReportRow {
   particulars: string;
   duration: string;
 }
-
-const termPackages: Record<string, number> = {
-  "1st Sem": 650.00,
-  "2nd Sem": 900.00,
-  "Summer": 200.00
-};
 
 function formatHoursAndMinutes(decimalHours: number) {
   const dec = Number(decimalHours) || 0;
@@ -64,7 +59,9 @@ export default function ReportsClient({
   students = [],
   collections = [],
   liquidations = [],
-  penalties = []
+  penalties = [],
+  packageRate,
+  setupCategories
 }: ReportsClientProps) {
   const [reportCategory, setReportCategory] = useState("Activity & Item Dues (Unpaid)");
   const [statusFilter, setStatusFilter] = useState("All Students (Master Roster)");
@@ -74,21 +71,21 @@ export default function ReportsClient({
   const validCollections = collections.filter(c => !String(c.paymentType || "").toUpperCase().includes("VOID"));
   const validLiquidations = liquidations.filter(l => !String(l.status || "").includes("Voided"));
 
+  // Find any miscellaneous fees recorded in collections that aren't explicitly in the setup
   const dynamicCategories = Array.from(
     new Set(validCollections.map(c => c.category).filter(cat => cat && cat !== "Departmental Fee" && cat !== "Departmental Fee - Package"))
   );
   
-  const defaultCategories = [
+  // Base system categories that should always be available
+  const systemCategories = [
     "Departmental Fee (Package)",
     "Activity & Item Dues (Unpaid)",
-    "Gen Orientation Lunch",
-    "Fellowship Night",
-    "Departmental Shirt (Officer)",
-    "Departmental Shirt (Non - Officer)",
     "Penalty Fee",
     "Liquidation / Audited Expenses"
   ];
-  const allCategories = Array.from(new Set([...defaultCategories, ...dynamicCategories]));
+
+  // Merge System + Dynamic Setup Fees + Any stray recorded fees
+  const allCategories = Array.from(new Set([...systemCategories, ...setupCategories, ...dynamicCategories]));
 
   const computedRoster = useMemo(() => {
     if (reportCategory === "Liquidation / Audited Expenses") return [];
@@ -112,7 +109,7 @@ export default function ReportsClient({
     };
 
     if (reportCategory === "Departmental Fee (Package)") {
-      const uniformRate = termPackages[term] || 650.00;
+      const uniformRate = packageRate; // Replaced hardcoded termPackages logic
       results = students.map(student => {
         const studentPayments = validCollections.filter(c => 
           (c.studentId?.toLowerCase() === student.studentId?.toLowerCase() || c.studentName?.toLowerCase() === student.fullName?.toLowerCase()) &&
@@ -199,6 +196,7 @@ export default function ReportsClient({
       });
 
     } else {
+      // Dynamic setup categories
       const itemPayers = new Map();
       validCollections.forEach(c => {
         if (c.itemDescription === reportCategory || c.category === reportCategory) {
@@ -222,7 +220,7 @@ export default function ReportsClient({
     }
 
     return results.sort((a, b) => a.fullName.localeCompare(b.fullName));
-  }, [students, validCollections, penalties, reportCategory, term]);
+  }, [students, validCollections, penalties, reportCategory, term, packageRate]);
 
   const filteredRoster = computedRoster.filter(row => {
     if (statusFilter === "Fully Paid Only" && row.status !== "Fully Paid" && row.status !== "Settled (Service)") return false;
@@ -256,9 +254,9 @@ export default function ReportsClient({
       if (validLiquidations.length === 0) return alert("No liquidation records to export.");
       csv = `Date,Audit ID,CA Reference,Officer / Requestor,Fund Source,Budget (CA),Liquidated Exp.,Cash Return (Surplus),Reimburse Due\n`;
       validLiquidations.forEach(l => {
-        const budget = (Number(l.totalAmountSpent)||0) + (Number(l.cashReturned)||0) - (Number(l.reimbursementDue)||0);
+        const budget = (Number(l.totalExpense)||0) + (Number(l.varianceReturn)||0) - (Number(l.reimbursementDue)||0);
         const rawDate = l.date ? String(l.date).split('T')[0] : '—';
-        csv += `"${rawDate}","${l.auditId}","${l.advanceId}","${l.requestor}","${l.fundSource}",${budget},${l.totalAmountSpent},${l.cashReturned||0},${l.reimbursementDue||0}\n`;
+        csv += `"${rawDate}","${l.auditId}","${l.referenceCaId || l.advanceId || ''}","${l.requestor}","${l.fundSource}",${budget},${l.totalExpense},${l.varianceReturn||0},${l.reimbursementDue||0}\n`;
       });
     } else if (isPenaltyReport) {
       if (sortedYearLevels.length === 0) return alert("No penalty records to export.");
@@ -506,20 +504,20 @@ export default function ReportsClient({
                   <tr><td colSpan={8} className="text-center text-secondary py-4">No audited liquidation records found.</td></tr>
                 ) : (
                   validLiquidations.map((l, idx) => {
-                    const budget = (Number(l.totalAmountSpent)||0) + (Number(l.cashReturned)||0) - (Number(l.reimbursementDue)||0);
+                    const budget = (Number(l.totalExpense)||0) + (Number(l.varianceReturn)||0) - (Number(l.reimbursementDue)||0);
                     let resultBadge = <span className="badge bg-secondary">Exact (₱0.00)</span>;
-                    if (Number(l.cashReturned) > 0) resultBadge = <span className="badge bg-success">+{fmt(l.cashReturned)} (Return)</span>;
+                    if (Number(l.varianceReturn) > 0) resultBadge = <span className="badge bg-success">+{fmt(l.varianceReturn)} (Return)</span>;
                     else if (Number(l.reimbursementDue) > 0) resultBadge = <span className="badge bg-danger">-{fmt(l.reimbursementDue)} (Reimburse)</span>;
 
                     return (
                       <tr key={`${l.id}-${idx}`}>
                         <td className="text-secondary small">{l.date ? String(l.date).split('T')[0] : '—'}</td>
                         <td><strong>{l.auditId}</strong></td>
-                        <td><span className="text-accent">{l.advanceId || '—'}</span></td>
+                        <td><span className="text-accent">{l.referenceCaId || l.advanceId || '—'}</span></td>
                         <td>{l.requestor || '—'}</td>
                         <td>{l.fundSource}</td>
                         <td className="text-end">{fmt(budget)}</td>
-                        <td className="text-end text-danger fw-bold">{fmt(l.totalAmountSpent)}</td>
+                        <td className="text-end text-danger fw-bold">{fmt(l.totalExpense)}</td>
                         <td className="text-end">{resultBadge}</td>
                       </tr>
                     );

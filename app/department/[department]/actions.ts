@@ -11,10 +11,6 @@ import { logSystemAction } from '@/lib/logger';
 // =========================================================================
 // AUTHORIZATION GUARD
 // =========================================================================
-/**
- * Validates if the active session has the required tab permission.
- * Throws an error if unauthorized, halting the server action.
- */
 export async function requireTabAccess(requiredTab: string) {
   const session = await auth();
   
@@ -25,10 +21,6 @@ export async function requireTabAccess(requiredTab: string) {
   const customUser = session.user as any;
   const allowedTabs = (customUser.allowedTabs as string[]) || [];
 
-  // ❌ REMOVED THE HARDCODED ADMIN OVERRIDE HERE
-  // The system will now STRICTLY respect the allowedTabs array for ALL roles.
-
-  // Reject if the assigned scope lacks the necessary tab
   if (!allowedTabs.includes(requiredTab)) {
     throw new Error(`403 Forbidden: Your account scope lacks permission for the ${requiredTab} module.`);
   }
@@ -36,13 +28,11 @@ export async function requireTabAccess(requiredTab: string) {
   return customUser;
 }
 
-// Helper: Format date for ID generation (yyyyMMdd-HHmmss)
 function formatDate(date: Date) {
   const pad = (n: number) => n.toString().padStart(2, '0');
   return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
 }
 
-// 1. Helper to get the Organization ID from the subdomain URL parameter
 async function getOrgId(department: string) {
   const org = await prisma.organization.findUnique({
     where: { subdomain: department },
@@ -51,8 +41,13 @@ async function getOrgId(department: string) {
   return org.id;
 }
 
+async function getActionUser(): Promise<string> {
+  const session = await auth();
+  const userWithRole = session?.user as { fullName?: string; email?: string } | undefined;
+  return userWithRole?.fullName || userWithRole?.email || "System";
+}
+
 export async function createDepartment(formData: FormData) {
-  // Creating a department is a root-level action, typically protected higher up
   const name = formData.get('name') as string;
   const subdomain = formData.get('subdomain') as string;
   const code = formData.get('code') as string;
@@ -87,7 +82,7 @@ export async function assessStudentDue(department: string, payload: {
   ay: string;
   term: string;
 }) {
-  await requireTabAccess('tab-collectibles'); // GUARD
+  await requireTabAccess('tab-collectibles');
 
   const organization = await prisma.organization.findUnique({
     where: { subdomain: department.toLowerCase() },
@@ -113,7 +108,7 @@ export async function assessStudentDue(department: string, payload: {
 }
 
 export async function deletePenalty(department: string, penaltyId: string) {
-  await requireTabAccess('tab-void'); // GUARD (Deletion acts as a Void)
+  await requireTabAccess('tab-void');
 
   const organization = await prisma.organization.findUnique({
     where: { subdomain: department.toLowerCase() },
@@ -131,13 +126,6 @@ export async function deletePenalty(department: string, penaltyId: string) {
   return { success: true, message: "Penalty record deleted successfully." };
 }
 
-async function getActionUser(): Promise<string> {
-  const session = await auth();
-  const userWithRole = session?.user as { fullName?: string; email?: string } | undefined;
-  return userWithRole?.fullName || userWithRole?.email || "System";
-}
-
-// 1. Server Action: Record Penalty
 export async function recordPenalty(department: string, data: {
   date: string;
   studentId: string;
@@ -149,7 +137,7 @@ export async function recordPenalty(department: string, data: {
   ay: string;
   term: string;
 }) {
-  await requireTabAccess('tab-penalties'); // GUARD
+  await requireTabAccess('tab-penalties');
 
   const officerName = await getActionUser();
   const orgId = await getOrgId(department);
@@ -179,7 +167,6 @@ export async function recordPenalty(department: string, data: {
   revalidatePath(`/department/${department}`);
 }
 
-// 3. Server Action: Issue Cash Advance
 export async function issueCashAdvance(department: string, data: {
   requestor: string;
   purpose: string;
@@ -190,7 +177,7 @@ export async function issueCashAdvance(department: string, data: {
   ay: string;
   term: string;
 }) {
-  await requireTabAccess('tab-advances'); // GUARD
+  await requireTabAccess('tab-advances');
 
   const officerName = await getActionUser();
   const orgId = await getOrgId(department);
@@ -219,7 +206,6 @@ export async function issueCashAdvance(department: string, data: {
   revalidatePath(`/department/${department}`);
 }
 
-// 4. Server Action: Record Collection (Payment)
 export async function recordCollection(department: string, data: {
   orNumber: string;
   studentId: string;
@@ -233,7 +219,7 @@ export async function recordCollection(department: string, data: {
   ay: string;
   term: string;
 }) {
-  await requireTabAccess('tab-payment'); // GUARD
+  await requireTabAccess('tab-payment');
 
   const officerName = await getActionUser();
   const orgId = await getOrgId(department);
@@ -265,9 +251,76 @@ export async function recordCollection(department: string, data: {
   revalidatePath(`/department/${department}`);
 }
 
-// 5. Server Action: Invalidate Online Remittance
+export async function recordPayment(department: string, data: {
+  orNumber: string;
+  date: string;
+  studentId: string;
+  studentName: string;
+  studentEmail?: string;
+  category: string;
+  itemDescription: string;
+  paymentType: string;
+  standardRate: number;
+  amountPaid: number;
+  fundAllocation: string;
+  ay: string;
+  term: string;
+}) {
+  await requireTabAccess('tab-payment');
+
+  const officerName = await getActionUser();
+  const orgId = await getOrgId(department);
+
+  const paid = Math.max(0, Number(data.amountPaid) || 0);
+  const rate = Math.max(0, Number(data.standardRate) || 0);
+
+  if (paid <= 0) {
+    throw new Error("Payment amount must be greater than zero.");
+  }
+
+  if (rate <= 0) {
+    throw new Error("The payment has no valid standard rate.");
+  }
+
+  if (paid > rate) {
+    throw new Error(`Payment amount ₱${paid.toFixed(2)} cannot exceed the assessed amount of ₱${rate.toFixed(2)}.`);
+  }
+
+  const balanceDue = Math.max(0, Math.round((rate - paid) * 100) / 100);
+  const actualPaymentType = balanceDue === 0 ? "Full Payment" : data.paymentType;
+  const category = String(data.category || "").trim();
+  const itemDescription = String(data.itemDescription || "").trim();
+
+  await prisma.collection.create({
+    data: {
+      organizationId: orgId,
+      academicYear: data.ay,
+      term: data.term,
+      date: new Date(data.date),
+      studentId: data.studentId,
+      studentName: data.studentName,
+      orNumber: data.orNumber,
+      category,
+      itemDescription,
+      paymentType: actualPaymentType,
+      standardRate: rate,
+      amountPaid: paid,
+      balanceDue,
+      fundAllocation: data.fundAllocation,
+      status: "Valid",
+      encodedBy: officerName
+    }
+  });
+
+  await logSystemAction(orgId, officerName, "RECORD_PAYMENT", `Recorded payment of ₱${paid.toFixed(2)} from ${data.studentName} [OR: ${data.orNumber}] for ${itemDescription}.`);
+
+  revalidatePath(`/department/${department}/collections`);
+  revalidatePath(`/department/${department}/clearance`);
+  revalidatePath(`/department/${department}`);
+}
+
 export async function invalidateOnlineRemittance(department: string, remittanceId: string) {
-  await requireTabAccess('tab-remittances'); // GUARD
+  await requireTabAccess('tab-remittances');
 
   const officerName = await getActionUser();
   const organization = await prisma.organization.findUnique({
@@ -292,9 +345,8 @@ export async function invalidateOnlineRemittance(department: string, remittanceI
   return { success: true, message: 'Remittance submission marked as invalid and removed from queue.' };
 }
 
-// 6. Server Action: Save Bulk Collectibles
 export async function saveBulkCollectibles(department: string, records: any[], ay: string, term: string) {
-  await requireTabAccess('tab-collectibles'); // GUARD
+  await requireTabAccess('tab-collectibles');
 
   const officerName = await getActionUser();
   const orgId = await getOrgId(department);
@@ -315,288 +367,72 @@ export async function saveBulkCollectibles(department: string, records: any[], a
   }
 
   await logSystemAction(orgId, officerName, "SAVE_COLLECTIBLES", `Assessed bulk collectibles across ${records.length} categories.`);
-
   revalidatePath(`/department/${department}/collectibles`);
 }
 
-// --- AUTHENTICATION ACTIONS ---
-// (No guards needed here as they handle login/OTP creation)
 export async function requestOtp(department: string, email: string) {
   const cleanDepartment = department.trim().toLowerCase();
   const cleanEmail = email.trim().toLowerCase();
 
   const organization = await prisma.organization.findUnique({
-    where: {
-      subdomain: cleanDepartment,
-    },
+    where: { subdomain: cleanDepartment },
   });
 
-  if (!organization) {
-    throw new Error(
-      `Department '${cleanDepartment}' not found.`
-    );
-  }
+  if (!organization) throw new Error(`Department '${cleanDepartment}' not found.`);
 
   const user = await prisma.tenantUser.findFirst({
-    where: {
-      organizationId: organization.id,
-      email: cleanEmail,
-    },
+    where: { organizationId: organization.id, email: cleanEmail },
   });
 
-  if (!user) {
-    throw new Error(
-      "This account is not registered or does not belong to this department."
-    );
-  }
-
-  if (user.status !== 'Active') {
-    throw new Error(
-      "This account is currently inactive."
-    );
-  }
+  if (!user) throw new Error("This account is not registered or does not belong to this department.");
+  if (user.status !== 'Active') throw new Error("This account is currently inactive.");
 
   const cookieStore = await cookies();
-
-  const lockoutCookie =
-    cookieStore.get('fcu_lockout');
+  const lockoutCookie = cookieStore.get('fcu_lockout');
 
   if (lockoutCookie) {
-    const lockoutTime =
-      parseInt(lockoutCookie.value, 10);
-
+    const lockoutTime = parseInt(lockoutCookie.value, 10);
     if (Date.now() < lockoutTime) {
-      const remainingMinutes =
-        Math.ceil(
-          (lockoutTime - Date.now()) / 60000
-        );
-
-      throw new Error(
-        `Too many failed attempts. Account temporarily locked. Try again in ${remainingMinutes} minute(s).`
-      );
+      const remainingMinutes = Math.ceil((lockoutTime - Date.now()) / 60000);
+      throw new Error(`Too many failed attempts. Account temporarily locked. Try again in ${remainingMinutes} minute(s).`);
     }
   }
 
-  const otpCode =
-    Math.floor(
-      100000 + Math.random() * 900000
-    ).toString();
+  const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+  const hashedCode = crypto.createHash('sha256').update(otpCode).digest('hex');
+  const expiresAt = Date.now() + 5 * 60 * 1000;
 
-  const hashedCode =
-    crypto
-      .createHash('sha256')
-      .update(otpCode)
-      .digest('hex');
+  cookieStore.set('fcu_otp_hash', `${hashedCode}:${expiresAt}`, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', maxAge: 300 });
+  cookieStore.set('fcu_otp_email', cleanEmail, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', maxAge: 300 });
+  cookieStore.set('fcu_otp_strikes', '0', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', maxAge: 300 });
 
-  const expiresAt =
-    Date.now() + 5 * 60 * 1000;
-
-  cookieStore.set(
-    'fcu_otp_hash',
-    `${hashedCode}:${expiresAt}`,
-    {
-      httpOnly: true,
-      secure:
-        process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 300,
-    }
-  );
-
-  cookieStore.set(
-    'fcu_otp_email',
-    cleanEmail,
-    {
-      httpOnly: true,
-      secure:
-        process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 300,
-    }
-  );
-
-  cookieStore.set(
-    'fcu_otp_strikes',
-    '0',
-    {
-      httpOnly: true,
-      secure:
-        process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 300,
-    }
-  );
-
-  const smtpUser =
-    process.env.SMTP_USER;
-
-  const smtpPass =
-    process.env.SMTP_PASS;
+  const smtpUser = process.env.SMTP_USER;
+  const smtpPass = process.env.SMTP_PASS;
 
   if (!smtpUser || !smtpPass) {
-    console.error(
-      'SMTP_USER or SMTP_PASS is not configured.'
-    );
-
-    throw new Error(
-      'Email service is not configured.'
-    );
+    throw new Error('Email service is not configured.');
   }
 
-  const transporter =
-    nodemailer.createTransport({
-      host:
-        process.env.SMTP_HOST ||
-        'smtp.gmail.com',
-
-      port:
-        Number(
-          process.env.SMTP_PORT || 465
-        ),
-
-      secure: true,
-
-      auth: {
-        user: smtpUser,
-        pass: smtpPass,
-      },
-    });
+  const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    port: Number(process.env.SMTP_PORT || 465),
+    secure: true,
+    auth: { user: smtpUser, pass: smtpPass },
+  });
 
   try {
-
     await transporter.sendMail({
-      from:
-        `"CLEAR System" <${smtpUser}>`,
-
+      from: `"CLEAR System" <${smtpUser}>`,
       to: cleanEmail,
-
-      subject:
-        `[CLEAR System] OTP CODE FOR COLLEGE OF ${cleanDepartment.toUpperCase()}`,
-
-      text: `
-CLEAR System
-
-Filamer Christian University
-
-You requested a verification code to sign in to the CLEAR System.
-
-Your 6-digit One-Time PIN is:
-
-${otpCode}
-
-This code will expire in 5 minutes.
-
-Do not share this code with anyone.
-
-Centralized Liquidation of Expenses & Audit Records System
-      `.trim(),
-
-      html: `
-        <div style="
-          font-family: Arial, sans-serif;
-          max-width: 600px;
-          margin: 0 auto;
-          padding: 30px;
-          background-color: #f8f9fa;
-          color: #333;
-          border-radius: 10px;
-          border: 1px solid #dee2e6;
-        ">
-
-          <h2 style="
-            color: #0d6efd;
-            margin-top: 0;
-          ">
-            Filamer Christian University, Inc.
-          </h2>
-
-          <h4 style="
-            color: #495057;
-            margin-bottom: 20px;
-          ">
-            CLEAR System Departmental Authorization
-          </h4>
-
-          <p>
-            You requested a verification code to sign in
-            to the CLEAR System.
-          </p>
-
-          <p>
-            Your 6-digit one-time authorization PIN is:
-          </p>
-
-          <div style="
-            font-size: 36px;
-            font-weight: bold;
-            letter-spacing: 8px;
-            color: #198754;
-            background: #ffffff;
-            padding: 18px 24px;
-            display: inline-block;
-            border: 1px solid #ced4da;
-            border-radius: 8px;
-            margin: 15px 0;
-          ">
-            ${otpCode}
-          </div>
-
-          <p style="
-            font-size: 14px;
-            color: #6c757d;
-            margin-top: 18px;
-          ">
-            This code will expire in
-            <strong>5 minutes</strong>.
-          </p>
-
-          <p style="
-            font-size: 14px;
-            color: #dc3545;
-            font-weight: bold;
-          ">
-            Do not share this code with anyone.
-          </p>
-
-          <hr style="
-            border: none;
-            border-top: 1px solid #dee2e6;
-            margin: 25px 0;
-          " />
-
-          <p style="
-            font-size: 11px;
-            color: #adb5bd;
-            margin-bottom: 0;
-          ">
-            Centralized Liquidation of Expenses
-            & Audit Records System
-          </p>
-
-        </div>
-      `,
+      subject: `[CLEAR System] OTP CODE FOR COLLEGE OF ${cleanDepartment.toUpperCase()}`,
+      text: `Your 6-digit One-Time PIN is: ${otpCode}\n\nThis code will expire in 5 minutes.`,
     });
-
   } catch (error) {
-
-    console.error(
-      'Gmail SMTP Error:',
-      error
-    );
-
-    throw new Error(
-      'Failed to dispatch verification email.'
-    );
+    console.error('Gmail SMTP Error:', error);
+    throw new Error('Failed to dispatch verification email.');
   }
 
-  return {
-    success: true,
-    message:
-      'Verification code sent successfully.',
-  };
+  return { success: true, message: 'Verification code sent successfully.' };
 }
 
 export async function verifyOtp(department: string, email: string, submittedOtp: string) {
@@ -607,43 +443,26 @@ export async function verifyOtp(department: string, email: string, submittedOtp:
   const emailCookie = cookieStore.get('fcu_otp_email');
   const strikesCookie = cookieStore.get('fcu_otp_strikes');
 
-  if (!otpCookie || !emailCookie) {
-    throw new Error("Verification session expired. Please request a new code.");
-  }
-
-  if (emailCookie.value !== cleanEmail) {
-    throw new Error("Email mismatch. Please request a new code.");
-  }
+  if (!otpCookie || !emailCookie) throw new Error("Verification session expired. Please request a new code.");
+  if (emailCookie.value !== cleanEmail) throw new Error("Email mismatch. Please request a new code.");
 
   let currentStrikes = strikesCookie ? parseInt(strikesCookie.value, 10) : 0;
 
   if (currentStrikes >= 5) {
     const lockoutUntil = Date.now() + 10 * 60 * 1000;
-    cookieStore.set('fcu_lockout', lockoutUntil.toString(), {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      path: '/',
-      maxAge: 600
-    });
+    cookieStore.set('fcu_lockout', lockoutUntil.toString(), { httpOnly: true, secure: process.env.NODE_ENV === 'production', path: '/', maxAge: 600 });
     throw new Error("Maximum verification attempts exceeded. Account locked for 10 minutes.");
   }
 
   const [storedHash, expiryStr] = otpCookie.value.split(':');
   const expiresAt = parseInt(expiryStr, 10);
 
-  if (Date.now() > expiresAt) {
-    throw new Error("Verification code has expired. Please request a new one.");
-  }
+  if (Date.now() > expiresAt) throw new Error("Verification code has expired. Please request a new one.");
 
   const submittedHash = crypto.createHash('sha256').update(submittedOtp.trim()).digest('hex');
   if (submittedHash !== storedHash) {
     currentStrikes += 1;
-    cookieStore.set('fcu_otp_strikes', currentStrikes.toString(), {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      path: '/',
-      maxAge: 300
-    });
+    cookieStore.set('fcu_otp_strikes', currentStrikes.toString(), { httpOnly: true, secure: process.env.NODE_ENV === 'production', path: '/', maxAge: 300 });
     const remainingAttempts = 5 - currentStrikes;
     throw new Error(`Invalid verification code. ${remainingAttempts} attempt(s) remaining.`);
   }
@@ -652,20 +471,13 @@ export async function verifyOtp(department: string, email: string, submittedOtp:
     where: { subdomain: department },
   });
 
-  if (!organization) {
-    throw new Error("Organization context lost.");
-  }
+  if (!organization) throw new Error("Organization context lost.");
 
   const user = await prisma.tenantUser.findFirst({
-    where: { 
-      organizationId: organization.id, 
-      email: cleanEmail 
-    }
+    where: { organizationId: organization.id, email: cleanEmail }
   });
 
-  if (!user) {
-    throw new Error("User record not found.");
-  }
+  if (!user) throw new Error("User record not found.");
 
   cookieStore.delete('fcu_otp_hash');
   cookieStore.delete('fcu_otp_email');
@@ -680,69 +492,10 @@ export async function verifyOtp(department: string, email: string, submittedOtp:
 
   return {
     success: true,
-    user: {
-      id: user.id,
-      fullName: user.fullName,
-      email: user.email,
-      role: user.role,
-      allowedTabs: JSON.parse(user.allowedTabs || '[]')
-    }
+    user: { id: user.id, fullName: user.fullName, email: user.email, role: user.role, allowedTabs: JSON.parse(user.allowedTabs || '[]') }
   };
 }
 
-// 7. Server Action: Record Payment & Track Balances
-export async function recordPayment(department: string, data: {
-  orNumber: string;
-  date: string;
-  studentId: string;
-  studentName: string;
-  studentEmail?: string;
-  category: string;
-  itemDescription: string;
-  paymentType: string;
-  standardRate: number;
-  amountPaid: number;
-  fundAllocation: string;
-  ay: string;
-  term: string;
-}) {
-  await requireTabAccess('tab-payment'); // GUARD
-
-  const officerName = await getActionUser();
-  const orgId = await getOrgId(department);
-  const paid = Number(data.amountPaid) || 0;
-  const rate = Number(data.standardRate) || 0;
-  const balanceDue = Math.max(0, rate - paid);
-  const actualPaymentType = (rate > 0 && balanceDue === 0) ? "Full Payment" : data.paymentType;
-
-  await prisma.collection.create({
-    data: {
-      organizationId: orgId,
-      academicYear: data.ay,
-      term: data.term,
-      date: new Date(data.date),
-      studentId: data.studentId,
-      studentName: data.studentName,
-      orNumber: data.orNumber,
-      category: data.category,
-      itemDescription: data.itemDescription,
-      paymentType: actualPaymentType,
-      standardRate: rate,
-      amountPaid: paid,
-      balanceDue,
-      fundAllocation: data.fundAllocation,
-      status: "Valid",
-      encodedBy: officerName
-    }
-  });
-
-  await logSystemAction(orgId, officerName, "RECORD_PAYMENT", `Recorded payment of ₱${paid} from ${data.studentName} [OR: ${data.orNumber}].`);
-
-  revalidatePath(`/department/${department}/collections`);
-  revalidatePath(`/department/${department}`);
-}
-
-// 8. Server Action: Record Audit & Settle Cash Advance
 export async function recordAudit(department: string, data: {
   date: string;
   advanceId: string;
@@ -754,7 +507,7 @@ export async function recordAudit(department: string, data: {
   ay: string;
   term: string;
 }) {
-  await requireTabAccess('tab-audit'); // GUARD
+  await requireTabAccess('tab-audit');
 
   const officerName = await getActionUser();
   const orgId = await getOrgId(department);
@@ -809,7 +562,6 @@ export async function recordAudit(department: string, data: {
   revalidatePath(`/department/${department}`);
 }
 
-// 11. Server Action: Inter-Fund Transfer Realignment
 export async function transferFunds(department: string, data: {
   fromFund: string;
   toFund: string;
@@ -818,8 +570,7 @@ export async function transferFunds(department: string, data: {
   ay: string;
   term: string;
 }) {
-  await requireTabAccess('tab-transfer'); // GUARD
-
+  await requireTabAccess('tab-transfer');
   const officerName = await getActionUser();
   const orgId = await getOrgId(department);
 
@@ -837,12 +588,10 @@ export async function transferFunds(department: string, data: {
   });
 
   await logSystemAction(orgId, officerName, "TRANSFER_FUNDS", `Realigned ₱${data.amount} from ${data.fromFund} to ${data.toFund}.`);
-
   revalidatePath(`/department/${department}/realign`);
   revalidatePath(`/department/${department}`);
 }
 
-// 12. Server Action: Term Balance Carry-Over
 export async function carryOverTermBalance(department: string, data: {
   sourceAY: string;
   sourceTerm: string;
@@ -851,8 +600,7 @@ export async function carryOverTermBalance(department: string, data: {
   amount: number;
   reason: string;
 }) {
-  await requireTabAccess('tab-transfer'); // GUARD
-
+  await requireTabAccess('tab-transfer');
   const officerName = await getActionUser();
   const orgId = await getOrgId(department);
 
@@ -870,12 +618,10 @@ export async function carryOverTermBalance(department: string, data: {
   });
 
   await logSystemAction(orgId, officerName, "CARRY_OVER", `Carried over ₱${data.amount} from ${data.sourceTerm} into ${data.destTerm} General Fund.`);
-
   revalidatePath(`/department/${department}/realign`);
   revalidatePath(`/department/${department}`);
 }
 
-// 13. Server Action: Submit Remittance Batch
 export async function submitRemittanceBatch(department: string, data: {
   collectionIds: string[];
   depositSlipOr: string;
@@ -885,8 +631,7 @@ export async function submitRemittanceBatch(department: string, data: {
   ay: string;
   term: string;
 }) {
-  await requireTabAccess('tab-remittances'); // GUARD
-
+  await requireTabAccess('tab-remittances');
   const officerName = await getActionUser();
   const orgId = await getOrgId(department);
 
@@ -901,13 +646,11 @@ export async function submitRemittanceBatch(department: string, data: {
   });
 
   await logSystemAction(orgId, officerName, "SUBMIT_REMITTANCE_BATCH", `Marked ${data.collectionIds.length} collections as remitted (Slip: ${data.depositSlipOr}).`);
-
   revalidatePath(`/department/${department}/remittances`);
   revalidatePath(`/department/${department}/collections`);
   revalidatePath(`/department/${department}`);
 }
 
-// 14. Server Action: Verify Online Remittance & Issue OR
 export async function verifyOnlineRemittance(department: string, data: {
   remittanceId: string;
   orNumber: string;
@@ -918,8 +661,7 @@ export async function verifyOnlineRemittance(department: string, data: {
   ay: string;
   term: string;
 }) {
-  await requireTabAccess('tab-remittances'); // GUARD
-
+  await requireTabAccess('tab-remittances');
   const officerName = await getActionUser();
   const orgId = await getOrgId(department);
 
@@ -950,14 +692,12 @@ export async function verifyOnlineRemittance(department: string, data: {
   });
 
   await logSystemAction(orgId, officerName, "VERIFY_REMITTANCE", `Verified online remittance for ${data.studentName} and issued OR: ${data.orNumber}.`);
-
   revalidatePath(`/department/${department}/remittances`);
   revalidatePath(`/department/${department}/collections`);
   revalidatePath(`/department/${department}/clearance`);
   revalidatePath(`/department/${department}`);
 }
 
-// 15. Server Action: Submit Online Payment Proof (Done by Student)
 export async function submitOnlineRemittance(department: string, data: {
   studentId: string;
   studentName: string;
@@ -970,7 +710,6 @@ export async function submitOnlineRemittance(department: string, data: {
   ay: string;
   term: string;
 }) {
-  // NO GUARD: This is public-facing for students to submit proofs
   const orgId = await getOrgId(department);
   const submissionId = `SUB-${formatDate(new Date())}-${Math.floor(Math.random() * 1000)}`;
 
@@ -994,19 +733,43 @@ export async function submitOnlineRemittance(department: string, data: {
   });
 
   await logSystemAction(orgId, "Public Submission", "SUBMIT_REMITTANCE", `Received ₱${data.amount} online payment proof from ${data.studentName} via ${data.paymentChannel}.`);
-
   revalidatePath(`/department/${department}/remittances`);
   revalidatePath(`/department/${department}/clearance`);
 }
 
-// 16. Server Action: Add or Update Student Profile
+export async function submitOnlineRemittanceDirect(department: string, payload: {
+  studentId: string;
+  studentName: string;
+  email: string;
+  channel: string;
+  referenceNo: string;
+  collectionType: string;
+  paymentMode: string;
+  amount: number;
+  proofBase64: string;
+  ay: string;
+  term: string;
+}) {
+  return submitOnlineRemittance(department, {
+    studentId: payload.studentId,
+    studentName: payload.studentName,
+    email: payload.email,
+    paymentChannel: payload.channel,
+    referenceNo: payload.referenceNo,
+    particulars: payload.collectionType,
+    amount: payload.amount,
+    proofBase64: payload.proofBase64,
+    ay: payload.ay,
+    term: payload.term
+  });
+}
+
 export async function upsertStudent(department: string, data: {
   studentId: string;
   fullName: string;
   email: string;
 }) {
-  await requireTabAccess('tab-students'); // GUARD
-
+  await requireTabAccess('tab-students');
   const officerName = await getActionUser();
   const orgId = await getOrgId(department);
   const cleanStudentId = data.studentId.trim();
@@ -1036,15 +799,12 @@ export async function upsertStudent(department: string, data: {
   }
 
   await logSystemAction(orgId, officerName, existing ? "UPDATE_STUDENT" : "ADD_STUDENT", `${existing ? 'Modified' : 'Registered'} profile for ${data.fullName} (${cleanStudentId}).`);
-
   revalidatePath(`/department/${department}/students`);
   revalidatePath(`/department/${department}/clearance`);
 }
 
-// 17. Server Action: Delete Student Record
 export async function deleteStudent(department: string, studentId: string) {
-  await requireTabAccess('tab-students'); // GUARD
-
+  await requireTabAccess('tab-students');
   const officerName = await getActionUser();
   const orgId = await getOrgId(department);
   
@@ -1064,15 +824,13 @@ export async function deleteStudent(department: string, studentId: string) {
   revalidatePath(`/department/${department}/clearance`);
 }
 
-// 9. Server Action: Settle Penalty via Community Service
 export async function settlePenaltyCommunityService(department: string, data: {
   penaltyId: string;
   hoursRendered: number;
   ay: string;
   term: string;
 }) {
-  await requireTabAccess('tab-penalties'); // GUARD
-
+  await requireTabAccess('tab-penalties');
   const officerName = await getActionUser();
   const orgId = await getOrgId(department);
 
@@ -1099,12 +857,10 @@ export async function settlePenaltyCommunityService(department: string, data: {
   });
 
   await logSystemAction(orgId, officerName, "SETTLE_PENALTY_SERVICE", `Applied ${data.hoursRendered} hrs community service to penalty [${data.penaltyId}]. Status: ${newStatus}`);
-
   revalidatePath(`/department/${department}/penalties`);
   revalidatePath(`/department/${department}`);
 }
 
-// 18. Server Action: Update Current User Profile Email
 export async function updateMyEmail(department: string, newEmail: string) {
   const session = await auth();
   const sessionUser = session?.user as { email?: string } | undefined;
@@ -1120,7 +876,6 @@ export async function updateMyEmail(department: string, newEmail: string) {
     throw new Error("Please provide a valid email address.");
   }
 
-  // Find the user by current session email and organization
   const user = await prisma.tenantUser.findFirst({
     where: { organizationId: orgId, email: sessionUser.email }
   });
@@ -1129,7 +884,6 @@ export async function updateMyEmail(department: string, newEmail: string) {
     throw new Error("User record not found in this department.");
   }
 
-  // Check if email is already taken by another account in the org
   const existing = await prisma.tenantUser.findFirst({
     where: { organizationId: orgId, email: cleanNewEmail }
   });
@@ -1151,10 +905,7 @@ export async function updateMyEmail(department: string, newEmail: string) {
 // OPTIMIZED FINANCIAL ENGINE: ADAPTIVE TERM & A.Y. DATA FILTERING
 // =========================================================================
 export async function getDepartmentFinancials(organizationId: string, ay: string, term: string) {
-  // Read-only dashboard view - No strict mutation guard needed here, 
-  // but it assumes it's only called on authenticated Server Components.
-
-  const [collections, audits, cashAdvances, explicitCollectibles, initialFunds, students] = await Promise.all([
+  const [collections, audits, cashAdvances, explicitCollectibles, initialFunds, students, collectionSetups] = await Promise.all([
     prisma.collection.findMany({ 
       where: { organizationId, academicYear: ay, term } 
     }),
@@ -1174,12 +925,15 @@ export async function getDepartmentFinancials(organizationId: string, ay: string
     prisma.student.findMany({ 
       where: { organizationId } 
     }),
+    prisma.collectionSetup.findMany({ 
+      where: { organizationId, academicYear: ay, term } 
+    }).catch(() => []) 
   ]);
 
-  const validCollections = collections.filter(c => !c.paymentType?.toUpperCase().includes('VOID'));
-  const validAudits = audits.filter(a => !a.status?.includes('VOID') && !a.status?.includes('CANCEL'));
+  const validCollections = collections.filter((c: any) => !String(c.paymentType || '').toUpperCase().includes('VOID'));
+  const validAudits = Array.isArray(audits) ? audits.filter((a: any) => !String(a.status || '').includes('VOID') && !String(a.status || '').includes('CANCEL')) : [];
 
-  const termPackages: Record<string, { total: number; items: { name: string; rate: number; fund: string }[] }> = {
+  const legacyTermPackages: Record<string, { total: number; items: { name: string; rate: number; fund: string }[] }> = {
     "1st Sem": {
       total: 650.00,
       items: [
@@ -1208,7 +962,22 @@ export async function getDepartmentFinancials(organizationId: string, ay: string
     }
   };
 
-  const termPkg = termPackages[term] || termPackages["1st Sem"];
+  let pkgTotal = 0;
+  const currentPkgItems: { name: string; rate: number; fund: string }[] = [];
+  const packageItems = (collectionSetups || []).filter((c: any) => c.isPackage !== false);
+
+  if (packageItems.length > 0) {
+    packageItems.forEach((s: any) => {
+      pkgTotal += s.amount;
+      currentPkgItems.push({ name: s.name, rate: s.amount, fund: s.targetFund });
+    });
+  } else {
+    const fallbackPkg = legacyTermPackages[term] || legacyTermPackages["1st Sem"];
+    pkgTotal = fallbackPkg.total;
+    currentPkgItems.push(...fallbackPkg.items);
+  }
+
+  const termPkg = { total: pkgTotal, items: currentPkgItems };
 
   const getFundName = (row: any) => {
     const raw = String(row.fundAllocation || row.fundSource || row.fundName || row.fund || '').trim();
@@ -1234,22 +1003,27 @@ export async function getDepartmentFinancials(organizationId: string, ay: string
     }
   };
 
-  validCollections.forEach(c => {
-    const itemDesc = c.itemDescription?.trim() || c.category?.trim() || 'General';
+  validCollections.forEach((c: any) => {
+    const itemDesc = String(c.itemDescription || c.category || 'General').trim();
     const amt = Number(c.amountPaid) || 0;
-    const studentKey = c.studentName ? c.studentName.trim().toLowerCase() : (c.studentId && c.studentId !== 'N/A' ? c.studentId.trim().toLowerCase() : c.orNumber);
+    const studentKey = c.studentName ? String(c.studentName).trim().toLowerCase() : (c.studentId && c.studentId !== 'N/A' ? String(c.studentId).trim().toLowerCase() : String(c.orNumber));
     const fund = getFundName(c);
 
-    const matchedPkgItem = termPkg.items.find(pi => pi.name.toLowerCase() === itemDesc.toLowerCase());
+    const matchedPkgItem = termPkg.items.find((pi: any) => pi.name.toLowerCase() === itemDesc.toLowerCase());
 
     if (matchedPkgItem) {
       addCollectionItem(matchedPkgItem.name, amt, studentKey, matchedPkgItem.fund);
-    } else if (itemDesc === 'Departmental Fee Package' || itemDesc === 'Departmental Fee') {
-      const pkgTotalRate = termPkg.total;
-      termPkg.items.forEach(pi => {
-        const share = (pi.rate / pkgTotalRate) * amt;
-        addCollectionItem(pi.name, share, studentKey, pi.fund);
-      });
+    } else if (itemDesc === 'Departmental Fee Package' || itemDesc === 'Departmental Fee' || itemDesc === 'Departmental Fee Package (All Items)') {
+      const pkgToUse = termPkg.items.length > 0 ? termPkg : (legacyTermPackages[term] || legacyTermPackages["1st Sem"]);
+      const pkgTotalRate = pkgToUse.total;
+      if (pkgTotalRate > 0) {
+        pkgToUse.items.forEach((pi: any) => {
+          const share = (pi.rate / pkgTotalRate) * amt;
+          addCollectionItem(pi.name, share, studentKey, pi.fund);
+        });
+      } else {
+        addCollectionItem(itemDesc, amt, studentKey, fund);
+      }
     } else {
       addCollectionItem(itemDesc, amt, studentKey, fund);
     }
@@ -1262,7 +1036,7 @@ export async function getDepartmentFinancials(organizationId: string, ay: string
   let grandExpenseTotal = 0;
   const expensesByFund: Record<string, number> = {};
 
-  validAudits.forEach(a => {
+  validAudits.forEach((a: any) => {
     const amt = Number(a.totalExpense) || 0;
     grandExpenseTotal += amt;
     const fund = getFundName(a);
@@ -1273,7 +1047,7 @@ export async function getDepartmentFinancials(organizationId: string, ay: string
   const unliquidatedAdvances: any[] = [];
   const unliquidatedByFund: Record<string, number> = {};
 
-  cashAdvances.forEach(ca => {
+  cashAdvances.forEach((ca: any) => {
     const status = String(ca.status || '').toUpperCase();
     if (status.includes('PENDING') && !status.includes('CANCEL')) {
       const amt = Number(ca.amountApproved) || 0;
@@ -1294,10 +1068,7 @@ export async function getDepartmentFinancials(organizationId: string, ay: string
     }
   });
 
-  const pkgTotal = termPkg.total;
   const paidMap: Record<string, number> = {};
-
-  // Track specific student obligations to prevent duplicates across tables in overview
   const studentItemObligations: Record<string, Set<string>> = {}; 
 
   const addStudentObligation = (studentKey: string, itemName: string) => {
@@ -1311,10 +1082,17 @@ export async function getDepartmentFinancials(organizationId: string, ay: string
     return false; 
   };
 
-  validCollections.forEach(c => {
-    if (c.category === 'Departmental Fee' || c.category === 'Departmental Fee - Package' || termPkg.items.some(pi => pi.name.toLowerCase() === (c.itemDescription || '').toLowerCase())) {
-      const sId = c.studentId?.trim().toLowerCase() || '';
-      const sName = c.studentName?.trim().toLowerCase() || '';
+  validCollections.forEach((c: any) => {
+    const catLower = String(c.category || '').toLowerCase();
+    const descLower = String(c.itemDescription || '').toLowerCase();
+    
+    if (
+      catLower.includes('fee') || 
+      catLower.includes('package') || 
+      termPkg.items.some((pi: any) => pi.name.toLowerCase() === descLower)
+    ) {
+      const sId = String(c.studentId || '').trim().toLowerCase();
+      const sName = String(c.studentName || '').trim().toLowerCase();
       const paid = Number(c.amountPaid) || 0;
       const key = sName || (sId && sId !== 'n/a' ? sId : '');
       if (key) {
@@ -1326,9 +1104,9 @@ export async function getDepartmentFinancials(organizationId: string, ay: string
   let unpaidOrPartialPackageCount = 0;
   let totalPackageReceivable = 0;
 
-  students.forEach(s => {
-    const sId = s.studentId?.trim().toLowerCase() || '';
-    const sName = s.fullName?.trim().toLowerCase() || '';
+  students.forEach((s: any) => {
+    const sId = String(s.studentId || '').trim().toLowerCase();
+    const sName = String(s.fullName || '').trim().toLowerCase();
     const key = sName || sId;
     const remitted = paidMap[key] || 0;
     if (remitted < pkgTotal) {
@@ -1348,16 +1126,16 @@ export async function getDepartmentFinancials(organizationId: string, ay: string
     };
   }
 
-  validCollections.forEach(c => {
+  validCollections.forEach((c: any) => {
     const balDue = Number(c.balanceDue) || 0;
-    const pType = c.paymentType || '';
-    const orNum = c.orNumber || '';
-    const sId = c.studentId?.trim().toLowerCase() || '';
-    const sName = c.studentName?.trim().toLowerCase() || '';
+    const pType = String(c.paymentType || '');
+    const orNum = String(c.orNumber || '');
+    const sId = String(c.studentId || '').trim().toLowerCase();
+    const sName = String(c.studentName || '').trim().toLowerCase();
     const studentKey = sName || sId || `UNKNOWN-${c.id}`;
 
     if ((balDue > 0 || pType.includes('Unpaid') || orNum.startsWith('DUE-')) && c.category !== 'Departmental Fee' && c.category !== 'Departmental Fee - Package') {
-      const itemName = c.itemDescription || c.category || 'Other Due';
+      const itemName = String(c.itemDescription || c.category || 'Other Due');
       
       if (addStudentObligation(studentKey, itemName)) {
         if (!collectiblesMap[itemName]) {
@@ -1369,19 +1147,19 @@ export async function getDepartmentFinancials(organizationId: string, ay: string
     }
   });
 
-  explicitCollectibles.forEach((ec: any) => {
-    let rawCat = ec.category?.trim() || 'Unassigned';
+  (explicitCollectibles as any[]).forEach((ec: any) => {
+    let rawCat = String(ec.category || 'Unassigned').trim();
     let itemName = rawCat;
     if (rawCat.startsWith('Arrears: ')) {
       const core = rawCat.substring(9);
       const dashIdx = core.lastIndexOf(' - ');
       itemName = dashIdx !== -1 ? core.substring(0, dashIdx).trim() : core;
     }
-    const headcount = ec.headcount || 1;
+    const headcount = Number(ec.headcount) || 1;
     const total = Number(ec.balanceDue) || Number(ec.total) || 0;
 
-    const sId = ec.studentId?.trim().toLowerCase() || '';
-    const sName = (ec.studentName || ec.fullName)?.trim().toLowerCase() || '';
+    const sId = String(ec.studentId || '').trim().toLowerCase();
+    const sName = String(ec.studentName || ec.fullName || '').trim().toLowerCase();
 
     if (sId || sName) {
       const studentKey = sName || sId;
@@ -1406,7 +1184,7 @@ export async function getDepartmentFinancials(organizationId: string, ay: string
 
   let totalInitialAlloc = 0;
   const initialAllocMap: Record<string, number> = {};
-  initialFunds.forEach(f => {
+  initialFunds.forEach((f: any) => {
     if (f.fundName) { 
       const initAmt = Number(f.initialAllocation) || 0; 
       initialAllocMap[f.fundName] = initAmt;
@@ -1447,4 +1225,125 @@ export async function getDepartmentFinancials(organizationId: string, ay: string
     fundsList,
     termPkg,
   };
+}
+
+export async function saveInitialFunds(
+  department: string, 
+  ay: string, 
+  term: string, 
+  funds: { fundName: string, amount: number }[]
+) {
+  const officerName = await getActionUser();
+  const orgId = await getOrgId(department);
+
+  const validFunds = funds.filter(f => f.fundName.trim() !== "");
+
+  await prisma.$transaction(async (tx) => {
+    await tx.fund.deleteMany({
+      where: { organizationId: orgId, academicYear: ay, term }
+    });
+
+    if (validFunds.length > 0) {
+      await tx.fund.createMany({
+        data: validFunds.map(f => ({
+          organizationId: orgId,
+          academicYear: ay,
+          term: term,
+          fundName: f.fundName.trim(),
+          initialAllocation: f.amount,
+          encodedBy: officerName
+        }))
+      });
+    }
+  });
+
+  await logSystemAction(
+    orgId, 
+    officerName, 
+    "SETUP_FUNDS", 
+    `Configured ${validFunds.length} target funds for ${term} (${ay}).`
+  );
+
+  revalidatePath(`/department/${department}/setup`);
+  revalidatePath(`/department/${department}`);
+}
+
+export async function saveCollectionSetupItem(
+  department: string,
+  payload: {
+    category: string;
+    name: string;
+    amount: number;
+    targetFund: string;
+    isPackage: boolean;
+    ay: string;
+    term: string;
+  }
+) {
+  await requireTabAccess("tab-setup");
+  const orgId = await getOrgId(department);
+  const cleanCategory = payload.category.trim();
+  const cleanName = payload.name.trim();
+
+  const existing = await prisma.collectionSetup.findFirst({
+    where: {
+      organizationId: orgId,
+      academicYear: payload.ay,
+      term: payload.term,
+      name: cleanName,
+    },
+  });
+
+  if (existing) {
+    await prisma.collectionSetup.update({
+      where: { id: existing.id },
+      data: {
+        category: cleanCategory,
+        amount: Number(payload.amount) || 0,
+        targetFund: payload.targetFund,
+        isPackage: Boolean(payload.isPackage),
+      },
+    });
+  } else {
+    await prisma.collectionSetup.create({
+      data: {
+        organizationId: orgId,
+        academicYear: payload.ay,
+        term: payload.term,
+        category: cleanCategory,
+        name: cleanName,
+        amount: Number(payload.amount) || 0,
+        targetFund: payload.targetFund,
+        isPackage: Boolean(payload.isPackage),
+      },
+    });
+  }
+
+  revalidatePath(`/department/${department}/setup/collections`);
+  revalidatePath(`/department/${department}/collections`);
+  revalidatePath(`/department/${department}/reports`);
+  revalidatePath(`/department/${department}/clearance`);
+  revalidatePath(`/department/${department}`);
+
+  return { success: true, message: `Configured '${cleanName}' successfully.` };
+}
+
+export async function deleteCollectionSetupItem(department: string, setupId: string) {
+  await requireTabAccess("tab-setup");
+  const orgId = await getOrgId(department);
+
+  await prisma.collectionSetup.delete({
+    where: {
+      id: setupId,
+      organizationId: orgId,
+    },
+  });
+
+  revalidatePath(`/department/${department}/setup/collections`);
+  revalidatePath(`/department/${department}/collections`);
+  revalidatePath(`/department/${department}/reports`);
+  revalidatePath(`/department/${department}/clearance`);
+  revalidatePath(`/department/${department}`);
+
+  return { success: true, message: "Configuration item removed successfully." };
 }
