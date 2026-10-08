@@ -2242,7 +2242,13 @@ export async function submitOnlineRemittance(department: string, formData: FormD
   const amount = parseFloat(formData.get('amount') as string);
   const ay = formData.get('ay') as string;
   const term = formData.get('term') as string;
-}) {
+  
+  if (receiptFile) {
+    const arrayBuffer = await receiptFile.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    // Convert back to base64 on the server to maintain compatibility with your database schema
+    proofBase64 = `data:${receiptFile.type};base64,${buffer.toString('base64')}`;
+  }
   // PUBLIC:
   // Do not use getOrgId().
   const orgId =
@@ -2252,12 +2258,7 @@ export async function submitOnlineRemittance(department: string, formData: FormD
 const receiptFile = formData.get('receipt') as File | null;
   let proofBase64: string | null = null;
   
-  if (receiptFile) {
-    const arrayBuffer = await receiptFile.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    // Convert back to base64 on the server to maintain compatibility with your database schema
-    proofBase64 = `data:${receiptFile.type};base64,${buffer.toString('base64')}`;
-  }
+
   const cleanEmail =
     String(
       data.email || ""
