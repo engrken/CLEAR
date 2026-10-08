@@ -12,7 +12,6 @@ import DataPrivacyModal from '../components/DataPrivacyModal';
 import { Metadata } from 'next';
 import { getDepartmentFinancials } from '../actions';
 
-// CRITICAL FIX: Forces Next.js to skip static build-time prerendering for this route
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
@@ -46,8 +45,8 @@ export default async function ClearancePage({
       <div className="d-flex flex-column min-vh-100 bg-canvas">
         <main className="flex-grow-1 p-4 d-flex align-items-center justify-content-center">
           <div className="alert alert-danger p-4 shadow-sm border-secondary text-center">
-            <h4 className="fw-bold mb-2">Department Not Found</h4>
-            <p className="small mb-0">The department '{decodeURIComponent(department)}' does not exist.</p>
+            <h4 className="fw-bold mb-2">Entity Not Found</h4>
+            <p className="small mb-0">The registered entity '{decodeURIComponent(department)}' does not exist.</p>
           </div>
         </main>
       </div>
@@ -82,16 +81,15 @@ export default async function ClearancePage({
   // REUSABLE PUBLIC HEADER COMPONENT
   // =======================================================
   const PublicHeader = () => {
-    const displayOrgName = organization.name.toLowerCase().startsWith('college of') 
-      ? organization.name : `College of ${organization.name}`;
     return (
       <header className="navbar border-bottom border-secondary px-4 py-3 bg-card shadow-sm d-print-none">
         <div className="d-flex align-items-center gap-3 w-100">
           <img src="/fcu.png" alt="FCU Logo" style={{ width: '55px', objectFit: 'contain' }} />
           <div>
             <h5 className="mb-0 fw-bold text-accent">CLEAR System</h5>
+            {/* SCRUBBED: Dynamic org name instead of forced College prefix */}
             <small className="text-secondary text-uppercase fw-semibold" style={{ letterSpacing: '0.05em' }}>
-              {displayOrgName}
+              {organization.name}
             </small>
           </div>
         </div>
@@ -107,14 +105,13 @@ export default async function ClearancePage({
   if (sigParam && q) {
     const expectedSig = crypto.createHash('sha256').update(`${q.toLowerCase()}|${ay}|${term}|${salt}`).digest('hex');
     const isSignatureValid = sigParam.toLowerCase() === expectedSig.toLowerCase();
-    const displayOrgName = organization.name.toLowerCase().startsWith('college of') ? organization.name : `College of ${organization.name}`;
 
     return (
       <div className="d-flex flex-column min-vh-100 bg-canvas">
         {!isOfficer && <PublicHeader />}
         <main className="flex-grow-1 p-3 p-md-5 w-100 d-flex align-items-center justify-content-center">
           <div className="card p-4 border-secondary text-center shadow-lg w-100" style={{ maxWidth: '500px', backgroundColor: '#1e293b' }}>
-            <h4 className="text-info fw-bold mb-1">{displayOrgName}</h4>
+            <h4 className="text-info fw-bold mb-1">{organization.name}</h4>
             <small className="text-secondary d-block mb-4">Centralized Liquidation of Expenses & Audit Records</small>
 
             {isSignatureValid ? (
@@ -133,7 +130,7 @@ export default async function ClearancePage({
             ) : (
               <div className="bg-danger text-white p-3 rounded fw-bold fs-5 mb-3 shadow-sm">
                 <i className="bi bi-x-circle-fill me-2"></i>INVALID OR TAMPERED
-                <p className="fs-6 fw-normal m-0 mt-2">This clearance token does not match department records, or active obligations were logged after issuance.</p>
+                <p className="fs-6 fw-normal m-0 mt-2">This clearance token does not match system records, or active obligations were logged after issuance.</p>
               </div>
             )}
           </div>
@@ -166,7 +163,6 @@ export default async function ClearancePage({
         (c.studentName && String(c.studentName).toLowerCase() === studentNameKey)
       );
 
-      // Bucket 1: Mandatory Package
       const packagePaid = myCollections.filter(c => {
         const descLower = String(c.itemDescription || '').toLowerCase();
         return termPkg.items.some((pi: any) => String(pi.name).toLowerCase() === descLower) || descLower.includes('package') || descLower === 'departmental fee';
@@ -176,7 +172,6 @@ export default async function ClearancePage({
         unpaidItems.push({ category: 'Departmental Fee', itemDescription: 'Mandatory Package Balance', balanceDue: termPkg.total - packagePaid });
       }
 
-      // Bucket 2: Standalone Items
       const standaloneItems = myCollections.filter(c => {
         const descLower = String(c.itemDescription || '').toLowerCase();
         const isPackageItem = termPkg.items.some((pi: any) => String(pi.name).toLowerCase() === descLower) || descLower.includes('package') || descLower === 'departmental fee';
@@ -191,7 +186,6 @@ export default async function ClearancePage({
         }
       }
 
-      // Bucket 3: Penalties & Fines (TS STRICT NULL FIX HERE)
       const myPenalties = allPenalties.filter(p => 
         String(p.studentId || '').toLowerCase() === studentKey && 
         !String(p.status || '').includes('Settled') && 
@@ -203,7 +197,6 @@ export default async function ClearancePage({
         unpaidItems.push({ category: 'Penalty', itemDescription: 'Unsettled Fine / Arrears', balanceDue: totalPen });
       }
 
-      // Cash Advances
       const myAdvances = allAdvances.filter(ca => 
         String(ca.requestor || '').toLowerCase().includes(studentKey) && 
         String(ca.status || '').includes('Pending') && 
@@ -273,7 +266,6 @@ export default async function ClearancePage({
 
       const validCollections = collections.filter(c => !String(c.paymentType || '').toUpperCase().includes('VOID'));
 
-      // Bucket 1: Mandatory Package
       const packagePaid = validCollections.filter(c => {
         const descLower = String(c.itemDescription || '').toLowerCase();
         return termPkg.items.some((pi: any) => String(pi.name).toLowerCase() === descLower) || descLower.includes('package') || descLower === 'departmental fee';
@@ -283,7 +275,6 @@ export default async function ClearancePage({
         pendingDues.push(`Departmental Fee Package (${fmt(termPkg.total - packagePaid)} remaining)`);
       }
 
-      // Bucket 2: Standalone Items
       const standaloneItems = validCollections.filter(c => {
         const descLower = String(c.itemDescription || '').toLowerCase();
         const isPackageItem = termPkg.items.some((pi: any) => String(pi.name).toLowerCase() === descLower) || descLower.includes('package') || descLower === 'departmental fee';
@@ -298,7 +289,6 @@ export default async function ClearancePage({
         }
       }
 
-      // Bucket 3: Penalties (TS STRICT NULL FIX HERE)
       const unsettledPenalties = penalties.filter(p => !String(p.status || '').includes('Settled') && !String(p.status || '').includes('Voided'));
       if (unsettledPenalties.length > 0) {
         const totalPen = unsettledPenalties.reduce((sum, p) => sum + (Number(p.fineAmount) || 0), 0);
@@ -358,7 +348,7 @@ export default async function ClearancePage({
                       <div className="alert alert-warning py-4 text-center border-warning shadow-sm m-0">
                         <i className="bi bi-person-x-fill fs-3 d-block mb-2 text-warning"></i>
                         <strong className="fs-5">RECORD NOT FOUND</strong>
-                        <div className="small mt-1 text-secondary">No enrolled record matches <code>{q}</code> for {term} ({ay}). Please verify your entry or visit the department treasury office.</div>
+                        <div className="small mt-1 text-secondary">No enrolled record matches <code>{q}</code> for {term} ({ay}). Please verify your entry or visit the treasury office.</div>
                       </div>
                     ) : (
                       <div className="card p-3 border-secondary shadow-sm mb-3 bg-card">
@@ -371,7 +361,7 @@ export default async function ClearancePage({
                         {isCleared ? (
                           <div className="alert alert-success py-3 mb-0 text-center border-success shadow-sm">
                             <div className="fw-bold fs-5 mb-2"><i className="bi bi-patch-check-fill me-2 text-success"></i> CLEARED FOR SIGNING</div>
-                            <div className="small text-secondary mb-3">Present this official QR code to the department adviser or custodian for digital sign-off.</div>
+                            <div className="small text-secondary mb-3">Present this official QR code to an authorized adviser or custodian for digital sign-off.</div>
                             <div className="d-inline-block p-2 bg-white rounded border border-success shadow-sm mb-2">
                               <Image src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(verifyUrl)}`} alt="Clearance QR Code" width={140} height={140} unoptimized />
                             </div>
@@ -381,7 +371,7 @@ export default async function ClearancePage({
                           <div className="alert alert-danger py-3 mb-0 text-center border-danger shadow-sm">
                             <div className="fw-bold fs-5 mb-1"><i className="bi bi-exclamation-triangle-fill me-2"></i> CLEARANCE HOLD ACTIVE</div>
                             <div className="small text-secondary">This student has <strong>{pendingDues.length}</strong> pending obligation(s).</div>
-                            <div className="small text-secondary mt-1">Please visit the department treasurer or auditor to settle your account.</div>
+                            <div className="small text-secondary mt-1">Please visit the treasurer or auditor to settle your account.</div>
                           </div>
                         )}
                       </div>

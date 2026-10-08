@@ -45,13 +45,13 @@ function TopHeaderContent({
   const [theme, setTheme] = useState('dark');
   
   const isLoggedIn = !!currentUser;
-  const userName = currentUser?.name || currentUser?.fullName || 'Department Officer';
+  // SCRUBBED: Fallback to System Officer instead of Department Officer
+  const userName = currentUser?.name || currentUser?.fullName || 'System Officer';
   const role = currentUser?.role || 'OFFICER';
   const username = currentUser?.username || 'N/A';
   const initialEmail = currentUser?.email || '';
   const allowedTabs = currentUser?.allowedTabs || [];
   
-  // Profile Modal State & Editable Email
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [editableEmail, setEditableEmail] = useState(initialEmail);
   const [isPending, startTransition] = useTransition();
@@ -214,7 +214,6 @@ function TopHeaderContent({
             <i className={`bi ${theme === 'light' ? 'bi-moon-fill' : 'bi-sun-fill'}`} style={{ fontSize: '0.85rem' }}></i>
           </button>
 
-          {/* CLICKABLE USER PROFILE BADGE */}
           <div>
             {isLoggedIn ? (
               <div 
@@ -322,7 +321,6 @@ function TopHeaderContent({
         </div>
       )}
 
-      {/* Forbidden Access Alert */}
       {showForbidden && (
         <div 
           className="alert alert-danger alert-dismissible fade show shadow-sm" 
