@@ -154,22 +154,22 @@ export default async function ClearancePage({
       prisma.cashAdvance.findMany({ where: { organizationId: organization.id, academicYear: ay, term } })
     ]);
 
-    const validCollections = allCollections.filter(c => !c.paymentType.toUpperCase().includes('VOID'));
+    const validCollections = allCollections.filter(c => !String(c.paymentType || '').toUpperCase().includes('VOID'));
 
     const clearanceRoster = allStudents.map(student => {
       const unpaidItems: any[] = [];
-      const studentKey = student.studentId.toLowerCase();
-      const studentNameKey = student.fullName.toLowerCase();
+      const studentKey = String(student.studentId || '').toLowerCase();
+      const studentNameKey = String(student.fullName || '').toLowerCase();
 
       const myCollections = validCollections.filter(c => 
-        (c.studentId && c.studentId.toLowerCase() === studentKey) || 
-        (c.studentName && c.studentName.toLowerCase() === studentNameKey)
+        (c.studentId && String(c.studentId).toLowerCase() === studentKey) || 
+        (c.studentName && String(c.studentName).toLowerCase() === studentNameKey)
       );
 
       // Bucket 1: Mandatory Package
       const packagePaid = myCollections.filter(c => {
-        const descLower = c.itemDescription?.toLowerCase() || '';
-        return termPkg.items.some((pi: any) => pi.name.toLowerCase() === descLower) || descLower.includes('package') || descLower === 'departmental fee';
+        const descLower = String(c.itemDescription || '').toLowerCase();
+        return termPkg.items.some((pi: any) => String(pi.name).toLowerCase() === descLower) || descLower.includes('package') || descLower === 'departmental fee';
       }).reduce((sum, c) => sum + (Number(c.amountPaid) || 0), 0);
 
       if (termPkg.total > 0 && packagePaid < termPkg.total) {
@@ -178,8 +178,8 @@ export default async function ClearancePage({
 
       // Bucket 2: Standalone Items
       const standaloneItems = myCollections.filter(c => {
-        const descLower = c.itemDescription?.toLowerCase() || '';
-        const isPackageItem = termPkg.items.some((pi: any) => pi.name.toLowerCase() === descLower) || descLower.includes('package') || descLower === 'departmental fee';
+        const descLower = String(c.itemDescription || '').toLowerCase();
+        const isPackageItem = termPkg.items.some((pi: any) => String(pi.name).toLowerCase() === descLower) || descLower.includes('package') || descLower === 'departmental fee';
         return !isPackageItem && Number(c.balanceDue) > 0;
       });
 
@@ -191,14 +191,25 @@ export default async function ClearancePage({
         }
       }
 
-      // Bucket 3: Penalties & Fines
-      const myPenalties = allPenalties.filter(p => p.studentId.toLowerCase() === studentKey && !p.status.includes('Settled') && !p.status.includes('Voided'));
+      // Bucket 3: Penalties & Fines (TS STRICT NULL FIX HERE)
+      const myPenalties = allPenalties.filter(p => 
+        String(p.studentId || '').toLowerCase() === studentKey && 
+        !String(p.status || '').includes('Settled') && 
+        !String(p.status || '').includes('Voided')
+      );
+
       if (myPenalties.length > 0) {
         const totalPen = myPenalties.reduce((sum, p) => sum + (Number(p.fineAmount) || 0), 0);
         unpaidItems.push({ category: 'Penalty', itemDescription: 'Unsettled Fine / Arrears', balanceDue: totalPen });
       }
 
-      const myAdvances = allAdvances.filter(ca => ca.requestor.toLowerCase().includes(studentKey) && ca.status.includes('Pending') && !ca.status.includes('Cancel'));
+      // Cash Advances
+      const myAdvances = allAdvances.filter(ca => 
+        String(ca.requestor || '').toLowerCase().includes(studentKey) && 
+        String(ca.status || '').includes('Pending') && 
+        !String(ca.status || '').includes('Cancel')
+      );
+
       if (myAdvances.length > 0) {
         myAdvances.forEach(ca => unpaidItems.push({ category: 'Cash Advance', itemDescription: `Unliquidated CA [${ca.advanceId}]`, balanceDue: ca.amountApproved }));
       }
@@ -260,12 +271,12 @@ export default async function ClearancePage({
         })
       ]);
 
-      const validCollections = collections.filter(c => !c.paymentType.toUpperCase().includes('VOID'));
+      const validCollections = collections.filter(c => !String(c.paymentType || '').toUpperCase().includes('VOID'));
 
       // Bucket 1: Mandatory Package
       const packagePaid = validCollections.filter(c => {
-        const descLower = c.itemDescription?.toLowerCase() || '';
-        return termPkg.items.some((pi: any) => pi.name.toLowerCase() === descLower) || descLower.includes('package') || descLower === 'departmental fee';
+        const descLower = String(c.itemDescription || '').toLowerCase();
+        return termPkg.items.some((pi: any) => String(pi.name).toLowerCase() === descLower) || descLower.includes('package') || descLower === 'departmental fee';
       }).reduce((sum, c) => sum + (Number(c.amountPaid) || 0), 0);
 
       if (termPkg.total > 0 && packagePaid < termPkg.total) {
@@ -274,8 +285,8 @@ export default async function ClearancePage({
 
       // Bucket 2: Standalone Items
       const standaloneItems = validCollections.filter(c => {
-        const descLower = c.itemDescription?.toLowerCase() || '';
-        const isPackageItem = termPkg.items.some((pi: any) => pi.name.toLowerCase() === descLower) || descLower.includes('package') || descLower === 'departmental fee';
+        const descLower = String(c.itemDescription || '').toLowerCase();
+        const isPackageItem = termPkg.items.some((pi: any) => String(pi.name).toLowerCase() === descLower) || descLower.includes('package') || descLower === 'departmental fee';
         return !isPackageItem && Number(c.balanceDue) > 0;
       });
 
@@ -287,14 +298,14 @@ export default async function ClearancePage({
         }
       }
 
-      // Bucket 3: Penalties
-      const unsettledPenalties = penalties.filter(p => !p.status.includes('Settled') && !p.status.includes('Voided'));
+      // Bucket 3: Penalties (TS STRICT NULL FIX HERE)
+      const unsettledPenalties = penalties.filter(p => !String(p.status || '').includes('Settled') && !String(p.status || '').includes('Voided'));
       if (unsettledPenalties.length > 0) {
         const totalPen = unsettledPenalties.reduce((sum, p) => sum + (Number(p.fineAmount) || 0), 0);
         pendingDues.push(`Unpaid Penalty Arrears (${fmt(totalPen)})`);
       }
 
-      const activeAdvances = cashAdvances.filter(ca => ca.status.includes('Pending') && !ca.status.includes('Cancel'));
+      const activeAdvances = cashAdvances.filter(ca => String(ca.status || '').includes('Pending') && !String(ca.status || '').includes('Cancel'));
       if (activeAdvances.length > 0) {
         activeAdvances.forEach(ca => { pendingDues.push(`Unliquidated Cash Advance [${ca.advanceId}]: ${fmt(ca.amountApproved)}`); });
       }
@@ -311,7 +322,7 @@ export default async function ClearancePage({
 
   return (
     <div className="d-flex flex-column min-vh-100 bg-canvas">
-      {!isOfficer && <PublicHeader />}
+      <PublicHeader />
       <main className="flex-grow-1 p-3 p-md-5 mx-auto w-100" style={{ maxWidth: '1200px' }}>
         <div className="module card p-3 p-md-4 border-secondary shadow-sm h-100">
           <h5 className="text-accent mb-2"><i className="bi bi-person-check me-2"></i>Student Financial Clearance Verification</h5>
