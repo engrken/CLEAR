@@ -16,6 +16,7 @@ interface CollectibleItem {
 
 export default function SummaryClient({
   department,
+  orgName,
   ay,
   term,
   termPkg,
@@ -27,6 +28,7 @@ export default function SummaryClient({
   totalCollectiblesSum
 }: {
   department: string;
+  orgName: string;
   ay: string;
   term: string;
   termPkg: { total: number; items: { name: string; rate: number; fund: string }[] };
@@ -96,7 +98,10 @@ export default function SummaryClient({
           </div>
           <div className="text-center flex-grow-1 px-3">
             <div className="fw-bold text-uppercase" style={{ fontSize: '0.9rem', letterSpacing: '0.5px' }}>Filamer Christian University</div>
-            <div className="fw-bold text-uppercase text-accent" style={{ fontSize: '1.1rem' }}>College of {decodeURIComponent(department)}</div>
+            
+            {/* UPDATED: Displays full dynamic name without "College of" hardcoded */}
+            <div className="fw-bold text-uppercase text-accent" style={{ fontSize: '1.1rem' }}>{orgName}</div>
+            
             <div className="text-muted small">Roxas Avenue, Roxas City, Capiz, Philippines 5800</div>
             <div className="mt-3 fw-bold text-uppercase" style={{ fontSize: '0.95rem' }}>Departmental Financial Audit & Liquidation Summary Report</div>
             <div className="text-muted small fst-italic mt-1">{ay} &nbsp;|&nbsp; {term}</div>
@@ -104,7 +109,7 @@ export default function SummaryClient({
           <div style={{ width: '90px', flexShrink: 0 }} className="text-center">
             <img 
               src={getAssetUrl(`${decodeURIComponent(department).toLowerCase().replace(/\s+/g, '')}_logo.png`)} 
-              alt="Department Logo" 
+              alt="Entity Logo" 
               onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = getAssetUrl('engineering_logo.png'); }} 
               style={{ width: '100%', maxHeight: '90px', objectFit: 'contain' }} 
             />
@@ -143,7 +148,6 @@ export default function SummaryClient({
                   return (
                     <tr key={idx}>
                       <td className="ps-3">{k}</td>
-                      {/* Rate column left as dash since this aggregates dynamic unpredictable payments */}
                       <td className="text-end">-</td>
                       <td className="text-end">{collectionHierarchy[k].count}</td>
                       <td className="text-end">{fmt(collectionHierarchy[k].total)}</td>

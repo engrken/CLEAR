@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import SummaryClient from './SummaryClient';
 import { Metadata } from 'next';
-import { getDepartmentFinancials } from '../../actions'; // Import the central engine
+import { getDepartmentFinancials } from '../../actions'; 
 
 export const metadata: Metadata = {
   title: 'Centralized Liquidation of Expenses & Audit Records',
@@ -34,6 +34,7 @@ export default async function SummaryReportPage({
     <div className="mx-auto" style={{ maxWidth: '1150px', minWidth: 0 }}>
       <SummaryClient 
         department={department}
+        orgName={organization.name} // NEW: Passing the full name from the database
         ay={ay}
         term={term}
         termPkg={financials.termPkg}
