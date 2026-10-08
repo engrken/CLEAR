@@ -50,10 +50,13 @@ export default async function SystemLogsPage({ params, searchParams }: PageProps
     details: l.details,
   }));
 
+  // Use organization.name if found, otherwise fallback to department string
+  const displayName = organization ? organization.name : department;
+
   return (
     <LogsClient 
       initialLogs={serializedLogs} 
-      department={department} 
+      department={displayName} 
       currentPage={page} 
       totalPages={totalPages} 
     />

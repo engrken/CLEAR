@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { fmt } from "@/lib/utils";
 import {
   Chart as ChartJS,
@@ -18,6 +18,7 @@ ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarEle
 
 interface ReportsClientProps {
   department: string;
+  orgName: string; // NEW PROP
   ay: string;
   term: string;
   students?: any[];
@@ -55,6 +56,7 @@ function formatHoursAndMinutes(decimalHours: number) {
 
 export default function ReportsClient({
   department,
+  orgName,
   ay,
   term,
   students = [],
@@ -69,6 +71,19 @@ export default function ReportsClient({
   const [statusFilter, setStatusFilter] = useState("All Students (Master Roster)");
   const [yearFilter, setYearFilter] = useState("All Year Levels");
   const [viewMode, setViewMode] = useState<"Table" | "Analytics">("Table");
+
+  // Hydration-safe asset path resolver for printing logos
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const getAssetUrl = (filename: string) => {
+    if (mounted && window.location.hostname.endsWith('.localhost')) {
+      return `http://localhost:${window.location.port}/${filename}`;
+    }
+    return `/${filename}`;
+  };
 
   const validCollections = collections.filter(c => !String(c.paymentType || "").toUpperCase().includes("VOID"));
   const validLiquidations = liquidations.filter(l => !String(l.status || "").includes("Voided"));
@@ -91,7 +106,6 @@ export default function ReportsClient({
 
     let results: ReportRow[] = [];
 
-    // ROBUST STUDENT MATCHER: Handles UUIDs, human-readable student IDs, and names safely
     const matchStudent = (cStudentId: unknown, cStudentName: unknown, student: any) => {
       const cleanRef = String(cStudentId || "").trim().toLowerCase();
       const sUuid = String(student?.id || "").trim().toLowerCase();
@@ -326,201 +340,279 @@ export default function ReportsClient({
   };
 
   return (
-    <div>
-      <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
-        <div>
-          <h5 className="text-info fw-bold mb-0"><i className="bi bi-bar-chart-fill me-2"></i>Institutional Collections & Liquidation Reports</h5>
-        </div>
-        <div className="btn-group btn-group-sm border border-secondary rounded">
-          <button className={`btn ${viewMode === 'Table' ? 'btn-info text-dark fw-bold' : 'btn-outline-secondary'}`} onClick={() => setViewMode('Table')}>
-            <i className="bi bi-table me-1"></i> Table View
-          </button>
-          <button className={`btn ${viewMode === 'Analytics' ? 'btn-info text-dark fw-bold' : 'btn-outline-secondary'}`} onClick={() => setViewMode('Analytics')}>
-            <i className="bi bi-pie-chart me-1"></i> Analytics Charts
-          </button>
-          <button className="btn btn-outline-secondary" onClick={handleExportCsv}>
-            <i className="bi bi-filetype-csv me-1"></i> Export CSV
-          </button>
-        </div>
-      </div>
+    <>
+      {/* PRINT STYLING INJECTION */}
+      <style dangerouslySetInnerHTML={{__html: `
+        @media print {
+          @page {
+            size: 8.5in 13in;
+            margin: 0.5in; 
+          }
+          aside, nav, header, .sidebar, .d-print-none { display: none !important; }
+          html, body, main, #__next, .layout-wrapper {
+            margin: 0 !important; padding: 0 !important; width: 100% !important; max-width: 100% !important; background-color: white !important;
+          }
+          .print-container {
+            position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important;
+            margin: 0 !important; padding: 0 !important; border: none !important; box-shadow: none !important; background-color: white !important;
+          }
+          .print-container * { color: #000000 !important; background-color: transparent !important; }
+          .print-container table { border-collapse: collapse !important; margin-bottom: 15px !important; width: 100% !important; border: 1.5px solid #000000 !important; }
+          .print-container th, .print-container td { border: 1px solid #000000 !important; padding: 5px 8px !important; }
+          .print-container .bg-dark { background-color: #f8f9fa !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .signature-block { margin-top: 40px !important; page-break-inside: avoid !important; }
+        }
+      `}} />
 
-      <div className="row g-3 mb-3">
-        <div className="col-12 col-md-4">
-          <label className="form-label text-secondary small mb-1">Report Category</label>
-          <select className="form-select bg-card text-white border-secondary" value={reportCategory} onChange={e => setReportCategory(e.target.value)}>
-            {allCategories.map((cat, idx) => <option key={idx} value={cat}>{cat}</option>)}
-          </select>
+      <div className="print-container">
+        {/* ISO PRINT HEADER (Visible ONLY on print) */}
+        <div className="d-none d-print-flex justify-content-between align-items-center mb-3 pb-2 border-bottom border-dark border-opacity-50">
+          <div style={{ width: '90px', flexShrink: 0 }} className="text-center">
+            <img src={getAssetUrl('fcu.png')} alt="FCU Logo" style={{ width: '100%', maxHeight: '90px', objectFit: 'contain' }} />
+          </div>
+          <div className="text-center flex-grow-1 px-3">
+            <div className="fw-bold text-uppercase" style={{ fontSize: '0.9rem', letterSpacing: '0.5px' }}>Filamer Christian University</div>
+            <div className="fw-bold text-uppercase text-accent" style={{ fontSize: '1.1rem' }}>{orgName}</div>
+            <div className="text-muted small">Roxas Avenue, Roxas City, Capiz, Philippines 5800</div>
+            <div className="mt-3 fw-bold text-uppercase" style={{ fontSize: '0.95rem' }}>Detailed Audit & Financial Report ({reportCategory})</div>
+            <div className="text-muted small fst-italic mt-1">{ay} &nbsp;|&nbsp; {term}</div>
+          </div>
+          <div style={{ width: '90px', flexShrink: 0 }} className="text-center">
+            <img 
+              src={getAssetUrl(`${decodeURIComponent(department).toLowerCase().replace(/\s+/g, '')}_logo.png`)} 
+              alt="Entity Logo" 
+              onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = getAssetUrl('engineering_logo.png'); }} 
+              style={{ width: '100%', maxHeight: '90px', objectFit: 'contain' }} 
+            />
+          </div>
         </div>
-        {!isLiquidationReport && (
-          <>
-            <div className="col-12 col-md-3">
-              <label className="form-label text-secondary small mb-1">Year Level Filter</label>
-              <select className="form-select bg-card text-white border-secondary" value={yearFilter} onChange={e => setYearFilter(e.target.value)}>
-                <option value="All Year Levels">All Year Levels</option>
-                <option value="1st Year">1st Year</option>
-                <option value="2nd Year">2nd Year</option>
-                <option value="3rd Year">3rd Year</option>
-                <option value="4th Year">4th Year</option>
-              </select>
-            </div>
-            <div className="col-12 col-md-3">
-              <label className="form-label text-secondary small mb-1">Payment Status Filter</label>
-              <select className="form-select bg-card text-white border-secondary" value={statusFilter} onChange={e => setStatusFilter(e.target.value)} disabled={isPenaltyReport}>
-                <option value="All Students (Master Roster)">All Students (Master Roster)</option>
-                <option value="Fully Paid Only">Fully Paid Only</option>
-                <option value="Partially Paid Only">Partially Paid Only</option>
-                <option value="Unpaid Only">Unpaid Only</option>
-              </select>
-            </div>
-          </>
-        )}
-        <div className="col-12 col-md-2 d-flex align-items-end ms-auto">
-          <button className="btn btn-outline-info w-100" onClick={() => window.location.reload()}>
-            <i className="bi bi-arrow-clockwise me-1"></i> Refresh
-          </button>
-        </div>
-      </div>
 
-      {!isLiquidationReport && (
-        <div className="bg-dark border border-secondary rounded p-2 mb-3 shadow-sm d-flex gap-3 px-3">
-          <span className="text-secondary fw-bold small">{ay} ({term}) — {reportCategory}: {filteredRoster.length} student(s) displayed</span>
-          <span className="text-secondary">|</span>
-          <span className="text-success fw-bold small">{fullyPaidCount} Fully Paid / Cleared</span>
-          <span className="text-secondary">|</span>
-          <span className="text-warning fw-bold small">{partialCount} Partially Paid</span>
-          {unpaidCount > 0 && (
+        {/* SCREEN TOOLBAR */}
+        <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3 d-print-none">
+          <div>
+            <h5 className="text-info fw-bold mb-0"><i className="bi bi-bar-chart-fill me-2"></i>Institutional Collections & Liquidation Reports</h5>
+          </div>
+          <div className="d-flex align-items-center gap-2">
+            <button className="btn btn-outline-secondary btn-sm fw-bold" onClick={() => window.print()}>
+              <i className="bi bi-printer me-1"></i>Print Report View
+            </button>
+            <div className="btn-group btn-group-sm border border-secondary rounded">
+              <button className={`btn ${viewMode === 'Table' ? 'btn-info text-dark fw-bold' : 'btn-outline-secondary'}`} onClick={() => setViewMode('Table')}>
+                <i className="bi bi-table me-1"></i> Table View
+              </button>
+              <button className={`btn ${viewMode === 'Analytics' ? 'btn-info text-dark fw-bold' : 'btn-outline-secondary'}`} onClick={() => setViewMode('Analytics')}>
+                <i className="bi bi-pie-chart me-1"></i> Analytics Charts
+              </button>
+              <button className="btn btn-outline-secondary" onClick={handleExportCsv}>
+                <i className="bi bi-filetype-csv me-1"></i> Export CSV
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="row g-3 mb-3 d-print-none">
+          <div className="col-12 col-md-4">
+            <label className="form-label text-secondary small mb-1">Report Category</label>
+            <select className="form-select bg-card text-white border-secondary" value={reportCategory} onChange={e => setReportCategory(e.target.value)}>
+              {allCategories.map((cat, idx) => <option key={idx} value={cat}>{cat}</option>)}
+            </select>
+          </div>
+          {!isLiquidationReport && (
             <>
-              <span className="text-secondary">|</span>
-              <span className="text-danger fw-bold small">{unpaidCount} Unpaid</span>
+              <div className="col-12 col-md-3">
+                <label className="form-label text-secondary small mb-1">Year Level Filter</label>
+                <select className="form-select bg-card text-white border-secondary" value={yearFilter} onChange={e => setYearFilter(e.target.value)}>
+                  <option value="All Year Levels">All Year Levels</option>
+                  <option value="1st Year">1st Year</option>
+                  <option value="2nd Year">2nd Year</option>
+                  <option value="3rd Year">3rd Year</option>
+                  <option value="4th Year">4th Year</option>
+                </select>
+              </div>
+              <div className="col-12 col-md-3">
+                <label className="form-label text-secondary small mb-1">Payment Status Filter</label>
+                <select className="form-select bg-card text-white border-secondary" value={statusFilter} onChange={e => setStatusFilter(e.target.value)} disabled={isPenaltyReport}>
+                  <option value="All Students (Master Roster)">All Students (Master Roster)</option>
+                  <option value="Fully Paid Only">Fully Paid Only</option>
+                  <option value="Partially Paid Only">Partially Paid Only</option>
+                  <option value="Unpaid Only">Unpaid Only</option>
+                </select>
+              </div>
             </>
           )}
-        </div>
-      )}
-
-      {viewMode === "Analytics" && !isLiquidationReport && (
-        <div className="row g-3 mb-4">
-          <div className="col-12 col-md-6">
-            <div className="card p-3 border-secondary bg-card shadow-sm h-100">
-              <h6 className="text-accent fw-bold mb-3">Collection Status Breakdown</h6>
-              <div style={{ position: 'relative', height: '280px' }}>
-                <Doughnut data={pieData} options={{ ...chartOptionsBase, plugins: { legend: { position: 'bottom', labels: { color: '#f8fafc' } } } }} />
-              </div>
-            </div>
-          </div>
-          <div className="col-12 col-md-6">
-            <div className="card p-3 border-secondary bg-card shadow-sm h-100">
-              <h6 className="text-accent fw-bold mb-3">Collections by Year Level</h6>
-              <div style={{ position: 'relative', height: '280px' }}>
-                <Bar data={barData} options={{ ...chartOptionsBase, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#334155' }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#334155' }, ticks: { color: '#94a3b8' } } } }} />
-              </div>
-            </div>
+          <div className="col-12 col-md-2 d-flex align-items-end ms-auto">
+            <button className="btn btn-outline-info w-100" onClick={() => window.location.reload()}>
+              <i className="bi bi-arrow-clockwise me-1"></i> Refresh
+            </button>
           </div>
         </div>
-      )}
 
-      {viewMode === "Analytics" && isLiquidationReport && (
-        <div className="text-center text-secondary py-5">
-          <i className="bi bi-bar-chart-line fs-1 d-block mb-2 text-secondary opacity-50"></i>
-          Analytics charts are available for student collections, fees, and penalties.
-        </div>
-      )}
+        {!isLiquidationReport && (
+          <div className="bg-dark border border-secondary rounded p-2 mb-3 shadow-sm d-flex gap-3 px-3 d-print-none">
+            <span className="text-secondary fw-bold small">{ay} ({term}) — {reportCategory}: {filteredRoster.length} student(s) displayed</span>
+            <span className="text-secondary">|</span>
+            <span className="text-success fw-bold small">{fullyPaidCount} Fully Paid / Cleared</span>
+            <span className="text-secondary">|</span>
+            <span className="text-warning fw-bold small">{partialCount} Partially Paid</span>
+            {unpaidCount > 0 && (
+              <>
+                <span className="text-secondary">|</span>
+                <span className="text-danger fw-bold small">{unpaidCount} Unpaid</span>
+              </>
+            )}
+          </div>
+        )}
 
-      {!isLiquidationReport && viewMode === "Table" && (
-        <div className="report-groups-container">
-          {sortedYearLevels.length === 0 ? (
-            <div className="text-center text-secondary py-4">No records found for the selected filters.</div>
-          ) : (
-            sortedYearLevels.map(yr => (
-              <div key={yr} className="mb-4">
-                <div className="badge bg-primary fs-6 mb-2 px-3 py-2 w-100 text-start">{yr} ({groupedRoster[yr].length} Students)</div>
-                <div className="table-responsive">
-                  <table className="table table-hover align-middle table-sm border-secondary text-white">
-                    <thead>
-                      <tr className="text-secondary border-bottom border-secondary" style={{ fontSize: '0.85rem' }}>
-                        <th className="py-2">Student ID</th>
-                        <th className="py-2">Student Name</th>
-                        {isPenaltyReport && <th className="py-2">Total Duration</th>}
-                        <th className="py-2 text-end">Assessed Fee</th>
-                        <th className="py-2 text-end">Amount Paid</th>
-                        <th className="py-2 text-end">Balance Due</th>
-                        <th className="py-2">Payment Status</th>
-                        <th className="py-2">{isPenaltyReport ? 'Activities & Breakdown' : 'OR Number(s)'}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {groupedRoster[yr].map((row, idx) => (
-                        <tr key={`${row.id}-${idx}`}>
-                          <td><span className="text-info font-monospace">{row.studentId}</span></td>
-                          <td className="fw-semibold">{row.fullName}</td>
-                          {isPenaltyReport && <td className="fw-semibold text-info">{row.duration}</td>}
-                          <td className="text-end">{fmt(row.assessedAmount)}</td>
-                          <td className="fw-bold text-info text-end">{fmt(row.amountPaid)}</td>
-                          <td className={`text-end ${row.balanceDue > 0 ? 'text-danger fw-bold' : 'text-secondary'}`}>{fmt(row.balanceDue)}</td>
-                          <td>
-                            <span className={`badge ${row.status === 'Fully Paid' || row.status === 'Settled (Service)' ? 'bg-success' : row.status === 'Partially Paid' ? 'bg-warning text-dark' : 'bg-danger'}`}>
-                              {row.status}
-                            </span>
-                          </td>
-                          <td className="text-secondary small" style={{ maxWidth: '300px' }}>{row.particulars}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+        {viewMode === "Analytics" && !isLiquidationReport && (
+          <div className="row g-3 mb-4 d-print-none">
+            <div className="col-12 col-md-6">
+              <div className="card p-3 border-secondary bg-card shadow-sm h-100">
+                <h6 className="text-accent fw-bold mb-3">Collection Status Breakdown</h6>
+                <div style={{ position: 'relative', height: '280px' }}>
+                  <Doughnut data={pieData} options={{ ...chartOptionsBase, plugins: { legend: { position: 'bottom', labels: { color: '#f8fafc' } } } }} />
                 </div>
               </div>
-            ))
-          )}
-        </div>
-      )}
-
-      {isLiquidationReport && viewMode === "Table" && (
-        <div>
-          <div className="bg-dark border border-secondary rounded p-2 mb-3 shadow-sm px-3">
-            <span className="text-secondary fw-bold small">{ay} ({term}) — Liquidation Audits: {validLiquidations.length} records found</span>
+            </div>
+            <div className="col-12 col-md-6">
+              <div className="card p-3 border-secondary bg-card shadow-sm h-100">
+                <h6 className="text-accent fw-bold mb-3">Collections by Year Level</h6>
+                <div style={{ position: 'relative', height: '280px' }}>
+                  <Bar data={barData} options={{ ...chartOptionsBase, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#334155' }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#334155' }, ticks: { color: '#94a3b8' } } } }} />
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="table-responsive">
-            <table className="table table-hover align-middle table-sm border-secondary text-white">
-              <thead>
-                <tr className="text-secondary border-bottom border-secondary" style={{ fontSize: '0.85rem' }}>
-                  <th className="py-2">Date</th>
-                  <th className="py-2">Audit ID</th>
-                  <th className="py-2">CA Reference</th>
-                  <th className="py-2">Officer / Requestor</th>
-                  <th className="py-2">Fund Source</th>
-                  <th className="py-2 text-end">Budget (CA)</th>
-                  <th className="py-2 text-end">Liquidated Exp.</th>
-                  <th className="py-2 text-end">Variance / Result</th>
-                </tr>
-              </thead>
-              <tbody>
-                {validLiquidations.length === 0 ? (
-                  <tr><td colSpan={8} className="text-center text-secondary py-4">No audited liquidation records found.</td></tr>
-                ) : (
-                  validLiquidations.map((l, idx) => {
-                    const budget = (Number(l.totalExpense)||0) + (Number(l.varianceReturn)||0) - (Number(l.reimbursementDue)||0);
-                    let resultBadge = <span className="badge bg-secondary">Exact (₱0.00)</span>;
-                    if (Number(l.varianceReturn) > 0) resultBadge = <span className="badge bg-success">+{fmt(l.varianceReturn)} (Return)</span>;
-                    else if (Number(l.reimbursementDue) > 0) resultBadge = <span className="badge bg-danger">-{fmt(l.reimbursementDue)} (Reimburse)</span>;
+        )}
 
-                    return (
-                      <tr key={`${l.id}-${idx}`}>
-                        <td className="text-secondary small">{l.date ? String(l.date).split('T')[0] : '—'}</td>
-                        <td><strong>{l.auditId}</strong></td>
-                        <td><span className="text-accent">{l.referenceCaId || l.advanceId || '—'}</span></td>
-                        <td>{l.requestor || '—'}</td>
-                        <td>{l.fundSource}</td>
-                        <td className="text-end">{fmt(budget)}</td>
-                        <td className="text-end text-danger fw-bold">{fmt(l.totalExpense)}</td>
-                        <td className="text-end">{resultBadge}</td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+        {viewMode === "Analytics" && isLiquidationReport && (
+          <div className="text-center text-secondary py-5 d-print-none">
+            <i className="bi bi-bar-chart-line fs-1 d-block mb-2 text-secondary opacity-50"></i>
+            Analytics charts are available for student collections, fees, and penalties.
+          </div>
+        )}
+
+        {!isLiquidationReport && viewMode === "Table" && (
+          <div className="report-groups-container">
+            {sortedYearLevels.length === 0 ? (
+              <div className="text-center text-secondary py-4">No records found for the selected filters.</div>
+            ) : (
+              sortedYearLevels.map(yr => (
+                <div key={yr} className="mb-4">
+                  <div className="badge bg-primary fs-6 mb-2 px-3 py-2 w-100 text-start">{yr} ({groupedRoster[yr].length} Students)</div>
+                  <div className="table-responsive">
+                    <table className="table table-hover align-middle table-sm border-secondary text-white">
+                      <thead>
+                        <tr className="text-secondary border-bottom border-secondary" style={{ fontSize: '0.85rem' }}>
+                          <th className="py-2">Student ID</th>
+                          <th className="py-2">Student Name</th>
+                          {isPenaltyReport && <th className="py-2">Total Duration</th>}
+                          <th className="py-2 text-end">Assessed Fee</th>
+                          <th className="py-2 text-end">Amount Paid</th>
+                          <th className="py-2 text-end">Balance Due</th>
+                          <th className="py-2">Payment Status</th>
+                          <th className="py-2">{isPenaltyReport ? 'Activities & Breakdown' : 'OR Number(s)'}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {groupedRoster[yr].map((row, idx) => (
+                          <tr key={`${row.id}-${idx}`}>
+                            <td><span className="text-info font-monospace">{row.studentId}</span></td>
+                            <td className="fw-semibold">{row.fullName}</td>
+                            {isPenaltyReport && <td className="fw-semibold text-info">{row.duration}</td>}
+                            <td className="text-end">{fmt(row.assessedAmount)}</td>
+                            <td className="fw-bold text-info text-end">{fmt(row.amountPaid)}</td>
+                            <td className={`text-end ${row.balanceDue > 0 ? 'text-danger fw-bold' : 'text-secondary'}`}>{fmt(row.balanceDue)}</td>
+                            <td>
+                              <span className={`badge ${row.status === 'Fully Paid' || row.status === 'Settled (Service)' ? 'bg-success' : row.status === 'Partially Paid' ? 'bg-warning text-dark' : 'bg-danger'}`}>
+                                {row.status}
+                              </span>
+                            </td>
+                            <td className="text-secondary small" style={{ maxWidth: '300px' }}>{row.particulars}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {isLiquidationReport && viewMode === "Table" && (
+          <div>
+            <div className="bg-dark border border-secondary rounded p-2 mb-3 shadow-sm px-3 d-print-none">
+              <span className="text-secondary fw-bold small">{ay} ({term}) — Liquidation Audits: {validLiquidations.length} records found</span>
+            </div>
+            <div className="table-responsive">
+              <table className="table table-hover align-middle table-sm border-secondary text-white">
+                <thead>
+                  <tr className="text-secondary border-bottom border-secondary" style={{ fontSize: '0.85rem' }}>
+                    <th className="py-2">Date</th>
+                    <th className="py-2">Audit ID</th>
+                    <th className="py-2">CA Reference</th>
+                    <th className="py-2">Officer / Requestor</th>
+                    <th className="py-2">Fund Source</th>
+                    <th className="py-2 text-end">Budget (CA)</th>
+                    <th className="py-2 text-end">Liquidated Exp.</th>
+                    <th className="py-2 text-end">Variance / Result</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {validLiquidations.length === 0 ? (
+                    <tr><td colSpan={8} className="text-center text-secondary py-4">No audited liquidation records found.</td></tr>
+                  ) : (
+                    validLiquidations.map((l, idx) => {
+                      const budget = (Number(l.totalExpense)||0) + (Number(l.varianceReturn)||0) - (Number(l.reimbursementDue)||0);
+                      let resultBadge = <span className="badge bg-secondary">Exact (₱0.00)</span>;
+                      if (Number(l.varianceReturn) > 0) resultBadge = <span className="badge bg-success">+{fmt(l.varianceReturn)} (Return)</span>;
+                      else if (Number(l.reimbursementDue) > 0) resultBadge = <span className="badge bg-danger">-{fmt(l.reimbursementDue)} (Reimburse)</span>;
+
+                      return (
+                        <tr key={`${l.id}-${idx}`}>
+                          <td className="text-secondary small">{l.date ? String(l.date).split('T')[0] : '—'}</td>
+                          <td><strong>{l.auditId}</strong></td>
+                          <td><span className="text-accent">{l.referenceCaId || l.advanceId || '—'}</span></td>
+                          <td>{l.requestor || '—'}</td>
+                          <td>{l.fundSource}</td>
+                          <td className="text-end">{fmt(budget)}</td>
+                          <td className="text-end text-danger fw-bold">{fmt(l.totalExpense)}</td>
+                          <td className="text-end">{resultBadge}</td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* PRINT SIGNATURE BLOCK (Visible ONLY on print) */}
+        <div className="row mt-4 pt-3 text-color signature-block d-none d-print-flex" style={{ fontSize: '0.85rem' }}>
+          <div className="col-3 text-center">
+            <div className="fw-bold text-uppercase text-muted mb-1" style={{ fontSize: '0.75rem' }}>Prepared by:</div>
+            <div style={{ height: '40px' }}></div>
+            <div className="fw-bold border-top border-dark pt-1 d-inline-block px-3">Auditor</div>
+          </div>
+          <div className="col-3 text-center">
+            <div className="fw-bold text-uppercase text-muted mb-1" style={{ fontSize: '0.75rem' }}>Attested by:</div>
+            <div style={{ height: '40px' }}></div>
+            <div className="fw-bold border-top border-dark pt-1 d-inline-block px-3">Treasurer</div>
+          </div>
+          <div className="col-3 text-center">
+            <div className="fw-bold text-uppercase text-muted mb-1" style={{ fontSize: '0.75rem' }}>Noted:</div>
+            <div style={{ height: '40px' }}></div>
+            <div className="fw-bold border-top border-dark pt-1 d-inline-block px-3">Adviser</div>
+          </div>
+          <div className="col-3 text-center">
+            <div className="fw-bold text-uppercase text-muted mb-1" style={{ fontSize: '0.75rem' }}>Approved:</div>
+            <div style={{ height: '40px' }}></div>
+            <div className="fw-bold border-top border-dark pt-1 d-inline-block px-3">Dean</div>
           </div>
         </div>
-      )}
-    </div>
+
+      </div>
+    </>
   );
 }

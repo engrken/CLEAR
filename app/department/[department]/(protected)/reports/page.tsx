@@ -24,7 +24,7 @@ export default async function InstitutionalReportsPage({
   });
 
   if (!organization) {
-    return <div className="alert alert-danger p-4">Department Not Found</div>;
+    return <div className="alert alert-danger p-4">Entity Not Found</div>;
   }
 
   // 1. Fetch Dynamic Package from Central Engine
@@ -64,6 +64,7 @@ export default async function InstitutionalReportsPage({
     <div className="module card p-3 p-md-4 border-secondary shadow-sm">
       <ReportsClient 
         department={department}
+        orgName={organization.name} // PASSED FULL DYNAMIC ORGANIZATION NAME
         ay={ay}
         term={term}
         students={serialize(students)}
@@ -72,7 +73,7 @@ export default async function InstitutionalReportsPage({
         penalties={serialize(penalties)}
         packageRate={financials.termPkg.total}
         setupCategories={setupCategories}
-        termPkgItems={financials.termPkg.items} // PASSED DYNAMIC ARRAY HERE
+        termPkgItems={financials.termPkg.items}
       />
     </div>
   );

@@ -38,10 +38,21 @@ export default async function PenaltiesPage({
       select: { studentId: true, fullName: true, email: true }
     }),
     prisma.penalty.findMany({
-      where: { organizationId: organization.id, academicYear: ay, term },
-      orderBy: { date: 'desc' }
-    })
-  ]);
+  where: {
+    organizationId: organization.id,
+    academicYear: ay,
+    term,
+    status: {
+      not: {
+        contains: 'Voided',
+      },
+    },
+  },
+  orderBy: {
+    date: 'desc',
+  },
+})
+]);
 
   return (
     <div className="module card p-3 p-md-4 border-secondary shadow-sm">

@@ -92,7 +92,15 @@ export default function DepartmentSidebar({
     ${isActive(path) ? 'bg-info bg-opacity-10 text-info fw-bold border-start border-info border-4' : 'text-secondary'}
   `;
 
+ // =========================================================
+  // ACCESS CONTROL EVALUATOR
+  // =========================================================
+
   const canAccess = (tabId: string) => {
+    // SUPER ADMIN BYPASS: Give kent.bsece@gmail.com full access to all tabs
+    if (currentUser?.email === 'kent.bsece@gmail.com') {
+      return true;
+    }
     return effectiveTabs.includes(tabId);
   };
 

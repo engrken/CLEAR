@@ -26,6 +26,31 @@ export default function LogsClient({
     router.push(`${pathname}?page=${newPage}`);
   };
 
+  // CSV Export Handler
+  const handleExportCsv = () => {
+    if (!logs || logs.length === 0) {
+      return alert("No audit logs available to export.");
+    }
+
+    let csv = `Timestamp,User,Action,Details\n`;
+    logs.forEach(log => {
+      // Escape double quotes to prevent CSV formatting issues
+      const cleanDetails = String(log.details || "").replace(/"/g, '""');
+      const cleanUser = String(log.user || "").replace(/"/g, '""');
+      const cleanAction = String(log.action || "").replace(/"/g, '""');
+      
+      csv += `"${log.timestamp}","${cleanUser}","${cleanAction}","${cleanDetails}"\n`;
+    });
+
+    const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `CLEAR_Audit_Logs_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="card p-3 p-md-4 border-secondary shadow-sm bg-card text-color">
       <div className="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
@@ -34,12 +59,20 @@ export default function LogsClient({
             <i className="bi bi-journal-text me-2"></i>System Audit Logs
           </h5>
           <p className="text-secondary small mb-0">
-            Inspect immutable activity records, user actions, and system events for {department.toUpperCase()}.
+            Inspect immutable activity records, user actions, and system events for {department}.
           </p>
         </div>
-        <button className="btn btn-outline-secondary btn-sm" onClick={() => window.location.reload()}>
-          <i className="bi bi-arrow-repeat me-1"></i>Refresh Logs
-        </button>
+        
+        <div className="d-flex align-items-center gap-2">
+          {/* EXPORT CSV BUTTON */}
+          <button className="btn btn-outline-info btn-sm" onClick={handleExportCsv}>
+            <i className="bi bi-filetype-csv me-1"></i>Export Logs
+          </button>
+          
+          <button className="btn btn-outline-secondary btn-sm" onClick={() => window.location.reload()}>
+            <i className="bi bi-arrow-repeat me-1"></i>Refresh
+          </button>
+        </div>
       </div>
 
       <div className="table-responsive">

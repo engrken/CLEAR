@@ -13,6 +13,10 @@
   color: var(--text-color);
 }
 
+html {
+  font-size: 91.6%; 
+}
+
 .form-control, .form-select {
   background-color: var(--bg-card);
   border-color: var(--border-color);

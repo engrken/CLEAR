@@ -20,35 +20,85 @@ export default async function LiquidationsPage({
   }>;
 }) {
   // =========================================================
-  // 1. EXTRACT PARAMS EARLY FOR REDIRECTION
+  // 1. EXTRACT PARAMS
   // =========================================================
   const { department } = await params;
-  
-  const cleanDepartment = decodeURIComponent(department).toLowerCase().trim();
 
-// =========================================================
-  // 2. STRICT LOGIN & PERMISSION CHECK
+  const cleanDepartment = decodeURIComponent(department)
+    .trim()
+    .toLowerCase();
+
+  // =========================================================
+  // 2. AUTHENTICATION
   // =========================================================
   const session = await auth();
 
-  // If not logged in, redirect to dashboard and trigger the LoginModal
   if (!session?.user) {
-    redirect(`/department/${encodeURIComponent(cleanDepartment)}?login=true`);
-  }
-
-  // Cast the user object to include the custom 'role' property
-  const userWithRole = session.user as typeof session.user & { role?: string };
-  const userRole = userWithRole.role?.toLowerCase() || 'viewer';
-  
-  const allowedRoles = ['admin', 'administrator', 'master', 'auditor', 'audit'];
-
-  // Decline access if they are a treasurer or viewer
-  if (!allowedRoles.includes(userRole)) {
-    redirect(`/department/${encodeURIComponent(cleanDepartment)}?forbidden=true`);
+    redirect(
+      `/department/${encodeURIComponent(cleanDepartment)}?login=true`
+    );
   }
 
   // =========================================================
-  // 3. RESOLVE SEARCH PARAMS
+  // 3. SUPERADMIN / ROLE AUTHORIZATION
+  // =========================================================
+
+  /**
+   * Extend the NextAuth user object with the custom role field.
+   */
+  const userWithRole = session.user as typeof session.user & {
+    role?: string | null;
+  };
+
+  /**
+   * Normalize role and email so that:
+   *
+   * "SuperAdmin"
+   * "SUPER_ADMIN"
+   * "super-admin"
+   * " superadmin "
+   *
+   * can all be handled consistently.
+   */
+  const userRole = String(userWithRole.role ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, '');
+
+  const userEmail = String(userWithRole.email ?? '')
+    .trim()
+    .toLowerCase();
+
+  /**
+   * SUPERADMIN BYPASS
+   *
+   * This must happen BEFORE the normal role restriction.
+   */
+  const isSuperAdmin =
+    userRole === 'superadmin' ||
+    userRole === 'master' ||
+    userEmail === 'kent.bsece@gmail.com';
+
+  /**
+   * Roles permitted to access Liquidations.
+   *
+   * Superadmin is already handled above.
+   */
+  const allowedRoles = [
+    'admin',
+    'administrator',
+    'auditor',
+    'audit',
+  ];
+
+  if (!isSuperAdmin && !allowedRoles.includes(userRole)) {
+    redirect(
+      `/department/${encodeURIComponent(cleanDepartment)}?forbidden=true`
+    );
+  }
+
+  // =========================================================
+  // 4. RESOLVE SEARCH PARAMS
   // =========================================================
   const resolvedSearch = searchParams ? await searchParams : {};
 
@@ -57,7 +107,7 @@ export default async function LiquidationsPage({
   const prefillCaId = resolvedSearch.caId || '';
 
   // =========================================================
-  // 4. FIND DEPARTMENT
+  // 5. FIND DEPARTMENT
   // =========================================================
   const organization = await prisma.organization.findUnique({
     where: {
@@ -77,7 +127,7 @@ export default async function LiquidationsPage({
   }
 
   // =========================================================
-  // 5. FETCH PENDING CASH ADVANCES AND FUNDS
+  // 6. FETCH PENDING CASH ADVANCES AND FUNDS
   // =========================================================
   const [pendingAdvances, funds] = await Promise.all([
     prisma.cashAdvance.findMany({
@@ -104,7 +154,7 @@ export default async function LiquidationsPage({
   ]);
 
   // =========================================================
-  // 6. RENDER PAGE
+  // 7. RENDER PAGE
   // =========================================================
   return (
     <div className="module card p-3 p-md-4 border-secondary shadow-sm">
