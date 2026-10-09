@@ -59,8 +59,7 @@ export default function VoidClient({
         department,
         category,
         referenceId: refId,
-        reason: reason.trim(),
-        pin
+        reason: reason.trim()
       });
 
       if (res.success) {
