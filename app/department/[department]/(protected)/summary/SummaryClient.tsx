@@ -84,7 +84,7 @@ export default function SummaryClient({
         <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4 d-print-none">
           <div>
             <h5 className="text-accent m-0 fw-bold">COLLECTIONS & EXPENSES SUMMARY ({term})</h5>
-            <small className="text-muted">Official departmental financial statement matching legacy ledger output.</small>
+            <small className="text-muted">Official financial statement matching legacy ledger output.</small>
           </div>
           <button className="btn btn-outline-secondary btn-sm fw-bold" onClick={() => window.print()}>
             <i className="bi bi-printer me-1"></i>Print Summary Report
