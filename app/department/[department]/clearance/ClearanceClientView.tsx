@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { submitOnlineRemittance } from "../actions"; 
+import { submitOnlineRemittance } from "../(protected)/remittances/actions";
 import { ThemedAlert } from '@/lib/alerts';
 
 export default function ClearanceClientView({

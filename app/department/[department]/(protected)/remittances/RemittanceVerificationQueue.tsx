@@ -6,7 +6,7 @@ import { format } from "date-fns";
 import {
   verifyOnlineRemittance,
   invalidateOnlineRemittance
-} from "../../actions";
+} from "./actions";
 import { ThemedAlert } from '@/lib/alerts';
 
 interface OnlineRemittanceItem {

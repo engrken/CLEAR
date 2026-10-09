@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { fmt } from "@/lib/utils";
 import { format } from "date-fns";
-import { submitRemittanceBatch } from "../../actions";
+import { submitRemittanceBatch } from "./actions";
 import { ThemedAlert } from '@/lib/alerts';
 
 interface CollectionItem {

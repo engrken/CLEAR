@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { fmt } from "@/lib/utils";
 import Link from "next/link";
-import { saveInitialFunds } from "../../actions";
+import { saveInitialFunds } from "./actions";
 
 interface RolloverRecord {
   id: string;

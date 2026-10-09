@@ -2,33 +2,24 @@
 
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
-import crypto from 'crypto';
-
-function sha256Hex(str: string) {
-  return crypto.createHash('sha256').update(str).digest('hex');
-}
+import { requireTabAccess } from '@/lib/permissions';
 
 export async function executeVoidTransaction(formData: {
   department: string;
   category: string;
   referenceId: string;
   reason: string;
-  pin?: string;
 }) {
-  const { department, category, referenceId, reason, pin } = formData;
+  const { department, category, referenceId, reason } = formData;
 
   if (!reason || !reason.trim()) {
     throw new Error('Mandatory REASON is required to execute a transaction reversal.');
   }
 
-  // Master PIN validation check (Default Master PIN hash matches LIVE_code.gs: 999999)
-  if (pin) {
-    const hashedPin = sha256Hex(pin.trim());
-    const expectedPinHash = sha256Hex('999999');
-    if (hashedPin !== expectedPinHash) {
-      throw new Error('Invalid Master Void Authorization PIN[cite: 17].');
-    }
-  }
+  // 1. Verify Permission & Extract User Name
+  const customUser = await requireTabAccess("tab-void");
+  // Prioritize .name (NextAuth default) to prevent falling back to the email
+  const officerName = customUser.name || customUser.fullName || customUser.email || "System Administrator";
 
   const organization = await prisma.organization.findUnique({
     where: { subdomain: department.toLowerCase() },
@@ -38,7 +29,9 @@ export async function executeVoidTransaction(formData: {
     throw new Error(`Organization subdomain "${department}" not found.`);
   }
 
-  // Execute category-specific reversal mirroring LIVE_code.gs handlers
+  let transactionDetails = '';
+
+  // 2. Execute category-specific reversal
   if (category === 'collections') {
     const collection = await prisma.collection.findFirst({
       where: { organizationId: organization.id, orNumber: referenceId },
@@ -50,6 +43,9 @@ export async function executeVoidTransaction(formData: {
       where: { id: collection.id },
       data: { status: 'VOID', itemDescription: `VOID: ${reason.trim()}`, amountPaid: 0, balanceDue: 0 },
     });
+    
+    transactionDetails = `Voided Collection OR #${referenceId}. Reason: ${reason}`;
+    
   } else if (category === 'penalties') {
     const penalty = await prisma.penalty.findFirst({
       where: { organizationId: organization.id, penaltyId: referenceId },
@@ -60,6 +56,9 @@ export async function executeVoidTransaction(formData: {
       where: { id: penalty.id },
       data: { status: `Voided: ${reason.trim()}` },
     });
+    
+    transactionDetails = `Voided Penalty #${referenceId}. Reason: ${reason}`;
+    
   } else if (category === 'advances') {
     const ca = await prisma.cashAdvance.findFirst({
       where: { organizationId: organization.id, advanceId: referenceId },
@@ -71,6 +70,9 @@ export async function executeVoidTransaction(formData: {
       where: { id: ca.id },
       data: { status: `Cancelled: ${reason.trim()}` },
     });
+    
+    transactionDetails = `Cancelled Cash Advance #${referenceId}. Reason: ${reason}`;
+    
   } else if (category === 'collectibles') {
     const collectible = await prisma.collectible.findFirst({
       where: { organizationId: organization.id, id: referenceId },
@@ -81,8 +83,28 @@ export async function executeVoidTransaction(formData: {
       where: { id: collectible.id },
       data: { status: 'Voided', balanceDue: 0 },
     });
+    
+    transactionDetails = `Voided Collectible Assessment #${referenceId}. Reason: ${reason}`;
   }
 
+  // 3. Create System Audit Log
+  try {
+    await prisma.systemLog.create({
+      data: {
+        organizationId: organization.id,
+        user: officerName,
+        action: "VOID_TRANSACTION",
+        details: transactionDetails,
+      }
+    });
+  } catch (error) {
+    console.warn("System logging failed:", error);
+  }
+
+  // 4. Revalidate Pages
   revalidatePath(`/department/${department}/void`);
-  return { success: true, message: `Transaction ${referenceId} successfully VOIDED[cite: 12, 17].` };
+  revalidatePath(`/department/${department}/logs`);
+  revalidatePath(`/department/${department}`);
+  
+  return { success: true, message: `Transaction ${referenceId} successfully VOIDED.` };
 }

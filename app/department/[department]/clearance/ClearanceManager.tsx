@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { fmt } from "@/lib/utils";
-import { submitOnlineRemittance } from "../actions";
+import { submitOnlineRemittance } from "../(protected)/remittances/actions";
 import { ThemedAlert } from '@/lib/alerts';
 
 interface StudentClearance {

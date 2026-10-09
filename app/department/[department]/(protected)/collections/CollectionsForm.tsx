@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { fmt } from "@/lib/utils";
-import { recordPayment } from "../../actions";
+import { recordPayment } from "./actions";
 
 interface Student {
   studentId: string;
@@ -67,13 +67,16 @@ export default function CollectionsForm({
   const [fundAllocation, setFundAllocation] = useState("");
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // 🚀 NEW STATE: Holds the receipt data to trigger the Printable UI
+  const [receiptData, setReceiptData] = useState<any>(null);
 
   // Filter items belonging to the currently selected category drop-down
   const currentCategoryItems = useMemo(() => {
     return collectionItems.filter((item) => item.category === category);
   }, [category, collectionItems]);
 
-  // Use the NEW architecture: Filter by isPackage boolean instead of strings!
+  // Filter by isPackage boolean
   const packageItems = useMemo(() => {
     return currentCategoryItems.filter((item) => item.isPackage !== false);
   }, [currentCategoryItems]);
@@ -89,7 +92,6 @@ export default function CollectionsForm({
       return;
     }
 
-    // Default to the "Choose All" package if there are multiple mandatory items in this category
     if (packageItems.length > 1) {
       setItemDescription(DEPARTMENTAL_PACKAGE_NAME);
       setFundAllocation("Multiple Funds (Package Split)");
@@ -184,7 +186,17 @@ export default function CollectionsForm({
         term,
       });
 
-      alert(`Payment successfully recorded under OR #${orNumber}! Digital receipt dispatched.`);
+      // 🚀 INSTEAD of an alert, trigger the Digital Receipt UI
+      setReceiptData({
+        orNumber,
+        date,
+        studentId,
+        studentName,
+        itemDescription,
+        amountPaid: paid,
+      });
+
+      // Reset form fields for the next transaction
       setAmountPaid("");
       setSearchQuery("");
       setStudentId("");
@@ -217,6 +229,92 @@ export default function CollectionsForm({
     );
   }
 
+  // =========================================================
+  // 🖨️ PRINTABLE DIGITAL RECEIPT UI
+  // =========================================================
+  if (receiptData) {
+    return (
+      <div className="d-flex flex-column align-items-center animation-fade-in">
+        <div className="alert alert-success w-100 shadow-sm border-success mb-4 text-center">
+          <i className="bi bi-check-circle-fill fs-4 d-block mb-2 text-success"></i>
+          <strong>Payment successfully recorded!</strong> The digital receipt is ready.
+        </div>
+
+        {/* The Receipt */}
+        <div id="printable-receipt" className="card border-secondary shadow bg-white text-dark w-100" style={{ maxWidth: '450px' }}>
+          <div className="card-body p-4 p-md-5">
+            <div className="text-center mb-4 border-bottom border-secondary pb-3">
+              <h5 className="fw-bold text-uppercase mb-1">{decodeURIComponent(department)}</h5>
+              <div className="text-muted small">Filamer Christian University</div>
+              <div className="mt-3 fw-bold fs-5" style={{ letterSpacing: '2px' }}>OFFICIAL RECEIPT</div>
+            </div>
+
+            <div className="d-flex justify-content-between small mb-1">
+              <span className="text-muted">OR Number:</span>
+              <span className="fw-bold font-monospace fs-6 text-danger">{receiptData.orNumber}</span>
+            </div>
+            <div className="d-flex justify-content-between small mb-4">
+              <span className="text-muted">Date:</span>
+              <span className="fw-medium">{new Date(receiptData.date).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+            </div>
+
+            <div className="bg-light p-3 rounded mb-4 border border-secondary border-opacity-25">
+              <div className="small text-muted mb-1">Received from:</div>
+              <div className="fw-bold fs-6">{receiptData.studentName}</div>
+              <div className="small text-muted font-monospace">{receiptData.studentId}</div>
+            </div>
+
+            <table className="table table-sm table-borderless mb-4">
+              <thead>
+                <tr className="border-bottom border-dark small text-muted">
+                  <th className="px-0">Particulars</th>
+                  <th className="px-0 text-end">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="px-0 py-2 small fw-medium">{receiptData.itemDescription}</td>
+                  <td className="px-0 py-2 text-end fw-bold fs-6">{fmt(receiptData.amountPaid)}</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div className="text-center mt-5 pt-4">
+              <div className="border-top border-dark d-inline-block px-5 pt-2 fw-bold text-uppercase text-muted">
+                Authorized Collecting Officer
+              </div>
+              <div className="small text-muted mt-1">CLEAR System Automated Receipt</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="d-flex gap-3 mt-4 d-print-none w-100" style={{ maxWidth: '450px' }}>
+          <button className="btn btn-outline-secondary fw-bold flex-grow-1" onClick={() => window.print()}>
+            <i className="bi bi-printer me-2"></i>Print Receipt
+          </button>
+          <button className="btn btn-info text-dark fw-bold flex-grow-1" onClick={() => setReceiptData(null)}>
+            <i className="bi bi-plus-circle me-2"></i>New Transaction
+          </button>
+        </div>
+
+        {/* Print Stylesheet Magic */}
+        <style dangerouslySetInnerHTML={{__html: `
+          @media print {
+            body * { visibility: hidden; }
+            #printable-receipt, #printable-receipt * { visibility: visible; color: black !important; }
+            #printable-receipt { position: absolute; left: 50%; top: 0; transform: translateX(-50%); width: 100%; border: none !important; box-shadow: none !important; }
+            .d-print-none { display: none !important; }
+            .bg-light { background-color: #f8f9fa !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          }
+        `}} />
+      </div>
+    );
+  }
+
+  // =========================================================
+  // 📝 STANDARD PAYMENT FORM UI
+  // =========================================================
   return (
     <form onSubmit={handleSubmit}>
       <div className="row g-2 mb-2">
@@ -344,7 +442,7 @@ export default function CollectionsForm({
       </div>
 
       <button type="submit" className="btn btn-info fw-bold w-100" disabled={isSubmitting}>
-        {isSubmitting ? "Recording Payment..." : "Post Payment & Send Digital Receipt"}
+        {isSubmitting ? "Recording Payment..." : "Post Payment & Generate Receipt"}
       </button>
     </form>
   );
