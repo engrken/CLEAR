@@ -5,7 +5,7 @@ import { getDepartmentFinancials } from "./actions";
 import Link from "next/link";
 import { auth } from "@/auth";
 import OtpModal from "./components/OtpModal";
-import DashboardClient from "./DashboardClient"; 
+import DashboardClient from "./DashboardClient";
 import { Metadata } from 'next';
 
 export const dynamic = 'force-dynamic';
@@ -86,18 +86,14 @@ export default async function EntityOverviewPage({
             <div className="position-absolute top-0 start-50 translate-middle-x w-100 h-50" style={{ background: 'radial-gradient(ellipse at top, rgba(56,189,248,0.15), transparent 70%)', zIndex: 0 }}></div>
             
             <div className="mb-4 position-relative" style={{ zIndex: 1 }}>
-              {/* THEME FIX: Replaced bg-dark with bg-body-tertiary */}
               <div className="d-inline-flex align-items-center justify-content-center bg-body-tertiary border border-secondary-subtle rounded-circle mb-3 shadow" style={{ width: '100px', height: '100px', padding: '15px' }}>
-                {/* VERCEL BLOB FIX: Now uses organization.logo if available */}
                 <img 
                   src={organization.logo || `/${cleanSubdomain}_logo.png`} 
                   alt={`${organization.name} Logo`} 
-                  onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = '/engineering_logo.png'; }}
                   style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                 />
               </div>
               
-              {/* THEME FIX: Removed text-white so it adapts to light/dark mode */}
               <h3 className="fw-bold mb-2" style={{ lineHeight: '1.3' }}>
                 {organization.name}
               </h3>
@@ -122,7 +118,6 @@ export default async function EntityOverviewPage({
 
             <div className="row g-3 mt-2 position-relative" style={{ zIndex: 1 }}>
               <div className="col-12 col-sm-6">
-                {/* THEME FIX: Replaced bg-dark with bg-body-tertiary - MOVED COMMENT OUTSIDE THE TAG */}
                 <Link
                   href={`${basePath}/clearance${queryString}`}
                   className="btn btn-outline-info w-100 h-100 p-3 d-flex flex-column align-items-center justify-content-center rounded-3 bg-body-tertiary"

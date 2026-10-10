@@ -8,7 +8,6 @@ import Link from 'next/link';
 import Image from 'next/image';
 import ClearanceClientView from './ClearanceClientView';
 import ClearanceManager from './ClearanceManager';
-import Footer from '../components/Footer';
 import DataPrivacyModal from '../components/DataPrivacyModal';
 import { Metadata } from 'next';
 import { getDepartmentFinancials } from '../actions';
@@ -21,7 +20,7 @@ export const metadata: Metadata = {
 
 // FIX: Extracted PublicHeader outside the main page component to prevent re-renders
 const PublicHeader = ({ organizationName }: { organizationName: string }) => {
-  const displayOrgName = organizationName.toLowerCase().startsWith('college of') 
+  const displayOrgName = organizationName.toLowerCase() 
     ? organizationName : `College of ${organizationName}`;
   return (
     <header className="navbar border-bottom border-secondary px-4 py-3 bg-card shadow-sm d-print-none">
@@ -105,7 +104,7 @@ export default async function ClearancePage({
   if (sigParam && q) {
     const expectedSig = crypto.createHash('sha256').update(`${q.toLowerCase()}|${ay}|${term}|${salt}`).digest('hex');
     const isSignatureValid = sigParam.toLowerCase() === expectedSig.toLowerCase();
-    const displayOrgName = organization.name.toLowerCase().startsWith('college of') ? organization.name : `College of ${organization.name}`;
+    const displayOrgName = organization.name.toLowerCase() ? organization.name : `College of ${organization.name}`;
 
     return (
       <div className="d-flex flex-column min-vh-100 bg-canvas">
@@ -403,7 +402,6 @@ export default async function ClearancePage({
       </main>
       {!isOfficer && (
         <>
-          <Footer />
           <DataPrivacyModal />
         </>
       )}
