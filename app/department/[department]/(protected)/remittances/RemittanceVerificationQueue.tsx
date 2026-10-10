@@ -148,7 +148,7 @@ export default function RemittanceVerificationQueue({
                     )}
                   </td>
                   <td>
-                    <span className={`badge ${r.status === 'Verified' ? 'bg-success' : r.status === 'Rejected' ? 'bg-danger' : 'bg-warning text-dark'}`}>
+                    <span className={`badge ${r.status === 'Verified' ? 'bg-success' : r.status === 'Rejected' ? 'bg-danger' : 'bg-warning'}`}>
                       {r.status || 'Pending'}
                     </span>
                   </td>
@@ -174,12 +174,12 @@ export default function RemittanceVerificationQueue({
       {activeProof && (
         <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.7)' }}>
           <div className="modal-dialog modal-dialog-centered modal-lg">
-            <div className="modal-content card border-secondary bg-dark text-white">
+            <div className="modal-content card border-secondary">
               <div className="modal-header border-secondary">
                 <h5 className="modal-title"><i className="bi bi-receipt me-2"></i>Payment Proof Inspection</h5>
-                <button type="button" className="btn-close btn-close-white" onClick={() => setActiveProof(null)}></button>
+                <button type="button" className="btn-close" onClick={() => setActiveProof(null)}></button>
               </div>
-              <div className="modal-body text-center bg-black p-3">
+              <div className="modal-body text-center p-3">
                 <img src={activeProof.url} alt="Payment Proof" className="img-fluid rounded" style={{ maxHeight: '70vh' }} />
               </div>
               <div className="modal-footer border-secondary">
@@ -193,10 +193,10 @@ export default function RemittanceVerificationQueue({
       {verifyingItem && (
         <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
           <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content card border-secondary bg-dark text-white">
+            <div className="modal-content card border-secondary">
               <div className="modal-header border-secondary">
                 <h5 className="modal-title text-success"><i className="bi bi-check-circle me-2"></i>Verify Online Payment</h5>
-                <button type="button" className="btn-close btn-close-white" onClick={() => setVerifyingItem(null)}></button>
+                <button type="button" className="btn-close" onClick={() => setVerifyingItem(null)}></button>
               </div>
               <form onSubmit={handleVerifySubmit}>
                 <div className="modal-body">

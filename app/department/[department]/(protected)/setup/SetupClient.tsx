@@ -187,7 +187,7 @@ export default function SetupClient({
         <div className="row g-2">
           <div className="col-12 col-md-6">
             <label className="form-label text-secondary small fw-semibold mb-1">Target Academic Year</label>
-            <select className="form-select form-select-sm bg-dark text-white border-secondary" value={targetAy} onChange={e => setTargetAy(e.target.value)}>
+            <select className="form-select form-select-sm border-secondary" value={targetAy} onChange={e => setTargetAy(e.target.value)}>
               <option value="A.Y. 2025 - 2026">A.Y. 2025 - 2026</option>
               <option value="A.Y. 2026 - 2027">A.Y. 2026 - 2027</option>
               <option value="A.Y. 2027 - 2028">A.Y. 2027 - 2028</option>
@@ -195,7 +195,7 @@ export default function SetupClient({
           </div>
           <div className="col-12 col-md-6">
             <label className="form-label text-secondary small fw-semibold mb-1">Target Term</label>
-            <select className="form-select form-select-sm bg-dark text-white border-secondary" value={targetTerm} onChange={e => setTargetTerm(e.target.value)}>
+            <select className="form-select form-select-sm border-secondary" value={targetTerm} onChange={e => setTargetTerm(e.target.value)}>
               <option value="1st Sem">1st Sem</option>
               <option value="2nd Sem">2nd Sem</option>
               <option value="Summer">Summer</option>
@@ -205,7 +205,7 @@ export default function SetupClient({
       </div>
 
       {/* Total Display Banner */}
-      <div className="alert alert-secondary py-2 px-3 mb-3 d-flex justify-content-between align-items-center border-secondary bg-dark text-white">
+      <div className="alert alert-secondary py-2 px-3 mb-3 d-flex justify-content-between align-items-center border-secondary">
         <strong className="text-uppercase tracking-wider small">Total Initial Allocation Pool:</strong>
         <span className="fs-5 fw-bold text-accent">{fmt(totalAllocation)}</span>
       </div>
@@ -227,19 +227,19 @@ export default function SetupClient({
                 />
                 <button
                   type="button"
-                  className="btn-close btn-close-white"
+                  className="btn-close"
                   style={{ fontSize: '0.5rem' }}
                   onClick={() => handleRemoveFund(idx)}
                   title="Remove Fund"
                 ></button>
               </div>
               <div className="input-group input-group-sm">
-                <span className="input-group-text bg-dark border-secondary text-secondary px-2">₱</span>
+                <span className="input-group-text border-secondary text-secondary px-2">₱</span>
                 <input 
                   type="number" 
                   step="0.01" 
                   min="0"
-                  className="form-control form-control-sm bg-card text-white border-secondary fw-semibold" 
+                  className="form-control form-control-sm bg-card border-secondary fw-semibold" 
                   value={fund.amount === 0 ? "" : fund.amount}
                   onChange={e => handleFundChange(idx, 'amount', e.target.value)}
                   placeholder="0.00"
@@ -271,7 +271,7 @@ export default function SetupClient({
         </div>
 
         <div className="table-responsive">
-          <table className="table table-hover align-middle table-sm border-secondary text-white mb-0" style={{ fontSize: '0.82rem' }}>
+          <table className="table table-hover align-middle table-sm border-secondary mb-0" style={{ fontSize: '0.82rem' }}>
             <thead>
               <tr className="text-secondary border-bottom border-secondary">
                 <th style={{ width: '20%' }} className="py-2">Reference</th>
@@ -324,12 +324,12 @@ export default function SetupClient({
       {showPresetModal && (
         <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.7)' }}>
           <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content card border-security bg-dark text-white shadow-lg">
+            <div className="modal-content card border-security shadow-lg">
               <div className="modal-header border-secondary">
                 <h5 className="modal-title text-accent">
                   <i className="bi bi-box-arrow-in-right me-2"></i>Apply 2nd Semester Preparation Preset
                 </h5>
-                <button type="button" className="btn-close btn-close-white" onClick={() => setShowPresetModal(false)}></button>
+                <button type="button" className="btn-close" onClick={() => setShowPresetModal(false)}></button>
               </div>
               <div className="modal-body">
                 <p className="text-secondary small mb-3">
@@ -337,15 +337,15 @@ export default function SetupClient({
                 </p>
                 
                 <div className="alert alert-dark border-secondary small mb-3 text-secondary">
-                  <div className="mb-2 text-white">
+                  <div className="mb-2">
                     <strong>Target Period:</strong> {targetTerm} ({targetAy})
                   </div>
                   {presetData.map((item, i) => (
                     <div key={i}>
-                      • {item.name}: <strong className="text-white">{fmt(item.amount)}</strong>
+                      • {item.name}: <strong className="">{fmt(item.amount)}</strong>
                     </div>
                   ))}
-                  <div className="mt-2 pt-2 border-top border-secondary text-white">
+                  <div className="mt-2 pt-2 border-top border-secondary">
                     <strong>Total Pool: {fmt(presetData.reduce((sum, item) => sum + item.amount, 0))}</strong>
                   </div>
                 </div>

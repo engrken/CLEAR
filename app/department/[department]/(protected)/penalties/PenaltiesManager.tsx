@@ -527,7 +527,7 @@ export default function PenaltiesManager({
           >
             <i className="bi bi-journal-text me-2"></i>
             Penalty Logs
-            <span className="badge bg-info text-dark ms-2">
+            <span className="badge bg-info ms-2">
               {penalties.length}
             </span>
           </button>
@@ -552,7 +552,7 @@ export default function PenaltiesManager({
             className="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"
             style={{ maxWidth: "96%" }}
           >
-            <div className="modal-content card border-secondary bg-dark text-white shadow-lg">
+            <div className="modal-content card border-secondary shadow-lg">
 
               {/* MODAL HEADER */}
               <div className="modal-header border-secondary">
@@ -569,7 +569,7 @@ export default function PenaltiesManager({
 
                 <button
                   type="button"
-                  className="btn-close btn-close-white"
+                  className="btn-close"
                   aria-label="Close"
                   onClick={closeLogs}
                 ></button>
@@ -631,7 +631,7 @@ export default function PenaltiesManager({
                 {/* LOG TABLE */}
                 <div className="table-responsive">
                   <table
-                    className="table table-sm table-hover align-middle text-white w-100"
+                    className="table table-sm table-hover align-middle w-100"
                     style={{ fontSize: "0.85rem" }}
                   >
                     <thead>
@@ -870,8 +870,8 @@ export default function PenaltiesManager({
                         type="button"
                         className={`btn btn-sm px-2 py-1 ${
                           currentPage === num
-                            ? "btn-info fw-bold text-dark"
-                            : "btn-outline-secondary text-white"
+                            ? "btn-info fw-bold"
+                            : "btn-outline-secondary"
                         }`}
                         onClick={() =>
                           setCurrentPage(num)
@@ -933,7 +933,7 @@ export default function PenaltiesManager({
           }}
         >
           <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content card border-secondary bg-dark text-white">
+            <div className="modal-content card border-secondary">
 
               <div className="modal-header border-secondary">
                 <h5 className="modal-title text-accent">
@@ -943,7 +943,7 @@ export default function PenaltiesManager({
 
                 <button
                   type="button"
-                  className="btn-close btn-close-white"
+                  className="btn-close"
                   onClick={() =>
                     setSelectedPenalty(null)
                   }

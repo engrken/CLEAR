@@ -241,7 +241,7 @@ export default function CollectionsForm({
         </div>
 
         {/* The Receipt */}
-        <div id="printable-receipt" className="card border-secondary shadow bg-white text-dark w-100" style={{ maxWidth: '450px' }}>
+        <div id="printable-receipt" className="card border-secondary shadow w-100" style={{ maxWidth: '450px' }}>
           <div className="card-body p-4 p-md-5">
             <div className="text-center mb-4 border-bottom border-secondary pb-3">
               <h5 className="fw-bold text-uppercase mb-1">{decodeURIComponent(department)}</h5>
@@ -258,7 +258,7 @@ export default function CollectionsForm({
               <span className="fw-medium">{new Date(receiptData.date).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
             </div>
 
-            <div className="bg-light p-3 rounded mb-4 border border-secondary border-opacity-25">
+            <div className="p-3 rounded mb-4 border border-secondary border-opacity-25">
               <div className="small text-muted mb-1">Received from:</div>
               <div className="fw-bold fs-6">{receiptData.studentName}</div>
               <div className="small text-muted font-monospace">{receiptData.studentId}</div>
@@ -341,15 +341,15 @@ export default function CollectionsForm({
       <div className="row g-2 mb-2">
         <div className="col-md-4">
           <label className="form-label text-secondary small fw-semibold">Student ID</label>
-          <input type="text" className="form-control text-secondary bg-dark" value={studentId} readOnly />
+          <input type="text" className="form-control text-secondary" value={studentId} readOnly />
         </div>
         <div className="col-md-4">
           <label className="form-label text-secondary small fw-semibold">Full Name</label>
-          <input type="text" className="form-control bg-dark text-white" value={studentName} onChange={(e) => setStudentName(e.target.value)} required />
+          <input type="text" className="form-control" value={studentName} onChange={(e) => setStudentName(e.target.value)} required />
         </div>
         <div className="col-md-4">
           <label className="form-label text-secondary small fw-semibold">Notification Email</label>
-          <input type="email" className="form-control bg-dark text-white" value={studentEmail} onChange={(e) => setStudentEmail(e.target.value)} placeholder="student@example.com" />
+          <input type="email" className="form-control" value={studentEmail} onChange={(e) => setStudentEmail(e.target.value)} placeholder="student@example.com" />
         </div>
       </div>
 
@@ -414,7 +414,7 @@ export default function CollectionsForm({
         </div>
         <div className="col-md-4">
           <label className="form-label text-secondary small fw-semibold">Standard Rate (₱)</label>
-          <input type="number" step="0.01" className="form-control text-white bg-dark" readOnly value={standardRate.toFixed(2)} />
+          <input type="number" step="0.01" className="form-control" readOnly value={standardRate.toFixed(2)} />
         </div>
         <div className="col-md-4">
           <label className="form-label text-info fw-bold small">Amount Paid Now (₱)</label>
@@ -430,7 +430,7 @@ export default function CollectionsForm({
 
       <div className="mb-3">
         <label className="form-label text-secondary small fw-semibold">Target Fund Allocation</label>
-        <select className="form-select text-white bg-dark" value={fundAllocation} onChange={(e) => setFundAllocation(e.target.value)} required>
+        <select className="form-select" value={fundAllocation} onChange={(e) => setFundAllocation(e.target.value)} required>
           {fundAllocation === "Multiple Funds (Package Split)" && (
             <option value="Multiple Funds (Package Split)">Multiple Funds (Package Split)</option>
           )}

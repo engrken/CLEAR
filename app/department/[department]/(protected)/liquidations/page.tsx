@@ -110,9 +110,13 @@ export default async function LiquidationsPage({
   // 5. FIND DEPARTMENT
   // =========================================================
   const organization = await prisma.organization.findUnique({
-    where: {
-      subdomain: cleanDepartment,
-    },
+    where: { subdomain: cleanDepartment },
+    select: { 
+      id: true, 
+      name: true, 
+      logo: true,
+      signatories: { orderBy: { order: 'asc' } } // <-- ADD THIS LINE
+    }
   });
 
   if (!organization) {
@@ -124,6 +128,22 @@ export default async function LiquidationsPage({
         </p>
       </div>
     );
+return (
+    <div className="module card p-0 border-secondary shadow-sm overflow-hidden bg-card">
+      <LiquidationsClient
+        department={cleanDepartment}
+        orgName={organization.name}
+        logoUrl={organization.logo}
+        signatories={organization.signatories || []} // <-- ADD THIS LINE
+        ay={ay}
+        term={term}
+        pendingAdvances={pendingAdvances}
+        funds={funds}
+        prefillCaId={prefillCaId}
+        pastAudits={pastAudits}
+      />
+    </div>
+  );
   }
 
   // =========================================================

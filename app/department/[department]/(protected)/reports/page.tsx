@@ -15,16 +15,23 @@ export default async function InstitutionalReportsPage({
   searchParams?: Promise<{ ay?: string; term?: string }>;
 }) {
   const { department } = await params;
+  const cleanDepartment = decodeURIComponent(department).trim().toLowerCase();
   const resolvedSearch = searchParams ? await searchParams : {};
   const ay = resolvedSearch.ay || 'A.Y. 2026 - 2027';
   const term = resolvedSearch.term || '1st Sem';
 
-  const organization = await prisma.organization.findUnique({
-    where: { subdomain: department },
+const organization = await prisma.organization.findUnique({
+    where: { subdomain: cleanDepartment },
+    select: { 
+      id: true, 
+      name: true, 
+      logo: true,
+      signatories: { orderBy: { order: 'asc' } } 
+    }
   });
 
   if (!organization) {
-    return <div className="alert alert-danger p-4">Entity Not Found</div>;
+    return <div className="alert alert-danger p-4">Department Not Found</div>;
   }
 
   // 1. Fetch Dynamic Package from Central Engine
@@ -67,6 +74,9 @@ export default async function InstitutionalReportsPage({
         orgName={organization.name} // PASSED FULL DYNAMIC ORGANIZATION NAME
         ay={ay}
         term={term}
+		orgId={organization.id}
+        logoUrl={organization.logo}
+        initialSignatories={organization.signatories || []}
         students={serialize(students)}
         collections={serialize(collections)}
         liquidations={serialize(liquidations)}

@@ -47,14 +47,14 @@ export default function EditLogoForm({
 
   return (
     // 2. ADDED encType="multipart/form-data"
-    <form onSubmit={handleSubmit} encType="multipart/form-data" className="p-3 border border-secondary rounded bg-dark text-white shadow-sm">
+    <form onSubmit={handleSubmit} encType="multipart/form-data" className="p-3 border border-secondary rounded text-white shadow-sm">
       <h6 className="mb-3 text-info fw-bold">
         <i className="bi bi-cloud-upload me-2"></i>Upload New Logo
       </h6>
       
       {currentLogo && (
         <div className="mb-3 d-flex align-items-center gap-3 border-bottom border-secondary pb-3">
-          <div className="bg-white rounded p-1" style={{ width: '50px', height: '50px' }}>
+          <div className="rounded p-1" style={{ width: '50px', height: '50px' }}>
             <img 
               src={currentLogo} 
               alt="Current Logo" 
@@ -77,7 +77,7 @@ export default function EditLogoForm({
           type="file" 
           name="logo" 
           accept="image/png, image/jpeg, image/webp"
-          className="form-control bg-card text-white border-secondary shadow-none form-control-sm" 
+          className="form-control bg-card border-secondary shadow-none form-control-sm" 
           required
         />
         <div className="form-text text-secondary small mt-1">
