@@ -176,9 +176,7 @@ export default function LoginModal({
       );
       window.location.href =
         `/department/${encodeURIComponent(cleanDepartment)}`;
-		router.push(targetUrl);
-        router.refresh();
-    } catch (error) {
+		} catch (error) {
       console.error(
         "OTP verification error:",
         error
