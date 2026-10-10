@@ -244,7 +244,7 @@ export default function AdminOtpModal() {
 
               <i className="bi bi-shield-lock-fill me-2"></i>
 
-              Super Admin Authentication
+              System Admin Authentication
 
             </h5>
 
@@ -267,9 +267,9 @@ export default function AdminOtpModal() {
 
               <p className="text-secondary small mb-3">
 
-                Verify your identity as the system architect.
+                Verify your identity as the system administrator.
                 A 6-digit OTP will be dispatched to your
-                authorized Gmail address.
+                authorized email address.
 
               </p>
 
@@ -277,7 +277,7 @@ export default function AdminOtpModal() {
 
                 <label className="form-label text-secondary small fw-semibold">
 
-                  Super Admin Email
+                  System Admin Email
 
                 </label>
 
