@@ -43,7 +43,8 @@ export default async function SetupPage({
       <SetupClient 
         department={department} 
         organizationId={organization.id} 
-        initialFundNames={initialFunds} 
+        initialFundNames={initialFunds}
+		currentLogo={organization.logo}
       />
     </div>
   );

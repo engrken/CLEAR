@@ -4,6 +4,7 @@ import { useState } from "react";
 import { fmt } from "@/lib/utils";
 import Link from "next/link";
 import { saveInitialFunds } from "./actions";
+import EditLogoForm from "./EditLogoForm";
 
 interface RolloverRecord {
   id: string;
@@ -24,11 +25,13 @@ interface FundItem {
 export default function SetupClient({ 
   department, 
   organizationId,
-  initialFundNames 
+  initialFundNames,
+  currentLogo
 }: { 
   department: string, 
   organizationId: string,
-  initialFundNames: string[] 
+  initialFundNames: string[],
+  currentLogo?: string | null
 }) {
   const [targetAy, setTargetAy] = useState("A.Y. 2026 - 2027");
   const [targetTerm, setTargetTerm] = useState("2nd Sem");
@@ -123,23 +126,23 @@ export default function SetupClient({
     if (totalAllocation <= 0 && !confirm("Total allocation is ₱0.00. Do you still want to save?")) return;
 
     setIsSubmitting(true);
-try {
-  await saveInitialFunds(department, targetAy, targetTerm, fundList); // <-- Replace the Promise
-  alert(`Initial fund allocations for ${targetTerm} (${targetAy}) saved successfully!`);
-} catch (error: any) {
-  alert("Error saving funds: " + error.message);
-} finally {
-  setIsSubmitting(false);
-}
+    try {
+      await saveInitialFunds(department, targetAy, targetTerm, fundList); 
+      alert(`Initial fund allocations for ${targetTerm} (${targetAy}) saved successfully!`);
+    } catch (error: any) {
+      alert("Error saving funds: " + error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <div className="mx-auto" style={{ maxWidth: '1150px', minWidth: 0 }}>
       {/* Header Toolbar */}
-      <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+      <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
         <div>
-          <h5 className="text-accent m-0 fw-bold"><i className="bi bi-gear me-2"></i>Fund Allocation Initial Setup</h5>
-          <small className="text-secondary">Initialize opening balances and carry over funds for upcoming academic terms.</small>
+          <h5 className="text-accent m-0 fw-bold"><i className="bi bi-gear me-2"></i>Organization Setup</h5>
+          <small className="text-secondary">Configure branding, initial balances, and carry-over funds.</small>
         </div>
         <div className="d-flex gap-2 flex-wrap">
           <Link href={`/department/${department}/setup/collections`} className="btn btn-outline-primary btn-sm fw-bold">
@@ -151,6 +154,28 @@ try {
           <button className="btn btn-outline-secondary btn-sm" onClick={handleResetZero}>
             <i className="bi bi-arrow-counterclockwise me-1"></i>Reset Zero
           </button>
+        </div>
+      </div>
+
+      {/* =========================================
+          NEW SECTION: ORGANIZATION BRANDING
+      ========================================= */}
+      <div className="card p-3 mb-4 border-secondary bg-card">
+        <div className="text-secondary small fw-bold text-uppercase mb-3">
+          <i className="bi bi-image me-2 text-info"></i>Organization Branding
+        </div>
+        <div className="row">
+          <div className="col-12 col-md-6 col-lg-5">
+            <EditLogoForm 
+              organizationId={organizationId} 
+              currentLogo={currentLogo} 
+            />
+          </div>
+          <div className="col-12 col-md-6 col-lg-7 d-none d-md-flex align-items-center">
+            <p className="text-secondary small mb-0 px-3">
+              This logo will be displayed on the main dashboard, printed reports, and student clearance certificates. Upload a clear, high-resolution PNG or JPEG with a transparent background for the best results.
+            </p>
+          </div>
         </div>
       </div>
 
