@@ -102,6 +102,19 @@ export default function ProvisionModal() {
                       <div className="form-text text-secondary small mt-1">No spaces. This acts as the secure URL link.</div>
                     </div>
                   </div>
+				  
+				  <div className="mb-3">
+  <label className="form-label text-secondary small mb-1">Organization Logo (Optional)</label>
+  <input 
+    type="file" 
+    name="logo" 
+    accept="image/png, image/jpeg, image/webp"
+    className="form-control bg-dark text-white border-secondary shadow-none" 
+  />
+  <div className="form-text text-secondary small mt-1">
+    File will be saved to the public directory. Recommended format: PNG.
+  </div>
+</div>
 
                   {/* RIGHT COLUMN: Administrator Details */}
                   <div className="col-12 col-md-6">

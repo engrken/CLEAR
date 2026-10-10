@@ -258,18 +258,6 @@ export default async function RootPage() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="py-4 border-top border-secondary bg-card position-relative" style={{ zIndex: 10 }}>
-        <div className="container d-flex flex-column flex-md-row justify-content-between align-items-center gap-2">
-          <small className="text-secondary">
-            &copy; {new Date().getFullYear()} CLEAR System. Centralized Liquidation of Expenses & Audit Records.
-          </small>
-          <small className="text-secondary font-monospace">
-            v2.0 • Secured by Role-Based Access Control
-          </small>
-        </div>
-      </footer>
-
     </div>
   );
 }

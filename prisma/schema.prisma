@@ -17,6 +17,7 @@ model Organization {
   activeAy          String   @default("A.Y. 2026 - 2027")
   activeTerm        String   @default("1st Sem")
   type              String   @default("Department")
+  logo 				String?
   students          Student[]
   enrollments       Enrollment[]
   funds             Fund[]
@@ -32,7 +33,7 @@ model Organization {
   tenantUsers       TenantUser[]
   voidTransactions  VoidTransaction[]
   realignments      FundRealignment[]
-collectionSetups  CollectionSetup[]
+  collectionSetups  CollectionSetup[]
 }
 
 model Student {
