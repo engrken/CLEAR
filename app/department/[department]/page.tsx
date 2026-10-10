@@ -122,9 +122,9 @@ export default async function EntityOverviewPage({
 
             <div className="row g-3 mt-2 position-relative" style={{ zIndex: 1 }}>
               <div className="col-12 col-sm-6">
+                {/* THEME FIX: Replaced bg-dark with bg-body-tertiary - MOVED COMMENT OUTSIDE THE TAG */}
                 <Link
                   href={`${basePath}/clearance${queryString}`}
-                  {/* THEME FIX: Replaced bg-dark with bg-body-tertiary */}
                   className="btn btn-outline-info w-100 h-100 p-3 d-flex flex-column align-items-center justify-content-center rounded-3 bg-body-tertiary"
                   style={{ transition: 'all 0.2s ease', border: '1px solid rgba(56,189,248,0.3)' }}
                 >
