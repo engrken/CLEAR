@@ -5,6 +5,11 @@ import Link from 'next/link';
 import LogoutButton from '../components/LogoutButton';
 import ProvisionModal from '../components/ProvisionModal';
 import { redirect } from 'next/navigation';
+import { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'CLEAR System Master Admin',
+};
 
 export default async function ProvisionPage() {
 

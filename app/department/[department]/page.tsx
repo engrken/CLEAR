@@ -5,7 +5,7 @@ import { getDepartmentFinancials } from "./actions";
 import Link from "next/link";
 import { auth } from "@/auth";
 import OtpModal from "./components/OtpModal";
-import DashboardClient from "./DashboardClient"; // <-- IMPORT THE NEW CLIENT
+import DashboardClient from "./DashboardClient"; 
 import { Metadata } from 'next';
 
 export const dynamic = 'force-dynamic';
@@ -86,15 +86,19 @@ export default async function EntityOverviewPage({
             <div className="position-absolute top-0 start-50 translate-middle-x w-100 h-50" style={{ background: 'radial-gradient(ellipse at top, rgba(56,189,248,0.15), transparent 70%)', zIndex: 0 }}></div>
             
             <div className="mb-4 position-relative" style={{ zIndex: 1 }}>
-              <div className="d-inline-flex align-items-center justify-content-center bg-dark border border-secondary rounded-circle mb-3 shadow" style={{ width: '100px', height: '100px', padding: '15px' }}>
+              {/* THEME FIX: Replaced bg-dark with bg-body-tertiary */}
+              <div className="d-inline-flex align-items-center justify-content-center bg-body-tertiary border border-secondary-subtle rounded-circle mb-3 shadow" style={{ width: '100px', height: '100px', padding: '15px' }}>
+                {/* VERCEL BLOB FIX: Now uses organization.logo if available */}
                 <img 
-                  src={`/${cleanSubdomain}_logo.png`} 
+                  src={organization.logo || `/${cleanSubdomain}_logo.png`} 
                   alt={`${organization.name} Logo`} 
+                  onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = '/engineering_logo.png'; }}
                   style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                 />
               </div>
               
-              <h3 className="fw-bold text-white mb-2" style={{ lineHeight: '1.3' }}>
+              {/* THEME FIX: Removed text-white so it adapts to light/dark mode */}
+              <h3 className="fw-bold mb-2" style={{ lineHeight: '1.3' }}>
                 {organization.name}
               </h3>
               <p className="text-secondary mb-0 mx-auto" style={{ maxWidth: '85%' }}>
@@ -120,7 +124,8 @@ export default async function EntityOverviewPage({
               <div className="col-12 col-sm-6">
                 <Link
                   href={`${basePath}/clearance${queryString}`}
-                  className="btn btn-outline-info w-100 h-100 p-3 d-flex flex-column align-items-center justify-content-center rounded-3 bg-dark"
+                  {/* THEME FIX: Replaced bg-dark with bg-body-tertiary */}
+                  className="btn btn-outline-info w-100 h-100 p-3 d-flex flex-column align-items-center justify-content-center rounded-3 bg-body-tertiary"
                   style={{ transition: 'all 0.2s ease', border: '1px solid rgba(56,189,248,0.3)' }}
                 >
                   <i className="bi bi-person-check fs-2 mb-2"></i>
