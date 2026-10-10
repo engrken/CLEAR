@@ -1,40 +1,37 @@
+// [department]/LoginModal.tsx
 "use client";
-
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { requestOtp } from "./auth-actions";
-
+import { useRouter } from "next/navigation";
 export default function LoginModal({
   show,
   onClose,
   department,
+  orgName,
 }: {
   show: boolean;
   onClose: () => void;
   department: string;
-}) {
+  orgName?: string;
+}){
+  const router = useRouter();
   const [step, setStep] =
     useState<"email" | "code">("email");
-
   const [email, setEmail] =
     useState("");
-
   const [code, setCode] =
     useState("");
-
   const [loading, setLoading] =
     useState(false);
-
   const [message, setMessage] =
     useState("");
-
   const [error, setError] =
     useState("");
 
   // =========================================================
   // RESET
   // =========================================================
-
   const resetLogin = () => {
     setStep("email");
     setEmail("");
@@ -47,10 +44,8 @@ export default function LoginModal({
   // =========================================================
   // CLOSE
   // =========================================================
-
   const handleClose = () => {
     if (loading) return;
-
     resetLogin();
     onClose();
   };
@@ -58,33 +53,26 @@ export default function LoginModal({
   // =========================================================
   // SEND OTP
   // =========================================================
-
   const handleSendOtp = async (
     e: React.FormEvent
   ) => {
     e.preventDefault();
-
     setError("");
     setMessage("");
-
     const cleanEmail =
       email.trim().toLowerCase();
-
     if (!cleanEmail) {
       setError(
         "Please enter your email address."
       );
       return;
     }
-
     setLoading(true);
-
     try {
       const result = await requestOtp(
         department,
         cleanEmail
       );
-
       if (!result?.success) {
         setError(
           result?.message ||
@@ -92,28 +80,22 @@ export default function LoginModal({
         );
         return;
       }
-
       setEmail(cleanEmail);
-
       setMessage(
         result.message ||
           "A verification code has been sent to your email address."
       );
-
       setStep("code");
-
     } catch (error) {
       console.error(
         "OTP request error:",
         error
       );
-
       setError(
         error instanceof Error
           ? error.message
           : "Failed to send verification code."
       );
-
     } finally {
       setLoading(false);
     }
@@ -122,18 +104,14 @@ export default function LoginModal({
   // =========================================================
   // VERIFY OTP
   // =========================================================
-
   const handleVerifyOtp = async (
     e: React.FormEvent
   ) => {
     e.preventDefault();
-
     setError("");
     setMessage("");
-
     const cleanEmail =
       email.trim().toLowerCase();
-
     const cleanDepartment =
       decodeURIComponent(department)
         .trim()
@@ -148,14 +126,11 @@ export default function LoginModal({
       );
       return;
     }
-
     setLoading(true);
-
     try {
       console.log(
         "Starting NextAuth OTP verification..."
       );
-
       const result = await signIn(
         "credentials",
         {
@@ -165,25 +140,21 @@ export default function LoginModal({
           redirect: false,
         }
       );
-
       console.log(
         "NextAuth signIn result:",
         result
       );
-
       if (!result) {
         setError(
           "No response was received from the authentication server."
         );
         return;
       }
-
       if (result.error) {
         console.error(
           "NextAuth authentication error:",
           result.error
         );
-
         if (
           result.error ===
           "CredentialsSignin"
@@ -194,35 +165,29 @@ export default function LoginModal({
         } else {
           setError(result.error);
         }
-
         return;
       }
 
       // =====================================================
       // AUTHENTICATION SUCCESSFUL
       // =====================================================
-
       console.log(
         "Authentication successful."
       );
-
       window.location.href =
-        `/department/${encodeURIComponent(
-          cleanDepartment
-        )}/`;
-
+        `/department/${encodeURIComponent(cleanDepartment)}`;
+		router.push(targetUrl);
+        router.refresh();
     } catch (error) {
       console.error(
         "OTP verification error:",
         error
       );
-
       setError(
         error instanceof Error
           ? error.message
           : "Verification failed. Please try again."
       );
-
     } finally {
       setLoading(false);
     }
@@ -231,7 +196,6 @@ export default function LoginModal({
   // =========================================================
   // DON'T RENDER
   // =========================================================
-
   if (!show) {
     return null;
   }
@@ -239,7 +203,6 @@ export default function LoginModal({
   // =========================================================
   // UI
   // =========================================================
-
   return (
     <div
       className="modal fade show d-block"
@@ -257,13 +220,11 @@ export default function LoginModal({
           {/* =================================================
               HEADER
           ================================================= */}
-
           <div className="modal-header border-secondary">
             <h5 className="modal-title text-accent fw-bold">
               <i className="bi bi-shield-lock-fill me-2"></i>
               Departmental Authorization
             </h5>
-
             <button
               type="button"
               className="btn-close btn-close-white"
@@ -271,20 +232,17 @@ export default function LoginModal({
               disabled={loading}
               aria-label="Close"
             />
-
           </div>
-
           {/* =================================================
               BODY (Encloses all inputs, alerts, and forms)
           ================================================= */}
-
           <div className="modal-body p-4">
-            
             {/* DEPARTMENT BADGE */}
             <div className="text-center mb-4">
-              <span className="badge bg-secondary px-3 py-2 text-uppercase">
+              {/* Use orgName if provided, otherwise fallback to the capitalized department slug */}
+              <span className="badge bg-secondary px-3 py-2 text-uppercase text-wrap lh-base" style={{ maxWidth: '100%' }}>
                 <i className="bi bi-building me-1"></i>
-                {department}
+                {orgName || department}
               </span>
             </div>
 
@@ -342,7 +300,6 @@ export default function LoginModal({
                     disabled={loading}
                   />
                 </div>
-
                 <button
                   type="submit"
                   className="btn btn-info w-100 fw-bold py-2 text-dark"
@@ -380,7 +337,6 @@ export default function LoginModal({
                     {email}
                   </div>
                 </div>
-
                 <div className="mb-3">
                   <label className="form-label text-secondary small fw-semibold">
                     Enter 6-Digit Code
@@ -407,7 +363,6 @@ export default function LoginModal({
                     disabled={loading}
                   />
                 </div>
-
                 <button
                   type="submit"
                   className="btn btn-success w-100 fw-bold py-2 mb-3 text-white"
@@ -429,7 +384,6 @@ export default function LoginModal({
                     </>
                   )}
                 </button>
-
                 <div className="text-center">
                   <button
                     type="button"
@@ -443,9 +397,7 @@ export default function LoginModal({
                 </div>
               </form>
             )}
-
           </div> {/* End of modal-body */}
-
         </div>
       </div>
     </div>

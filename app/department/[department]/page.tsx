@@ -155,7 +155,11 @@ export default async function EntityOverviewPage({
             </div>
           </div>
         </div>
-        <OtpModal department={cleanSubdomain} />
+        <OtpModal
+			department={cleanSubdomain}
+			orgName={organization.name}
+			orgType={organization.type}
+			/>
       </>
     );
   }

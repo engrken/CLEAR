@@ -1,5 +1,5 @@
+// app/department/[department]/DashboardClient.tsx
 "use client";
-
 import { useState } from "react";
 import Link from "next/link";
 import { fmt } from "@/lib/utils";
@@ -28,7 +28,6 @@ export default function DashboardClient({
   const [subtab, setSubtab] = useState<"funds" | "advances">("funds");
 
   // --- CHART 1: Fund Allocation Health (Doughnut) ---
-  // Filters out negative/zero balances so the pie chart doesn't break
   const activeFunds = overview.fundsList.filter((f: any) => f.balance > 0);
   const fundPieData = {
     labels: activeFunds.map((f: any) => f.name),
@@ -36,7 +35,7 @@ export default function DashboardClient({
       data: activeFunds.map((f: any) => f.balance),
       backgroundColor: ['#38bdf8', '#818cf8', '#34d399', '#fbbf24', '#f87171', '#c084fc'],
       borderWidth: 1,
-      borderColor: '#1e293b'
+      borderColor: 'var(--bs-body-bg)' // Adapts to theme
     }]
   };
 
@@ -51,26 +50,29 @@ export default function DashboardClient({
     }]
   };
 
+  // Theme-adaptive chart text color
   const chartOptionsBase = {
     responsive: true,
     maintainAspectRatio: false,
-    color: '#94a3b8',
-    plugins: { legend: { position: 'bottom' as const, labels: { color: '#f8fafc' } } }
+    color: '#6c757d', // Neutral gray looks good in light and dark
+    plugins: { legend: { position: 'bottom' as const, labels: { color: '#6c757d' } } }
   };
 
   return (
     <>
       <style dangerouslySetInnerHTML={{__html: `
+        /* THEME FIX: Swapped hardcoded hex colors for Bootstrap CSS variables */
         .stat-card {
-          background-color: #1e293b; border: 1px solid #334155; border-radius: 1rem;
+          background-color: var(--bs-tertiary-bg); 
+          border: 1px solid var(--bs-border-color); 
+          border-radius: 1rem;
           padding: 1.25rem; transition: all 0.3s ease; height: 100%; display: flex; flex-direction: column;
         }
-        .stat-card:hover { transform: translateY(-5px); border-color: #38bdf8; box-shadow: 0 10px 20px rgba(0,0,0,0.25); }
+        .stat-card:hover { transform: translateY(-5px); border-color: #38bdf8; box-shadow: 0 10px 20px rgba(0,0,0,0.15); }
         .stat-icon { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; margin-bottom: 1rem; }
-        .quick-action-btn { background-color: #0f172a; border: 1px solid #334155; border-radius: 0.75rem; color: #94a3b8; transition: all 0.2s ease; }
-        .quick-action-btn:hover { background-color: #1e293b; border-color: #38bdf8; color: #38bdf8; }
+        .quick-action-btn { background-color: var(--bs-body-bg); border: 1px solid var(--bs-border-color); border-radius: 0.75rem; color: var(--bs-body-color); transition: all 0.2s ease; }
+        .quick-action-btn:hover { background-color: var(--bs-tertiary-bg); border-color: #38bdf8; color: #38bdf8; }
       `}} />
-
       <div className="d-flex flex-column gap-4">
         {/* HEADER */}
         <div>
@@ -78,7 +80,8 @@ export default function DashboardClient({
             <i className={`me-1 ${organization.type === 'Organization' ? 'bi bi-people-fill' : 'bi bi-building'}`}></i>
             {organization.type || 'Department'} Workspace
           </span>
-          <h4 className="fw-bold mb-1 text-white">{organization.name}</h4>
+          {/* THEME FIX: Removed text-white */}
+          <h4 className="fw-bold mb-1 text-body">{organization.name}</h4>
           <p className="text-secondary small mb-0">Financial Analytics & Active Insights for {ay} | {term}</p>
         </div>
 
@@ -104,7 +107,7 @@ export default function DashboardClient({
           </div>
           <div className="col-6 col-md-3">
             <Link href={`${basePath}/reports${queryString}`} className="quick-action-btn w-100 text-decoration-none d-flex align-items-center p-2 gap-2 shadow-sm">
-              <div className="bg-secondary bg-opacity-25 text-white rounded p-1"><i className="bi bi-bar-chart-fill fs-5"></i></div>
+              <div className="bg-secondary bg-opacity-25 text-body rounded p-1"><i className="bi bi-bar-chart-fill fs-5"></i></div>
               <span className="small fw-semibold">Full Reports</span>
             </Link>
           </div>
@@ -116,7 +119,8 @@ export default function DashboardClient({
             <div className="stat-card">
               <div className="stat-icon bg-info bg-opacity-10 text-info"><i className="bi bi-wallet2"></i></div>
               <small className="text-secondary text-uppercase fw-bold mb-1" style={{ fontSize: "0.7rem", letterSpacing: "0.5px" }}>Total Collections</small>
-              <div className="fs-4 fw-bold text-white mt-auto">{fmt(overview.grandCollectionTotal)}</div>
+              {/* THEME FIX: Removed text-white */}
+              <div className="fs-4 fw-bold mt-auto text-body">{fmt(overview.grandCollectionTotal)}</div>
             </div>
           </div>
           <div className="col-6 col-lg-3">
@@ -130,7 +134,8 @@ export default function DashboardClient({
             <div className="stat-card">
               <div className="stat-icon bg-danger bg-opacity-10 text-danger"><i className="bi bi-receipt"></i></div>
               <small className="text-secondary text-uppercase fw-bold mb-1" style={{ fontSize: "0.7rem", letterSpacing: "0.5px" }}>Audited Expenses</small>
-              <div className="fs-4 fw-bold text-white mt-auto">{fmt(overview.grandExpenseTotal)}</div>
+              {/* THEME FIX: Removed text-white */}
+              <div className="fs-4 fw-bold mt-auto text-body">{fmt(overview.grandExpenseTotal)}</div>
             </div>
           </div>
           <div className="col-6 col-lg-3">
@@ -149,7 +154,8 @@ export default function DashboardClient({
         <div className="row g-3">
           <div className="col-12 col-lg-5">
             <div className="card p-3 border-secondary shadow-sm bg-card h-100">
-              <h6 className="fw-bold text-white mb-3">Available Target Funds</h6>
+              {/* THEME FIX: Removed text-white */}
+              <h6 className="fw-bold text-body mb-3">Available Target Funds</h6>
               <div style={{ position: 'relative', height: '260px' }}>
                 {activeFunds.length > 0 ? (
                   <Doughnut data={fundPieData} options={chartOptionsBase} />
@@ -161,14 +167,18 @@ export default function DashboardClient({
           </div>
           <div className="col-12 col-lg-7">
             <div className="card p-3 border-secondary shadow-sm bg-card h-100">
-              <h6 className="fw-bold text-white mb-3">Cash Flow Velocity</h6>
+              {/* THEME FIX: Removed text-white */}
+              <h6 className="fw-bold text-body mb-3">Cash Flow Velocity</h6>
               <div style={{ position: 'relative', height: '260px' }}>
                 <Bar 
                   data={flowBarData} 
                   options={{
                     ...chartOptionsBase, 
                     plugins: { legend: { display: false } },
-                    scales: { y: { grid: { color: '#334155' }, ticks: { color: '#94a3b8' } }, x: { grid: { display: false }, ticks: { color: '#94a3b8' } } }
+                    scales: { 
+                      y: { grid: { color: 'rgba(108, 117, 125, 0.2)' }, ticks: { color: '#6c757d' } }, 
+                      x: { grid: { display: false }, ticks: { color: '#6c757d' } } 
+                    }
                   }} 
                 />
               </div>
@@ -179,7 +189,8 @@ export default function DashboardClient({
         {/* WIDGET PANEL (Tables) */}
         <div className="card p-3 p-md-4 border-secondary shadow-sm bg-card mt-2">
           <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-            <h6 className="fw-bold text-white m-0">
+            {/* THEME FIX: Removed text-white */}
+            <h6 className="fw-bold text-body m-0">
               {subtab === "funds" ? <><i className="bi bi-list-columns me-2 text-info"></i> Detailed Ledger</> : <><i className="bi bi-clock-history me-2 text-warning"></i> Pending Advances</>}
             </h6>
             <div className="btn-group btn-group-sm rounded shadow-sm">
@@ -187,10 +198,11 @@ export default function DashboardClient({
               <button onClick={() => setSubtab("advances")} className={`btn ${subtab === "advances" ? "btn-info text-dark fw-bold" : "btn-outline-secondary"}`}>Pending Advances</button>
             </div>
           </div>
-
+          
           {subtab === "funds" ? (
             <div className="table-responsive">
-              <table className="table table-hover align-middle mb-0 text-white" style={{ fontSize: '0.9rem' }}>
+              {/* THEME FIX: Removed text-white */}
+              <table className="table table-hover align-middle mb-0 text-body" style={{ fontSize: '0.9rem' }}>
                 <thead>
                   <tr className="text-secondary small border-bottom border-secondary">
                     <th className="py-2">Account Pool</th>
@@ -219,7 +231,8 @@ export default function DashboardClient({
             </div>
           ) : (
             <div className="table-responsive">
-              <table className="table table-hover align-middle mb-0 text-white" style={{ fontSize: '0.9rem' }}>
+              {/* THEME FIX: Removed text-white */}
+              <table className="table table-hover align-middle mb-0 text-body" style={{ fontSize: '0.9rem' }}>
                 <thead>
                   <tr className="text-secondary small border-bottom border-secondary">
                     <th className="py-2">Advance ID</th>

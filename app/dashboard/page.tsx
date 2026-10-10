@@ -1,25 +1,19 @@
 // app/dashboard/page.tsx
-
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import AdminOtpModal from './components/AdminOtpModal';
 import { Metadata } from 'next';
-
 export const metadata: Metadata = {
   title: 'Centralized Liquidation of Expenses & Audit Records',
 };
-
 export default async function DashboardPage() {
   // Fetch entities alphabetically for a clean UI
   const departments = await prisma.organization.findMany({
     orderBy: { name: 'asc' }
   });
-
   const getDeptUrl = (subdomain: string) => `/department/${encodeURIComponent(subdomain)}`;
-
   return (
-    <div className="w-100 min-vh-100 bg-canvas d-flex flex-column">
-      
+    <div className="w-100 min-vh-100 bg-canvas d-flex flex-column">    
       {/* INLINE CSS FOR PREMIUM SAAS AESTHETICS */}
       <style dangerouslySetInnerHTML={{__html: `
         .hero-section {
@@ -64,20 +58,16 @@ export default async function DashboardPage() {
       {/* HERO SECTION */}
       <div className="hero-section text-center position-relative w-100">
         <div className="container" style={{ maxWidth: '900px' }}>
-          
           <div className="d-inline-block mb-3 px-3 py-1 rounded-pill bg-info bg-opacity-10 border border-info border-opacity-25 text-info fw-bold small shadow-sm">
             <i className="bi bi-shield-check me-2"></i>Secure Institutional Platform
           </div>
-
           <h1 className="display-4 fw-bold mb-3 text-white">
             Welcome to the <span className="glow-text">CLEAR System</span>
           </h1>
-          
           <p className="lead text-secondary mb-5">
             <b>C</b>entralized <b>L</b>iquidation of <b>E</b>xpenses & <b>A</b>udit <b>R</b>ecords. <br className="d-none d-md-block" />
             Select an active entity below to access the financial portal, or log in to manage system provisions.
           </p>
-
           <button
             type="button"
             className="btn btn-info fw-bold px-4 py-2 shadow"
@@ -87,14 +77,11 @@ export default async function DashboardPage() {
             <i className="bi bi-gear-fill me-2"></i>
             System Admin Access
           </button>
-
         </div>
       </div>
-
       {/* MAIN ENTITY GRID SECTION */}
       <div className="flex-grow-1 py-5">
         <div className="container" style={{ maxWidth: '1200px' }}>
-          
           <div className="d-flex justify-content-between align-items-center mb-4 px-2">
             <h5 className="fw-bold text-white mb-0">
               <i className="bi bi-grid-fill me-2 text-secondary"></i>
@@ -104,7 +91,6 @@ export default async function DashboardPage() {
               {departments.length} Provisioned
             </span>
           </div>
-
           {departments.length === 0 ? (
             /* EMPTY STATE */
             <div className="card entity-card shadow-lg p-5 text-center border-secondary mt-3">
@@ -123,10 +109,8 @@ export default async function DashboardPage() {
             <div className="row g-4">
               {departments.map((dept) => (
                 <div key={dept.id} className="col-12 col-sm-6 col-lg-4">
-                  <Link href={getDeptUrl(dept.subdomain)} className="text-decoration-none">
-                    
+                  <Link href={getDeptUrl(dept.subdomain)} className="text-decoration-none">    
                     <div className="card entity-card h-100 text-center p-4 position-relative">
-                      
                       {/* DYNAMIC ENTITY BADGE */}
                       <div className="position-absolute top-0 start-50 translate-middle-x">
                         <span 
@@ -138,7 +122,6 @@ export default async function DashboardPage() {
                           {dept.type || 'Department'}
                         </span>
                       </div>
-
                       {/* LOGO WRAPPER */}
 <div className="logo-wrapper mt-3">
   {dept.logo ? (
@@ -157,19 +140,16 @@ export default async function DashboardPage() {
     <i className={`fs-1 text-secondary ${dept.type === 'Organization' ? 'bi bi-people-fill' : 'bi bi-building'}`}></i>
   )}
 </div>
-
                       {/* ENTITY NAME & LINK */}
                       <h5 className="fw-bold text-white mb-2 px-2" style={{ lineHeight: '1.3' }}>
                         {dept.name}
-                      </h5>
-                      
+                      </h5>                
                       <div className="mt-auto pt-3">
                         <span className="text-secondary small font-monospace d-flex align-items-center justify-content-center gap-1">
                           /department/{dept.subdomain}
                           <i className="bi bi-box-arrow-in-right opacity-50 ms-1"></i>
                         </span>
                       </div>
-
                     </div>
                   </Link>
                 </div>

@@ -1,5 +1,5 @@
+// app/dashboard/components/AdminOtpModal.tsx
 'use client';
-
 import { useState, useEffect } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
@@ -11,48 +11,39 @@ export default function AdminOtpModal() {
   const [loading, setLoading] = useState(false);
   const [devNotice, setDevNotice] = useState('');
   const [resendTimer, setResendTimer] = useState(0);
-
   const router = useRouter();
 
   // --------------------------------------------------
   // RESEND COUNTDOWN
   // --------------------------------------------------
-
   useEffect(() => {
     if (resendTimer <= 0) return;
-
     const interval = setInterval(() => {
       setResendTimer((prev) =>
         prev > 0 ? prev - 1 : 0
       );
     }, 1000);
-
     return () => clearInterval(interval);
   }, [resendTimer]);
 
   // --------------------------------------------------
   // SEND OTP
   // --------------------------------------------------
-
   const handleSendOtp = async (
     e?: React.FormEvent
   ) => {
     if (e) e.preventDefault();
-
     const cleanEmail =
       email.trim().toLowerCase();
-
     // Super Admin restriction
     if (cleanEmail !== 'kent.bsece@gmail.com') {
       alert(
-        'Access Denied: Unrecognized super administrator email.'
+        'Access Denied: Unrecognized system administrator email.'
       );
       return;
     }
-
     setLoading(true);
     setDevNotice('');
-
     try {
       const res = await fetch(
         '/api/auth/send-otp',
@@ -66,9 +57,7 @@ export default function AdminOtpModal() {
           }),
         }
       );
-
       const data = await res.json();
-
       if (!res.ok || !data.success) {
         alert(
           data.message ||
@@ -76,29 +65,22 @@ export default function AdminOtpModal() {
         );
         return;
       }
-
       setEmail(cleanEmail);
       setDevNotice(
         data.message ||
         'Verification code sent successfully.'
       );
-
       setStep('code');
-
       // 60-second resend cooldown
       setResendTimer(60);
-
     } catch (error) {
-
       console.error(
         'OTP request error:',
         error
       );
-
       alert(
         'Failed to connect to authentication server.'
       );
-
     } finally {
       setLoading(false);
     }
@@ -107,78 +89,59 @@ export default function AdminOtpModal() {
   // --------------------------------------------------
   // VERIFY OTP
   // --------------------------------------------------
-
   const handleVerifyOtp = async (
     e: React.FormEvent
   ) => {
     e.preventDefault();
-
     if (code.length !== 6) {
       alert(
         'Please enter the complete 6-digit verification code.'
       );
       return;
     }
-
     setLoading(true);
-
     try {
-
       const result = await signIn(
         'credentials',
         {
           email:
             email.trim().toLowerCase(),
-
           code: code.trim(),
-
           redirect: false,
         }
       );
-
       if (result?.error) {
-
         alert(result.error);
-
         setCode('');
-
         return;
       }
 
       // ------------------------------------------------
       // CLOSE BOOTSTRAP MODAL
       // ------------------------------------------------
-
       const modalEl =
         document.getElementById(
           'otpAuthModal'
         );
-
       if (
         modalEl &&
         typeof window !== 'undefined' &&
         (window as any).bootstrap
       ) {
-
         const modal =
           (window as any).bootstrap.Modal
             .getInstance(modalEl);
-
         modal?.hide();
       }
 
       // ------------------------------------------------
       // CLEAN BOOTSTRAP BACKDROP
       // ------------------------------------------------
-
       document.body.classList.remove(
         'modal-open'
       );
-
       document.body.style.overflow = '';
-
       document.body.style.paddingRight = '';
-
       document
         .querySelectorAll(
           '.modal-backdrop'
@@ -188,7 +151,6 @@ export default function AdminOtpModal() {
       // ------------------------------------------------
       // RESET COMPONENT
       // ------------------------------------------------
-
       setCode('');
       setDevNotice('');
       setResendTimer(0);
@@ -196,24 +158,18 @@ export default function AdminOtpModal() {
       // ------------------------------------------------
       // GO TO MASTER ADMIN
       // ------------------------------------------------
-
       router.push(
         '/dashboard/provisions'
       );
-
       router.refresh();
-
     } catch (error) {
-
       console.error(
         'OTP verification error:',
         error
       );
-
       alert(
         'Verification failed.'
       );
-
     } finally {
       setLoading(false);
     }
@@ -222,7 +178,6 @@ export default function AdminOtpModal() {
   // --------------------------------------------------
   // RENDER
   // --------------------------------------------------
-
   return (
     <div
       className="modal fade"
@@ -231,56 +186,36 @@ export default function AdminOtpModal() {
       aria-hidden="true"
       data-bs-backdrop="static"
     >
-
       <div className="modal-dialog modal-dialog-centered">
-
         <div className="modal-content bg-card border-secondary text-color p-4 shadow-lg">
-
           {/* HEADER */}
-
           <div className="d-flex justify-content-between align-items-center mb-3">
-
             <h5 className="modal-title text-accent fw-bold">
-
               <i className="bi bi-shield-lock-fill me-2"></i>
-
               System Admin Authentication
-
             </h5>
-
             <button
               type="button"
               className="btn-close btn-close-white"
               data-bs-dismiss="modal"
               aria-label="Close"
             />
-
           </div>
 
           {/* ==================================================
               EMAIL STEP
           ================================================== */}
-
           {step === 'email' ? (
-
             <form onSubmit={handleSendOtp}>
-
               <p className="text-secondary small mb-3">
-
                 Verify your identity as the system administrator.
                 A 6-digit OTP will be dispatched to your
                 authorized email address.
-
               </p>
-
               <div className="mb-3">
-
                 <label className="form-label text-secondary small fw-semibold">
-
                   System Admin Email
-
                 </label>
-
                 <input
                   type="email"
                   value={email}
@@ -292,15 +227,12 @@ export default function AdminOtpModal() {
                   autoComplete="email"
                   required
                 />
-
               </div>
-
               <button
                 type="submit"
                 className="btn btn-info w-100 fw-bold py-2 text-dark"
                 disabled={loading}
               >
-
                 {loading ? (
                   <>
                     <span
@@ -315,53 +247,30 @@ export default function AdminOtpModal() {
                     Dispatch Verification Code
                   </>
                 )}
-
               </button>
-
             </form>
-
           ) : (
-
             /* ==================================================
                OTP STEP
             ================================================== */
-
             <form onSubmit={handleVerifyOtp}>
-
               <div className="mb-3 text-center">
-
                 <p className="text-secondary small mb-1">
-
                   Code dispatched securely to:
-
                 </p>
-
                 <span className="text-info fw-bold fs-6">
-
                   {email}
-
                 </span>
-
               </div>
-
               {devNotice && (
-
                 <div className="alert alert-secondary bg-dark border-secondary text-light small py-2 px-3 mb-3 text-center">
-
                   <i className="bi bi-envelope-check me-2"></i>
-
                   {devNotice}
-
                 </div>
-
               )}
-
               <div className="mb-3">
-
                 <label className="form-label text-secondary small fw-semibold">
-
                   Enter 6-Digit Code
-
                 </label>
 
                 <input
@@ -382,9 +291,7 @@ export default function AdminOtpModal() {
                   autoComplete="one-time-code"
                   required
                 />
-
               </div>
-
               <button
                 type="submit"
                 className="btn btn-success w-100 fw-bold py-2 mb-4 text-white"
@@ -393,7 +300,6 @@ export default function AdminOtpModal() {
                   code.length !== 6
                 }
               >
-
                 {loading ? (
                   <>
                     <span
@@ -408,31 +314,22 @@ export default function AdminOtpModal() {
                     Verify & Unlock System
                   </>
                 )}
-
               </button>
-
               {/* ACTIONS */}
-
               <div className="d-flex justify-content-between align-items-center px-2">
-
-                <button
+                 <button
                   type="button"
                   className="btn btn-link text-secondary text-decoration-none small p-0"
                   onClick={() => {
-
                     setStep('email');
                     setCode('');
                     setDevNotice('');
                     setResendTimer(0);
-
                   }}
                 >
-
                   <i className="bi bi-arrow-left me-1"></i>
                   Change Email
-
                 </button>
-
                 <button
                   type="button"
                   className={`btn btn-link text-decoration-none small p-0 ${
@@ -448,23 +345,15 @@ export default function AdminOtpModal() {
                     loading
                   }
                 >
-
                   {resendTimer > 0
                     ? `Resend Code in ${resendTimer}s`
                     : 'Resend Code'}
-
                 </button>
-
               </div>
-
             </form>
-
           )}
-
         </div>
-
       </div>
-
     </div>
   );
 }

@@ -48,11 +48,11 @@ export async function POST(request: Request) {
     await transporter.sendMail({
       from: process.env.MAIL_FROM, 
       to: email,
-      subject: 'CLEAR System: Super Admin Verification Code',
+      subject: 'CLEAR System: System Admin Verification Code',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
           <h2 style="color: #0dcaf0; margin-bottom: 20px;">CLEAR System Authorization</h2>
-          <p style="color: #555; font-size: 15px;">You are attempting to access the Super Admin Setup Module.</p>
+          <p style="color: #555; font-size: 15px;">You are attempting to access the System Admin Setup Module.</p>
           <p style="color: #555; font-size: 15px;">Your one-time verification code is:</p>
           
           <div style="background-color: #f8f9fa; padding: 15px; text-align: center; border-radius: 6px; margin: 25px 0;">

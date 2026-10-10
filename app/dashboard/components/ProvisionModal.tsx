@@ -1,20 +1,16 @@
 // app/dashboard/components/ProvisionModal.tsx
 "use client";
-
 import { useRef, useState } from "react";
 import { createDepartment } from "@/app/dashboard/actions";
-
 export default function ProvisionModal() {
   const formRef = useRef<HTMLFormElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null); // Added ref for auto-closing
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
-
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
     setMessage(null);
-
     const formData = new FormData(e.currentTarget);
     
     // 1. VERCEL PAYLOAD LIMIT GUARD (Max 2MB)
@@ -24,19 +20,15 @@ export default function ProvisionModal() {
       setLoading(false);
       return;
     }
-    
-    try {
+     try {
       const res = await createDepartment(formData);
       if (res.success) {
         formRef.current?.reset();
         setMessage({ text: res.message, type: "success" });
-        
-        // 3. AUTO-CLOSE UX: Programmatically click the hidden close button after a short delay
         setTimeout(() => {
           closeBtnRef.current?.click();
           setMessage(null); // Reset message for next time
         }, 1200);
-        
       } else {
         setMessage({ text: res.message, type: "error" });
       }
@@ -51,7 +43,6 @@ export default function ProvisionModal() {
     <div className="modal fade" id="provisionModal" tabIndex={-1} aria-labelledby="provisionModalLabel" aria-hidden="true">
       <div className="modal-dialog modal-dialog-centered modal-lg">
         <div className="modal-content bg-dark border-secondary text-white shadow-lg">
-          
           <div className="modal-header border-secondary">
             <h5 className="modal-title text-info fw-bold" id="provisionModalLabel">
               <i className="bi bi-hdd-network me-2"></i> Register Department / Organization
@@ -59,7 +50,6 @@ export default function ProvisionModal() {
             {/* Attached closeBtnRef here */}
             <button ref={closeBtnRef} type="button" className="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
-
           <div className="modal-body p-4">
             {message && (
               <div className={`alert ${message.type === 'success' ? 'alert-success' : 'alert-danger'} py-2 small fw-bold`}>
@@ -122,11 +112,9 @@ export default function ProvisionModal() {
                     </div>
                   </div>
                 </div>
-
                 {/* RIGHT COLUMN: Administrator Details */}
                 <div className="col-12 col-md-6">
-                  <h6 className="text-warning border-bottom border-secondary pb-2 mb-3">2. Initial Administrator</h6>
-                  
+                  <h6 className="text-warning border-bottom border-secondary pb-2 mb-3">2. Initial Administrator</h6>              
                   <div className="mb-3">
                     <label className="form-label text-secondary small mb-1">Admin Full Name</label>
                     <input 
@@ -137,7 +125,6 @@ export default function ProvisionModal() {
                       required 
                     />
                   </div>
-
                   <div className="mb-3">
                     <label className="form-label text-secondary small mb-1">Admin Email Address</label>
                     <input 
@@ -148,7 +135,6 @@ export default function ProvisionModal() {
                       required 
                     />
                   </div>
-
                   <div className="mb-3">
                     <label className="form-label text-secondary small mb-1">Admin Username</label>
                     <input 
@@ -160,9 +146,7 @@ export default function ProvisionModal() {
                     />
                   </div>
                 </div>
-
               </div>
-
               <div className="mt-4 pt-3 border-top border-secondary text-end">
                 <button type="button" className="btn btn-outline-secondary me-2" data-bs-dismiss="modal">Cancel</button>
                 <button type="submit" className="btn btn-primary fw-bold px-4" disabled={loading}>
@@ -173,7 +157,6 @@ export default function ProvisionModal() {
                   )}
                 </button>
               </div>
-
             </form>
           </div>
         </div>

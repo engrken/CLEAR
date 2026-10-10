@@ -1,11 +1,9 @@
+//department/[department]/auth-actions.ts
 'use server';
-
 import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
 import nodemailer from 'nodemailer';
-
 const SUPER_ADMIN_EMAIL = 'kent.bsece@gmail.com';
-
 export async function requestOtp(
   department: string,
   email: string
@@ -15,11 +13,9 @@ export async function requestOtp(
   )
     .trim()
     .toLowerCase();
-
   const cleanEmail = email
     .trim()
     .toLowerCase();
-
   console.log('========== REQUEST OTP ==========');
   console.log('OTP EMAIL:', cleanEmail);
   console.log('OTP DEPARTMENT:', cleanDepartment);
@@ -27,7 +23,6 @@ export async function requestOtp(
   // =========================================================
   // SMTP CONFIGURATION
   // =========================================================
-
   const smtpHost = process.env.SMTP_HOST;
   const smtpPort = Number(
     process.env.SMTP_PORT || '587'
@@ -35,7 +30,6 @@ export async function requestOtp(
   const smtpUser = process.env.SMTP_USER;
   const smtpPassword = process.env.SMTP_PASSWORD;
   const mailFrom = process.env.MAIL_FROM;
-
   if (
     !smtpHost ||
     !smtpUser ||
@@ -45,7 +39,6 @@ export async function requestOtp(
     console.error(
       'Missing SMTP configuration.'
     );
-
     throw new Error(
       'Email service is not configured.'
     );
@@ -54,11 +47,9 @@ export async function requestOtp(
   // =========================================================
   // GENERATE OTP
   // =========================================================
-
   const otp = crypto
     .randomInt(100000, 1000000)
     .toString();
-
   const otpExpires = new Date(
     Date.now() + 5 * 60 * 1000
   );
@@ -66,15 +57,12 @@ export async function requestOtp(
   // =========================================================
   // SUPER ADMIN
   // =========================================================
-
   if (cleanEmail === SUPER_ADMIN_EMAIL) {
     console.log(
       'OTP MODE: SUPER ADMIN'
     );
 
-    // The VerificationToken model uses identifier
-    // as its primary key, so use the email as identifier.
-
+    // The VerificationToken model uses identifier as its primary key, so use the email as identifier.
     await prisma.verificationToken.upsert({
       where: {
         identifier: cleanEmail,
@@ -89,7 +77,6 @@ export async function requestOtp(
         expires: otpExpires,
       },
     });
-
     const transporter =
       nodemailer.createTransport({
         host: smtpHost,
@@ -100,13 +87,12 @@ export async function requestOtp(
           pass: smtpPassword,
         },
       });
-
     try {
       await transporter.sendMail({
         from: mailFrom,
         to: cleanEmail,
         subject:
-          'CLEAR System: Super Admin Verification Code',
+          'CLEAR System: System Admin Verification Code',
         html: `
           <div style="
             font-family: Arial, sans-serif;
@@ -115,31 +101,25 @@ export async function requestOtp(
             padding: 30px;
             background: #f8f9fa;
           ">
-
             <div style="
               background: #ffffff;
               border-radius: 12px;
               padding: 30px;
               border: 1px solid #dee2e6;
             ">
-
               <h2 style="
                 margin-top: 0;
                 color: #212529;
               ">
                 CLEAR System
               </h2>
-
               <p>
-                A Super Admin login verification
-                code has been requested.
+                A System Admin login verification code has been requested.
               </p>
-
               <div style="
                 text-align: center;
                 margin: 30px 0;
               ">
-
                 <div style="
                   display: inline-block;
                   padding: 15px 25px;
@@ -152,83 +132,66 @@ export async function requestOtp(
                 ">
                   ${otp}
                 </div>
-
               </div>
-
               <p>
-                This verification code will expire
-                in <strong>5 minutes</strong>.
+                This verification code will expire in <strong>5 minutes</strong>.
               </p>
-
               <p style="
                 color: #6c757d;
                 font-size: 13px;
               ">
-                If you did not request this code,
-                you may safely ignore this email.
+                If you did not request this code, you may safely ignore this email.
               </p>
-
             </div>
-
           </div>
         `,
       });
-
       console.log(
         'SUPER ADMIN OTP EMAIL SENT.'
       );
-
     } catch (error) {
       console.error(
         'Super Admin OTP email error:',
         error
       );
-
       // Clear OTP if email failed.
       await prisma.verificationToken.deleteMany({
         where: {
           identifier: cleanEmail,
         },
       });
-
       throw new Error(
         'Unable to send verification email. Please try again.'
       );
     }
-
     console.log(
       '========== REQUEST OTP SUCCESS =========='
     );
-
     return {
       success: true,
       message:
-        'A Super Admin verification code has been sent to your registered email address.',
+        'A verification code has been sent to your registered email address.',
     };
   }
 
   // =========================================================
   // FIND ORGANIZATION
   // =========================================================
-
   const organization =
     await prisma.organization.findUnique({
       where: {
         subdomain: cleanDepartment,
       },
     });
-
   if (!organization) {
     console.error(
       'Organization not found:',
       cleanDepartment
     );
-
     throw new Error(
       'Department not found.'
     );
   }
-
   console.log(
     'OTP ORGANIZATION:',
     organization.id
@@ -237,7 +200,6 @@ export async function requestOtp(
   // =========================================================
   // FIND DEPARTMENT USER
   // =========================================================
-
   const user =
     await prisma.tenantUser.findFirst({
       where: {
@@ -247,18 +209,15 @@ export async function requestOtp(
         status: 'Active',
       },
     });
-
   if (!user) {
     console.error(
       'Department user not found:',
       cleanEmail
     );
-
     throw new Error(
       'This account is not registered or is currently inactive.'
     );
   }
-
   console.log(
     'OTP USER FOUND:',
     user.id
@@ -267,7 +226,6 @@ export async function requestOtp(
   // =========================================================
   // STORE DEPARTMENT USER OTP
   // =========================================================
-
   await prisma.tenantUser.update({
     where: {
       id: user.id,
@@ -277,7 +235,6 @@ export async function requestOtp(
       otpExpires,
     },
   });
-
   console.log(
     'DEPARTMENT OTP STORED.'
   );
@@ -285,7 +242,6 @@ export async function requestOtp(
   // =========================================================
   // SEND EMAIL
   // =========================================================
-
   const transporter =
     nodemailer.createTransport({
       host: smtpHost,
@@ -296,7 +252,6 @@ export async function requestOtp(
         pass: smtpPassword,
       },
     });
-
   try {
     await transporter.sendMail({
       from: mailFrom,
@@ -311,36 +266,29 @@ export async function requestOtp(
           padding: 30px;
           background: #f8f9fa;
         ">
-
           <div style="
             background: #ffffff;
             border-radius: 12px;
             padding: 30px;
             border: 1px solid #dee2e6;
           ">
-
             <h2 style="
               margin-top: 0;
               color: #212529;
             ">
               CLEAR System
             </h2>
-
             <p>
               Hello <strong>${user.fullName}</strong>,
             </p>
-
             <p>
               Your verification code for
-              <strong>${organization.name}</strong>
-              is:
+              <strong>${organization.name}</strong>is:
             </p>
-
             <div style="
               text-align: center;
               margin: 30px 0;
             ">
-
               <div style="
                 display: inline-block;
                 padding: 15px 25px;
@@ -353,38 +301,28 @@ export async function requestOtp(
               ">
                 ${otp}
               </div>
-
             </div>
-
             <p>
-              This verification code will expire
-              in <strong>5 minutes</strong>.
+              This verification code will expire in <strong>5 minutes</strong>.
             </p>
-
             <p style="
               color: #6c757d;
               font-size: 13px;
             ">
-              If you did not request this code,
-              you may safely ignore this email.
+              If you did not request this code, you may safely ignore this email.
             </p>
-
           </div>
-
         </div>
       `,
     });
-
     console.log(
       'DEPARTMENT OTP EMAIL SENT.'
     );
-
   } catch (error) {
     console.error(
       'OTP email error:',
       error
     );
-
     // Clear OTP if email failed.
     await prisma.tenantUser.update({
       where: {
@@ -395,16 +333,13 @@ export async function requestOtp(
         otpExpires: null,
       },
     });
-
     throw new Error(
       'Unable to send verification email. Please try again.'
     );
   }
-
   console.log(
     '========== REQUEST OTP SUCCESS =========='
   );
-
   return {
     success: true,
     message:
