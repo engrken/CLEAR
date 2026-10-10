@@ -21,6 +21,7 @@ export default async function SummaryReportPage({
 
   const organization = await prisma.organization.findUnique({
     where: { subdomain: department },
+	select: { id: true, name: true, logo: true },
   });
 
   if (!organization) {
@@ -35,6 +36,7 @@ export default async function SummaryReportPage({
       <SummaryClient 
         department={department}
         orgName={organization.name} // NEW: Passing the full name from the database
+		logoUrl={organization.logo}
         ay={ay}
         term={term}
         termPkg={financials.termPkg}

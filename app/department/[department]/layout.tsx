@@ -1,8 +1,9 @@
+// /[department]/layout.tsx
 import type { ReactNode } from "react";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 
-import DepartmentSidebar from "@/app/department/[department]/Sidebar";
+import DepartmentSidebar from "@/app/department/[department]/Sidebar"; // Make sure this path exactly matches your file structure
 import TopHeader from "@/app/department/[department]/TopHeader";
 import Footer from "@/app/department/[department]/components/Footer";
 import DataPrivacyModal from "@/app/department/[department]/components/DataPrivacyModal";
@@ -84,6 +85,14 @@ export default async function ProtectedDepartmentLayout({
     where: {
       subdomain: cleanDepartment,
     },
+    // ADDED: Make sure we fetch the logo and name so the sidebar can use them
+    select: {
+      id: true,
+      name: true,
+      logo: true,
+      activeAy: true,
+      activeTerm: true
+    }
   });
 
   if (!organization) {
@@ -145,9 +154,11 @@ export default async function ProtectedDepartmentLayout({
     >
       <DepartmentSidebar
         department={cleanDepartment}
+        orgName={organization.name} // NEW: Pass the name to the sidebar
+        logoUrl={organization.logo} // NEW: Pass the blob URL to the sidebar
         currentUser={currentUser}
-		defaultAy={organization.activeAy}
-        defaultTerm={organization.activeTerm}
+        defaultAy={organization.activeAy || undefined}
+        defaultTerm={organization.activeTerm || undefined}
       />
 
       <div
@@ -160,8 +171,8 @@ export default async function ProtectedDepartmentLayout({
         <TopHeader
           department={cleanDepartment}
           currentUser={currentUser}
-		  defaultAy={organization.activeAy}
-          defaultTerm={organization.activeTerm}
+          defaultAy={organization.activeAy || undefined}
+          defaultTerm={organization.activeTerm || undefined}
         />
 
         <main

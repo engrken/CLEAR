@@ -27,12 +27,14 @@ export default function RootLayout({
       <body className="bg-body text-body min-vh-100 d-flex flex-column">
         {/* Global Content Mount Point */}
         {children}
+        
+        {/* Components must be strictly inside the body */}
+        <DataPrivacyModal />
+        <Footer />
         <Analytics />
         
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" async />
       </body>
-	          <Footer />
-        <DataPrivacyModal />
     </html>
   );
 }

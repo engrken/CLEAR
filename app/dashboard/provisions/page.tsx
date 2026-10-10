@@ -87,9 +87,16 @@ export default async function ProvisionPage() {
               Create a new Academic Department or Student Organization and assign its initial administrator.
             </p>
 
-            {/* BOOTSTRAP MODAL BUTTON COMPONENT */}
+            {/* EXPLICIT BOOTSTRAP MODAL BUTTON */}
             <div className="d-grid">
-              <ProvisionModal />
+              <button 
+                type="button" 
+                className="btn btn-primary fw-bold shadow-sm" 
+                data-bs-toggle="modal" 
+                data-bs-target="#provisionModal"
+              >
+                <i className="bi bi-building-add me-2"></i> Provision New Entity
+              </button>
             </div>
 
             {/* SECURITY INFORMATION */}
@@ -136,23 +143,23 @@ export default async function ProvisionPage() {
                     <div className="card h-100 text-center border-secondary shadow-sm p-4 bg-card transition-all position-relative">
                       
                       {/* Entity Type Badge */}
-<span className={`position-absolute top-0 start-50 translate-middle-x badge rounded-bottom ${dept.type === 'Organization' ? 'bg-warning text-dark' : 'bg-info text-dark'}`}>
-  {dept.type || 'Department'}
-</span>
+                      <span className={`position-absolute top-0 start-50 translate-middle-x badge rounded-bottom ${dept.type === 'Organization' ? 'bg-warning text-dark' : 'bg-info text-dark'}`}>
+                        {dept.type || 'Department'}
+                      </span>
 
-<div className="mb-3 mt-3 d-flex justify-content-center align-items-center" style={{ height: '60px' }}>
-  {dept.logo ? (
-    <img 
-      src={dept.logo} 
-      alt={`${dept.name} logo`} 
-      style={{ maxWidth: '60px', maxHeight: '60px', objectFit: 'contain' }} 
-    />
-  ) : (
-    <i className={`fs-1 ${dept.type === 'Organization' ? 'bi bi-people-fill text-warning' : 'bi bi-building-check text-info'}`}></i>
-  )}
-</div>
+                      <div className="mb-3 mt-3 d-flex justify-content-center align-items-center" style={{ height: '60px' }}>
+                        {dept.logo ? (
+                          <img 
+                            src={dept.logo} 
+                            alt={`${dept.name} logo`} 
+                            style={{ maxWidth: '60px', maxHeight: '60px', objectFit: 'contain' }} 
+                          />
+                        ) : (
+                          <i className={`fs-1 ${dept.type === 'Organization' ? 'bi bi-people-fill text-warning' : 'bi bi-building-check text-info'}`}></i>
+                        )}
+                      </div>
 
-<h6 className="fw-bold text-color mb-1">
+                      <h6 className="fw-bold text-color mb-1">
                         {dept.name}
                       </h6>
 
@@ -169,6 +176,10 @@ export default async function ProvisionPage() {
           )}
         </div>
       </div>
+
+      {/* RENDER MODAL ROOT-LEVEL TO PREVENT STACKING CONTEXT ISSUES */}
+      <ProvisionModal />
+
     </div>
   );
 }

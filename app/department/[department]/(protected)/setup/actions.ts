@@ -4,8 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { requireTabAccess } from '@/lib/permissions';
 import { revalidatePath } from 'next/cache';
 import { auth } from '@/auth';
-import { writeFile, unlink } from 'fs/promises';
-import path from 'path';
+import { put, del } from '@vercel/blob';
 
 // =========================================================================
 // HELPER FUNCTIONS (Internal to this module)
@@ -124,7 +123,6 @@ export async function updateEntityLogo(formData: FormData) {
   }
 
   try {
-    // 1. Fetch the existing organization to find the old logo path
     const org = await prisma.organization.findUnique({
       where: { id: organizationId },
       select: { logo: true, subdomain: true }
@@ -132,36 +130,35 @@ export async function updateEntityLogo(formData: FormData) {
 
     if (!org) throw new Error('Organization not found.');
 
-    // 2. Delete the old logo from the public folder to save space
-    if (org.logo) {
+    // 1. Delete the old logo from Vercel Blob
+    if (org.logo && org.logo.includes('vercel-storage.com')) {
       try {
-        // Use path.basename to extract just the filename from "/filename.png"
-        const oldFilename = path.basename(org.logo);
-        const oldFilePath = path.join(process.cwd(), 'public', oldFilename);
-        await unlink(oldFilePath);
+        await del(org.logo);
       } catch (err) {
-        console.warn('Could not delete old logo (it may have been manually removed).', err);
+        console.warn('Could not delete old logo from Blob storage.', err);
       }
     }
 
-    // 3. Process and save the new logo
-    const buffer = Buffer.from(await logoFile.arrayBuffer());
+    // 2. Upload the new logo to Vercel Blob
     const extension = logoFile.name.split('.').pop() || 'png';
-    const filename = `${org.subdomain}_logo_${Date.now()}.${extension}`;
-    const filepath = path.join(process.cwd(), 'public', filename);
+    const filename = `logos/${org.subdomain}_logo_${Date.now()}.${extension}`;
     
-    await writeFile(filepath, buffer);
-    const newLogoPath = `/${filename}`;
+    const blob = await put(filename, logoFile, { 
+      access: 'public',
+      addRandomSuffix: false 
+    });
+    
+    const newLogoPath = blob.url;
 
-    // 4. Update the database record
+    // 3. Update the database
     await prisma.organization.update({
       where: { id: organizationId },
       data: { logo: newLogoPath }
     });
 
     revalidatePath('/dashboard/provisions');
-    revalidatePath(`/department/${org.subdomain}/setup`); // Refresh tenant dashboard
-    revalidatePath(`/department/${org.subdomain}`); // Refresh layout headers
+    revalidatePath(`/department/${org.subdomain}/setup`);
+    revalidatePath(`/department/${org.subdomain}`);
     
     return { success: true, message: 'Logo updated successfully!' };
   } catch (error: any) {

@@ -1,3 +1,5 @@
+// app/department/[department]/Sidebar.tsx
+
 "use client";
 
 import Link from 'next/link';
@@ -25,13 +27,15 @@ const PRESET_ROLE_TABS: Record<string, string[]> = {
 
 export default function DepartmentSidebar({
   department,
-  orgName, // NEW: Accepts the full organization name
+  orgName,
+  logoUrl, // NEW: Accepts the full Blob URL
   currentUser,
   defaultAy = 'A.Y. 2026 - 2027',
   defaultTerm = '1st Sem'
 }: {
   department: string;
-  orgName?: string; // Optional to prevent breaking existing layouts without it
+  orgName?: string; 
+  logoUrl?: string | null; // NEW: Optional Blob URL
   currentUser?: any;
   defaultAy?: string;
   defaultTerm?: string;
@@ -66,8 +70,9 @@ export default function DepartmentSidebar({
   const term = searchParams.get('term') || '1st Sem';
   const queryString = `?ay=${encodeURIComponent(ay)}&term=${encodeURIComponent(term)}`;
 
-  const logoPath = `/${deptKey}_logo.png`;
   const fallbackLogoPath = '/engineering_logo.png';
+  // Use the database Blob URL if provided, otherwise use fallback
+  const displayLogo = logoUrl || fallbackLogoPath;
 
   // =========================================================
   // ACTIVE LINK DETECTION
@@ -114,16 +119,26 @@ export default function DepartmentSidebar({
       <div className="d-flex align-items-center mb-4 px-2">
         <div style={{ width: '40px', flexShrink: 0 }} className="text-center me-2">
           <img
-            src={logoPath}
+            src={displayLogo}
             alt={`${department} Logo`}
             onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = fallbackLogoPath; }}
             style={{ width: '100%', maxHeight: '40px', objectFit: 'contain' }}
           />
         </div>
-        <div className="overflow-hidden">
+        
+        {/* Removed overflow-hidden from the wrapper to allow natural vertical expansion */}
+        <div>
           <h6 className="fw-bold mb-0 text-accent text-truncate">CLEAR System</h6>
-          {/* SCRUBBED: Dynamic orgName instead of "COLLEGE OF..." */}
-          <small className="text-secondary text-truncate d-block" style={{ fontSize: '0.75rem', textTransform: 'uppercase' }}>
+          
+          {/* REMOVED text-truncate and ADDED lineHeight for clean multi-line text */}
+          <small 
+            className="text-secondary d-block mt-1" 
+            style={{ 
+              fontSize: '0.7rem', 
+              textTransform: 'uppercase',
+              lineHeight: '1.2' 
+            }}
+          >
             {orgName || department} 
           </small>
         </div>

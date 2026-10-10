@@ -140,19 +140,23 @@ export default async function DashboardPage() {
                       </div>
 
                       {/* LOGO WRAPPER */}
-                      <div className="logo-wrapper mt-3">
-                        <img
-                          src={`/${dept.subdomain}_logo.png`}
-                          alt={`${dept.name} Logo`}
-                          className="img-fluid"
-                          style={{
-                            maxWidth: '100%',
-                            maxHeight: '100%',
-                            objectFit: 'contain',
-                            filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))'
-                          }}
-                        />
-                      </div>
+<div className="logo-wrapper mt-3">
+  {dept.logo ? (
+    <img
+      src={dept.logo}
+      alt={`${dept.name} Logo`}
+      className="img-fluid"
+      style={{
+        maxWidth: '100%',
+        maxHeight: '100%',
+        objectFit: 'contain',
+        filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))'
+      }}
+    />
+  ) : (
+    <i className={`fs-1 text-secondary ${dept.type === 'Organization' ? 'bi bi-people-fill' : 'bi bi-building'}`}></i>
+  )}
+</div>
 
                       {/* ENTITY NAME & LINK */}
                       <h5 className="fw-bold text-white mb-2 px-2" style={{ lineHeight: '1.3' }}>

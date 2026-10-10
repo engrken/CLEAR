@@ -17,6 +17,7 @@ interface CollectibleItem {
 export default function SummaryClient({
   department,
   orgName,
+  logoUrl,
   ay,
   term,
   termPkg,
@@ -29,6 +30,7 @@ export default function SummaryClient({
 }: {
   department: string;
   orgName: string;
+  logoUrl?: string | null;
   ay: string;
   term: string;
   termPkg: { total: number; items: { name: string; rate: number; fund: string }[] };
@@ -53,6 +55,9 @@ export default function SummaryClient({
     }
     return `/${filename}`;
   };
+  
+  // Determine the correct logo to display: User's uploaded blob, or fallback
+  const displayLogo = logoUrl || getAssetUrl('engineering_logo.png');
 
   return (
     <>
@@ -108,8 +113,8 @@ export default function SummaryClient({
           </div>
           <div style={{ width: '90px', flexShrink: 0 }} className="text-center">
             <img 
-              src={getAssetUrl(`${decodeURIComponent(department).toLowerCase().replace(/\s+/g, '')}_logo.png`)} 
-              alt="Entity Logo" 
+              src={displayLogo} 
+              alt={`${orgName} Logo`} 
               onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = getAssetUrl('engineering_logo.png'); }} 
               style={{ width: '100%', maxHeight: '90px', objectFit: 'contain' }} 
             />

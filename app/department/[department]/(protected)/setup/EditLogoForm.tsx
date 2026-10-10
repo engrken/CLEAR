@@ -22,6 +22,14 @@ export default function EditLogoForm({
     // Securely attach the organization ID to the form data
     formData.append("organizationId", organizationId); 
     
+    // 1. VERCEL PAYLOAD LIMIT GUARD (Max 2MB)
+    const logoFile = formData.get('logo') as File | null;
+    if (logoFile && logoFile.size > 2 * 1024 * 1024) {
+      setMessage({ text: "Logo file is too large. Please upload an image smaller than 2MB.", type: "error" });
+      setLoading(false);
+      return;
+    }
+    
     try {
       const res = await updateEntityLogo(formData);
       setMessage({ text: res.message, type: res.success ? "success" : "error" });
@@ -38,7 +46,8 @@ export default function EditLogoForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="p-3 border border-secondary rounded bg-dark text-white shadow-sm">
+    // 2. ADDED encType="multipart/form-data"
+    <form onSubmit={handleSubmit} encType="multipart/form-data" className="p-3 border border-secondary rounded bg-dark text-white shadow-sm">
       <h6 className="mb-3 text-info fw-bold">
         <i className="bi bi-cloud-upload me-2"></i>Upload New Logo
       </h6>
@@ -71,6 +80,9 @@ export default function EditLogoForm({
           className="form-control bg-card text-white border-secondary shadow-none form-control-sm" 
           required
         />
+        <div className="form-text text-secondary small mt-1">
+          Max file size: 2MB. Recommended format: PNG.
+        </div>
       </div>
 
       <button type="submit" className="btn btn-primary btn-sm fw-bold w-100" disabled={loading}>
