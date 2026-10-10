@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { fmt } from "@/lib/utils";
+import { useRouter } from "next/navigation";
+import { saveSignatories } from "../../actions";
 
 interface CollectionItem {
   count: number;
@@ -16,8 +18,10 @@ interface CollectibleItem {
 
 export default function SummaryClient({
   department,
+  orgId,
   orgName,
   logoUrl,
+  initialSignatories,
   ay,
   term,
   termPkg,
@@ -27,27 +31,12 @@ export default function SummaryClient({
   grandExpenseTotal,
   collectibles,
   totalCollectiblesSum
-}: {
-  department: string;
-  orgName: string;
-  logoUrl?: string | null;
-  ay: string;
-  term: string;
-  termPkg: { total: number; items: { name: string; rate: number; fund: string }[] };
-  collectionHierarchy: Record<string, CollectionItem>;
-  grandCollectionTotal: number;
-  expensesByFund: Record<string, number>;
-  grandExpenseTotal: number;
-  collectibles: CollectibleItem[];
-  totalCollectiblesSum: number;
-}) {
+}: any) {
+  const router = useRouter();
   const netBalance = grandCollectionTotal - grandExpenseTotal;
 
-  // Hydration-safe asset path resolver
   const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  useEffect(() => setMounted(true), []);
 
   const getAssetUrl = (filename: string) => {
     if (mounted && window.location.hostname.endsWith('.localhost')) {
@@ -55,18 +44,53 @@ export default function SummaryClient({
     }
     return `/${filename}`;
   };
-  
-  // Determine the correct logo to display: User's uploaded blob, or fallback
+
   const displayLogo = logoUrl || getAssetUrl('engineering_logo.png');
+
+  // =========================================================
+  // SETTINGS MODAL STATE
+  // =========================================================
+  const [showSettings, setShowSettings] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  
+  // Local state for the dynamic signatories list
+  const [signatories, setSignatories] = useState(initialSignatories);
+  
+  // Options for the Label dropdown
+  const labelOptions = ["Prepared by:", "Attested by:", "Noted by:", "Endorsed by:", "Verified by:", "Approved by:"];
+
+  const handleAddSignatory = () => {
+    setSignatories([...signatories, { label: "Prepared by:", name: "", position: "" }]);
+  };
+
+  const handleUpdateSignatory = (index: number, field: string, value: string) => {
+    const updated = [...signatories];
+    updated[index] = { ...updated[index], [field]: value };
+    setSignatories(updated);
+  };
+
+  const handleRemoveSignatory = (index: number) => {
+    setSignatories(signatories.filter((_: any, i: number) => i !== index));
+  };
+
+  const handleSaveSignatories = async () => {
+    setIsSaving(true);
+    try {
+      await saveSignatories(orgId, department, signatories);
+      setShowSettings(false);
+      router.refresh();
+    } catch (error) {
+      alert("Failed to save signatories.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <>
       <style dangerouslySetInnerHTML={{__html: `
         @media print {
-          @page {
-            size: 8.5in 13in;
-            margin: 0.5in; 
-          }
+          @page { size: 8.5in 13in; margin: 0.5in; }
           aside, nav, header, .sidebar, .d-print-none { display: none !important; }
           html, body, main, #__next, .layout-wrapper {
             margin: 0 !important; padding: 0 !important; width: 100% !important; max-width: 100% !important; background-color: white !important;
@@ -91,9 +115,15 @@ export default function SummaryClient({
             <h5 className="text-accent m-0 fw-bold">COLLECTIONS & EXPENSES SUMMARY ({term})</h5>
             <small className="text-muted">Official financial statement matching legacy ledger output.</small>
           </div>
-          <button className="btn btn-outline-secondary btn-sm fw-bold" onClick={() => window.print()}>
-            <i className="bi bi-printer me-1"></i>Print Summary Report
-          </button>
+          <div>
+            {/* NEW: Settings Button */}
+            <button className="btn btn-outline-info btn-sm fw-bold me-2" onClick={() => setShowSettings(true)}>
+              <i className="bi bi-gear-fill me-1"></i>Report Settings
+            </button>
+            <button className="btn btn-outline-secondary btn-sm fw-bold" onClick={() => window.print()}>
+              <i className="bi bi-printer me-1"></i>Print Summary Report
+            </button>
+          </div>
         </div>
 
         {/* ISO / INSTITUTIONAL PRINT HEADER */}
@@ -108,7 +138,7 @@ export default function SummaryClient({
             <div className="fw-bold text-uppercase text-accent" style={{ fontSize: '1.1rem' }}>{orgName}</div>
             
             <div className="text-muted small">Roxas Avenue, Roxas City, Capiz, Philippines 5800</div>
-            <div className="mt-3 fw-bold text-uppercase" style={{ fontSize: '0.95rem' }}>Departmental Financial Audit & Liquidation Summary Report</div>
+            <div className="mt-3 fw-bold text-uppercase" style={{ fontSize: '0.95rem' }}>FINANCIAL REPORT OF  CONTRIBUTIONS AND EXPENSES</div>
             <div className="text-muted small fst-italic mt-1">{ay} &nbsp;|&nbsp; {term}</div>
           </div>
           <div style={{ width: '90px', flexShrink: 0 }} className="text-center">
@@ -256,7 +286,7 @@ export default function SummaryClient({
         </div>
 
         {/* REMAINING BALANCE (NET ENDING POSITION) */}
-        <div className="card p-2 border-dark bg-dark text-white d-flex flex-row justify-content-between align-items-center flex-wrap gap-2 mb-3">
+        <div className="card p-2 d-flex flex-row justify-content-between align-items-center flex-wrap gap-2 mb-3">
           <div>
             <span className="fw-bold text-uppercase">REMAINING BALANCE (NET ENDING POSITION):</span>
             <div className="text-muted small" style={{ fontSize: '0.75rem' }}>Total Collections minus Total Liquidated Expenses</div>
@@ -266,34 +296,104 @@ export default function SummaryClient({
           </div>
         </div>
 
-        {/* ISO SIGNATURE BLOCK */}
+        {/* DYNAMIC SIGNATURE BLOCK */}
         <div className="row mt-4 pt-3 text-color signature-block" style={{ fontSize: '0.85rem' }}>
-          <div className="col-3 text-center">
-            <div className="fw-bold text-uppercase text-muted mb-1" style={{ fontSize: '0.75rem' }}>Prepared by:</div>
-            <div style={{ height: '40px' }}></div>
-            <div className="fw-bold border-top border-dark pt-1 d-inline-block px-3">Auditor</div>
-          </div>
-          <div className="col-3 text-center">
-            <div className="fw-bold text-uppercase text-muted mb-1" style={{ fontSize: '0.75rem' }}>Attested by:</div>
-            <div style={{ height: '40px' }}></div>
-            <div className="fw-bold border-top border-dark pt-1 d-inline-block px-3">Treasurer</div>
-          </div>
-          <div className="col-3 text-center">
-            <div className="fw-bold text-uppercase text-muted mb-1" style={{ fontSize: '0.75rem' }}>Noted:</div>
-            <div style={{ height: '40px' }}></div>
-            <div className="fw-bold border-top border-dark pt-1 d-inline-block px-3">Adviser</div>
-          </div>
-          <div className="col-3 text-center">
-            <div className="fw-bold text-uppercase text-muted mb-1" style={{ fontSize: '0.75rem' }}>Approved:</div>
-            <div style={{ height: '40px' }}></div>
-            <div className="fw-bold border-top border-dark pt-1 d-inline-block px-3">Dean</div>
-          </div>
+          {signatories && signatories.length > 0 ? (
+            signatories.map((sig: any, idx: number) => (
+              <div className="col text-center" key={idx}>
+                <div className="fw-bold text-uppercase text-muted mb-1" style={{ fontSize: '0.75rem' }}>{sig.label}</div>
+                <div style={{ height: '40px' }}></div>
+                <div className="fw-bold border-top border-dark pt-1 d-inline-block px-3">{sig.name || "________________"}</div>
+                <div className="text-muted mt-1" style={{ fontSize: '0.7rem' }}>{sig.position || "Position"}</div>
+              </div>
+            ))
+          ) : (
+            <div className="text-center text-muted small w-100">
+              <em>No signatories configured. Click "Report Settings" to add them.</em>
+            </div>
+          )}
         </div>
 
         <div className="mt-5 pt-3 small fw-bold text-end text-muted" style={{ fontSize: '0.75rem' }}>
           cc: VPAA, VPF, OSA
         </div>
       </div>
+	  
+	  {/* =========================================================
+          REPORT SETTINGS MODAL
+      ========================================================= */}
+      {showSettings && (
+        <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: "rgba(0,0,0,0.7)" }}>
+          <div className="modal-dialog modal-dialog-centered modal-lg">
+            <div className="modal-content bg-card border-secondary text-color shadow-lg">
+              <div className="modal-header border-secondary">
+                <h5 className="modal-title fw-bold text-info">
+                  <i className="bi bi-pen-fill me-2"></i>Configure Signatories
+                </h5>
+                <button type="button" className="btn-close btn-close-white" onClick={() => setShowSettings(false)}></button>
+              </div>
+              <div className="modal-body p-4">
+                <p className="small text-secondary mb-3">
+                  Customize the official signatories for this department. These will appear at the bottom of the Summary and Liquidation reports. Dragging/reordering is determined by the order they appear below.
+                </p>
+
+                {signatories.map((sig: any, idx: number) => (
+                  <div key={idx} className="row g-2 mb-3 align-items-center bg-body-tertiary p-2 rounded border border-secondary-subtle">
+                    <div className="col-md-3">
+                      <label className="form-label small fw-semibold text-muted mb-1">Action / Label</label>
+                      <select 
+                        className="form-select form-select-sm bg-card text-color border-secondary" 
+                        value={sig.label} 
+                        onChange={(e) => handleUpdateSignatory(idx, 'label', e.target.value)}
+                      >
+                        {labelOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                      </select>
+                    </div>
+                    <div className="col-md-4">
+                      <label className="form-label small fw-semibold text-muted mb-1">Full Name</label>
+                      <input 
+                        type="text" 
+                        className="form-control form-control-sm bg-card text-color border-secondary" 
+                        placeholder="e.g. Juan Dela Cruz" 
+                        value={sig.name} 
+                        onChange={(e) => handleUpdateSignatory(idx, 'name', e.target.value)}
+                      />
+                    </div>
+                    <div className="col-md-4">
+                      <label className="form-label small fw-semibold text-muted mb-1">Position / Title</label>
+                      <input 
+                        type="text" 
+                        className="form-control form-control-sm bg-card text-color border-secondary" 
+                        placeholder="e.g. Internal Auditor" 
+                        value={sig.position} 
+                        onChange={(e) => handleUpdateSignatory(idx, 'position', e.target.value)}
+                      />
+                    </div>
+                    <div className="col-md-1 text-end mt-4">
+                      <button className="btn btn-outline-danger btn-sm" onClick={() => handleRemoveSignatory(idx)} title="Remove">
+                        <i className="bi bi-trash"></i>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                <button className="btn btn-outline-secondary btn-sm w-100 fw-bold border-dashed mt-2" onClick={handleAddSignatory}>
+                  <i className="bi bi-plus-lg me-1"></i> Add Signatory
+                </button>
+              </div>
+              <div className="modal-footer border-secondary">
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => {
+                  setSignatories(initialSignatories); // Revert changes
+                  setShowSettings(false);
+                }}>Cancel</button>
+                <button type="button" className="btn btn-info btn-sm text-dark fw-bold" onClick={handleSaveSignatories} disabled={isSaving}>
+                  {isSaving ? "Saving..." : "Save Signatories"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

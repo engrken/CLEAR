@@ -34,6 +34,20 @@ model Organization {
   voidTransactions  VoidTransaction[]
   realignments      FundRealignment[]
   collectionSetups  CollectionSetup[]
+  signatories   Signatory[]
+}
+
+model Signatory {
+  id             String       @id @default(cuid())
+  organizationId String
+  label          String       // e.g., "Prepared by:", "Attested by:", "Approved:"
+  name           String       // e.g., "Juan Dela Cruz"
+  position       String       // e.g., "Auditor", "Dean", "Adviser"
+  order          Int          // Controls the left-to-right display order (1, 2, 3...)
+  
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
 }
 
 model Student {

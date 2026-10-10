@@ -219,6 +219,33 @@ async function getActionUser(): Promise<string> {
 // DEPARTMENT PROVISIONING
 // =========================================================================
 
+  export async function saveSignatories(orgId: string, department: string, signatories: any[]) {
+  // 1. We use a transaction to safely clear old signatories and insert the new ones
+  await prisma.$transaction(async (tx) => {
+    await tx.signatory.deleteMany({
+      where: { organizationId: orgId }
+    });
+
+    if (signatories.length > 0) {
+      await tx.signatory.createMany({
+        data: signatories.map((sig, index) => ({
+          organizationId: orgId,
+          label: sig.label,
+          name: sig.name,
+          position: sig.position,
+          order: index, // Automatically assigns the array order (0, 1, 2...)
+        }))
+      });
+    }
+  });
+
+  // 2. Clear Next.js cache so the UI updates instantly
+  revalidatePath(`/department/${department}/summary`);
+  revalidatePath(`/department/${department}/liquidations`);
+  
+  return { success: true };
+}
+
 export async function createDepartment(formData: FormData) {
   await requireSuperAdmin();
 
@@ -1387,6 +1414,8 @@ export async function getDepartmentFinancials(
       });
     }
   });
+  
+
 
   // =========================================================================
   // PACKAGE PAYMENT MAP

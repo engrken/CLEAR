@@ -2,7 +2,6 @@
 import Script from 'next/script';
 import { Analytics } from '@vercel/analytics/next';
 import '@/app/globals.css';
-import Footer from "@/app/department/[department]/components/Footer";
 import DataPrivacyModal from "@/app/department/[department]/components/DataPrivacyModal";
 
 export default function RootLayout({
@@ -30,7 +29,7 @@ export default function RootLayout({
         
         {/* Components must be strictly inside the body */}
         <DataPrivacyModal />
-        <Footer />
+        
         <Analytics />
         
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" async />
