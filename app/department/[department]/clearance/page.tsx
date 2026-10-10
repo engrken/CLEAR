@@ -139,7 +139,7 @@ export default async function ClearancePage({
             )}
           </div>
         </main>
-        {!isOfficer && <><Footer /><DataPrivacyModal /></>}
+        {!isOfficer && <><DataPrivacyModal /></>}
       </div>
     );
   }
