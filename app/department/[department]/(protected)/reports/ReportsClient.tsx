@@ -418,7 +418,8 @@ export default function ReportsClient({
           .print-container * { color: #000000 !important; background-color: transparent !important; }
           .print-container .bg-dark, .print-container .table-dark { background-color: #f8f9fa !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
           
-          .print-container table { border-collapse: collapse !important; margin-bottom: 15px !important; width: 100% !important;  }
+          /* Removed the 1.5px outer border here */
+          .print-container table { border-collapse: collapse !important; margin-bottom: 15px !important; width: 100% !important; }
           .print-container th, .print-container td { border: 1px solid #000000 !important; padding: 5px 8px !important; }
           
           .print-container thead { display: table-header-group !important; }
