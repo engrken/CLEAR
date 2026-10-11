@@ -180,6 +180,70 @@ export async function settlePenaltyCommunityService(
   revalidatePath(`/department/${department}`);
 }
 
+// =========================================================================
+// NEW: CASH PAYMENT SETTLEMENT HANDLER
+// =========================================================================
+export async function settlePenaltyCash(
+  department: string,
+  data: {
+    penaltyId: string;
+    amountPaid: number;
+    ay: string;
+    term: string;
+  }
+) {
+  const customUser = await requireTabAccess("tab-payment");
+  const officerName = customUser.fullName || customUser.email || "System Administrator";
+
+  const organization = await prisma.organization.findUnique({
+    where: { subdomain: department.toLowerCase() }
+  });
+  if (!organization) throw new Error(`Organization subdomain "${department}" not found.`);
+  const orgId = organization.id;
+
+  const amountPaid = money(data.amountPaid, "Amount Paid");
+  if (amountPaid <= 0) throw new Error("Payment amount must be greater than zero.");
+
+  const targetPen = await prisma.penalty.findFirst({
+    where: { penaltyId: data.penaltyId, organizationId: orgId },
+  });
+
+  if (!targetPen) throw new Error("Penalty record not found.");
+
+  const existingFine = Math.max(0, Number(targetPen.fineAmount) || 0);
+  if (existingFine <= 0) {
+    throw new Error("This penalty has already been fully settled.");
+  }
+
+  const remainingFine = Math.max(0, Math.round((existingFine - amountPaid) * 100) / 100);
+
+  const newStatus = remainingFine === 0
+    ? `Settled (Cash Payment - ₱${amountPaid.toFixed(2)})`
+    : `Partially Paid (₱${amountPaid.toFixed(2)} paid, ₱${remainingFine.toFixed(2)} remaining)`;
+
+  await prisma.penalty.update({
+    where: { id: targetPen.id },
+    data: { fineAmount: remainingFine, status: newStatus },
+  });
+
+  try {
+    await prisma.systemLog.create({
+      data: {
+        organizationId: orgId,
+        user: officerName,
+        action: "SETTLE_PENALTY_CASH",
+        details: `Applied ₱${amountPaid.toFixed(2)} cash payment to penalty [${data.penaltyId}]. Status: ${newStatus}`,
+      }
+    });
+  } catch (error) {
+    console.warn("System logging failed:", error);
+  }
+
+  revalidatePath(`/department/${department}/penalties`);
+  revalidatePath(`/department/${department}/collections`);
+  revalidatePath(`/department/${department}`);
+}
+
 export async function deletePenalty(department: string, penaltyId: string) {
   // 1. Verify Permission (Notice this requires tab-void)
   await requireTabAccess("tab-void");
