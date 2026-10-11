@@ -1,3 +1,4 @@
+// /(protected)/summary/SummaryClient.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -165,7 +166,7 @@ export default function SummaryClient({
             </thead>
             <tbody>
               <tr><td colSpan={4} className="fw-bold text-accent py-2">Departmental Fee</td></tr>
-              {termPkg.items.map((item, idx) => {
+              {termPkg.items.map((item: any, idx: number) => {
                 const entry = collectionHierarchy[item.name] || { count: 0, total: 0 };
                 return (
                   <tr key={idx}>
@@ -266,7 +267,7 @@ export default function SummaryClient({
               {collectibles.length === 0 ? (
                 <tr><td colSpan={4} className="text-center text-muted py-2">No collectibles recorded for this term.</td></tr>
               ) : (
-                collectibles.map((col, idx) => (
+                collectibles.map((col: any, idx: number) => (
                   <tr key={idx}>
                     <td className="ps-3">{col.category}</td>
                     <td></td>

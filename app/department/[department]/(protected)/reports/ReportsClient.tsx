@@ -122,22 +122,22 @@ export default function ReportsClient({
     return `/${filename}`;
   };
 
-  const validCollections = collections.filter(c => !String(c.paymentType || "").toUpperCase().includes("VOID"));
-  const validLiquidations = liquidations.filter(l => !String(l.status || "").includes("Voided"));
+  const validCollections = collections.filter((c: any) => !String(c.paymentType || "").toUpperCase().includes("VOID"));
+  const validLiquidations = liquidations.filter((l: any) => !String(l.status || "").includes("Voided"));
 
   // =========================================================
   // DYNAMIC CATEGORY RESOLUTION
   // =========================================================
-  const hasPackageData = termPkgItems.length > 0 || packageRate > 0 || validCollections.some(c => String(c.itemDescription || '').toLowerCase().includes('package') || String(c.itemDescription || '').toLowerCase() === 'departmental fee');
-  const hasUnpaidDues = validCollections.some(c => String(c.paymentType || "").includes("Unpaid") || String(c.orNumber || "").toUpperCase().startsWith("DUE-") || Number(c.balanceDue) > 0);
+  const hasPackageData = termPkgItems.length > 0 || packageRate > 0 || validCollections.some((c: any) => String(c.itemDescription || '').toLowerCase().includes('package') || String(c.itemDescription || '').toLowerCase() === 'departmental fee');
+  const hasUnpaidDues = validCollections.some((c: any) => String(c.paymentType || "").includes("Unpaid") || String(c.orNumber || "").toUpperCase().startsWith("DUE-") || Number(c.balanceDue) > 0);
 
   const dynamicCategories = Array.from(
     new Set([
       ...(setupCategories || []),
       ...(termPkgItems || []).map((i: any) => i.name),
-      ...validCollections.map(c => String(c.itemDescription || c.category || '')).filter(Boolean)
+      ...validCollections.map((c: any) => String(c.itemDescription || c.category || '')).filter(Boolean)
     ])
-  ).filter(cat => cat !== "Penalty / Fines" && !cat.toLowerCase().includes("penalty"));
+  ).filter((cat: string) => cat !== "Penalty / Fines" && !cat.toLowerCase().includes("penalty"));
 
   const defaultCategory = hasUnpaidDues ? "Activity & Item Dues (Unpaid)" : (dynamicCategories[0] || "Liquidation / Audited Expenses");
 
@@ -166,7 +166,7 @@ export default function ReportsClient({
     };
 
     const getStudentData = (sId: string, sName: string) => {
-      const s = students.find(st => matchStudent(sId, sName, st));
+      const s = students.find((st: any) => matchStudent(sId, sName, st));
       const uniqueKey = (s?.fullName || sName || s?.studentId || sId || "unknown").trim().toLowerCase();
       
       return {
@@ -180,8 +180,8 @@ export default function ReportsClient({
 
     if (reportCategory === "Departmental Fee (Package)") {
       const uniformRate = packageRate; 
-      results = students.map(student => {
-        const studentPayments = validCollections.filter(c => {
+      results = students.map((student: any) => {
+        const studentPayments = validCollections.filter((c: any) => {
           const isMatch = matchStudent(c.studentId, c.studentName, student);
           const descLower = String(c.itemDescription || '').toLowerCase();
           const isPackageItem = termPkgItems.some((pi: any) => pi.name.toLowerCase() === descLower) || descLower.includes('package') || descLower === 'departmental fee';
@@ -191,7 +191,7 @@ export default function ReportsClient({
 
         let amountPaid = 0;
         let orNumbers: string[] = [];
-        studentPayments.forEach(c => {
+        studentPayments.forEach((c: any) => {
           amountPaid += Number(c.amountPaid);
           if (c.orNumber && !orNumbers.includes(c.orNumber)) orNumbers.push(c.orNumber);
         });
@@ -209,7 +209,7 @@ export default function ReportsClient({
 
     } else if (reportCategory === "Activity & Item Dues (Unpaid)") {
       const payers = new Map();
-      validCollections.forEach(c => {
+      validCollections.forEach((c: any) => {
         const pType = String(c.paymentType || "");
         const orNum = String(c.orNumber || "").toUpperCase();
         const balDue = Number(c.balanceDue) || 0;
@@ -226,13 +226,13 @@ export default function ReportsClient({
           p.items.push(`${c.itemDescription} [${orNum}]: ₱${balDue.toFixed(2)}`);
         }
       });
-      results = Array.from(payers.values()).map(p => ({
+      results = Array.from(payers.values()).map((p: any) => ({
         ...p, status: p.balanceDue <= 0 ? "Fully Paid" : "Partially Paid", particulars: p.items.join(" ; "), duration: ""
       }));
 
     } else if (reportCategory === "Penalty Fee") {
       const penMap = new Map();
-      penalties.forEach(p => {
+      penalties.forEach((p: any) => {
         const status = String(p.status || "");
         if (status.includes("Voided")) return;
         
@@ -252,14 +252,14 @@ export default function ReportsClient({
         pt.activities.push(actLabel);
       });
       
-      validCollections.forEach(c => {
+      validCollections.forEach((c: any) => {
         if (c.itemDescription === "Penalty / Fines" || String(c.category).includes("Penalty")) {
           const sInfo = getStudentData(c.studentId, c.studentName);
           if (penMap.has(sInfo.key)) penMap.get(sInfo.key).amountPaid += (Number(c.amountPaid) || 0);
         }
       });
 
-      results = Array.from(penMap.values()).map(p => {
+      results = Array.from(penMap.values()).map((p: any) => {
         const totalResolved = p.amountPaid + p.serviceFine;
         const isFullyPaid = totalResolved >= p.totalFine;
         let status = "Partially Paid";
@@ -272,7 +272,7 @@ export default function ReportsClient({
 
     } else {
       const itemPayers = new Map();
-      validCollections.forEach(c => {
+      validCollections.forEach((c: any) => {
         if (c.itemDescription === reportCategory || c.category === reportCategory) {
           const sInfo = getStudentData(c.studentId, c.studentName);
           if (!itemPayers.has(sInfo.key)) {
@@ -284,7 +284,7 @@ export default function ReportsClient({
           if (c.orNumber && !ip.orNumbers.includes(c.orNumber)) ip.orNumbers.push(c.orNumber);
         }
       });
-      results = Array.from(itemPayers.values()).map(ip => {
+      results = Array.from(itemPayers.values()).map((ip: any) => {
         const netBal = ip.rate > 0 ? Math.max(0, ip.rate - ip.amountPaid) : 0;
         return {
           ...ip, assessedAmount: ip.rate, balanceDue: netBal,
@@ -296,7 +296,7 @@ export default function ReportsClient({
     return results.sort((a, b) => a.fullName.localeCompare(b.fullName));
   }, [students, validCollections, penalties, reportCategory, term, packageRate, termPkgItems]);
 
-  const filteredRoster = computedRoster.filter(row => {
+  const filteredRoster = computedRoster.filter((row: any) => {
     if (statusFilter === "Fully Paid Only" && row.status !== "Fully Paid" && row.status !== "Settled (Service)") return false;
     if (statusFilter === "Partially Paid Only" && row.status !== "Partially Paid") return false;
     if (statusFilter === "Unpaid Only" && row.status !== "Unpaid") return false;
@@ -304,18 +304,18 @@ export default function ReportsClient({
     return true; 
   });
 
-  const groupedRoster = filteredRoster.reduce((acc, row) => {
+  const groupedRoster = filteredRoster.reduce((acc: any, row: any) => {
     const yr = row.yearLevel || "Unassigned";
     if (!acc[yr]) acc[yr] = [];
     acc[yr].push(row);
     return acc;
   }, {} as Record<string, ReportRow[]>);
 
-  const sortedYearLevels = ["1st Year", "2nd Year", "3rd Year", "4th Year", "Unassigned"].filter(y => groupedRoster[y]);
+  const sortedYearLevels = ["1st Year", "2nd Year", "3rd Year", "4th Year", "Unassigned"].filter((y: string) => groupedRoster[y]);
 
-  const fullyPaidCount = filteredRoster.filter(r => r.status === "Fully Paid" || r.status === "Settled (Service)").length;
-  const partialCount = filteredRoster.filter(r => r.status === "Partially Paid").length;
-  const unpaidCount = filteredRoster.filter(r => r.status === "Unpaid").length;
+  const fullyPaidCount = filteredRoster.filter((r: any) => r.status === "Fully Paid" || r.status === "Settled (Service)").length;
+  const partialCount = filteredRoster.filter((r: any) => r.status === "Partially Paid").length;
+  const unpaidCount = filteredRoster.filter((r: any) => r.status === "Unpaid").length;
 
   const isPenaltyReport = reportCategory === "Penalty Fee";
   const isLiquidationReport = reportCategory === "Liquidation / Audited Expenses";
@@ -326,7 +326,7 @@ export default function ReportsClient({
     if (isLiquidationReport) {
       if (validLiquidations.length === 0) return alert("No liquidation records to export.");
       csv = `Date,Audit ID,CA Reference,Officer / Requestor,Fund Source,Budget (CA),Liquidated Exp.,Cash Return (Surplus),Reimburse Due\n`;
-      validLiquidations.forEach(l => {
+      validLiquidations.forEach((l: any) => {
         const budget = (Number(l.totalExpense)||0) + (Number(l.varianceReturn)||0) - (Number(l.reimbursementDue)||0);
         const rawDate = l.date ? String(l.date).split('T')[0] : '—';
         csv += `"${rawDate}","${l.auditId}","${l.referenceCaId || l.advanceId || ''}","${l.requestor}","${l.fundSource}",${budget},${l.totalExpense},${l.varianceReturn||0},${l.reimbursementDue||0}\n`;
@@ -334,8 +334,8 @@ export default function ReportsClient({
     } else if (isPenaltyReport) {
       if (sortedYearLevels.length === 0) return alert("No penalty records to export.");
       csv = `Year Level,Student ID,Student Name,Duration,Assessed Fee,Amount Paid,Balance Due,Status,Particulars\n`;
-      sortedYearLevels.forEach(yr => {
-        groupedRoster[yr].forEach(s => {
+      sortedYearLevels.forEach((yr: string) => {
+        groupedRoster[yr].forEach((s: any) => {
           csv += `"${yr}","${s.studentId}","${s.fullName}","${s.duration}",${s.assessedAmount},${s.amountPaid},${s.balanceDue},"${s.status}","${s.particulars}"\n`;
         });
       });
@@ -343,8 +343,8 @@ export default function ReportsClient({
       if (sortedYearLevels.length === 0) return alert("No records to export for this category.");
       const headerName = reportCategory === "Activity & Item Dues (Unpaid)" ? "Remarks" : "OR Number(s) / Remarks";
       csv = `Year Level,Student ID,Student Name,Assessed Fee,Amount Paid,Balance Due,Status,${headerName}\n`;
-      sortedYearLevels.forEach(yr => {
-        groupedRoster[yr].forEach(s => {
+      sortedYearLevels.forEach((yr: string) => {
+        groupedRoster[yr].forEach((s: any) => {
           csv += `"${yr}","${s.studentId}","${s.fullName}",${s.assessedAmount},${s.amountPaid},${s.balanceDue},"${s.status}","${s.particulars}"\n`;
         });
       });
@@ -373,7 +373,7 @@ export default function ReportsClient({
     labels: sortedYearLevels,
     datasets: [{
       label: 'Total Collections (₱)',
-      data: sortedYearLevels.map(yr => groupedRoster[yr].reduce((sum, s) => sum + s.amountPaid, 0)),
+      data: sortedYearLevels.map((yr: string) => groupedRoster[yr].reduce((sum: number, s: any) => sum + s.amountPaid, 0)),
       backgroundColor: '#0dcaf0',
       borderRadius: 4
     }]
@@ -491,7 +491,7 @@ export default function ReportsClient({
 
               {dynamicCategories.length > 0 && (
                 <optgroup label="Organization Collection Fees">
-                  {dynamicCategories.map((cat, idx) => <option key={`dyn-${idx}`} value={cat}>{cat}</option>)}
+                  {dynamicCategories.map((cat: string, idx: number) => <option key={`dyn-${idx}`} value={cat}>{cat}</option>)}
                 </optgroup>
               )}
               
@@ -580,14 +580,14 @@ export default function ReportsClient({
             {sortedYearLevels.length === 0 ? (
               <div className="text-center text-muted py-4">No records found for the selected filters.</div>
             ) : (
-              sortedYearLevels.map(yr => {
+              sortedYearLevels.map((yr: string) => {
                 let lastColumnHeader = "OR Number(s)";
                 if (isPenaltyReport) {
                   lastColumnHeader = "Activities & Breakdown";
                 } else if (reportCategory === "Activity & Item Dues (Unpaid)") {
                   lastColumnHeader = "Remarks"; 
                 } else {
-                  const hasOR = groupedRoster[yr].some(row => row.particulars && row.particulars !== "—");
+                  const hasOR = groupedRoster[yr].some((row: any) => row.particulars && row.particulars !== "—");
                   if (!hasOR) lastColumnHeader = "Remarks";
                 }
 
@@ -609,7 +609,7 @@ export default function ReportsClient({
                           </tr>
                         </thead>
                         <tbody>
-                          {groupedRoster[yr].map((row, idx) => (
+                          {groupedRoster[yr].map((row: any, idx: number) => (
                             <tr key={`${row.id}-${idx}`}>
                               <td><span className="text-info font-monospace">{row.studentId}</span></td>
                               <td className="fw-semibold">{row.fullName}</td>
@@ -658,7 +658,7 @@ export default function ReportsClient({
                   {validLiquidations.length === 0 ? (
                     <tr><td colSpan={8} className="text-center text-muted py-4">No audited liquidation records found.</td></tr>
                   ) : (
-                    validLiquidations.map((l, idx) => {
+                    validLiquidations.map((l: any, idx: number) => {
                       const budget = (Number(l.totalExpense)||0) + (Number(l.varianceReturn)||0) - (Number(l.reimbursementDue)||0);
                       let resultBadge = <span className="badge bg-secondary">Exact (₱0.00)</span>;
                       if (Number(l.varianceReturn) > 0) resultBadge = <span className="badge bg-success">+{fmt(l.varianceReturn)} (Return)</span>;
@@ -734,7 +734,7 @@ export default function ReportsClient({
                         value={sig.label} 
                         onChange={(e) => handleUpdateSignatory(idx, 'label', e.target.value)}
                       >
-                        {labelOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                        {labelOptions.map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
                       </select>
                     </div>
                     <div className="col-md-4">
