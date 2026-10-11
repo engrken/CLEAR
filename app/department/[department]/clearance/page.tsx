@@ -18,17 +18,16 @@ export const metadata: Metadata = {
   title: 'Centralized Liquidation of Expense & Audit Records',
 };
 
-// FIX: Extracted PublicHeader outside the main page component to prevent re-renders
 const PublicHeader = ({ organizationName }: { organizationName: string }) => {
   const displayOrgName = organizationName.toLowerCase() 
     ? organizationName : `College of ${organizationName}`;
   return (
-    <header className="navbar border-bottom border-secondary px-4 py-3 bg-card shadow-sm d-print-none">
+    <header className="navbar border-bottom border-secondary px-4 py-3 bg-body shadow-sm d-print-none text-body">
       <div className="d-flex align-items-center gap-3 w-100">
         <img src="/fcu.png" alt="FCU Logo" style={{ width: '55px', objectFit: 'contain' }} />
         <div>
-          <h5 className="mb-0 fw-bold text-accent">CLEAR System</h5>
-          <small className="text-secondary text-uppercase fw-semibold" style={{ letterSpacing: '0.05em' }}>
+          <h5 className="mb-0 fw-bold text-info">CLEAR System</h5>
+          <small className="text-muted text-uppercase fw-semibold" style={{ letterSpacing: '0.05em' }}>
             {displayOrgName}
           </small>
         </div>
@@ -55,7 +54,6 @@ export default async function ClearancePage({
   const cleanDepartment = decodeURIComponent(department).toLowerCase().trim();
   const basePath = `/department/${encodeURIComponent(cleanDepartment)}`;
 
-  // FIX: Resolve headers to build an absolute URL for the QR Code
   const headersList = await headers();
   const host = headersList.get('host') || 'localhost:3000';
   const protocol = process.env.NODE_ENV === 'development' ? 'http' : 'https';
@@ -67,7 +65,7 @@ export default async function ClearancePage({
 
   if (!organization) {
     return (
-      <div className="d-flex flex-column min-vh-100 bg-canvas">
+      <div className="d-flex flex-column min-vh-100 bg-body-tertiary">
         <main className="flex-grow-1 p-4 d-flex align-items-center justify-content-center">
           <div className="alert alert-danger p-4 shadow-sm border-secondary text-center">
             <h4 className="fw-bold mb-2">Department Not Found</h4>
@@ -107,26 +105,25 @@ export default async function ClearancePage({
     const displayOrgName = organization.name.toLowerCase() ? organization.name : `College of ${organization.name}`;
 
     return (
-      <div className="d-flex flex-column min-vh-100 bg-canvas">
+      <div className="d-flex flex-column min-vh-100 bg-body-tertiary text-body">
         {!isOfficer && <PublicHeader organizationName={organization.name} />}
         <main className="flex-grow-1 p-3 p-md-5 w-100 d-flex align-items-center justify-content-center">
-          <div className="card p-4 border-secondary text-center shadow-lg w-100" style={{ maxWidth: '500px', backgroundColor: '#1e293b' }}>
+          <div className="card p-4 border-secondary text-center shadow-lg w-100 bg-body text-body" style={{ maxWidth: '500px' }}>
             <h4 className="text-info fw-bold mb-1">{displayOrgName}</h4>
-            <small className="text-secondary d-block mb-4">Centralized Liquidation of Expenses & Audit Records</small>
+            <small className="text-muted d-block mb-4">Centralized Liquidation of Expenses & Audit Records</small>
 
             {isSignatureValid ? (
               <>
                 <div className="bg-success text-white p-3 rounded fw-bold fs-5 mb-4 shadow-sm"><i className="bi bi-check-circle-fill me-2"></i>OFFICIAL CLEARANCE VALID</div>
-                <table className="table table-sm table-borderless text-start text-white mb-4">
+                <table className="table table-sm table-borderless text-start text-body mb-4">
                   <tbody>
-                    <tr className="border-bottom border-secondary"><td className="text-secondary py-2">Student ID:</td><td className="fw-bold text-info py-2">{q}</td></tr>
-                    <tr className="border-bottom border-secondary"><td className="text-secondary py-2">Academic Term:</td><td className="py-2">{term} ({ay})</td></tr>
+                    <tr className="border-bottom border-secondary"><td className="text-muted py-2">Student ID:</td><td className="fw-bold text-info py-2">{q}</td></tr>
+                    <tr className="border-bottom border-secondary"><td className="text-muted py-2">Academic Term:</td><td className="py-2">{term} ({ay})</td></tr>
                     <tr className="border-bottom border-secondary">
-                      <td className="text-secondary py-2">Verification Time:</td>
-                      {/* FIX: Forced Manila timezone mapping for server accuracy */}
+                      <td className="text-muted py-2">Verification Time:</td>
                       <td className="py-2">{formatInTimeZone(new Date(), 'Asia/Manila', 'MMM dd, yyyy - hh:mm a')}</td>
                     </tr>
-                    <tr><td className="text-secondary py-2">Crypto Hash:</td><td className="font-monospace text-secondary small py-2">{sigParam.substring(0, 16)}...</td></tr>
+                    <tr><td className="text-muted py-2">Crypto Hash:</td><td className="font-monospace text-muted small py-2">{sigParam.substring(0, 16)}...</td></tr>
                   </tbody>
                 </table>
                 <p className="text-success small fw-semibold m-0">This certificate confirms zero financial arrears, penalties, or unliquidated advances for the specified period.</p>
@@ -218,12 +215,12 @@ export default async function ClearancePage({
     });
 
     return (
-      <div className="d-flex flex-column min-vh-100 bg-canvas">
+      <div className="d-flex flex-column min-vh-100 bg-body-tertiary">
         <main className="flex-grow-1 p-3 p-md-5 mx-auto w-100" style={{ maxWidth: '1200px' }}>
-          <div className="module card p-3 p-md-4 border-secondary shadow-sm h-100">
-            <h5 className="text-accent mb-3"><i className="bi bi-shield-check me-2"></i> Officer Clearance Dashboard</h5>
+          <div className="module card p-3 p-md-4 border-secondary shadow-sm h-100 bg-body text-body">
+            <h5 className="text-info mb-3 fw-bold"><i className="bi bi-shield-check me-2"></i> Officer Clearance Dashboard</h5>
             <ClearanceManager 
-              department={cleanDepartment} /* FIX: Pass decoded URL param */
+              department={cleanDepartment}
               ay={ay} 
               term={term}
               students={clearanceRoster} 
@@ -307,19 +304,18 @@ export default async function ClearancePage({
       if (isCleared) {
         const rawStr = `${studentRecord.studentId.toLowerCase()}|${ay}|${term}|${salt}`;
         clearanceSig = crypto.createHash('sha256').update(rawStr).digest('hex');
-        // FIX: Construct the URL securely with the domain included so mobile phone scanners process it as a hyperlink
         verifyUrl = `${absoluteBaseUrl}${basePath}/clearance?ay=${encodeURIComponent(ay)}&term=${encodeURIComponent(term)}&q=${encodeURIComponent(studentRecord.studentId)}&sig=${encodeURIComponent(clearanceSig)}`;
       }
     }
   }
 
   return (
-    <div className="d-flex flex-column min-vh-100 bg-canvas">
+    <div className="d-flex flex-column min-vh-100 bg-body-tertiary">
       <PublicHeader organizationName={organization.name} />
-      <main className="flex-grow-1 p-3 p-md-5 mx-auto w-100" style={{ maxWidth: '1200px' }}>
-        <div className="module card p-3 p-md-4 border-secondary shadow-sm h-100">
-          <h5 className="text-accent mb-2"><i className="bi bi-person-check me-2"></i>Student Financial Clearance Verification</h5>
-          <p className="text-secondary small mb-3">Verification requires your exact <strong>Student ID</strong> or registered <strong>Email Address</strong>.</p>
+      <main className="flex-grow-1 p-3 p-md-5 mx-auto w-100 text-body" style={{ maxWidth: '1200px' }}>
+        <div className="module card p-3 p-md-4 border-secondary shadow-sm h-100 bg-body">
+          <h5 className="text-info mb-2 fw-bold"><i className="bi bi-person-check me-2"></i>Student Financial Clearance Verification</h5>
+          <p className="text-muted small mb-3">Verification requires your exact <strong>Student ID</strong> or registered <strong>Email Address</strong>.</p>
 
           <form method="GET" action={`${basePath}/clearance`} className="mb-4">
             <input type="hidden" name="ay" value={ay} />
@@ -327,12 +323,12 @@ export default async function ClearancePage({
             <div className="row g-2">
               <div className="col-12 col-md-8">
                 <div className="input-group">
-                  <span className="input-group-text border-secondary text-secondary bg-card"><i className="bi bi-person-vcard"></i></span>
-                  <input type="text" name="q" className="form-control bg-card text-color border-secondary" placeholder="Enter student ID or registered email..." defaultValue={q || ""} autoComplete="off" required />
+                  <span className="input-group-text border-secondary text-muted bg-body-secondary"><i className="bi bi-person-vcard"></i></span>
+                  <input type="text" name="q" className="form-control bg-body text-body border-secondary" placeholder="Enter student ID or registered email..." defaultValue={q || ""} autoComplete="off" required />
                 </div>
               </div>
               <div className="col-12 col-md-4 d-flex align-items-end">
-                <button type="submit" className="btn btn-info w-100 fw-bold"><i className="bi bi-search me-1"></i> Check Clearance</button>
+                <button type="submit" className="btn btn-info text-dark w-100 fw-bold"><i className="bi bi-search me-1"></i> Check Clearance</button>
               </div>
             </div>
           </form>
@@ -340,48 +336,48 @@ export default async function ClearancePage({
           {q && (
             <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.75)' }}>
               <div className="modal-dialog modal-dialog-centered modal-lg">
-                <div className="modal-content card border-secondary bg-dark text-white shadow-lg">
+                <div className="modal-content card border-secondary bg-body text-body shadow-lg">
                   <div className="modal-header border-secondary">
-                    <h5 className="modal-title text-accent"><i className="bi bi-person-badge me-2"></i> Clearance Verification Result</h5>
-                    <Link href={`${basePath}/clearance${queryString}`} className="btn-close btn-close-white" />
+                    <h5 className="modal-title text-info fw-bold"><i className="bi bi-person-badge me-2"></i> Clearance Verification Result</h5>
+                    <Link href={`${basePath}/clearance${queryString}`} className="btn-close" />
                   </div>
 
                   <div className="modal-body" style={{ maxHeight: '75vh', overflowY: 'auto' }}>
                     {!studentRecord ? (
-                      <div className="alert alert-warning py-4 text-center border-warning shadow-sm m-0">
+                      <div className="alert alert-warning py-4 text-center border-warning text-dark shadow-sm m-0">
                         <i className="bi bi-person-x-fill fs-3 d-block mb-2 text-warning"></i>
                         <strong className="fs-5">RECORD NOT FOUND</strong>
-                        <div className="small mt-1 text-secondary">No enrolled record matches <code>{q}</code> for {term} ({ay}). Please verify your entry or visit the department treasury office.</div>
+                        <div className="small mt-1 opacity-75">No enrolled record matches <code>{q}</code> for {term} ({ay}). Please verify your entry or visit the department treasury office.</div>
                       </div>
                     ) : (
-                      <div className="card p-3 border-secondary shadow-sm mb-3 bg-card">
+                      <div className="card p-3 border-secondary shadow-sm mb-3 bg-body-secondary">
                         <div className="d-flex justify-content-between align-items-center mb-2">
-                          <span className="text-secondary small fw-bold">STUDENT RECORD:</span>
+                          <span className="text-muted small fw-bold">STUDENT RECORD:</span>
                           <span className="badge border border-secondary text-info">{term} ({ay})</span>
                         </div>
-                        <h4 className="fw-bold text-accent mb-2">{studentRecord.fullName} <span className="text-secondary fs-6">({studentRecord.studentId})</span></h4>
+                        <h4 className="fw-bold text-info mb-2">{studentRecord.fullName} <span className="text-muted fs-6">({studentRecord.studentId})</span></h4>
 
                         {isCleared ? (
                           <div className="alert alert-success py-3 mb-0 text-center border-success shadow-sm">
                             <div className="fw-bold fs-5 mb-2"><i className="bi bi-patch-check-fill me-2 text-success"></i> CLEARED FOR SIGNING</div>
-                            <div className="small text-secondary mb-3">Present this official QR code to the department adviser or custodian for digital sign-off.</div>
+                            <div className="small text-muted mb-3">Present this official QR code to the department adviser or custodian for digital sign-off.</div>
                             <div className="d-inline-block p-2 bg-white rounded border border-success shadow-sm mb-2">
                               <Image src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(verifyUrl)}`} alt="Clearance QR Code" width={140} height={140} unoptimized />
                             </div>
-                            <div><a href={verifyUrl} target="_blank" rel="noopener noreferrer" className="btn btn-outline-success btn-sm fw-bold mt-1"><i className="bi bi-box-arrow-up-right me-1"></i> Open Digital Certificate</a></div>
+                            <div><a href={verifyUrl} target="_blank" rel="noopener noreferrer" className="btn btn-outline-success btn-sm fw-bold mt-1 text-dark"><i className="bi bi-box-arrow-up-right me-1"></i> Open Digital Certificate</a></div>
                           </div>
                         ) : (
                           <div className="alert alert-danger py-3 mb-0 text-center border-danger shadow-sm">
                             <div className="fw-bold fs-5 mb-1"><i className="bi bi-exclamation-triangle-fill me-2"></i> CLEARANCE HOLD ACTIVE</div>
-                            <div className="small text-secondary">This student has <strong>{pendingDues.length}</strong> pending obligation(s).</div>
-                            <div className="small text-secondary mt-1">Please visit the department treasurer or auditor to settle your account.</div>
+                            <div className="small text-dark">This student has <strong>{pendingDues.length}</strong> pending obligation(s).</div>
+                            <div className="small text-dark mt-1">Please visit the department treasurer or auditor to settle your account.</div>
                           </div>
                         )}
                       </div>
                     )}
                   </div>
                   <div className="modal-footer border-secondary">
-                    <Link href={`${basePath}/clearance${queryString}`} className="btn btn-secondary btn-sm">Close</Link>
+                    <Link href={`${basePath}/clearance${queryString}`} className="btn btn-secondary btn-sm">Close View</Link>
                   </div>
                 </div>
               </div>
@@ -389,7 +385,7 @@ export default async function ClearancePage({
           )}
 
           <ClearanceClientView
-            department={cleanDepartment} /* FIX: Pass decoded URL param */
+            department={cleanDepartment}
             ay={ay}
             term={term}
             defaultStudentId={studentRecord?.studentId || q || ""}

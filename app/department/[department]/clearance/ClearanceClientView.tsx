@@ -28,19 +28,20 @@ export default function ClearanceClientView({
   const [email, setEmail] = useState(defaultEmail);
   const [channel, setChannel] = useState("GCash");
   const [referenceNo, setReferenceNo] = useState("");
+  
+  // DYNAMIC COLLECTION LOGIC
   const [collectionType, setCollectionType] = useState(feeOptions[0] || "Departmental Fee");
+  const [customCollectionType, setCustomCollectionType] = useState("");
+  
   const [paymentModeUI, setPaymentModeUI] = useState("Full Payment"); 
   const [amount, setAmount] = useState<number>(packageRate);
   
-  // Storing the raw File instead of a Base64 string to prevent Payload Too Large errors
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setProofFile(file);
-    }
+    if (file) setProofFile(file);
   };
 
   const handleProofSubmit = async (e: React.FormEvent) => {
@@ -49,16 +50,20 @@ export default function ClearanceClientView({
       return alert("Please complete all required fields and attach a receipt file.");
     }
 
+    const finalParticulars = collectionType === "Other" ? customCollectionType.trim() : collectionType;
+    if (!finalParticulars) {
+      return alert("Please specify what this payment is for.");
+    }
+
     setIsSubmitting(true);
     try {
-      // Append payload to FormData to correctly stream the file through Next.js Server Actions
       const formData = new FormData();
       formData.append("studentId", studentId);
       formData.append("studentName", fullName || "Student");
       formData.append("email", email || "student@example.com");
       formData.append("paymentChannel", channel);
       formData.append("referenceNo", referenceNo);
-      formData.append("particulars", collectionType);
+      formData.append("particulars", finalParticulars);
       formData.append("amount", amount.toString());
       formData.append("ay", ay);
       formData.append("term", term);
@@ -70,6 +75,7 @@ export default function ClearanceClientView({
       setShowProofModal(false);
       setReferenceNo("");
       setProofFile(null);
+      setCustomCollectionType("");
     } catch (err: any) {
       alert("Error: " + err.message);
     } finally {
@@ -96,11 +102,12 @@ export default function ClearanceClientView({
           <div className="modal-dialog modal-dialog-centered modal-lg">
             <div className="modal-content card border-secondary bg-body text-body shadow-lg">
               <div className="modal-header border-secondary">
-                <h5 className="modal-title fw-bold text-success"><i className="bi bi-shield-lock-fill me-2"></i>Submit GCash / Maya Proof</h5>
+                <h5 className="modal-title fw-bold text-success"><i className="bi bi-shield-lock-fill me-2"></i>Submit Payment Proof</h5>
                 <button type="button" className="btn-close" onClick={() => setShowProofModal(false)}></button>
               </div>
               <form onSubmit={handleProofSubmit}>
                 <div className="modal-body">
+                  
                   <div className="row g-2 mb-3">
                     <div className="col-md-6">
                       <label className="form-label text-muted small fw-semibold">Student ID</label>
@@ -135,11 +142,17 @@ export default function ClearanceClientView({
                   <div className="row g-2 mb-3">
                     <div className="col-md-6">
                       <label className="form-label text-muted small fw-semibold">Collection Type / Particulars</label>
-                      <select className="form-select bg-body text-body border-secondary" value={collectionType} onChange={e => setCollectionType(e.target.value)}>
+                      <select className="form-select bg-body text-body border-secondary mb-2" value={collectionType} onChange={e => setCollectionType(e.target.value)}>
                         {feeOptions.map((fee, idx) => (
                           <option key={idx} value={fee}>{fee}</option>
                         ))}
+                        <option value="Penalty Arrears">Penalty Arrears</option>
+                        <option value="Other">Other (Please specify...)</option>
                       </select>
+                      {/* CONDITIONAL RENDER FOR 'OTHER' */}
+                      {collectionType === "Other" && (
+                        <input type="text" className="form-control bg-body-secondary text-body border-secondary" placeholder="Type specific payment reason..." value={customCollectionType} onChange={e => setCustomCollectionType(e.target.value)} required />
+                      )}
                     </div>
                     <div className="col-md-6">
                       <label className="form-label text-muted small fw-semibold">Payment Mode & Amount</label>
