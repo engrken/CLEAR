@@ -108,10 +108,10 @@ export default async function LiquidationsPage({
     );
   }
 
-  // =========================================================
+// =========================================================
   // 6. FETCH PENDING ADVANCES, FUNDS, AND PAST AUDITS
   // =========================================================
-  const [pendingAdvances, funds, pastAudits] = await Promise.all([
+  const [pendingAdvances, funds, rawPastAudits] = await Promise.all([
     // 6a. Pending Cash Advances
     prisma.cashAdvance.findMany({
       where: {
@@ -136,21 +136,27 @@ export default async function LiquidationsPage({
       },
     }),
 
-    // 6c. Historical Liquidations (with line items for printing)
-    prisma.liquidation.findMany({
+    // 6c. Historical Liquidations (Your schema calls this 'Audit')
+    prisma.audit.findMany({
       where: {
         organizationId: organization.id,
         academicYear: ay,
         term,
       },
       include: {
-        items: true,
+        expenseItems: true, // Your schema calls the relation 'expenseItems'
       },
       orderBy: {
         date: 'desc',
       },
-    }).catch(() => []), // Fallback to empty array if table isn't ready
+    }).catch(() => []), 
   ]);
+
+  // Map 'expenseItems' to 'items' so the LiquidationHistory component works instantly
+  const pastAudits = rawPastAudits.map(audit => ({
+    ...audit,
+    items: audit.expenseItems
+  }));
 
   // =========================================================
   // 7. RENDER WRAPPER CLIENT COMPONENT
