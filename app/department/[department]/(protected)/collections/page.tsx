@@ -19,7 +19,7 @@ export default async function CollectionsPage({
     prefillCategory?: string;
     prefillDesc?: string;
     prefillAmount?: string;
-  >>;
+  }>;
 }) {
   const { department } = await params;
   const resolvedSearch = searchParams ? await searchParams : {};
