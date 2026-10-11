@@ -418,7 +418,7 @@ export default function ReportsClient({
           .print-container * { color: #000000 !important; background-color: transparent !important; }
           .print-container .bg-dark, .print-container .table-dark { background-color: #f8f9fa !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
           
-          .print-container table { border-collapse: collapse !important; margin-bottom: 15px !important; width: 100% !important; border: 1.5px solid #000000 !important; }
+          .print-container table { border-collapse: collapse !important; margin-bottom: 15px !important; width: 100% !important;  }
           .print-container th, .print-container td { border: 1px solid #000000 !important; padding: 5px 8px !important; }
           
           .print-container thead { display: table-header-group !important; }
@@ -434,8 +434,8 @@ export default function ReportsClient({
             <img src={getAssetUrl('fcu.png')} alt="FCU Logo" style={{ width: '100%', maxHeight: '90px', objectFit: 'contain' }} />
           </div>
           <div className="text-center flex-grow-1 px-3">
-            <div className="fw-bold text-uppercase" style={{ fontSize: '0.9rem', letterSpacing: '0.5px' }}>Filamer Christian University</div>
-            <div className="fw-bold text-uppercase text-info" style={{ fontSize: '1.1rem' }}>{orgName}</div>
+            <div className="fw-bold text-uppercase" style={{ fontSize: '1.1rem' }}>Filamer Christian University</div>
+            <div className="fw-bold text-uppercase text-info" style={{ fontSize: '0.9rem', letterSpacing: '0.5px' }}>{orgName}</div>
             <div className="text-muted small">Roxas Avenue, Roxas City, Capiz, Philippines 5800</div>
             <div className="mt-3 fw-bold text-uppercase" style={{ fontSize: '0.95rem' }}>Detailed Audit & Financial Report ({reportCategory})</div>
             <div className="text-muted small fst-italic mt-1">{ay} &nbsp;|&nbsp; {term}</div>

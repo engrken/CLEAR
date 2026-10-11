@@ -140,7 +140,7 @@ export default async function LiquidationsPage({
     <div className="module card p-3 p-md-4 border-secondary shadow-sm">
       <h5 className="text-accent mb-3">
         <i className="bi bi-receipt me-2"></i>
-        Audit Liquidation Examination
+        Audit Liquidation Checking
       </h5>
 
       <LiquidationsForm
