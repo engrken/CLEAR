@@ -63,8 +63,8 @@ export default function PenaltiesManager({
   // PENALTY LOG MODAL STATE & FILTERS
   // =========================================================
   const [isLogsOpen, setIsLogsOpen] = useState(false);
-  const [logSearch, setLogSearch] = useState(""); // <--- NEW: Filter search bar inside logs modal
-  const [statusFilter, setStatusFilter] = useState("All"); // <--- NEW: Status filter dropdown
+  const [logSearch, setLogSearch] = useState(""); 
+  const [statusFilter, setStatusFilter] = useState("All"); 
 
   // =========================================================
   // PAGINATION STATE
@@ -106,8 +106,6 @@ export default function PenaltiesManager({
   const [csHours, setCsHours] = useState<number>(0);
   const [csMinutes, setCsMinutes] = useState<number>(0);
   const [isSubmittingCs, setIsSubmittingCs] = useState(false);
-
-  const baseUrl = `http://${department}.localhost:3000`;
 
   // =========================================================
   // DYNAMIC FINE CALCULATION
@@ -468,7 +466,7 @@ export default function PenaltiesManager({
                                   {isUnsettled && (
                                     <>
                                       <Link
-                                        href={`${baseUrl}/collections?ay=${encodeURIComponent(ay)}&term=${encodeURIComponent(term)}&prefillId=${encodeURIComponent(p.studentId || "")}`}
+                                        href={`/department/${encodeURIComponent(department)}/collections?ay=${encodeURIComponent(ay)}&term=${encodeURIComponent(term)}&prefillId=${encodeURIComponent(p.studentId || "")}`}
                                         className="btn btn-outline-info btn-xs py-0 w-100 text-center fw-semibold"
                                         style={{ fontSize: "0.75rem" }}
                                         onClick={() => setIsLogsOpen(false)}
