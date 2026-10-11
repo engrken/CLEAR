@@ -1,7 +1,8 @@
 // /(protected)/liquidations/page.tsx
+
 import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
-import LiquidationsForm from './LiquidationsForm';
+import LiquidationsClient from './LiquidationsClient';
 import { redirect } from 'next/navigation';
 import { Metadata } from 'next';
 
@@ -84,14 +85,15 @@ export default async function LiquidationsPage({
   const prefillCaId = resolvedSearch.caId || '';
 
   // =========================================================
-  // 5. FIND DEPARTMENT
+  // 5. FIND DEPARTMENT & SIGNATORIES
   // =========================================================
   const organization = await prisma.organization.findUnique({
     where: { subdomain: cleanDepartment },
     select: { 
       id: true, 
       name: true, 
-      logo: true 
+      logo: true,
+      signatories: { orderBy: { order: 'asc' } } // Fetched for the Print View
     }
   });
 
@@ -107,9 +109,10 @@ export default async function LiquidationsPage({
   }
 
   // =========================================================
-  // 6. FETCH PENDING CASH ADVANCES AND FUNDS
+  // 6. FETCH PENDING ADVANCES, FUNDS, AND PAST AUDITS
   // =========================================================
-  const [pendingAdvances, funds] = await Promise.all([
+  const [pendingAdvances, funds, pastAudits] = await Promise.all([
+    // 6a. Pending Cash Advances
     prisma.cashAdvance.findMany({
       where: {
         organizationId: organization.id,
@@ -124,6 +127,7 @@ export default async function LiquidationsPage({
       },
     }),
 
+    // 6b. Existing Funds
     prisma.fund.findMany({
       where: {
         organizationId: organization.id,
@@ -131,25 +135,39 @@ export default async function LiquidationsPage({
         term,
       },
     }),
+
+    // 6c. Historical Liquidations (with line items for printing)
+    prisma.liquidation.findMany({
+      where: {
+        organizationId: organization.id,
+        academicYear: ay,
+        term,
+      },
+      include: {
+        items: true,
+      },
+      orderBy: {
+        date: 'desc',
+      },
+    }).catch(() => []), // Fallback to empty array if table isn't ready
   ]);
 
   // =========================================================
-  // 7. RENDER PAGE
+  // 7. RENDER WRAPPER CLIENT COMPONENT
   // =========================================================
   return (
-    <div className="module card p-3 p-md-4 border-secondary shadow-sm">
-      <h5 className="text-accent mb-3">
-        <i className="bi bi-receipt me-2"></i>
-        Audit Liquidation Checking
-      </h5>
-
-      <LiquidationsForm
+    <div className="module card p-0 border-secondary shadow-sm overflow-hidden bg-body text-body">
+      <LiquidationsClient
         department={cleanDepartment}
+        orgName={organization.name}
+        logoUrl={organization.logo}
+        signatories={organization.signatories || []}
         ay={ay}
         term={term}
         pendingAdvances={pendingAdvances}
         funds={funds}
         prefillCaId={prefillCaId}
+        pastAudits={pastAudits}
       />
     </div>
   );

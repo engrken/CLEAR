@@ -134,10 +134,10 @@ export default function SummaryClient({
             <img src={getAssetUrl('fcu.png')} alt="FCU Logo" style={{ width: '100%', maxHeight: '90px', objectFit: 'contain' }} />
           </div>
           <div className="text-center flex-grow-1 px-3">
-            <div className="fw-bold text-uppercase" style={{ fontSize: '0.9rem', letterSpacing: '0.5px' }}>Filamer Christian University</div>
+            <div className="fw-bold text-uppercase" style={{ fontSize: '1.1rem' }}>Filamer Christian University</div>
             
             {/* UPDATED: Displays full dynamic name without "College of" hardcoded */}
-            <div className="fw-bold text-uppercase text-info" style={{ fontSize: '1.1rem' }}>{orgName}</div>
+            <div className="fw-bold text-uppercase text-info" style={{ fontSize: '0.9rem', letterSpacing: '0.5px' }}>{orgName}</div>
             
             <div className="text-muted small">Roxas Avenue, Roxas City, Capiz, Philippines 5800</div>
             <div className="mt-3 fw-bold text-uppercase" style={{ fontSize: '0.95rem' }}>FINANCIAL REPORT OF  CONTRIBUTIONS AND EXPENSES</div>
