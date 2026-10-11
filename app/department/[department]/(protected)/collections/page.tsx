@@ -15,7 +15,11 @@ export default async function CollectionsPage({
     ay?: string;
     term?: string;
     prefillId?: string;
-  }>;
+    penaltyId?: string;
+    prefillCategory?: string;
+    prefillDesc?: string;
+    prefillAmount?: string;
+  >>;
 }) {
   const { department } = await params;
   const resolvedSearch = searchParams ? await searchParams : {};
@@ -23,6 +27,10 @@ export default async function CollectionsPage({
   const ay = resolvedSearch.ay || "A.Y. 2026 - 2027";
   const term = resolvedSearch.term || "1st Sem";
   const prefillId = resolvedSearch.prefillId || "";
+  const penaltyId = resolvedSearch.penaltyId || "";
+  const prefillCategory = resolvedSearch.prefillCategory || "";
+  const prefillDesc = resolvedSearch.prefillDesc || "";
+  const prefillAmount = resolvedSearch.prefillAmount || "";
 
   const organization = await prisma.organization.findUnique({
     where: { subdomain: department },
@@ -48,14 +56,11 @@ export default async function CollectionsPage({
     orderBy: { fundName: "asc" },
   });
 
-  // Fetch all collection setups. The client form will use the 'isPackage' flag
-  // to dynamically build the mandatory package vs standalone dropdown options.
   const collectionSetups = await prisma.collectionSetup.findMany({
     where: { organizationId: organization.id, academicYear: ay, term },
     orderBy: [{ category: "asc" }, { name: "asc" }],
   });
 
-  // Calculate next OR number
   const lastCollection = await prisma.collection.findFirst({
     where: { organizationId: organization.id, academicYear: ay },
     orderBy: { timestamp: "desc" },
@@ -94,6 +99,10 @@ export default async function CollectionsPage({
         collectionItems={collectionSetups}
         nextOr={nextOr}
         prefillId={prefillId}
+        penaltyId={penaltyId}
+        prefillCategory={prefillCategory}
+        prefillDesc={prefillDesc}
+        prefillAmount={prefillAmount}
       />
     </div>
   );

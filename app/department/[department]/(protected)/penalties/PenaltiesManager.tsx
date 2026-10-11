@@ -466,13 +466,13 @@ export default function PenaltiesManager({
                                   {isUnsettled && (
                                     <>
                                       <Link
-												href={`/department/${encodeURIComponent(department)}/collections?ay=${encodeURIComponent(ay)}&term=${encodeURIComponent(term)}&prefillId=${encodeURIComponent(p.studentId || "")}&penaltyId=${encodeURIComponent(p.penaltyId)}`}
-												className="btn btn-outline-info btn-xs py-0 w-100 text-center fw-semibold"
-												style={{ fontSize: "0.75rem" }}
-												onClick={() => setIsLogsOpen(false)}
-											>
-											Pay in Cash
-										</Link>
+  href={`/department/${encodeURIComponent(department)}/collections?ay=${encodeURIComponent(ay)}&term=${encodeURIComponent(term)}&prefillId=${encodeURIComponent(p.studentId || "")}&penaltyId=${encodeURIComponent(p.penaltyId)}&prefillCategory=Others&prefillDesc=${encodeURIComponent(`Penalty Fine: ${p.activity}`)}&prefillAmount=${p.fineAmount}`}
+  className="btn btn-outline-info btn-xs py-0 w-100 text-center fw-semibold"
+  style={{ fontSize: "0.75rem" }}
+  onClick={() => setIsLogsOpen(false)}
+>
+  Pay in Cash
+</Link>
                                       <button
                                         type="button"
                                         className="btn btn-outline-warning btn-xs py-0 w-100 text-center fw-semibold"

@@ -21,16 +21,13 @@ function parseDate(val: any, fieldName: string): Date {
   return date;
 }
 
-// 🚨 REPLACED: Now resolves and returns the correct Database UUID
 async function resolveStudentDbId(orgId: string, identifier: string | null) {
   if (!identifier) return null;
 
-  // Try finding by internal Database ID (UUID) first
   let student = await prisma.student.findFirst({
     where: { id: identifier, organizationId: orgId }
   });
 
-  // If not found, try finding by the human-readable School ID
   if (!student) {
     student = await prisma.student.findFirst({
       where: { studentId: identifier, organizationId: orgId }
@@ -41,7 +38,7 @@ async function resolveStudentDbId(orgId: string, identifier: string | null) {
     throw new Error(`Student identifier "${identifier}" is not registered in your roster.`);
   }
 
-  return student.id; // Always returns the DB UUID
+  return student.id;
 }
 
 async function sendEmailReceipt(
@@ -57,14 +54,14 @@ async function sendEmailReceipt(
     paymentType: string;
   }
 ) {
-  if (!studentEmail) return; // Skip if the student doesn't have an email on file
+  if (!studentEmail) return;
 
   try {
     const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
-        user: process.env.GMAIL_USER, // e.g., your system email
-        pass: process.env.GMAIL_APP_PASSWORD, // 16-character App Password
+        user: process.env.GMAIL_USER,
+        pass: process.env.GMAIL_APP_PASSWORD,
       },
     });
 
@@ -129,8 +126,6 @@ async function sendEmailReceipt(
     console.log(`Receipt successfully sent to ${studentEmail}`);
   } catch (error) {
     console.error("Failed to send digital receipt:", error);
-    // We intentionally don't throw the error here so that a failed email 
-    // doesn't accidentally crash the successful database payment logging.
   }
 }
 
@@ -177,6 +172,7 @@ export async function recordPayment(
     fundAllocation: string;
     ay: string;
     term: string;
+    penaltyId?: string; // <-- ADDED SUPPORT FOR PENALTY SETTLEMENT
   }
 ) {
   // 1. Verify Permission via Shared Guard
@@ -193,7 +189,7 @@ export async function recordPayment(
   }
   const orgId = organization.id;
 
-  // 3. Validate Inputs & Fetch the Correct UUID 🚨
+  // 3. Validate Inputs & Fetch the Correct UUID
   const rawStudentInput = String(data.studentId || "").trim() || null;
   const studentDbId = await resolveStudentDbId(orgId, rawStudentInput);
 
@@ -224,12 +220,8 @@ export async function recordPayment(
 
   const remainingBeforePayment = Math.max(0, Math.round((rate - alreadyPaid) * 100) / 100);
 
-  if (remainingBeforePayment <= 0) {
+  if (remainingBeforePayment <= 0 && !data.penaltyId) {
     throw new Error(`This assessment has already been fully paid at ₱${rate.toFixed(2)}.`);
-  }
-
-  if (paid > remainingBeforePayment) {
-    throw new Error(`Payment amount ₱${paid.toFixed(2)} cannot exceed the remaining balance of ₱${remainingBeforePayment.toFixed(2)}.`);
   }
 
   const newTotalPaid = alreadyPaid + paid;
@@ -239,26 +231,49 @@ export async function recordPayment(
     ? "Full Payment"
     : String(data.paymentType || "").trim() || "Partial Payment";
 
-  // 5. Create Database Record
-  await prisma.collection.create({
-    data: {
-      organizationId: orgId,
-      academicYear: data.ay,
-      term: data.term,
-      date,
-      studentId: studentDbId,
-      studentName,
-      orNumber: String(data.orNumber || "").trim(),
-      category,
-      itemDescription,
-      paymentType: actualPaymentType,
-      standardRate: rate,
-      amountPaid: paid,
-      balanceDue,
-      fundAllocation: String(data.fundAllocation || "").trim(),
-      status: "Valid",
-      encodedBy: officerName,
-    },
+  // 5. Create Database Record & Execute Penalty Settlement Transaction if Applicable
+  await prisma.$transaction(async (tx) => {
+    await tx.collection.create({
+      data: {
+        organizationId: orgId,
+        academicYear: data.ay,
+        term: data.term,
+        date,
+        studentId: studentDbId,
+        studentName,
+        orNumber: String(data.orNumber || "").trim(),
+        category,
+        itemDescription,
+        paymentType: actualPaymentType,
+        standardRate: rate,
+        amountPaid: paid,
+        balanceDue,
+        fundAllocation: String(data.fundAllocation || "").trim(),
+        status: "Valid",
+        encodedBy: officerName,
+      },
+    });
+
+    // 🚀 PENALTY SETTLEMENT HOOK
+    if (data.penaltyId) {
+      const targetPen = await tx.penalty.findFirst({
+        where: { penaltyId: data.penaltyId, organizationId: orgId },
+      });
+
+      if (targetPen) {
+        const existingFine = Math.max(0, Number(targetPen.fineAmount) || 0);
+        const remainingFine = Math.max(0, Math.round((existingFine - paid) * 100) / 100);
+
+        const newStatus = remainingFine === 0
+          ? `Settled (Cash Payment - ₱${paid.toFixed(2)})`
+          : `Partially Paid (₱${paid.toFixed(2)} paid, ₱${remainingFine.toFixed(2)} remaining)`;
+
+        await tx.penalty.update({
+          where: { id: targetPen.id },
+          data: { fineAmount: remainingFine, status: newStatus },
+        });
+      }
+    }
   });
 
   // 6. Audit Log
@@ -268,15 +283,16 @@ export async function recordPayment(
         organizationId: orgId,
         user: officerName,
         action: "RECORD_PAYMENT",
-        details: `Recorded payment of ₱${paid.toFixed(2)} from ${studentName} [OR: ${data.orNumber}] for ${itemDescription}.`,
+        details: `Recorded payment of ₱${paid.toFixed(2)} from ${studentName} [OR: ${data.orNumber}] for ${itemDescription}.${data.penaltyId ? ` Settled penalty [${data.penaltyId}].` : ''}`,
       }
     });
   } catch (error) {
-    console.warn("System logging failed (table might not exist yet):", error);
+    console.warn("System logging failed:", error);
   }
 
   // 7. Revalidate Cache
   revalidatePath(`/department/${department}/collections`);
+  revalidatePath(`/department/${department}/penalties`);
   revalidatePath(`/department/${department}/clearance`);
   revalidatePath(`/department/${department}`);
 }
