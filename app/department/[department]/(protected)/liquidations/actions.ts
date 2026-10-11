@@ -44,6 +44,8 @@ export async function recordAudit(
       orsi: string;
       desc: string;
       subTotal: number;
+      proofBase64?: string; // 🚀 ADDED SUPPORT FOR BLOB ATTACHMENTS
+      proofMime?: string;
     }[];
     ay: string;
     term: string;
@@ -138,7 +140,7 @@ export async function recordAudit(
       },
     });
 
-    // Create Expense Items
+    // Create Expense Items with Receipt Proof Blob URLs
     for (const item of data.items) {
       await tx.expenseItem.create({
         data: {
@@ -148,6 +150,7 @@ export async function recordAudit(
           qty: Number(item.qty),
           description: String(item.desc || "").trim(),
           subTotal: money(item.subTotal, "Expense subtotal"),
+          receiptProofUrl: item.proofBase64 || null, // 🚀 SAVES THE ATTACHED BLOB TO THE DATABASE
         },
       });
     }
@@ -178,7 +181,7 @@ export async function recordAudit(
       }
     });
   } catch (error) {
-    console.warn("System logging failed (table might not exist yet):", error);
+    console.warn("System logging failed:", error);
   }
 
   // 8. Revalidate Cache
