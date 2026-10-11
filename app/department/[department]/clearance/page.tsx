@@ -1,6 +1,8 @@
+// /[department]/clearance/pasge.tsx
+
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/auth';
-import { fmt, formatHoursAndMinutes } from '@/lib/utils';
+import { fmt } from '@/lib/utils';
 import { formatInTimeZone } from 'date-fns-tz';
 import { headers } from 'next/headers';
 import crypto from 'crypto';
@@ -93,9 +95,14 @@ export default async function ClearancePage({
     orderBy: { name: 'asc' }
   });
 
-  const feeOptions = collectionSetups.length > 0 
-    ? collectionSetups.map(c => c.name) 
-    : ["Departmental Fee (Package)"];
+  // FIX: Explicitly include the Full Package AND all individual Collectible Items
+  const feeOptions = [
+    { name: "Departmental Fee (Full Package)", amount: termPkg.total },
+    ...collectionSetups.map(c => ({
+      name: c.name,
+      amount: c.amount
+    }))
+  ];
 
   const salt = process.env.CLEARANCE_SALT || 'CLEARANCE_KEY_2026';
 
@@ -344,7 +351,7 @@ export default async function ClearancePage({
 
                   <div className="modal-body" style={{ maxHeight: '75vh', overflowY: 'auto' }}>
                     {!studentRecord ? (
-                      <div className="alert alert-warning py-4 text-center border-warning text-dark shadow-sm m-0">
+                      <div className="alert alert-warning py-4 text-center border-warning bg-warning bg-opacity-10 text-warning shadow-sm m-0">
                         <i className="bi bi-person-x-fill fs-3 d-block mb-2 text-warning"></i>
                         <strong className="fs-5">RECORD NOT FOUND</strong>
                         <div className="small mt-1 opacity-75">No enrolled record matches <code>{q}</code> for {term} ({ay}). Please verify your entry or visit the department treasury office.</div>

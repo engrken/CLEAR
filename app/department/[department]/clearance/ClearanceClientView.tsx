@@ -1,3 +1,5 @@
+// /[department]/clearance/ClearanceClientView.tsx
+
 "use client";
 
 import { useState } from "react";
@@ -19,7 +21,7 @@ export default function ClearanceClientView({
   defaultStudentId: string;
   defaultFullName: string;
   defaultEmail: string;
-  feeOptions: string[];
+  feeOptions: { name: string; amount: number }[]; // <-- UPGRADED
   packageRate: number;
 }) {
   const [showProofModal, setShowProofModal] = useState(false);
@@ -30,14 +32,26 @@ export default function ClearanceClientView({
   const [referenceNo, setReferenceNo] = useState("");
   
   // DYNAMIC COLLECTION LOGIC
-  const [collectionType, setCollectionType] = useState(feeOptions[0] || "Departmental Fee");
+  const [collectionType, setCollectionType] = useState(feeOptions[0]?.name || "Departmental Fee (Full Package)");
   const [customCollectionType, setCustomCollectionType] = useState("");
   
   const [paymentModeUI, setPaymentModeUI] = useState("Full Payment"); 
-  const [amount, setAmount] = useState<number>(packageRate);
+  const [amount, setAmount] = useState<number>(feeOptions[0]?.amount || packageRate);
   
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // AUTO-UPDATES AMOUNT WHEN DROPDOWN CHANGES
+  const handleCollectionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    setCollectionType(val);
+    if (val === "Other" || val === "Penalty Arrears") {
+      setAmount(0);
+    } else {
+      const matched = feeOptions.find(f => f.name === val);
+      if (matched) setAmount(matched.amount);
+    }
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -142,16 +156,16 @@ export default function ClearanceClientView({
                   <div className="row g-2 mb-3">
                     <div className="col-md-6">
                       <label className="form-label text-muted small fw-semibold">Collection Type / Particulars</label>
-                      <select className="form-select bg-body text-body border-secondary mb-2" value={collectionType} onChange={e => setCollectionType(e.target.value)}>
+                      <select className="form-select bg-body text-body border-secondary mb-2" value={collectionType} onChange={handleCollectionChange}>
                         {feeOptions.map((fee, idx) => (
-                          <option key={idx} value={fee}>{fee}</option>
+                          <option key={idx} value={fee.name}>{fee.name}</option>
                         ))}
                         <option value="Penalty Arrears">Penalty Arrears</option>
                         <option value="Other">Other (Please specify...)</option>
                       </select>
                       {/* CONDITIONAL RENDER FOR 'OTHER' */}
                       {collectionType === "Other" && (
-                        <input type="text" className="form-control bg-body-secondary text-body border-secondary" placeholder="Type specific payment reason..." value={customCollectionType} onChange={e => setCustomCollectionType(e.target.value)} required />
+                        <input type="text" className="form-control bg-body-secondary text-body border-secondary" placeholder="Type specific payment reason..." value={customCollectionType} onChange={e => setCustomCollectionType(e.target.value)} required autoFocus />
                       )}
                     </div>
                     <div className="col-md-6">
@@ -166,9 +180,9 @@ export default function ClearanceClientView({
                     </div>
                   </div>
 
-                  <div className="alert alert-warning py-2 small mb-3 border-warning text-dark shadow-sm">
+                  <div className="alert border-warning bg-warning bg-opacity-10 text-warning py-2 small mb-3 shadow-sm">
                     <i className="bi bi-shield-exclamation me-2"></i>
-                    <strong>Privacy Notice:</strong> Please blur or black out your personal phone number and remaining wallet balance before uploading your screenshot.
+                    <strong>Privacy Notice:</strong> Please blur or black out your personal phone number and remaining wallet balance before uploading.
                   </div>
 
                   <div className="mb-3">
