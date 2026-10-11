@@ -225,8 +225,8 @@ export default function LiquidationHistory({
               <img src={getAssetUrl('fcu.png')} alt="FCU Logo" style={{ width: '100%', maxHeight: '90px', objectFit: 'contain' }} />
             </div>
             <div className="text-center flex-grow-1 px-3">
-              <div className="fw-bold text-uppercase" style={{ fontSize: '0.9rem' }}>Filamer Christian University</div>
-              <div className="fw-bold text-uppercase" style={{ fontSize: '1.1rem' }}>{orgName}</div>
+              <div className="fw-bold text-uppercase" style={{ fontSize: '1.1rem' }}>Filamer Christian University</div>
+              <div className="fw-bold text-uppercase" style={{ fontSize: '0.9rem' }}>{orgName}</div>
               <div className="small">Roxas Avenue, Roxas City, Capiz</div>
               <div className="mt-3 fw-bold text-uppercase" style={{ fontSize: '0.95rem' }}>OFFICIAL AUDITED LIQUIDATION REPORT</div>
               <div className="small mt-1">{ay} &nbsp;|&nbsp; {term}</div>
