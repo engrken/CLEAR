@@ -1,5 +1,4 @@
 // /(protected)/liquidations/LiquidationHistory.tsx
-
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -59,10 +58,10 @@ export default function LiquidationHistory({
   // =================================================================
   const handlePrint = (audit: any) => {
     setPrintData(audit);
-    // Allow React state to update the DOM with the hidden print template before calling window.print
+    // Give React slightly more time to inject the new Audit data into the hidden DOM
     setTimeout(() => {
       window.print();
-    }, 150); 
+    }, 300); 
   };
 
   if (!audits || audits.length === 0) {
@@ -93,12 +92,17 @@ export default function LiquidationHistory({
             overflow: visible !important; position: static !important;
           }
           
+          /* GUARANTEE PRINT CONTAINER IS VISIBLE */
           .print-container {
+            display: block !important;
+            visibility: visible !important;
+            position: absolute !important; 
+            top: 0; left: 0;
             width: 100% !important; margin: 0 !important; padding: 0 !important; 
             border: none !important; box-shadow: none !important; background-color: white !important;
           }
-          .print-container * { color: #000000 !important; background-color: transparent !important; }
           
+          .print-container * { color: #000000 !important; background-color: transparent !important; }
           .print-container .bg-dark { background-color: #f8f9fa !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
           
           .print-container table { border-collapse: collapse !important; margin-bottom: 15px !important; width: 100% !important; }
@@ -207,7 +211,7 @@ export default function LiquidationHistory({
           HIDDEN PRINT TEMPLATE (Activated via window.print)
       ================================================================= */}
       {printData && (
-        <div className="print-container d-none">
+        <div className="print-container d-none d-print-block">
           
           {/* INSTITUTIONAL HEADER */}
           <div className="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom border-dark">

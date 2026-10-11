@@ -164,6 +164,7 @@ export default async function LiquidationsPage({
   return (
     <div className="module card p-0 border-secondary shadow-sm overflow-hidden bg-body text-body">
       <LiquidationsClient
+	    orgId={organization.id}
         department={cleanDepartment}
         orgName={organization.name}
         logoUrl={organization.logo}
