@@ -1,5 +1,3 @@
-// /[department]/clearance/pasge.tsx
-
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/auth';
 import { fmt } from '@/lib/utils';
@@ -95,7 +93,6 @@ export default async function ClearancePage({
     orderBy: { name: 'asc' }
   });
 
-  // FIX: Explicitly include the Full Package AND all individual Collectible Items
   const feeOptions = [
     { name: "Departmental Fee (Full Package)", amount: termPkg.total },
     ...collectionSetups.map(c => ({
@@ -351,7 +348,7 @@ export default async function ClearancePage({
 
                   <div className="modal-body" style={{ maxHeight: '75vh', overflowY: 'auto' }}>
                     {!studentRecord ? (
-                      <div className="alert alert-warning py-4 text-center border-warning bg-warning bg-opacity-10 text-warning shadow-sm m-0">
+                      <div className="alert border-warning bg-warning bg-opacity-10 text-warning py-4 text-center shadow-sm m-0">
                         <i className="bi bi-person-x-fill fs-3 d-block mb-2 text-warning"></i>
                         <strong className="fs-5">RECORD NOT FOUND</strong>
                         <div className="small mt-1 opacity-75">No enrolled record matches <code>{q}</code> for {term} ({ay}). Please verify your entry or visit the department treasury office.</div>
@@ -365,19 +362,19 @@ export default async function ClearancePage({
                         <h4 className="fw-bold text-info mb-2">{studentRecord.fullName} <span className="text-muted fs-6">({studentRecord.studentId})</span></h4>
 
                         {isCleared ? (
-                          <div className="alert alert-success py-3 mb-0 text-center border-success shadow-sm">
-                            <div className="fw-bold fs-5 mb-2"><i className="bi bi-patch-check-fill me-2 text-success"></i> CLEARED FOR SIGNING</div>
-                            <div className="small text-muted mb-3">Present this official QR code to the department adviser or custodian for digital sign-off.</div>
+                          <div className="alert border-success bg-success bg-opacity-10 text-success py-3 mb-0 text-center shadow-sm">
+                            <div className="fw-bold fs-5 mb-2"><i className="bi bi-patch-check-fill me-2"></i> CLEARED FOR SIGNING</div>
+                            <div className="small opacity-75 mb-3 text-body">Present this official QR code to the department adviser or custodian for digital sign-off.</div>
                             <div className="d-inline-block p-2 bg-white rounded border border-success shadow-sm mb-2">
                               <Image src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(verifyUrl)}`} alt="Clearance QR Code" width={140} height={140} unoptimized />
                             </div>
-                            <div><a href={verifyUrl} target="_blank" rel="noopener noreferrer" className="btn btn-outline-success btn-sm fw-bold mt-1 text-dark"><i className="bi bi-box-arrow-up-right me-1"></i> Open Digital Certificate</a></div>
+                            <div><a href={verifyUrl} target="_blank" rel="noopener noreferrer" className="btn btn-success btn-sm fw-bold mt-1 text-dark"><i className="bi bi-box-arrow-up-right me-1"></i> Open Digital Certificate</a></div>
                           </div>
                         ) : (
-                          <div className="alert alert-danger py-3 mb-0 text-center border-danger shadow-sm">
+                          <div className="alert border-danger bg-danger bg-opacity-10 text-danger py-3 mb-0 text-center shadow-sm">
                             <div className="fw-bold fs-5 mb-1"><i className="bi bi-exclamation-triangle-fill me-2"></i> CLEARANCE HOLD ACTIVE</div>
-                            <div className="small text-dark">This student has <strong>{pendingDues.length}</strong> pending obligation(s).</div>
-                            <div className="small text-dark mt-1">Please visit the department treasurer or auditor to settle your account.</div>
+                            <div className="small opacity-75 text-body">This student has <strong>{pendingDues.length}</strong> pending obligation(s).</div>
+                            <div className="small opacity-75 text-body mt-1">Please visit the department treasurer or auditor to settle your account.</div>
                           </div>
                         )}
                       </div>
