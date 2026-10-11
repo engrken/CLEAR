@@ -1,15 +1,16 @@
+// /(protected)/remittances/RemittanceManager.tsx
+
 "use client";
 
 import { useState, useMemo } from "react";
 import { fmt } from "@/lib/utils";
 import { format } from "date-fns";
 import { submitRemittanceBatch } from "./actions";
-import { ThemedAlert } from '@/lib/alerts';
 
 interface CollectionItem {
   id: string;
   orNumber: string;
-  date: Date;
+  date: string; // Serialized Date from Server
   studentId: string;
   studentName: string;
   category: string;
@@ -83,7 +84,7 @@ export default function RemittanceManager({
         term
       });
 
-      alert(`Successfully remitted ${selectedIds.length} items totaling ${fmt(totalSelectedAmount)} under Slip #${depositSlipOr.trim()}`);
+      alert(`Successfully remitted ${selectedIds.length} items totaling ${fmt(totalSelectedAmount as any)} under Slip #${depositSlipOr.trim()}`);
       setSelectedIds([]);
       setDepositSlipOr("");
       setRemarks("");
@@ -98,48 +99,48 @@ export default function RemittanceManager({
     <div>
       <form onSubmit={handleSubmitRemittance} className="mb-4">
         {/* Remittance Details Card */}
-        <div className="card p-3 border-secondary bg-card mb-3 shadow-sm">
+        <div className="card p-3 border-secondary bg-body-secondary mb-3 shadow-sm text-body">
           <h6 className="text-success fw-bold mb-3"><i className="bi bi-bank me-2"></i>Remit Selected to University Cashier</h6>
           
           <div className="row g-2 mb-2">
             <div className="col-md-4">
-              <label className="form-label text-secondary small fw-semibold">Remittance Date</label>
-              <input type="date" className="form-control" value={remitDate} onChange={e => setRemitDate(e.target.value)} required />
+              <label className="form-label text-muted small fw-semibold">Remittance Date</label>
+              <input type="date" className="form-control bg-body text-body border-secondary" value={remitDate} onChange={e => setRemitDate(e.target.value)} required />
             </div>
             <div className="col-md-4">
-              <label className="form-label text-secondary small fw-semibold">Treasury OR / Deposit Slip #</label>
-              <input type="text" className="form-control font-monospace" placeholder="e.g. UCR-2026-9812" value={depositSlipOr} onChange={e => setDepositSlipOr(e.target.value)} required />
+              <label className="form-label text-muted small fw-semibold">Treasury OR / Deposit Slip #</label>
+              <input type="text" className="form-control font-monospace bg-body text-body border-secondary" placeholder="e.g. UCR-2026-9812" value={depositSlipOr} onChange={e => setDepositSlipOr(e.target.value)} required />
             </div>
             <div className="col-md-4">
-              <label className="form-label text-secondary small fw-semibold">Deposited By (Officer)</label>
-              <input type="text" className="form-control" placeholder="Full Name" value={depositedBy} onChange={e => setDepositedBy(e.target.value)} required />
+              <label className="form-label text-muted small fw-semibold">Deposited By (Officer)</label>
+              <input type="text" className="form-control bg-body text-body border-secondary" placeholder="Full Name" value={depositedBy} onChange={e => setDepositedBy(e.target.value)} required />
             </div>
           </div>
 
           <div className="mb-3">
-            <label className="form-label text-secondary small fw-semibold">Remarks / Notes</label>
-            <input type="text" className="form-control" placeholder="e.g. Batch remittance for 1st Sem collections" value={remarks} onChange={e => setRemarks(e.target.value)} />
+            <label className="form-label text-muted small fw-semibold">Remarks / Notes</label>
+            <input type="text" className="form-control bg-body text-body border-secondary" placeholder="e.g. Batch remittance for 1st Sem collections" value={remarks} onChange={e => setRemarks(e.target.value)} />
           </div>
 
           <div className="d-flex justify-content-between align-items-center p-2 rounded bg-body border border-secondary mb-3">
-            <span className="small text-secondary">Selected Items: <strong>{selectedIds.length}</strong></span>
-            <span className="small text-secondary">Total Deposit Amount: <strong className="text-success fs-6">{fmt(totalSelectedAmount)}</strong></span>
+            <span className="small text-muted">Selected Items: <strong className="text-body">{selectedIds.length}</strong></span>
+            <span className="small text-muted">Total Deposit Amount: <strong className="text-success fs-6 fw-bold">{fmt(totalSelectedAmount as any)}</strong></span>
           </div>
 
-          <button type="submit" className="btn btn-success fw-bold w-100" disabled={isSubmitting || selectedIds.length === 0}>
+          <button type="submit" className="btn btn-success fw-bold text-dark w-100 py-2" disabled={isSubmitting || selectedIds.length === 0}>
             {isSubmitting ? "Processing Remittance..." : "Submit Remittance to Treasury"}
           </button>
         </div>
       </form>
 
       {/* Unremitted Queue Table */}
-      <h6 className="fw-bold text-secondary mb-2">Pending Unremitted Collections ({unremittedItems.length})</h6>
-      <div className="table-responsive mb-4">
-        <table className="table table-hover align-middle">
+      <h6 className="fw-bold text-info mb-2">Pending Unremitted Collections ({unremittedItems.length})</h6>
+      <div className="table-responsive mb-5">
+        <table className="table table-hover align-middle text-body border-secondary">
           <thead>
-            <tr className="text-secondary small">
+            <tr className="text-muted small border-bottom border-secondary">
               <th className="text-center" style={{ width: '40px' }}>
-                <input type="checkbox" className="form-check-input" checked={unremittedItems.length > 0 && selectedIds.length === unremittedItems.length} onChange={toggleSelectAll} />
+                <input type="checkbox" className="form-check-input border-secondary" checked={unremittedItems.length > 0 && selectedIds.length === unremittedItems.length} onChange={toggleSelectAll} />
               </th>
               <th>OR #</th>
               <th>Date</th>
@@ -150,18 +151,18 @@ export default function RemittanceManager({
           </thead>
           <tbody>
             {unremittedItems.length === 0 ? (
-              <tr><td colSpan={6} className="text-center text-secondary py-3">All collections for this term have been remitted.</td></tr>
+              <tr><td colSpan={6} className="text-center text-muted py-3">All collections for this term have been remitted.</td></tr>
             ) : (
               unremittedItems.map(item => (
-                <tr key={item.id}>
+                <tr key={item.id} className="border-bottom border-secondary">
                   <td className="text-center">
-                    <input type="checkbox" className="form-check-input" checked={selectedIds.includes(item.id)} onChange={() => toggleSelect(item.id)} />
+                    <input type="checkbox" className="form-check-input border-secondary" checked={selectedIds.includes(item.id)} onChange={() => toggleSelect(item.id)} />
                   </td>
                   <td><strong className="font-monospace text-info">{item.orNumber}</strong></td>
-                  <td>{format(new Date(item.date), 'yyyy-MM-dd')}</td>
-                  <td>{item.studentName} <small className="text-secondary">({item.studentId})</small></td>
-                  <td>{item.itemDescription || item.category}</td>
-                  <td className="text-end fw-bold text-success">{fmt(item.amountPaid)}</td>
+                  <td className="small text-muted">{format(new Date(item.date), 'yyyy-MM-dd')}</td>
+                  <td><span className="fw-semibold">{item.studentName}</span> <br/><small className="text-muted">({item.studentId})</small></td>
+                  <td className="small">{item.itemDescription || item.category}</td>
+                  <td className="text-end fw-bold text-success">{fmt(item.amountPaid as any)}</td>
                 </tr>
               ))
             )}
@@ -172,29 +173,29 @@ export default function RemittanceManager({
       {/* Remitted History Table */}
       <h6 className="fw-bold text-secondary mb-2">Completed Remittance History ({remittedItems.length})</h6>
       <div className="table-responsive">
-        <table className="table table-hover align-middle">
+        <table className="table table-hover align-middle text-body border-secondary">
           <thead>
-            <tr className="text-secondary small">
+            <tr className="text-muted small border-bottom border-secondary">
               <th>OR / Slip #</th>
               <th>Date</th>
               <th>Student</th>
               <th>Item Description</th>
               <th className="text-end">Amount</th>
-              <th>Status</th>
+              <th className="text-center">Status</th>
             </tr>
           </thead>
           <tbody>
             {remittedItems.length === 0 ? (
-              <tr><td colSpan={6} className="text-center text-secondary py-3">No completed remittances recorded yet.</td></tr>
+              <tr><td colSpan={6} className="text-center text-muted py-3">No completed remittances recorded yet.</td></tr>
             ) : (
               remittedItems.map(item => (
-                <tr key={item.id}>
+                <tr key={item.id} className="border-bottom border-secondary">
                   <td><strong className="font-monospace text-secondary">{item.orNumber}</strong></td>
-                  <td>{format(new Date(item.date), 'yyyy-MM-dd')}</td>
-                  <td>{item.studentName}</td>
-                  <td>{item.itemDescription || item.category}</td>
-                  <td className="text-end fw-bold text-success">{fmt(item.amountPaid)}</td>
-                  <td><span className="badge bg-success">{item.status}</span></td>
+                  <td className="small text-muted">{format(new Date(item.date), 'yyyy-MM-dd')}</td>
+                  <td className="fw-semibold">{item.studentName}</td>
+                  <td className="small">{item.itemDescription || item.category}</td>
+                  <td className="text-end fw-bold text-success">{fmt(item.amountPaid as any)}</td>
+                  <td className="text-center"><span className="badge bg-success text-white">{item.status}</span></td>
                 </tr>
               ))
             )}

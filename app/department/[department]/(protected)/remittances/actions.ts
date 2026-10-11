@@ -1,3 +1,6 @@
+// /(protected)/remittances/actions.ts
+
+
 "use server";
 
 import { prisma } from '@/lib/prisma';
@@ -50,59 +53,39 @@ export async function verifyOnlineRemittance(
     amount: number;
     ay: string;
     term: string;
+    fundAllocation: string; // <--- ADDED THIS
   }
 ) {
-  // 1. Verify Permission
   const customUser = await requireTabAccess("tab-remittances");
   const officerName = customUser.fullName || customUser.email || "System Administrator";
 
-  // 2. Resolve Organization ID
   const organization = await prisma.organization.findUnique({
     where: { subdomain: department.toLowerCase() }
   });
   if (!organization) throw new Error(`Organization subdomain "${department}" not found.`);
   const orgId = organization.id;
 
-  // 3. Validate OR Number
   const orNumber = String(data.orNumber || "").trim();
   if (!orNumber) throw new Error("OR number is required.");
 
-  // 4. Database Transaction
   await prisma.$transaction(async (tx) => {
-    // 4a. Fetch and validate Remittance
     const remittance = await tx.onlineRemittance.findFirst({
       where: { id: data.remittanceId, organizationId: orgId },
     });
 
     if (!remittance) throw new Error("Online remittance record not found.");
-
-    const currentStatus = String(remittance.status || "").toUpperCase();
-    if (currentStatus === "VERIFIED") throw new Error("This remittance has already been verified.");
+    if (String(remittance.status || "").toUpperCase() === "VERIFIED") throw new Error("This remittance has already been verified.");
 
     const amount = Math.max(0, Number(remittance.amountPaid) || 0);
     if (amount <= 0) throw new Error("The remittance contains an invalid amount.");
 
-    // 4b. Validate Student FK (If provided)
     const studentDbId = remittance.studentId ? String(remittance.studentId).trim() : null;
-    if (studentDbId) {
-      const student = await tx.student.findFirst({
-        where: { id: studentDbId, organizationId: orgId },
-        select: { id: true },
-      });
-      if (!student) throw new Error("The remittance student does not belong to this department.");
-    }
 
-    // 4c. Update Remittance Status
     await tx.onlineRemittance.update({
       where: { id: remittance.id },
-      data: {
-        status: "Verified",
-        reviewedBy: officerName,
-        orNumber,
-      },
+      data: { status: "Verified", reviewedBy: officerName, orNumber },
     });
 
-    // 4d. Post Official Collection Record
     await tx.collection.create({
       data: {
         organizationId: orgId,
@@ -113,19 +96,18 @@ export async function verifyOnlineRemittance(
         studentName: remittance.studentName,
         orNumber,
         category: remittance.category || "Online Remittance",
-        itemDescription: remittance.itemDescription,
+        itemDescription: remittance.itemDescription || "Online Payment",
         paymentType: "Full Payment",
         standardRate: amount,
         amountPaid: amount,
         balanceDue: 0,
-        fundAllocation: "New Accounts (Current Operations)",
+        fundAllocation: data.fundAllocation, // <--- NOW DYNAMICALLY ASSIGNED
         status: "Valid",
         encodedBy: officerName,
       },
     });
   });
 
-  // 5. Audit Log
   try {
     await prisma.systemLog.create({
       data: {
@@ -135,11 +117,8 @@ export async function verifyOnlineRemittance(
         details: `Verified online remittance [${data.remittanceId}] and issued OR: ${orNumber}.`,
       }
     });
-  } catch (e) {
-    console.warn(e);
-  }
+  } catch (e) { console.warn(e); }
 
-  // 6. Revalidate Cache
   revalidatePath(`/department/${department}/remittances`);
   revalidatePath(`/department/${department}/collections`);
   revalidatePath(`/department/${department}/clearance`);
@@ -162,8 +141,14 @@ export async function invalidateOnlineRemittance(department: string, remittanceI
     throw new Error("A verified remittance cannot be invalidated from the pending queue.");
   }
 
-  await prisma.onlineRemittance.deleteMany({
-    where: { id: remittance.id, organizationId: orgId },
+  // FIX APPLIED: Update status to "Rejected" instead of permanently deleting the record
+  await prisma.onlineRemittance.update({
+    where: { id: remittance.id },
+    data: {
+      status: "Rejected",
+      reviewedBy: officerName,
+      reviewNotes: "Marked invalid and removed from queue by admin."
+    }
   });
 
   try {
@@ -179,7 +164,7 @@ export async function invalidateOnlineRemittance(department: string, remittanceI
 
   revalidatePath(`/department/${department}/remittances`);
 
-  return { success: true, message: "Remittance submission marked as invalid and removed from queue." };
+  return { success: true, message: "Remittance submission marked as invalid and moved to Rejected tab." };
 }
 
 // =========================================================================
