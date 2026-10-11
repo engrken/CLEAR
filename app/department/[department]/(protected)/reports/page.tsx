@@ -1,3 +1,5 @@
+// /(protected)/reports/page.tsx
+
 import { prisma } from '@/lib/prisma';
 import ReportsClient from './ReportsClient';
 import { Metadata } from 'next';

@@ -1,7 +1,7 @@
-// @ts-nocheck
+// /(protected)/liquidations/page.tsx
 import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
-import LiquidationsClient from './LiquidationsClient';
+import LiquidationsForm from './LiquidationsForm';
 import { redirect } from 'next/navigation';
 import { Metadata } from 'next';
 
@@ -84,15 +84,14 @@ export default async function LiquidationsPage({
   const prefillCaId = resolvedSearch.caId || '';
 
   // =========================================================
-  // 5. FIND DEPARTMENT & SIGNATORIES
+  // 5. FIND DEPARTMENT
   // =========================================================
   const organization = await prisma.organization.findUnique({
     where: { subdomain: cleanDepartment },
     select: { 
       id: true, 
       name: true, 
-      logo: true,
-      signatories: { orderBy: { order: 'asc' } }
+      logo: true 
     }
   });
 
@@ -108,9 +107,9 @@ export default async function LiquidationsPage({
   }
 
   // =========================================================
-  // 6. FETCH ADVANCES, FUNDS, AND PAST AUDITS
+  // 6. FETCH PENDING CASH ADVANCES AND FUNDS
   // =========================================================
-  const [pendingAdvances, funds, pastAudits] = await Promise.all([
+  const [pendingAdvances, funds] = await Promise.all([
     prisma.cashAdvance.findMany({
       where: {
         organizationId: organization.id,
@@ -132,39 +131,25 @@ export default async function LiquidationsPage({
         term,
       },
     }),
-
-    // Fetch the historical liquidations for the History Tab
-    prisma.liquidation.findMany({
-      where: {
-        organizationId: organization.id,
-        academicYear: ay,
-        term,
-      },
-      include: {
-        items: true,
-      },
-      orderBy: {
-        date: 'desc',
-      },
-    }).catch(() => []), // Fallback to empty array if not ready
   ]);
 
   // =========================================================
   // 7. RENDER PAGE
   // =========================================================
   return (
-    <div className="module card p-0 border-secondary shadow-sm overflow-hidden bg-body">
-      <LiquidationsClient
+    <div className="module card p-3 p-md-4 border-secondary shadow-sm">
+      <h5 className="text-accent mb-3">
+        <i className="bi bi-receipt me-2"></i>
+        Audit Liquidation Examination
+      </h5>
+
+      <LiquidationsForm
         department={cleanDepartment}
-        orgName={organization.name}
-        logoUrl={organization.logo}
-        signatories={organization.signatories || []}
         ay={ay}
         term={term}
         pendingAdvances={pendingAdvances}
         funds={funds}
         prefillCaId={prefillCaId}
-        pastAudits={pastAudits}
       />
     </div>
   );
