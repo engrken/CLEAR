@@ -1,4 +1,5 @@
 // /(protected)/liquidations/LiquidationHistory.tsx
+
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -58,10 +59,10 @@ export default function LiquidationHistory({
   // =================================================================
   const handlePrint = (audit: any) => {
     setPrintData(audit);
-    // Give React slightly more time to inject the new Audit data into the hidden DOM
+    // Increased delay to 500ms to guarantee React paints the hidden DOM completely before printing
     setTimeout(() => {
       window.print();
-    }, 300); 
+    }, 500); 
   };
 
   if (!audits || audits.length === 0) {
@@ -75,29 +76,34 @@ export default function LiquidationHistory({
 
   return (
     <>
-      {/* PRINT STYLESHEET */}
+      {/* BULLETPROOF PRINT STYLESHEET */}
       <style dangerouslySetInnerHTML={{__html: `
         @media print {
           @page { size: 8.5in 13in; margin: 0.5in; }
           
-          /* Hides standard app layout elements including the footer */
+          /* Hides standard app layout elements */
           aside, nav, header, footer, .sidebar, .d-print-none { 
             display: none !important; 
           }
-          
-          /* Reset layout for natural multi-page flow */
-          html, body, main, #__next, .layout-wrapper {
-            margin: 0 !important; padding: 0 !important; width: 100% !important; 
-            height: auto !important; min-height: auto !important; background-color: white !important;
-            overflow: visible !important; position: static !important;
+
+          /* CRITICAL FIX: Force every single element to allow overflow so nothing gets cut off */
+          * {
+            overflow: visible !important;
           }
           
-          /* GUARANTEE PRINT CONTAINER IS VISIBLE */
+          /* CRITICAL FIX: Reset layout for natural multi-page flow and kill the card overflow-hidden */
+          html, body, main, #__next, .layout-wrapper, .card, .module, .card-body {
+            margin: 0 !important; padding: 0 !important; width: 100% !important; 
+            height: auto !important; min-height: auto !important; background-color: white !important;
+            position: static !important;
+            box-shadow: none !important; border: none !important;
+          }
+          
+          /* GUARANTEE PRINT CONTAINER IS VISIBLE AND STATIC */
           .print-container {
             display: block !important;
             visibility: visible !important;
-            position: absolute !important; 
-            top: 0; left: 0;
+            position: static !important; 
             width: 100% !important; margin: 0 !important; padding: 0 !important; 
             border: none !important; box-shadow: none !important; background-color: white !important;
           }
