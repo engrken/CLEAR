@@ -1,4 +1,5 @@
 // /(protected)/summary/SummaryClient.tsx
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -55,7 +56,7 @@ export default function SummaryClient({
   const [isSaving, setIsSaving] = useState(false);
   
   // Local state for the dynamic signatories list
-  const [signatories, setSignatories] = useState(initialSignatories);
+  const [signatories, setSignatories] = useState(initialSignatories || []);
   
   // Options for the Label dropdown
   const labelOptions = ["Prepared by:", "Attested by:", "Noted by:", "Endorsed by:", "Verified by:", "Approved by:"];
@@ -92,28 +93,28 @@ export default function SummaryClient({
       <style dangerouslySetInnerHTML={{__html: `
         @media print {
           @page { size: 8.5in 13in; margin: 0.5in; }
-          aside, nav, header, .sidebar, .d-print-none { display: none !important; }
+          aside, nav, header, footer, .sidebar, .d-print-none { display: none !important; }
           html, body, main, #__next, .layout-wrapper {
             margin: 0 !important; padding: 0 !important; width: 100% !important; max-width: 100% !important; background-color: white !important;
           }
           .print-container {
-            position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important;
+            position: static !important; width: 100% !important;
             margin: 0 !important; padding: 0 !important; border: none !important; box-shadow: none !important; background-color: white !important;
           }
           .print-container * { color: #000000 !important; background-color: transparent !important; }
           .print-container table { border-collapse: collapse !important; margin-bottom: 15px !important; width: 100% !important; border: 1.5px solid #000000 !important; }
           .print-container th, .print-container td { border: 1px solid #000000 !important; padding: 5px 8px !important; }
-          .print-container .bg-dark { background-color: #f8f9fa !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .print-container .bg-dark { background-color: #f8f9fa !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
           h6 { margin-top: 15px !important; margin-bottom: 5px !important; }
           .signature-block { margin-top: 40px !important; page-break-inside: avoid !important; }
         }
       `}} />
 
-      <div className="card p-3 p-md-4 border-secondary shadow-sm bg-card text-color print-container">
+      <div className="card p-3 p-md-4 border-secondary shadow-sm bg-body text-body print-container">
         {/* HEADER TOOLBAR (Hidden during print) */}
         <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4 d-print-none">
           <div>
-            <h5 className="text-accent m-0 fw-bold">COLLECTIONS & EXPENSES SUMMARY ({term})</h5>
+            <h5 className="text-info m-0 fw-bold">COLLECTIONS & EXPENSES SUMMARY ({term})</h5>
             <small className="text-muted">Official financial statement matching legacy ledger output.</small>
           </div>
           <div>
@@ -136,7 +137,7 @@ export default function SummaryClient({
             <div className="fw-bold text-uppercase" style={{ fontSize: '0.9rem', letterSpacing: '0.5px' }}>Filamer Christian University</div>
             
             {/* UPDATED: Displays full dynamic name without "College of" hardcoded */}
-            <div className="fw-bold text-uppercase text-accent" style={{ fontSize: '1.1rem' }}>{orgName}</div>
+            <div className="fw-bold text-uppercase text-info" style={{ fontSize: '1.1rem' }}>{orgName}</div>
             
             <div className="text-muted small">Roxas Avenue, Roxas City, Capiz, Philippines 5800</div>
             <div className="mt-3 fw-bold text-uppercase" style={{ fontSize: '0.95rem' }}>FINANCIAL REPORT OF  CONTRIBUTIONS AND EXPENSES</div>
@@ -155,7 +156,7 @@ export default function SummaryClient({
         {/* COLLECTIONS SECTION */}
         <h6 className="text-info text-uppercase fw-bold mt-2">Collections ({term})</h6>
         <div className="table-responsive mb-4">
-          <table className="table table-sm table-bordered border-dark align-middle text-color mb-0" style={{ fontSize: '0.85rem' }}>
+          <table className="table table-sm table-bordered border-dark align-middle text-body mb-0" style={{ fontSize: '0.85rem' }}>
             <thead>
               <tr className="text-muted">
                 <th>Collection Item</th>
@@ -165,28 +166,28 @@ export default function SummaryClient({
               </tr>
             </thead>
             <tbody>
-              <tr><td colSpan={4} className="fw-bold text-accent py-2">Departmental Fee</td></tr>
-              {termPkg.items.map((item: any, idx: number) => {
+              <tr><td colSpan={4} className="fw-bold text-info py-2">Departmental Fee</td></tr>
+              {termPkg?.items?.map((item: any, idx: number) => {
                 const entry = collectionHierarchy[item.name] || { count: 0, total: 0 };
                 return (
                   <tr key={idx}>
                     <td className="ps-3">{item.name}</td>
-                    <td className="text-end">{fmt(item.rate)}</td>
+                    <td className="text-end">{fmt(item.rate as any)}</td>
                     <td className="text-end">{entry.count}</td>
-                    <td className="text-end">{fmt(entry.total)}</td>
+                    <td className="text-end">{fmt(entry.total as any)}</td>
                   </tr>
                 );
               })}
 
-              <tr><td colSpan={4} className="fw-bold text-accent py-2 pt-3">Other Fees / Merchandise / Penalties</td></tr>
-              {Object.keys(collectionHierarchy).map((k, idx) => {
-                if (!termPkg.items.some(pi => pi.name === k) && k !== "General Fund (Carried Over)" && k !== "New Accounts Inflow") {
+              <tr><td colSpan={4} className="fw-bold text-info py-2 pt-3">Other Fees / Merchandise / Penalties</td></tr>
+              {Object.keys(collectionHierarchy).map((k: string, idx: number) => {
+                if (!termPkg?.items?.some((pi: any) => pi.name === k) && k !== "General Fund (Carried Over)" && k !== "New Accounts Inflow") {
                   return (
                     <tr key={idx}>
                       <td className="ps-3">{k}</td>
                       <td className="text-end">-</td>
                       <td className="text-end">{collectionHierarchy[k].count}</td>
-                      <td className="text-end">{fmt(collectionHierarchy[k].total)}</td>
+                      <td className="text-end">{fmt(collectionHierarchy[k].total as any)}</td>
                     </tr>
                   );
                 }
@@ -197,19 +198,19 @@ export default function SummaryClient({
                 <td className="ps-3 fw-semibold">General Fund (Carried Over)</td>
                 <td className="text-end">-</td>
                 <td className="text-end">{(collectionHierarchy["General Fund (Carried Over)"] || {}).count || 0}</td>
-                <td className="text-end">{fmt((collectionHierarchy["General Fund (Carried Over)"] || {}).total || 0)}</td>
+                <td className="text-end">{fmt((collectionHierarchy["General Fund (Carried Over)"] || {}).total as any || 0)}</td>
               </tr>
               <tr>
                 <td className="ps-3 fw-semibold">New Accounts (Current Term Inflow)</td>
                 <td className="text-end">-</td>
                 <td className="text-end">{(collectionHierarchy["New Accounts Inflow"] || {}).count || 0}</td>
-                <td className="text-end">{fmt((collectionHierarchy["New Accounts Inflow"] || {}).total || 0)}</td>
+                <td className="text-end">{fmt((collectionHierarchy["New Accounts Inflow"] || {}).total as any || 0)}</td>
               </tr>
             </tbody>
             <tfoot>
               <tr className="fw-bold bg-dark text-white">
                 <td colSpan={3} className="text-end py-1">SUB TOTAL:</td>
-                <td className="text-end text-accent">{fmt(grandCollectionTotal)}</td>
+                <td className="text-end text-info">{fmt(grandCollectionTotal as any)}</td>
               </tr>
             </tfoot>
           </table>
@@ -218,7 +219,7 @@ export default function SummaryClient({
         {/* EXPENSES SECTION */}
         <h6 className="text-danger text-uppercase fw-bold mt-3">Expenses ({term})</h6>
         <div className="table-responsive mb-4">
-          <table className="table table-sm table-bordered border-dark align-middle text-color mb-0" style={{ fontSize: '0.85rem' }}>
+          <table className="table table-sm table-bordered border-dark align-middle text-body mb-0" style={{ fontSize: '0.85rem' }}>
             <thead>
               <tr className="text-muted">
                 <th>Fund Source Account</th>
@@ -231,12 +232,12 @@ export default function SummaryClient({
               {Object.keys(expensesByFund).length === 0 ? (
                 <tr><td colSpan={4} className="text-center text-muted py-2">No liquidated expenses recorded for this term.</td></tr>
               ) : (
-                Object.entries(expensesByFund).sort().map(([fundName, totalAmt], idx) => (
+                Object.entries(expensesByFund).sort().map(([fundName, totalAmt]: any, idx: number) => (
                   <tr key={idx}>
                     <td className="ps-3 fw-bold">{fundName}</td>
                     <td></td>
                     <td></td>
-                    <td className="text-end text-danger">{fmt(totalAmt)}</td>
+                    <td className="text-end text-danger">{fmt(totalAmt as any)}</td>
                   </tr>
                 ))
               )}
@@ -244,7 +245,7 @@ export default function SummaryClient({
             <tfoot>
               <tr className="fw-bold bg-dark text-white">
                 <td colSpan={3} className="text-end py-1">SUB TOTAL:</td>
-                <td className="text-end text-danger">{fmt(grandExpenseTotal)}</td>
+                <td className="text-end text-danger">{fmt(grandExpenseTotal as any)}</td>
               </tr>
             </tfoot>
           </table>
@@ -254,7 +255,7 @@ export default function SummaryClient({
         <h6 className="text-warning text-uppercase fw-bold mt-3">Collectibles & Receivables ({term})</h6>
         <div className="text-muted small fst-italic mb-1" style={{ fontSize: '0.75rem' }}>NOTE: These are amounts to be collected from students who have not paid.</div>
         <div className="table-responsive mb-4">
-          <table className="table table-sm table-bordered border-dark align-middle text-color mb-0" style={{ fontSize: '0.85rem' }}>
+          <table className="table table-sm table-bordered border-dark align-middle text-body mb-0" style={{ fontSize: '0.85rem' }}>
             <thead>
               <tr className="text-muted">
                 <th>Category / Description</th>
@@ -272,7 +273,7 @@ export default function SummaryClient({
                     <td className="ps-3">{col.category}</td>
                     <td></td>
                     <td className="text-end">{col.headcount}</td>
-                    <td className="text-end fw-bold">{fmt(col.total)}</td>
+                    <td className="text-end fw-bold">{fmt(col.total as any)}</td>
                   </tr>
                 ))
               )}
@@ -280,25 +281,25 @@ export default function SummaryClient({
             <tfoot>
               <tr className="fw-bold bg-dark text-white">
                 <td colSpan={3} className="text-end py-1">SUB TOTAL:</td>
-                <td className="text-end text-warning">{fmt(totalCollectiblesSum)}</td>
+                <td className="text-end text-warning">{fmt(totalCollectiblesSum as any)}</td>
               </tr>
             </tfoot>
           </table>
         </div>
 
         {/* REMAINING BALANCE (NET ENDING POSITION) */}
-        <div className="card p-2 d-flex flex-row justify-content-between align-items-center flex-wrap gap-2 mb-3">
+        <div className="card p-2 d-flex flex-row justify-content-between align-items-center flex-wrap gap-2 mb-3 bg-body-secondary border-secondary">
           <div>
-            <span className="fw-bold text-uppercase">REMAINING BALANCE (NET ENDING POSITION):</span>
+            <span className="fw-bold text-uppercase text-body">REMAINING BALANCE (NET ENDING POSITION):</span>
             <div className="text-muted small" style={{ fontSize: '0.75rem' }}>Total Collections minus Total Liquidated Expenses</div>
           </div>
           <div className={`fs-5 fw-bold ${netBalance >= 0 ? 'text-success' : 'text-danger'}`}>
-            {fmt(netBalance)}
+            {fmt(netBalance as any)}
           </div>
         </div>
 
         {/* DYNAMIC SIGNATURE BLOCK */}
-        <div className="row mt-4 pt-3 text-color signature-block" style={{ fontSize: '0.85rem' }}>
+        <div className="row mt-4 pt-3 text-body signature-block" style={{ fontSize: '0.85rem' }}>
           {signatories && signatories.length > 0 ? (
             signatories.map((sig: any, idx: number) => (
               <div className="col text-center" key={idx}>
@@ -319,42 +320,42 @@ export default function SummaryClient({
           cc: VPAA, VPF, OSA
         </div>
       </div>
-	  
-	  {/* =========================================================
+      
+      {/* =========================================================
           REPORT SETTINGS MODAL
       ========================================================= */}
       {showSettings && (
-        <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: "rgba(0,0,0,0.7)" }}>
+        <div className="modal fade show d-block d-print-none" tabIndex={-1} style={{ backgroundColor: "rgba(0,0,0,0.6)" }}>
           <div className="modal-dialog modal-dialog-centered modal-lg">
-            <div className="modal-content bg-card border-secondary text-color shadow-lg">
+            <div className="modal-content bg-body border-secondary text-body shadow-lg">
               <div className="modal-header border-secondary">
                 <h5 className="modal-title fw-bold text-info">
                   <i className="bi bi-pen-fill me-2"></i>Configure Signatories
                 </h5>
-                <button type="button" className="btn-close btn-close-white" onClick={() => setShowSettings(false)}></button>
+                <button type="button" className="btn-close" onClick={() => setShowSettings(false)}></button>
               </div>
               <div className="modal-body p-4">
-                <p className="small text-secondary mb-3">
+                <p className="small text-muted mb-3">
                   Customize the official signatories for this department. These will appear at the bottom of the Summary and Liquidation reports. Dragging/reordering is determined by the order they appear below.
                 </p>
 
                 {signatories.map((sig: any, idx: number) => (
-                  <div key={idx} className="row g-2 mb-3 align-items-center bg-body-tertiary p-2 rounded border border-secondary-subtle">
+                  <div key={idx} className="row g-2 mb-3 align-items-center bg-body-secondary p-2 rounded border border-secondary">
                     <div className="col-md-3">
                       <label className="form-label small fw-semibold text-muted mb-1">Action / Label</label>
                       <select 
-                        className="form-select form-select-sm bg-card text-color border-secondary" 
+                        className="form-select form-select-sm bg-body text-body border-secondary" 
                         value={sig.label} 
                         onChange={(e) => handleUpdateSignatory(idx, 'label', e.target.value)}
                       >
-                        {labelOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                        {labelOptions.map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
                       </select>
                     </div>
                     <div className="col-md-4">
                       <label className="form-label small fw-semibold text-muted mb-1">Full Name</label>
                       <input 
                         type="text" 
-                        className="form-control form-control-sm bg-card text-color border-secondary" 
+                        className="form-control form-control-sm bg-body text-body border-secondary" 
                         placeholder="e.g. Juan Dela Cruz" 
                         value={sig.name} 
                         onChange={(e) => handleUpdateSignatory(idx, 'name', e.target.value)}
@@ -364,7 +365,7 @@ export default function SummaryClient({
                       <label className="form-label small fw-semibold text-muted mb-1">Position / Title</label>
                       <input 
                         type="text" 
-                        className="form-control form-control-sm bg-card text-color border-secondary" 
+                        className="form-control form-control-sm bg-body text-body border-secondary" 
                         placeholder="e.g. Internal Auditor" 
                         value={sig.position} 
                         onChange={(e) => handleUpdateSignatory(idx, 'position', e.target.value)}
@@ -384,7 +385,7 @@ export default function SummaryClient({
               </div>
               <div className="modal-footer border-secondary">
                 <button type="button" className="btn btn-secondary btn-sm" onClick={() => {
-                  setSignatories(initialSignatories); // Revert changes
+                  setSignatories(initialSignatories); 
                   setShowSettings(false);
                 }}>Cancel</button>
                 <button type="button" className="btn btn-info btn-sm text-dark fw-bold" onClick={handleSaveSignatories} disabled={isSaving}>
