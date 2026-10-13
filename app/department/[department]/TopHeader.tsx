@@ -149,7 +149,7 @@ function TopHeaderContent({
             <button 
               className="btn btn-outline-secondary btn-sm d-lg-none" 
               type="button" 
-              onClick={() => document.getElementById('appSidebar')?.classList.toggle('show')}
+              onClick={() => window.dispatchEvent(new Event('toggle-sidebar'))}
             >
               <i className="bi bi-list fs-3"></i>
             </button>
