@@ -92,7 +92,7 @@ async function getActionUser(): Promise<string> {
 }
 
 // =========================================================================
-// DEPARTMENT PROVISIONING (Optimized)
+// DEPARTMENT PROVISIONING (Optimized & Typed)
 // =========================================================================
 
 export async function saveSignatories(orgId: string, department: string, signatories: any[]) {
@@ -104,7 +104,8 @@ export async function saveSignatories(orgId: string, department: string, signato
       });
     }
   });
-  ['summary', 'liquidations'].forEach(p => revalidatePath(`/department/${department}/${p}`));
+  revalidatePath(`/department/${department}/summary`);
+  revalidatePath(`/department/${department}/liquidations`);
   return { success: true };
 }
 
@@ -117,7 +118,8 @@ export async function createDepartment(formData: FormData) {
 
   try {
     await prisma.organization.create({ data: { name, subdomain } });
-    ['/', '/dashboard'].forEach(revalidatePath);
+    revalidatePath('/');
+    revalidatePath('/dashboard');
     return { success: true, message: `Department '${name}' successfully registered!` };
   } catch (error) {
     return { success: false, message: 'Subdomain already exists or could not be created.' };
@@ -173,76 +175,10 @@ export async function recordCollection(department: string, data: any) {
   });
 
   await logSystemAction(orgId, officerName, 'RECORD_COLLECTION', `Collected ₱${paid.toFixed(2)} from ${data.studentName} for ${itemDesc} [OR: ${data.orNumber}].`);
-  ['collections', 'clearance', ''].forEach(p => revalidatePath(`/department/${department}${p ? `/${p}` : ''}`));
-}
-
-// =========================================================================
-// OTP LOGIN (Optimized)
-// =========================================================================
-
-export async function requestOtp(department: string, email: string) {
-  const [cleanDept, cleanEmail] = [normalizeDepartment(department), String(email || '').trim().toLowerCase()];
-  if (!cleanEmail.includes('@')) throw new Error('Please provide a valid email address.');
-
-  const org = await prisma.organization.findUnique({ where: { subdomain: cleanDept } });
-  if (!org) throw new Error('Department organization not found.');
-
-  const user = await prisma.tenantUser.findFirst({ where: { organizationId: org.id, email: cleanEmail } });
-  if (!user || user.status !== 'Active') throw new Error(user ? 'This account is currently inactive.' : 'This account is not registered.');
-
-  const cookieStore = await cookies();
-  const lockoutTime = Number.parseInt(cookieStore.get('fcu_lockout')?.value || '0', 10);
-  if (lockoutTime && Date.now() < lockoutTime) throw new Error(`Account temporarily locked. Try again in ${Math.ceil((lockoutTime - Date.now()) / 60000)} min(s).`);
-
-  const otpCode = crypto.randomInt(100000, 1000000).toString();
-  const hashedCode = crypto.createHash('sha256').update(otpCode).digest('hex');
-
-  const [smtpUser, smtpPass] = [process.env.SMTP_USER, process.env.SMTP_PASS];
-  if (!smtpUser || !smtpPass) throw new Error('Email service is not configured.');
-
-  try {
-    await nodemailer.createTransport({ host: process.env.SMTP_HOST || 'smtp.gmail.com', port: Number(process.env.SMTP_PORT || 465), secure: true, auth: { user: smtpUser, pass: smtpPass } })
-      .sendMail({ from: `"CLEAR System" <${smtpUser}>`, to: cleanEmail, subject: `[CLEAR System] OTP CODE FOR ${org.name.toUpperCase()}`, text: `Your 6-digit One-Time PIN is: ${otpCode}\n\nThis code expires in 5 minutes.` });
-  } catch (e) { throw new Error('Failed to dispatch verification email.'); }
-
-  const opts = { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' as const, path: '/', maxAge: 300 };
-  ['hash', 'email', 'department', 'strikes'].forEach((k, i) => cookieStore.set(`fcu_otp_${k}`, [`${hashedCode}:${Date.now() + 300000}`, cleanEmail, cleanDept, '0'][i], opts));
-
-  return { success: true, message: 'Verification code sent successfully.' };
-}
-
-export async function verifyOtp(department: string, email: string, submittedOtp: string) {
-  const [cleanDept, cleanEmail, cleanOtp] = [normalizeDepartment(department), String(email || '').trim().toLowerCase(), String(submittedOtp || '').trim()];
-  if (!/^\d{6}$/.test(cleanOtp)) throw new Error('Verification code must be exactly 6 digits.');
-
-  const cookieStore = await cookies();
-  const [otpC, emailC, deptC, strikesC] = ['hash', 'email', 'department', 'strikes'].map(k => cookieStore.get(`fcu_otp_${k}`));
-  if (!otpC || !emailC || !deptC || emailC.value !== cleanEmail || deptC.value !== cleanDept) throw new Error('Invalid or expired verification session.');
-
-  let strikes = Number.parseInt(strikesC?.value || '0', 10);
-  const handleLockout = (msg: string) => { cookieStore.set('fcu_lockout', (Date.now() + 600000).toString(), { httpOnly: true, path: '/', maxAge: 600 }); throw new Error(msg); };
-  if (strikes >= 5) handleLockout('Maximum attempts exceeded. Account locked for 10 minutes.');
-
-  const [storedHash, expiryStr] = otpC.value.split(':');
-  if (!storedHash || Date.now() > Number.parseInt(expiryStr, 10)) {
-    ['hash', 'email', 'department', 'strikes'].forEach(k => cookieStore.delete(`fcu_otp_${k}`));
-    throw new Error('Verification code has expired. Please request a new one.');
-  }
-
-  const submittedHash = crypto.createHash('sha256').update(cleanOtp).digest('hex');
-  if (!crypto.timingSafeEqual(Buffer.from(storedHash, 'utf8'), Buffer.from(submittedHash, 'utf8'))) {
-    cookieStore.set('fcu_otp_strikes', (++strikes).toString(), { httpOnly: true, path: '/', maxAge: 300 });
-    if (strikes >= 5) handleLockout('Maximum attempts exceeded. Account locked for 10 minutes.');
-    throw new Error(`Invalid verification code. ${5 - strikes} attempt(s) remaining.`);
-  }
-
-  const user = await prisma.tenantUser.findFirst({ where: { organizationId: await resolveOrganizationId(cleanDept), email: cleanEmail, status: 'Active' } });
-  if (!user) throw new Error('Account inactive or not found.');
-
-  ['hash', 'email', 'department', 'strikes', 'lockout'].forEach(k => cookieStore.delete(`fcu_${k.includes('lockout') ? 'lockout' : 'otp_' + k}`));
-  cookieStore.set('fcu_session', user.id, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', maxAge: 86400 });
-
-  return { success: true, user: { id: user.id, fullName: user.fullName, email: user.email, role: user.role, allowedTabs: parseAllowedTabs(user.allowedTabs) } };
+  
+  revalidatePath(`/department/${department}/collections`);
+  revalidatePath(`/department/${department}/clearance`);
+  revalidatePath(`/department/${department}`);
 }
 
 // =========================================================================
@@ -261,7 +197,9 @@ export async function upsertStudent(department: string, data: { studentId: strin
   else await prisma.student.create({ data: { organizationId: orgId, studentId: sId, fullName: name, email, yearLevel: 'N/A' } });
 
   await logSystemAction(orgId, officerName, existing ? 'UPDATE_STUDENT' : 'ADD_STUDENT', `${existing ? 'Modified' : 'Registered'} profile for ${name} (${sId}).`);
-  ['students', 'clearance'].forEach(p => revalidatePath(`/department/${department}/${p}`));
+  
+  revalidatePath(`/department/${department}/students`);
+  revalidatePath(`/department/${department}/clearance`);
 }
 
 export async function deleteStudent(department: string, studentId: string) {
@@ -274,7 +212,9 @@ export async function deleteStudent(department: string, studentId: string) {
     await prisma.student.delete({ where: { id: existing.id } });
     await logSystemAction(orgId, officerName, 'DELETE_STUDENT', `Permanently removed student record for ${existing.fullName} (${existing.studentId}).`);
   }
-  ['students', 'clearance'].forEach(p => revalidatePath(`/department/${department}/${p}`));
+  
+  revalidatePath(`/department/${department}/students`);
+  revalidatePath(`/department/${department}/clearance`);
 }
 
 export async function transferFunds(department: string, data: { fromFund: string; toFund: string; amount: number; reason: string; ay: string; term: string }) {
@@ -287,25 +227,9 @@ export async function transferFunds(department: string, data: { fromFund: string
 
   await prisma.fundTransfer.create({ data: { organizationId: orgId, academicYear: data.ay, term: data.term, sourceFund: from, destinationFund: to, amount: amt, reason: String(data.reason || '').trim(), encodedBy: officerName } });
   await logSystemAction(orgId, officerName, 'TRANSFER_FUNDS', `Realigned ₱${amt.toFixed(2)} from ${from} to ${to}.`);
-  ['realign', ''].forEach(p => revalidatePath(`/department/${department}${p ? `/${p}` : ''}`));
-}
-
-export async function updateMyEmail(department: string, newEmail: string) {
-  const sessionUser = (await auth())?.user as { email?: string } | undefined;
-  if (!sessionUser?.email) throw new Error('Unauthorized: No active session found.');
   
-  const [orgId, currentEmail, cleanNewEmail] = [await getOrgId(department), sessionUser.email.trim().toLowerCase(), String(newEmail || '').trim().toLowerCase()];
-  if (!cleanNewEmail.includes('@')) throw new Error('Please provide a valid email address.');
-
-  const user = await prisma.tenantUser.findFirst({ where: { organizationId: orgId, email: currentEmail } });
-  if (!user) throw new Error('User record not found in this department.');
-
-  const existing = await prisma.tenantUser.findFirst({ where: { organizationId: orgId, email: cleanNewEmail } });
-  if (existing && existing.id !== user.id) throw new Error('This email is already registered by another account.');
-
-  await prisma.tenantUser.update({ where: { id: user.id }, data: { email: cleanNewEmail } });
+  revalidatePath(`/department/${department}/realign`);
   revalidatePath(`/department/${department}`);
-  return { success: true, message: 'Email updated! Please sign out and back in.' };
 }
 
 // =========================================================================
@@ -328,7 +252,7 @@ export async function getDepartmentFinancials(organizationId: string, ay: string
     prisma.enrollment.findMany({ where: { organizationId, academicYear: ay, term }, include: { student: { select: { id: true, studentId: true, fullName: true } } } }),
     prisma.collectionSetup.findMany({ where: { organizationId, academicYear: ay, term } }),
     prisma.fundTransfer.findMany({ where: { organizationId, academicYear: ay, term } }),
-    prisma.cashierRemittance.findMany({ where: { organizationId, academicYear: ay, term, status: "Remitted" } }), // 🚀 Safekeeping Fetch
+    prisma.cashierRemittance.findMany({ where: { organizationId, academicYear: ay, term, status: "Remitted" } }), 
   ]);
 
   // 1. SAFEKEEPING MATH
@@ -402,7 +326,6 @@ export async function getDepartmentFinancials(organizationId: string, ay: string
       addCollectionItem(desc, amt, studentKey, fund);
     }
 
-    // Package payment tracking
     if ((matchedPkgItem || isDepPkg) && amt > 0) {
       const relId = String(c.student?.id || '').toLowerCase();
       const rawRef = String(c.studentId || '').toLowerCase();
@@ -414,7 +337,6 @@ export async function getDepartmentFinancials(organizationId: string, ay: string
       else if (uniqueName && studentNameCounts.get(uniqueName) === 1) paidByUniqueStudentName[uniqueName] = (paidByUniqueStudentName[uniqueName] || 0) + amt;
     }
 
-    // Non-package obligation tracking
     if (!matchedPkgItem && !isDepPkg) {
       const itemName = desc || String(c.category || '').trim() || 'Other Due';
       const groupKey = `${studentKey}|${itemName.trim().toLowerCase()}`;
@@ -498,8 +420,14 @@ export async function getDepartmentFinancials(organizationId: string, ay: string
   const totalCollectiblesSum = collectiblesList.reduce((sum, c) => sum + c.total, 0);
 
   // 7. FUNDS, TRANSFERS & BALANCES
-  const initialAllocMap = initialFunds.reduce((acc: any, f: any) => { const n = String(f.fundName || '').trim(); if (n) acc[n] = (acc[n] || 0) + (Number(f.initialAllocation) || 0); return acc; }, {});
-  const totalInitialAlloc = Object.values(initialAllocMap).reduce((s: number, a: number) => s + a, 0);
+  const initialAllocMap = initialFunds.reduce((acc: Record<string, number>, f: any) => { 
+    const n = String(f.fundName || '').trim(); 
+    if (n) acc[n] = (acc[n] || 0) + (Number(f.initialAllocation) || 0); 
+    return acc; 
+  }, {});
+  
+  // 🚀 TYPING FIX: Explicitly cast to number[] before reducing
+  const totalInitialAlloc = (Object.values(initialAllocMap) as number[]).reduce((s, a) => s + a, 0);
 
   let carryOverInboundTotal = 0;
   const transferEffects = fundTransfers.reduce((acc: any, t: any) => {
@@ -528,8 +456,9 @@ export async function getDepartmentFinancials(organizationId: string, ay: string
     cashierBalance, totalDeposited, totalWithdrawn
   };
 }
+
 // =========================================================================
-// COLLECTION SETUP (Optimized)
+// COLLECTION SETUP (Optimized & Typed)
 // =========================================================================
 
 export async function saveCollectionSetupItem(department: string, p: { category: string; name: string; amount: number; targetFund: string; isPackage: boolean; ay: string; term: string; }) {
@@ -548,17 +477,26 @@ export async function saveCollectionSetupItem(department: string, p: { category:
     await prisma.collectionSetup.create({ data: { organizationId: orgId, academicYear: p.ay, term: p.term, name, ...updateData } });
   }
 
-  ['setup/collections', 'collections', 'reports', 'clearance', ''].forEach(path => revalidatePath(`/department/${department}${path ? `/${path}` : ''}`));
+  revalidatePath(`/department/${department}/setup/collections`);
+  revalidatePath(`/department/${department}/collections`);
+  revalidatePath(`/department/${department}/reports`);
+  revalidatePath(`/department/${department}/clearance`);
+  revalidatePath(`/department/${department}`);
+  
   return { success: true, message: `Configured '${name}' successfully.` };
 }
 
 export async function deleteCollectionSetupItem(department: string, setupId: string) {
   await requireTabAccess('tab-setup');
   
-  // 🚀 Optimized: Performs a targeted delete and checks the result in a single DB query
   const result = await prisma.collectionSetup.deleteMany({ where: { id: setupId, organizationId: await getOrgId(department) } });
   if (result.count === 0) throw new Error('Collection setup item not found or already removed.');
 
-  ['setup/collections', 'collections', 'reports', 'clearance', ''].forEach(path => revalidatePath(`/department/${department}${path ? `/${path}` : ''}`));
+  revalidatePath(`/department/${department}/setup/collections`);
+  revalidatePath(`/department/${department}/collections`);
+  revalidatePath(`/department/${department}/reports`);
+  revalidatePath(`/department/${department}/clearance`);
+  revalidatePath(`/department/${department}`);
+  
   return { success: true, message: 'Configuration item removed successfully.' };
 }
