@@ -179,8 +179,8 @@ function TopHeaderContent({
                 </span>
 
                 {/* 📱 MOBILE VIEW: Compact bold text instead of the large logo */}
-                <span className="text-accent d-inline d-md-none fw-bold" style={{ fontSize: '1.35rem', letterSpacing: '0.5px' }}>
-                  CLEAR System
+                <span className="text-accent d-inline d-md-none fw-bold" style={{ fontSize: '1.25rem', letterSpacing: '0.5px' }}>
+                  <b>C</b>entralized <b>L</b>iquidation of <b>E</b>xpenses & <b>A</b>udit <b>R</b>ecords <b>System</b>
                 </span>
               </div>
             </div>

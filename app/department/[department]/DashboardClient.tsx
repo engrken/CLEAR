@@ -27,6 +27,12 @@ export default function DashboardClient({
 }) {
   const [subtab, setSubtab] = useState<"funds" | "advances">("funds");
 
+  // --- SAFE-KEEPING CALCULATIONS ---
+  const cashierBalance = overview.cashierBalance || 0;
+  const totalDeposited = overview.totalDeposited || 0;
+  const totalWithdrawn = overview.totalWithdrawn || 0;
+  const physicalCashOnHand = (overview.remainingBalance || 0) - cashierBalance;
+
   // --- CHART 1: Fund Allocation Health (Doughnut) ---
   const activeFunds = overview.fundsList.filter((f: any) => f.balance > 0);
   const fundPieData = {
@@ -50,18 +56,16 @@ export default function DashboardClient({
     }]
   };
 
-  // Theme-adaptive chart text color
   const chartOptionsBase = {
     responsive: true,
     maintainAspectRatio: false,
-    color: '#6c757d', // Neutral gray looks good in light and dark
+    color: '#6c757d',
     plugins: { legend: { position: 'bottom' as const, labels: { color: '#6c757d' } } }
   };
 
   return (
     <>
       <style dangerouslySetInnerHTML={{__html: `
-        /* THEME FIX: Swapped hardcoded hex colors for Bootstrap CSS variables */
         .stat-card {
           background-color: var(--bs-tertiary-bg); 
           border: 1px solid var(--bs-border-color); 
@@ -73,6 +77,7 @@ export default function DashboardClient({
         .quick-action-btn { background-color: var(--bs-body-bg); border: 1px solid var(--bs-border-color); border-radius: 0.75rem; color: var(--bs-body-color); transition: all 0.2s ease; }
         .quick-action-btn:hover { background-color: var(--bs-tertiary-bg); border-color: #38bdf8; color: #38bdf8; }
       `}} />
+      
       <div className="d-flex flex-column gap-4">
         {/* HEADER */}
         <div>
@@ -80,7 +85,6 @@ export default function DashboardClient({
             <i className={`me-1 ${organization.type === 'Organization' ? 'bi bi-people-fill' : 'bi bi-building'}`}></i>
             {organization.type || 'Department'} Workspace
           </span>
-          {/* THEME FIX: Removed text-white */}
           <h4 className="fw-bold mb-1 text-body">{organization.name}</h4>
           <p className="text-secondary small mb-0">Financial Analytics & Active Insights for {ay} | {term}</p>
         </div>
@@ -94,9 +98,9 @@ export default function DashboardClient({
             </Link>
           </div>
           <div className="col-6 col-md-3">
-            <Link href={`${basePath}/remittances${queryString}`} className="quick-action-btn w-100 text-decoration-none d-flex align-items-center p-2 gap-2 shadow-sm">
-              <div className="bg-success bg-opacity-10 text-success rounded p-1"><i className="bi bi-upload fs-5"></i></div>
-              <span className="small fw-semibold">Remit Funds</span>
+            <Link href={`${basePath}/cashier-remittance${queryString}`} className="quick-action-btn w-100 text-decoration-none d-flex align-items-center p-2 gap-2 shadow-sm">
+              <div className="bg-success bg-opacity-10 text-success rounded p-1"><i className="bi bi-safe2 fs-5"></i></div>
+              <span className="small fw-semibold">Univ. Cashier</span>
             </Link>
           </div>
           <div className="col-6 col-md-3">
@@ -119,7 +123,6 @@ export default function DashboardClient({
             <div className="stat-card">
               <div className="stat-icon bg-info bg-opacity-10 text-info"><i className="bi bi-wallet2"></i></div>
               <small className="text-secondary text-uppercase fw-bold mb-1" style={{ fontSize: "0.7rem", letterSpacing: "0.5px" }}>Total Collections</small>
-              {/* THEME FIX: Removed text-white */}
               <div className="fs-4 fw-bold mt-auto text-body">{fmt(overview.grandCollectionTotal)}</div>
             </div>
           </div>
@@ -134,18 +137,55 @@ export default function DashboardClient({
             <div className="stat-card">
               <div className="stat-icon bg-danger bg-opacity-10 text-danger"><i className="bi bi-receipt"></i></div>
               <small className="text-secondary text-uppercase fw-bold mb-1" style={{ fontSize: "0.7rem", letterSpacing: "0.5px" }}>Audited Expenses</small>
-              {/* THEME FIX: Removed text-white */}
               <div className="fs-4 fw-bold mt-auto text-body">{fmt(overview.grandExpenseTotal)}</div>
             </div>
           </div>
           <div className="col-6 col-lg-3">
-            <div className="stat-card position-relative overflow-hidden">
+            <div className="stat-card position-relative overflow-hidden border-info">
               <div className="position-absolute top-0 end-0 p-3 opacity-25">
-                <i className="bi bi-bank" style={{ fontSize: '4rem', color: overview.remainingBalance >= 0 ? '#22c55e' : '#ef4444' }}></i>
+                <i className="bi bi-piggy-bank" style={{ fontSize: '4rem', color: overview.remainingBalance >= 0 ? '#22c55e' : '#ef4444' }}></i>
               </div>
-              <div className={`stat-icon bg-opacity-10 ${overview.remainingBalance >= 0 ? 'bg-success text-success' : 'bg-danger text-danger'}`}><i className="bi bi-safe2"></i></div>
+              <div className={`stat-icon bg-opacity-10 ${overview.remainingBalance >= 0 ? 'bg-success text-success' : 'bg-danger text-danger'}`}><i className="bi bi-bank"></i></div>
               <small className="text-secondary text-uppercase fw-bold mb-1" style={{ fontSize: "0.7rem", letterSpacing: "0.5px", zIndex: 1 }}>Net Treasury Balance</small>
               <div className={`fs-4 fw-bold mt-auto ${overview.remainingBalance >= 0 ? "text-success" : "text-danger"}`} style={{ zIndex: 1 }}>{fmt(overview.remainingBalance)}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* 🚀 NEW: FUND LOCATION TRACKER (Safekeeping vs Cash on Hand) */}
+        <div className="row g-3 mt-1">
+          <div className="col-12 col-md-6">
+            <div className="card h-100 border-info shadow-sm bg-info bg-opacity-10 transition-all">
+              <div className="card-body p-3 p-md-4 d-flex justify-content-between align-items-center">
+                <div>
+                  <h6 className="text-info fw-bold mb-1 text-uppercase"><i className="bi bi-safe2-fill me-2"></i>University Cashier</h6>
+                  <small className="text-muted fw-semibold">Funds currently in safekeeping</small>
+                  <div className="d-flex gap-3 mt-2 small fw-bold">
+                    <span className="text-success"><i className="bi bi-arrow-up-right me-1"></i>{fmt(totalDeposited)} In</span>
+                    <span className="text-danger"><i className="bi bi-arrow-down-right me-1"></i>{fmt(totalWithdrawn)} Out</span>
+                  </div>
+                </div>
+                <div className="text-end">
+                  <h3 className="fw-bold text-info mb-0">{fmt(cashierBalance)}</h3>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div className="col-12 col-md-6">
+            <div className="card h-100 border-secondary shadow-sm bg-body transition-all">
+              <div className="card-body p-3 p-md-4 d-flex justify-content-between align-items-center">
+                <div>
+                  <h6 className="text-body fw-bold mb-1 text-uppercase"><i className="bi bi-cash me-2 text-success"></i>Physical Cash on Hand</h6>
+                  <small className="text-muted fw-semibold">Held by student treasurer</small>
+                  <div className="mt-2 small text-muted">
+                    Net Balance minus Safekeeping
+                  </div>
+                </div>
+                <div className="text-end">
+                  <h3 className={`fw-bold mb-0 ${physicalCashOnHand < 0 ? 'text-danger' : 'text-success'}`}>{fmt(physicalCashOnHand)}</h3>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -154,7 +194,6 @@ export default function DashboardClient({
         <div className="row g-3">
           <div className="col-12 col-lg-5">
             <div className="card p-3 border-secondary shadow-sm bg-card h-100">
-              {/* THEME FIX: Removed text-white */}
               <h6 className="fw-bold text-body mb-3">Available Target Funds</h6>
               <div style={{ position: 'relative', height: '260px' }}>
                 {activeFunds.length > 0 ? (
@@ -167,7 +206,6 @@ export default function DashboardClient({
           </div>
           <div className="col-12 col-lg-7">
             <div className="card p-3 border-secondary shadow-sm bg-card h-100">
-              {/* THEME FIX: Removed text-white */}
               <h6 className="fw-bold text-body mb-3">Cash Flow Velocity</h6>
               <div style={{ position: 'relative', height: '260px' }}>
                 <Bar 
@@ -189,7 +227,6 @@ export default function DashboardClient({
         {/* WIDGET PANEL (Tables) */}
         <div className="card p-3 p-md-4 border-secondary shadow-sm bg-card mt-2">
           <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-            {/* THEME FIX: Removed text-white */}
             <h6 className="fw-bold text-body m-0">
               {subtab === "funds" ? <><i className="bi bi-list-columns me-2 text-info"></i> Detailed Ledger</> : <><i className="bi bi-clock-history me-2 text-warning"></i> Pending Advances</>}
             </h6>
@@ -201,7 +238,6 @@ export default function DashboardClient({
           
           {subtab === "funds" ? (
             <div className="table-responsive">
-              {/* THEME FIX: Removed text-white */}
               <table className="table table-hover align-middle mb-0 text-body" style={{ fontSize: '0.9rem' }}>
                 <thead>
                   <tr className="text-secondary small border-bottom border-secondary">
@@ -231,7 +267,6 @@ export default function DashboardClient({
             </div>
           ) : (
             <div className="table-responsive">
-              {/* THEME FIX: Removed text-white */}
               <table className="table table-hover align-middle mb-0 text-body" style={{ fontSize: '0.9rem' }}>
                 <thead>
                   <tr className="text-secondary small border-bottom border-secondary">

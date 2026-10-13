@@ -344,6 +344,7 @@ model CashierRemittance {
   date             DateTime     @default(now())
   remittedBy       String
   fundSource       String
+  type             String       @default("Deposit") // 🚀 NEW: "Deposit" or "Withdrawal"
   amount           Float        @default(0)
   cashierReceiptNo String?
   remarks          String?

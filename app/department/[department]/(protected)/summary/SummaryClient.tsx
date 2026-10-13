@@ -7,17 +7,6 @@ import { fmt } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { saveSignatories } from "../../actions";
 
-interface CollectionItem {
-  count: number;
-  total: number;
-}
-
-interface CollectibleItem {
-  category: string;
-  headcount: number;
-  total: number;
-}
-
 export default function SummaryClient({
   department,
   orgId,
@@ -32,10 +21,14 @@ export default function SummaryClient({
   expensesByFund,
   grandExpenseTotal,
   collectibles,
-  totalCollectiblesSum
+  totalCollectiblesSum,
+  cashierBalance, // 🚀 NEW: Receive tracking data
+  totalDeposited,
+  totalWithdrawn
 }: any) {
   const router = useRouter();
   const netBalance = grandCollectionTotal - grandExpenseTotal;
+  const safeBalance = cashierBalance || 0;
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -54,11 +47,7 @@ export default function SummaryClient({
   // =========================================================
   const [showSettings, setShowSettings] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  
-  // Local state for the dynamic signatories list
   const [signatories, setSignatories] = useState(initialSignatories || []);
-  
-  // Options for the Label dropdown
   const labelOptions = ["Prepared by:", "Attested by:", "Noted by:", "Endorsed by:", "Verified by:", "Approved by:"];
 
   const handleAddSignatory = () => {
@@ -105,20 +94,21 @@ export default function SummaryClient({
           .print-container table { border-collapse: collapse !important; margin-bottom: 15px !important; width: 100% !important; border: 1.5px solid #000000 !important; }
           .print-container th, .print-container td { border: 1px solid #000000 !important; padding: 5px 8px !important; }
           .print-container .bg-dark { background-color: #f8f9fa !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+          .print-border { border: 1.5px solid #000000 !important; }
           h6 { margin-top: 15px !important; margin-bottom: 5px !important; }
           .signature-block { margin-top: 40px !important; page-break-inside: avoid !important; }
         }
       `}} />
 
       <div className="card p-3 p-md-4 border-secondary shadow-sm bg-body text-body print-container">
-        {/* HEADER TOOLBAR (Hidden during print) */}
+        
+        {/* HEADER TOOLBAR */}
         <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4 d-print-none">
           <div>
             <h5 className="text-info m-0 fw-bold">COLLECTIONS & EXPENSES SUMMARY ({term})</h5>
             <small className="text-muted">Official financial statement matching legacy ledger output.</small>
           </div>
           <div>
-            {/* NEW: Settings Button */}
             <button className="btn btn-outline-info btn-sm fw-bold me-2" onClick={() => setShowSettings(true)}>
               <i className="bi bi-gear-fill me-1"></i>Report Settings
             </button>
@@ -135,12 +125,9 @@ export default function SummaryClient({
           </div>
           <div className="text-center flex-grow-1 px-3">
             <div className="fw-bold text-uppercase" style={{ fontSize: '1.1rem' }}>Filamer Christian University</div>
-            
-            {/* UPDATED: Displays full dynamic name without "College of" hardcoded */}
             <div className="fw-bold text-uppercase text-info" style={{ fontSize: '0.9rem', letterSpacing: '0.5px' }}>{orgName}</div>
-            
             <div className="text-muted small">Roxas Avenue, Roxas City, Capiz, Philippines 5800</div>
-            <div className="mt-3 fw-bold text-uppercase" style={{ fontSize: '0.95rem' }}>FINANCIAL REPORT OF  CONTRIBUTIONS AND EXPENSES</div>
+            <div className="mt-3 fw-bold text-uppercase" style={{ fontSize: '0.95rem' }}>FINANCIAL REPORT OF CONTRIBUTIONS AND EXPENSES</div>
             <div className="text-muted small fst-italic mt-1">{ay} &nbsp;|&nbsp; {term}</div>
           </div>
           <div style={{ width: '90px', flexShrink: 0 }} className="text-center">
@@ -288,9 +275,9 @@ export default function SummaryClient({
         </div>
 
         {/* REMAINING BALANCE (NET ENDING POSITION) */}
-        <div className="card p-2 d-flex flex-row justify-content-between align-items-center flex-wrap gap-2 mb-3 bg-body-secondary border-secondary">
+        <div className="card p-2 d-flex flex-row justify-content-between align-items-center flex-wrap gap-2 mb-4 bg-body-secondary border-dark print-border rounded-0">
           <div>
-            <span className="fw-bold text-uppercase text-body">REMAINING BALANCE (NET ENDING POSITION):</span>
+            <span className="fw-bold text-uppercase text-body">NET TREASURY BALANCE (NET ENDING POSITION):</span>
             <div className="text-muted small" style={{ fontSize: '0.75rem' }}>Total Collections minus Total Liquidated Expenses</div>
           </div>
           <div className={`fs-5 fw-bold ${netBalance >= 0 ? 'text-success' : 'text-danger'}`}>
@@ -298,8 +285,30 @@ export default function SummaryClient({
           </div>
         </div>
 
+        {/* 🚀 NEW: FUND LOCATION / SAFEKEEPING STATUS */}
+        <div className="card p-3 mb-4 bg-transparent border-dark text-body rounded-0 print-border">
+          <h6 className="fw-bold text-uppercase mb-3"><i className="bi bi-safe2 me-2"></i>Fund Location / Safekeeping Status</h6>
+          <div className="d-flex justify-content-between small mb-1">
+            <span>Total Physically Deposited to Univ. Cashier:</span>
+            <span className="fw-semibold text-success">{fmt(totalDeposited || 0)}</span>
+          </div>
+          <div className="d-flex justify-content-between small mb-1">
+            <span>Total Physically Withdrawn:</span>
+            <span className="fw-semibold text-danger">({fmt(totalWithdrawn || 0)})</span>
+          </div>
+          <hr className="border-dark my-2 opacity-25" />
+          <div className="d-flex justify-content-between fw-bold">
+            <span>CURRENT BALANCE IN SAFEKEEPING:</span>
+            <span className="text-info">{fmt(safeBalance)}</span>
+          </div>
+          <div className="d-flex justify-content-between fw-bold mt-2 pt-2 border-top border-dark text-dark">
+            <span>PHYSICAL CASH ON HAND <span className="fw-normal">(Net Balance minus Safekeeping)</span>:</span>
+            <span>{fmt(netBalance - safeBalance)}</span>
+          </div>
+        </div>
+
         {/* DYNAMIC SIGNATURE BLOCK */}
-        <div className="row mt-4 pt-3 text-body signature-block" style={{ fontSize: '0.85rem' }}>
+        <div className="row mt-5 pt-3 text-body signature-block" style={{ fontSize: '0.85rem' }}>
           {signatories && signatories.length > 0 ? (
             signatories.map((sig: any, idx: number) => (
               <div className="col text-center" key={idx}>

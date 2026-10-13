@@ -28,6 +28,7 @@ export async function recordCashierRemittance(
     date: string;
     remittedBy: string;
     fundSource: string;
+    type: string; // "Deposit" or "Withdrawal"
     amount: number;
     cashierReceiptNo: string;
     remarks: string;
@@ -35,7 +36,6 @@ export async function recordCashierRemittance(
     term: string;
   }
 ) {
-  // Requires basic payment/treasury privileges
   const customUser = await requireTabAccess("tab-payment");
   const officerName = customUser.fullName || customUser.email || "System Administrator";
 
@@ -45,11 +45,11 @@ export async function recordCashierRemittance(
   if (!organization) throw new Error(`Organization not found.`);
   const orgId = organization.id;
 
-  const amount = money(data.amount, "Remittance Amount");
+  const amount = money(data.amount, "Transaction Amount");
   if (amount <= 0) throw new Error("Amount must be greater than zero.");
   
-  const date = parseDate(data.date, "remittance date");
-  const remittanceId = generateReference("SAFE");
+  const date = parseDate(data.date, "transaction date");
+  const remittanceId = generateReference(data.type === "Withdrawal" ? "WITH" : "SAFE");
 
   await prisma.cashierRemittance.create({
     data: {
@@ -60,27 +60,33 @@ export async function recordCashierRemittance(
       date,
       remittedBy: String(data.remittedBy).trim(),
       fundSource: String(data.fundSource).trim(),
+      type: data.type,
       amount,
       cashierReceiptNo: String(data.cashierReceiptNo || "PENDING").trim(),
       remarks: String(data.remarks).trim(),
-      status: "Remitted",
+      status: "Remitted", // We keep "Remitted" to mean "Valid/Processed"
       encodedBy: officerName,
     }
   });
 
   try {
+    const logAction = data.type === "Withdrawal" ? "Withdrew" : "Deposited";
     await prisma.systemLog.create({
       data: {
         organizationId: orgId,
         user: officerName,
-        action: "RECORD_CASHIER_REMITTANCE",
-        details: `Deposited ₱${amount.toFixed(2)} from ${data.fundSource} to University Cashier for safekeeping.`,
+        action: `RECORD_CASHIER_${data.type.toUpperCase()}`,
+        details: `${logAction} ₱${amount.toFixed(2)} (${data.fundSource}) via University Cashier.`,
       }
     });
   } catch (e) { console.warn("Log failed:", e); }
 
   revalidatePath(`/department/${department}/cashier-remittance`);
   revalidatePath(`/department/${department}/reports`);
+  revalidatePath(`/department/${department}/summary`);
+  revalidatePath(`/department/${department}`);
+
+  return { success: true, remittanceId };
 }
 
 export async function voidCashierRemittance(department: string, id: string) {
@@ -92,12 +98,11 @@ export async function voidCashierRemittance(department: string, id: string) {
   });
   if (!organization) throw new Error(`Organization not found.`);
   
-  // 🚀 FIX: Verify ownership first, then update using ONLY the unique ID
   const existing = await prisma.cashierRemittance.findFirst({
     where: { id, organizationId: organization.id }
   });
 
-  if (!existing) throw new Error("Remittance record not found or access denied.");
+  if (!existing) throw new Error("Record not found or access denied.");
 
   const record = await prisma.cashierRemittance.update({
     where: { id },
@@ -109,12 +114,14 @@ export async function voidCashierRemittance(department: string, id: string) {
       data: {
         organizationId: organization.id,
         user: officerName,
-        action: "VOID_CASHIER_REMITTANCE",
-        details: `Voided safekeeping turnover record [${record.remittanceId}].`,
+        action: "VOID_CASHIER_TRANSACTION",
+        details: `Voided cashier transaction record [${record.remittanceId}].`,
       }
     });
   } catch (e) { console.warn("Log failed:", e); }
 
   revalidatePath(`/department/${department}/cashier-remittance`);
   revalidatePath(`/department/${department}/reports`);
+  revalidatePath(`/department/${department}/summary`);
+  revalidatePath(`/department/${department}`);
 }

@@ -57,6 +57,9 @@ const organization = await prisma.organization.findUnique({
         grandExpenseTotal={financials.grandExpenseTotal}
         collectibles={financials.collectiblesList}
         totalCollectiblesSum={financials.totalCollectibles}
+		cashierBalance={financials.cashierBalance}
+        totalDeposited={financials.totalDeposited}
+        totalWithdrawn={financials.totalWithdrawn}
       />
     </div>
   );

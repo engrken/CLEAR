@@ -1016,6 +1016,7 @@ export async function getDepartmentFinancials(
     enrollments,
     collectionSetups,
     fundTransfers,
+    cashierRecords, // 🚀 NEW: Added to destructuring
   ] = await Promise.all([
     prisma.collection.findMany({
       where: {
@@ -1107,7 +1108,41 @@ export async function getDepartmentFinancials(
         term,
       },
     }),
+
+    // 🚀 NEW: Fetch valid safekeeping transactions from the cashier
+    prisma.cashierRemittance.findMany({
+      where: {
+        organizationId,
+        academicYear: ay,
+        term,
+        status: "Remitted", // Only count valid transactions
+      },
+    }),
   ]);
+
+  // =========================================================================
+  // 🚀 NEW: SAFEKEEPING / CASHIER MATH LOGIC
+  // =========================================================================
+  const totalDeposited = cashierRecords
+    .filter(r => r.type === "Deposit")
+    .reduce((sum, r) => sum + (r.amount || 0), 0);
+
+  const totalWithdrawn = cashierRecords
+    .filter(r => r.type === "Withdrawal")
+    .reduce((sum, r) => sum + (r.amount || 0), 0);
+
+  const cashierBalance = totalDeposited - totalWithdrawn;
+
+  // ... (Keep all your existing calculations for termPkg, hierarchy, expenses, collectibles, etc. here) ...
+  
+  // Make sure you export these new variables in your final return statement at the bottom of the function!
+  return {
+    // ... your existing returned variables (collections, audits, grandCollectionTotal, etc)
+    cashierBalance,
+    totalDeposited,
+    totalWithdrawn,
+  };
+}
 
   // =========================================================================
   // VALID COLLECTIONS / AUDITS
