@@ -10,7 +10,7 @@ import { logSystemAction } from '@/lib/logger';
 import { requireTabAccess, requireSuperAdmin } from '@/lib/permissions';
 
 // =========================================================================
-// GENERAL HELPERS (Optimized)
+// GENERAL HELPERS
 // =========================================================================
 
 function formatDate(date: Date) {
@@ -63,7 +63,7 @@ function normalizeItemKey(val: unknown) {
 }
 
 // =========================================================================
-// ORGANIZATION / TENANT (Optimized)
+// ORGANIZATION / TENANT
 // =========================================================================
 
 async function resolveOrganizationId(department: string) {
@@ -92,7 +92,7 @@ async function getActionUser(): Promise<string> {
 }
 
 // =========================================================================
-// DEPARTMENT PROVISIONING (Optimized & Typed)
+// DEPARTMENT PROVISIONING
 // =========================================================================
 
 export async function saveSignatories(orgId: string, department: string, signatories: any[]) {
@@ -104,6 +104,8 @@ export async function saveSignatories(orgId: string, department: string, signato
       });
     }
   });
+  
+  // Explicit revalidation
   revalidatePath(`/department/${department}/summary`);
   revalidatePath(`/department/${department}/liquidations`);
   return { success: true };
@@ -127,7 +129,7 @@ export async function createDepartment(formData: FormData) {
 }
 
 // =========================================================================
-// COLLECTION (Optimized)
+// COLLECTION
 // =========================================================================
 
 async function validateStudentOwnership(organizationId: string, studentDbId?: string | null) {
@@ -176,13 +178,87 @@ export async function recordCollection(department: string, data: any) {
 
   await logSystemAction(orgId, officerName, 'RECORD_COLLECTION', `Collected ₱${paid.toFixed(2)} from ${data.studentName} for ${itemDesc} [OR: ${data.orNumber}].`);
   
+  // Explicit revalidation
   revalidatePath(`/department/${department}/collections`);
   revalidatePath(`/department/${department}/clearance`);
   revalidatePath(`/department/${department}`);
 }
 
 // =========================================================================
-// STUDENTS & TRANSFERS (Optimized)
+// OTP LOGIN
+// =========================================================================
+
+export async function requestOtp(department: string, email: string) {
+  const [cleanDept, cleanEmail] = [normalizeDepartment(department), String(email || '').trim().toLowerCase()];
+  if (!cleanEmail.includes('@')) throw new Error('Please provide a valid email address.');
+
+  const org = await prisma.organization.findUnique({ where: { subdomain: cleanDept } });
+  if (!org) throw new Error('Department organization not found.');
+
+  const user = await prisma.tenantUser.findFirst({ where: { organizationId: org.id, email: cleanEmail } });
+  if (!user || user.status !== 'Active') throw new Error(user ? 'This account is currently inactive.' : 'This account is not registered.');
+
+  const cookieStore = await cookies();
+  const lockoutTime = Number.parseInt(cookieStore.get('fcu_lockout')?.value || '0', 10);
+  if (lockoutTime && Date.now() < lockoutTime) throw new Error(`Account temporarily locked. Try again in ${Math.ceil((lockoutTime - Date.now()) / 60000)} min(s).`);
+
+  const otpCode = crypto.randomInt(100000, 1000000).toString();
+  const hashedCode = crypto.createHash('sha256').update(otpCode).digest('hex');
+
+  const [smtpUser, smtpPass] = [process.env.SMTP_USER, process.env.SMTP_PASS];
+  if (!smtpUser || !smtpPass) throw new Error('Email service is not configured.');
+
+  try {
+    await nodemailer.createTransport({ host: process.env.SMTP_HOST || 'smtp.gmail.com', port: Number(process.env.SMTP_PORT || 465), secure: true, auth: { user: smtpUser, pass: smtpPass } })
+      .sendMail({ from: `"CLEAR System" <${smtpUser}>`, to: cleanEmail, subject: `[CLEAR System] OTP CODE FOR ${org.name.toUpperCase()}`, text: `Your 6-digit One-Time PIN is: ${otpCode}\n\nThis code expires in 5 minutes.` });
+  } catch (e) { throw new Error('Failed to dispatch verification email.'); }
+
+  const opts = { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' as const, path: '/', maxAge: 300 };
+  
+  cookieStore.set('fcu_otp_hash', `${hashedCode}:${Date.now() + 300000}`, opts);
+  cookieStore.set('fcu_otp_email', cleanEmail, opts);
+  cookieStore.set('fcu_otp_department', cleanDept, opts);
+  cookieStore.set('fcu_otp_strikes', '0', opts);
+
+  return { success: true, message: 'Verification code sent successfully.' };
+}
+
+export async function verifyOtp(department: string, email: string, submittedOtp: string) {
+  const [cleanDept, cleanEmail, cleanOtp] = [normalizeDepartment(department), String(email || '').trim().toLowerCase(), String(submittedOtp || '').trim()];
+  if (!/^\d{6}$/.test(cleanOtp)) throw new Error('Verification code must be exactly 6 digits.');
+
+  const cookieStore = await cookies();
+  const [otpC, emailC, deptC, strikesC] = ['hash', 'email', 'department', 'strikes'].map(k => cookieStore.get(`fcu_otp_${k}`));
+  if (!otpC || !emailC || !deptC || emailC.value !== cleanEmail || deptC.value !== cleanDept) throw new Error('Invalid or expired verification session.');
+
+  let strikes = Number.parseInt(strikesC?.value || '0', 10);
+  const handleLockout = (msg: string) => { cookieStore.set('fcu_lockout', (Date.now() + 600000).toString(), { httpOnly: true, path: '/', maxAge: 600 }); throw new Error(msg); };
+  if (strikes >= 5) handleLockout('Maximum attempts exceeded. Account locked for 10 minutes.');
+
+  const [storedHash, expiryStr] = otpC.value.split(':');
+  if (!storedHash || Date.now() > Number.parseInt(expiryStr, 10)) {
+    ['hash', 'email', 'department', 'strikes'].forEach(k => cookieStore.delete(`fcu_otp_${k}`));
+    throw new Error('Verification code has expired. Please request a new one.');
+  }
+
+  const submittedHash = crypto.createHash('sha256').update(cleanOtp).digest('hex');
+  if (!crypto.timingSafeEqual(Buffer.from(storedHash, 'utf8'), Buffer.from(submittedHash, 'utf8'))) {
+    cookieStore.set('fcu_otp_strikes', (++strikes).toString(), { httpOnly: true, path: '/', maxAge: 300 });
+    if (strikes >= 5) handleLockout('Maximum attempts exceeded. Account locked for 10 minutes.');
+    throw new Error(`Invalid verification code. ${5 - strikes} attempt(s) remaining.`);
+  }
+
+  const user = await prisma.tenantUser.findFirst({ where: { organizationId: await resolveOrganizationId(cleanDept), email: cleanEmail, status: 'Active' } });
+  if (!user) throw new Error('Account inactive or not found.');
+
+  ['hash', 'email', 'department', 'strikes', 'lockout'].forEach(k => cookieStore.delete(`fcu_${k.includes('lockout') ? 'lockout' : 'otp_' + k}`));
+  cookieStore.set('fcu_session', user.id, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', maxAge: 86400 });
+
+  return { success: true, user: { id: user.id, fullName: user.fullName, email: user.email, role: user.role, allowedTabs: parseAllowedTabs(user.allowedTabs) } };
+}
+
+// =========================================================================
+// STUDENTS & TRANSFERS
 // =========================================================================
 
 export async function upsertStudent(department: string, data: { studentId: string; fullName: string; email: string }) {
@@ -232,8 +308,26 @@ export async function transferFunds(department: string, data: { fromFund: string
   revalidatePath(`/department/${department}`);
 }
 
+export async function updateMyEmail(department: string, newEmail: string) {
+  const sessionUser = (await auth())?.user as { email?: string } | undefined;
+  if (!sessionUser?.email) throw new Error('Unauthorized: No active session found.');
+  
+  const [orgId, currentEmail, cleanNewEmail] = [await getOrgId(department), sessionUser.email.trim().toLowerCase(), String(newEmail || '').trim().toLowerCase()];
+  if (!cleanNewEmail.includes('@')) throw new Error('Please provide a valid email address.');
+
+  const user = await prisma.tenantUser.findFirst({ where: { organizationId: orgId, email: currentEmail } });
+  if (!user) throw new Error('User record not found in this department.');
+
+  const existing = await prisma.tenantUser.findFirst({ where: { organizationId: orgId, email: cleanNewEmail } });
+  if (existing && existing.id !== user.id) throw new Error('This email is already registered by another account.');
+
+  await prisma.tenantUser.update({ where: { id: user.id }, data: { email: cleanNewEmail } });
+  revalidatePath(`/department/${department}`);
+  return { success: true, message: 'Email updated! Please sign out and back in.' };
+}
+
 // =========================================================================
-// FINANCIAL ENGINE (Optimized)
+// FINANCIAL ENGINE
 // =========================================================================
 
 export async function getDepartmentFinancials(organizationId: string, ay: string, term: string, isPublic: boolean = false) {
@@ -426,7 +520,6 @@ export async function getDepartmentFinancials(organizationId: string, ay: string
     return acc; 
   }, {});
   
-  // 🚀 TYPING FIX: Explicitly cast to number[] before reducing
   const totalInitialAlloc = (Object.values(initialAllocMap) as number[]).reduce((s, a) => s + a, 0);
 
   let carryOverInboundTotal = 0;
@@ -458,7 +551,7 @@ export async function getDepartmentFinancials(organizationId: string, ay: string
 }
 
 // =========================================================================
-// COLLECTION SETUP (Optimized & Typed)
+// COLLECTION SETUP
 // =========================================================================
 
 export async function saveCollectionSetupItem(department: string, p: { category: string; name: string; amount: number; targetFund: string; isPackage: boolean; ay: string; term: string; }) {
