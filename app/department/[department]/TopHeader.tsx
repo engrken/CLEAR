@@ -45,7 +45,6 @@ function TopHeaderContent({
   const [theme, setTheme] = useState('dark');
   
   const isLoggedIn = !!currentUser;
-  // SCRUBBED: Fallback to System Officer instead of Department Officer
   const userName = currentUser?.name || currentUser?.fullName || 'System Officer';
   const role = currentUser?.role || 'OFFICER';
   const username = currentUser?.username || 'N/A';
@@ -146,6 +145,8 @@ function TopHeaderContent({
       <header className="navbar navbar-expand border-bottom border-secondary px-4 py-3 bg-card shadow-sm flex-column align-items-stretch">
         <div className="d-flex align-items-center justify-content-between w-100">
           <div className="d-flex align-items-center gap-3">
+            
+            {/* 📱 MOBILE FIX: Uses a global event instead of direct DOM manipulation */}
             <button 
               className="btn btn-outline-secondary btn-sm d-lg-none" 
               type="button" 
@@ -155,8 +156,9 @@ function TopHeaderContent({
             </button>
 
             <div className="d-flex align-items-center gap-3">
+              {/* 🖥️ DESKTOP VIEW: Show the actual logo */}
               {!fcuError ? (
-                <div style={{ width: '96px', flexShrink: 0 }} className="text-center">
+                <div style={{ width: '96px', flexShrink: 0 }} className="text-center d-none d-md-block">
                   <img 
                     src={fcuLogoPath} 
                     alt="FCU Logo" 
@@ -165,14 +167,20 @@ function TopHeaderContent({
                   />
                 </div>
               ) : (
-                <div className="bg-accent text-dark rounded px-3 py-2 fw-bold" style={{ fontSize: '2.55rem' }}>
+                <div className="bg-accent text-dark rounded px-3 py-2 fw-bold d-none d-md-block" style={{ fontSize: '2.55rem' }}>
                   FCU
                 </div>
               )}
 
               <div>
+                {/* 🖥️ DESKTOP VIEW: Full spelled-out title */}
                 <span className="text-secondary d-none d-md-inline" style={{ fontSize: '2.16rem', lineHeight: '1.2' }}>
                   <b>C</b>entralized <b>L</b>iquidation of <b>E</b>xpenses & <b>A</b>udit <b>R</b>ecords <b>System</b>
+                </span>
+
+                {/* 📱 MOBILE VIEW: Compact bold text instead of the large logo */}
+                <span className="text-accent d-inline d-md-none fw-bold" style={{ fontSize: '1.35rem', letterSpacing: '0.5px' }}>
+                  CLEAR System
                 </span>
               </div>
             </div>
