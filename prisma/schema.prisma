@@ -28,6 +28,7 @@ model Organization {
   expenseItems      ExpenseItem[]
   collectibles      Collectible[]
   onlineRemittances OnlineRemittance[]
+  cashierRemittances CashierRemittance[]
   fundTransfers     FundTransfer[]
   systemLogs        SystemLog[]
   tenantUsers       TenantUser[]
@@ -330,4 +331,23 @@ model FundRealignment {
   authorizedBy   String
 
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model CashierRemittance {
+  id               String       @id @default(uuid())
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  remittanceId     String       @unique
+  academicYear     String
+  term             String
+  date             DateTime     @default(now())
+  remittedBy       String
+  fundSource       String
+  amount           Float        @default(0)
+  cashierReceiptNo String?
+  remarks          String?
+  status           String       @default("Remitted") 
+  encodedBy        String
+  createdAt        DateTime     @default(now())
 }
