@@ -136,9 +136,9 @@ export default function CashierRemittanceForm({
           </div>
           <div className="card-body row g-3">
             
-            {/* 💡 HELPFUL NOTE */}
+            {/* 💡 FIX 1: Theme-adaptive warning alert that is fully readable in Dark Mode */}
             <div className="col-12 mb-0 pb-0">
-              <div className="alert alert-warning py-2 mb-0 small border-warning text-dark">
+              <div className="alert py-2 mb-0 small border border-warning bg-warning bg-opacity-10 text-warning">
                 <i className="bi bi-info-circle-fill me-2"></i>
                 <strong>Note:</strong> You can type the names below to print them. <strong>If left blank, a blank underline will automatically be generated</strong> for manual physical signatures.
               </div>
@@ -163,7 +163,8 @@ export default function CashierRemittanceForm({
         </div>
 
         {/* 📄 THE ACTUAL PRINTABLE PAPER VOUCHER */}
-        <div id="printable-remittance" className="card border-dark w-100 bg-white text-dark shadow" style={{ maxWidth: '800px', borderRadius: '0px' }}>
+        {/* 💡 FIX 2: Forced color variables to insulate the paper from Dark Mode inheritance */}
+        <div id="printable-remittance" className="card border-dark w-100 shadow" style={{ maxWidth: '800px', borderRadius: '0px', backgroundColor: 'white', color: 'black' }}>
           <div className="card-body p-4 p-md-5">
             
             <div className="text-center mb-4 pb-3 border-bottom border-dark">
@@ -176,32 +177,33 @@ export default function CashierRemittanceForm({
 
             <div className="row mb-4">
               <div className="col-6">
-                <div className="small text-muted mb-1 text-uppercase fw-bold">System Tracking No.</div>
+                <div className="small mb-1 text-uppercase fw-bold" style={{ opacity: 0.6 }}>System Tracking No.</div>
                 <div className="fw-bold font-monospace fs-5">{printData.remittanceId}</div>
               </div>
               <div className="col-6 text-end">
-                <div className="small text-muted mb-1 text-uppercase fw-bold">Date of {printData.type === "Deposit" ? "Turnover" : "Withdrawal"}</div>
+                <div className="small mb-1 text-uppercase fw-bold" style={{ opacity: 0.6 }}>Date of {printData.type === "Deposit" ? "Turnover" : "Withdrawal"}</div>
                 <div className="fw-bold">{format(new Date(printData.date), "MMMM dd, yyyy")}</div>
               </div>
             </div>
 
-            <table className="table table-bordered border-dark mb-5 align-middle">
+            {/* 💡 FIX 2 (Table): Stripped Bootstrap's dark mode table variables */}
+            <table className="table table-bordered border-dark mb-5 align-middle" style={{ '--bs-table-bg': 'white', '--bs-table-color': 'black', color: 'black' } as React.CSSProperties}>
               <tbody>
                 <tr>
-                  <td className="fw-bold text-uppercase small" style={{ width: '35%', backgroundColor: '#f8f9fa' }}>Source Fund / Pool</td>
-                  <td className="fw-semibold">{printData.fundSource}</td>
+                  <td className="fw-bold text-uppercase small" style={{ width: '35%', backgroundColor: '#e9ecef', color: 'black' }}>Source Fund / Pool</td>
+                  <td className="fw-semibold" style={{ backgroundColor: 'white', color: 'black' }}>{printData.fundSource}</td>
                 </tr>
                 <tr>
-                  <td className="fw-bold text-uppercase small" style={{ backgroundColor: '#f8f9fa' }}>Remarks / Particulars</td>
-                  <td>{printData.remarks || "—"}</td>
+                  <td className="fw-bold text-uppercase small" style={{ backgroundColor: '#e9ecef', color: 'black' }}>Remarks / Particulars</td>
+                  <td style={{ backgroundColor: 'white', color: 'black' }}>{printData.remarks || "—"}</td>
                 </tr>
                 <tr>
-                  <td className="fw-bold text-uppercase small" style={{ backgroundColor: '#f8f9fa' }}>Cashier O.R. Reference</td>
-                  <td className="font-monospace">{printData.cashierReceiptNo || "To be issued physically"}</td>
+                  <td className="fw-bold text-uppercase small" style={{ backgroundColor: '#e9ecef', color: 'black' }}>Cashier O.R. Reference</td>
+                  <td className="font-monospace" style={{ backgroundColor: 'white', color: 'black' }}>{printData.cashierReceiptNo || "To be issued physically"}</td>
                 </tr>
                 <tr>
-                  <td className="fw-bold text-uppercase fs-6" style={{ backgroundColor: '#f8f9fa' }}>Total Amount {printData.type === "Deposit" ? "Remitted" : "Withdrawn"}</td>
-                  <td className={`fw-bold fs-5 ${printData.type === "Deposit" ? "text-success" : "text-danger"}`}>
+                  <td className="fw-bold text-uppercase fs-6" style={{ backgroundColor: '#e9ecef', color: 'black' }}>Total Amount {printData.type === "Deposit" ? "Remitted" : "Withdrawn"}</td>
+                  <td className={`fw-bold fs-5 ${printData.type === "Deposit" ? "text-success" : "text-danger"}`} style={{ backgroundColor: 'white' }}>
                     {fmt(printData.amount)}
                   </td>
                 </tr>
@@ -214,19 +216,19 @@ export default function CashierRemittanceForm({
                 <div className="border-bottom border-dark d-inline-block px-2 fw-bold mb-1 w-100 text-truncate" style={{ height: '24px' }}>
                   {prepName || "\u00A0"}
                 </div>
-                <div className="small text-muted fw-semibold">{prepTitle}</div>
+                <div className="small fw-semibold" style={{ opacity: 0.6 }}>{prepTitle}</div>
               </div>
               <div className="col-4">
                 <div className="border-bottom border-dark d-inline-block px-2 fw-bold mb-1 w-100 text-truncate" style={{ height: '24px' }}>
                   {notedName || "\u00A0"}
                 </div>
-                <div className="small text-muted fw-semibold">{notedTitle}</div>
+                <div className="small fw-semibold" style={{ opacity: 0.6 }}>{notedTitle}</div>
               </div>
               <div className="col-4">
                 <div className="border-bottom border-dark d-inline-block px-2 fw-bold mb-1 w-100 text-truncate" style={{ height: '24px' }}>
                   {recName || "\u00A0"}
                 </div>
-                <div className="small text-muted fw-semibold">{recTitle}</div>
+                <div className="small fw-semibold" style={{ opacity: 0.6 }}>{recTitle}</div>
               </div>
             </div>
 
