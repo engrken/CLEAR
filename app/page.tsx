@@ -100,7 +100,7 @@ export default async function RootPage() {
               </h1>
 
               <p className="lead text-secondary mb-4 fs-6" style={{ maxWidth: '620px', lineHeight: 1.6 }}>
-                Eliminate paper-heavy liquidation queues, untracked fees, and lost cash receipts. CLEAR equips university departments and student councils with automated collection rosters, instant clearance tracking, and immutable audit logs.
+                Eliminate paper-heavy liquidation queues, untracked fees, and lost cash receipts. CLEAR equips university departments and student councils with automated collection rosters, instant clearance tracking, physical cash/safekeeping trackers, and immutable audit logs.
               </p>
 
               <div className="d-flex flex-wrap gap-3 mb-5">
@@ -157,9 +157,10 @@ export default async function RootPage() {
                     <span className="small text-secondary">Collections Cleared</span>
                     <span className="text-success font-monospace fw-bold">98.4%</span>
                   </div>
+                  {/* 🚀 NEW: Replaced variance with the new Safekeeping metric */}
                   <div className="p-2 rounded bg-body border border-secondary border-opacity-50 d-flex justify-content-between align-items-center">
-                    <span className="small text-secondary">Audited Liquidations</span>
-                    <span className="text-info font-monospace fw-bold">₱0.00 Variance</span>
+                    <span className="small text-secondary">Cashier Safekeeping</span>
+                    <span className="text-info font-monospace fw-bold"><i className="bi bi-safe2-fill me-1"></i>Secured</span>
                   </div>
                   <div className="p-2 rounded bg-body border border-secondary border-opacity-50 d-flex justify-content-between align-items-center">
                     <span className="small text-secondary">Student Directory</span>
@@ -205,12 +206,13 @@ export default async function RootPage() {
               </div>
             </div>
 
+            {/* 🚀 NEW: Updated to explicitly mention Treasury & Cash on Hand */}
             <div className="col-12 col-md-6 col-lg-4">
               <div className="card h-100 p-4 border-secondary hover-lift">
-                <i className="bi bi-receipt-cutoff text-success fs-3 mb-3"></i>
-                <h5 className="fw-bold mb-2">Collections & Clearance</h5>
+                <i className="bi bi-bank text-success fs-3 mb-3"></i>
+                <h5 className="fw-bold mb-2">Treasury & Collections</h5>
                 <p className="text-secondary small mb-0">
-                  Log official receipts, manage uniform and package dues, compute outstanding balances, and authorize graduation clearances automatically.
+                  Log official receipts, track Physical Cash on Hand vs. University Cashier Safekeeping, compute outstanding balances, and authorize clearances.
                 </p>
               </div>
             </div>
@@ -245,12 +247,13 @@ export default async function RootPage() {
               </div>
             </div>
 
+            {/* 🚀 NEW: Updated to mention Cash Remittance Vouchers */}
             <div className="col-12 col-md-6 col-lg-4">
               <div className="card h-100 p-4 border-secondary hover-lift">
                 <i className="bi bi-printer text-info fs-3 mb-3"></i>
-                <h5 className="fw-bold mb-2">Print-Optimized Ledgers</h5>
+                <h5 className="fw-bold mb-2">Printable Vouchers</h5>
                 <p className="text-secondary small mb-0">
-                  Built-in formal print stylesheets generate black-and-white reports and signature blocks ready for dean approvals and external auditors.
+                  Built-in formal print stylesheets instantly generate black-and-white Cash Remittance Vouchers, Ledgers, and dynamic signature blocks.
                 </p>
               </div>
             </div>
