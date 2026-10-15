@@ -94,15 +94,15 @@ export default async function RootPage() {
             <div className="col-12 col-lg-7">
               <div className="d-inline-flex align-items-center gap-2 badge border border-info border-opacity-25 bg-info bg-opacity-10 text-info px-3 py-2 rounded-pill mb-4 font-monospace small">
                 <i className="bi bi-patch-check-fill"></i>
-                <span>Enterprise Multi-Tenant Architecture</span>
+                <span>Enterprise Multi-Tenant Financial Architecture</span>
               </div>
 
               <h1 className="display-4 fw-bold mb-3" style={{ letterSpacing: '-0.03em', lineHeight: 1.15 }}>
-                Centralized Liquidation & Audit Records for <span className="text-accent">Campus Organizations</span>
+                Financial Accountability &amp; Clearance for <span className="text-accent">Campus Organizations</span>
               </h1>
 
               <p className="lead text-secondary mb-4 fs-6" style={{ maxWidth: '620px', lineHeight: 1.6 }}>
-                Eliminate paper-heavy liquidation queues, untracked fees, and lost cash receipts. CLEAR equips university departments and student councils with automated collection rosters, instant clearance tracking, physical cash/safekeeping trackers, and immutable audit logs.
+                Eliminate paper-heavy liquidation queues, untracked fees, and lost cash receipts. CLEAR equips university departments and student chapters with automated fee-package splitting, online GCash/Maya remittance queues, university cashier safekeeping trackers, and immutable audit logs.
               </p>
 
               <div className="d-flex flex-wrap gap-3 mb-5">
@@ -125,11 +125,11 @@ export default async function RootPage() {
               <div className="row g-3 pt-3 border-top border-secondary border-opacity-50">
                 <div className="col-4">
                   <div className="fw-bold fs-5 text-accent">Isolated</div>
-                  <div className="text-secondary small" style={{ fontSize: '0.75rem' }}>Tenant Data Silos</div>
+                  <div className="text-secondary small" style={{ fontSize: '0.75rem' }}>Tenant Database</div>
                 </div>
                 <div className="col-4">
                   <div className="fw-bold fs-5 text-success">Zero-Trust</div>
-                  <div className="text-secondary small" style={{ fontSize: '0.75rem' }}>OTP Verification</div>
+                  <div className="text-secondary small" style={{ fontSize: '0.75rem' }}>OTP Email Verification</div>
                 </div>
                 <div className="col-4">
                   <div className="fw-bold fs-5 text-info">Immutable</div>
@@ -151,7 +151,7 @@ export default async function RootPage() {
                   <i className="bi bi-cpu text-info"></i>
                 </div>
 
-                <h6 className="fw-bold text-accent mb-1">Instant Clearance & Audit Metrics</h6>
+                <h6 className="fw-bold text-accent mb-1">Instant Clearance &amp; Treasury Metrics</h6>
                 <p className="text-secondary small mb-3">Real-time status overview across department operations.</p>
 
                 <div className="vstack gap-2 mb-3">
@@ -159,7 +159,6 @@ export default async function RootPage() {
                     <span className="small text-secondary">Collections Cleared</span>
                     <span className="text-success font-monospace fw-bold">98.4%</span>
                   </div>
-                  {/* 🚀 NEW: Replaced variance with the new Safekeeping metric */}
                   <div className="p-2 rounded bg-body border border-secondary border-opacity-50 d-flex justify-content-between align-items-center">
                     <span className="small text-secondary">Cashier Safekeeping</span>
                     <span className="text-info font-monospace fw-bold"><i className="bi bi-safe2-fill me-1"></i>Secured</span>
@@ -193,7 +192,7 @@ export default async function RootPage() {
             <span className="badge bg-primary bg-opacity-10 text-accent font-monospace px-3 py-1 mb-2">FEATURES</span>
             <h2 className="fw-bold">Engineered for Academic Accountability</h2>
             <p className="text-secondary small mx-auto" style={{ maxWidth: '550px' }}>
-              Built specifically to handle the unique financial workflows of college organizations and student chapters.
+              Built specifically to handle the unique financial workflows, digital clearance QR validation, and auditing standards of college organizations.
             </p>
           </div>
 
@@ -201,18 +200,17 @@ export default async function RootPage() {
             <div className="col-12 col-md-6 col-lg-4">
               <div className="card h-100 p-4 border-secondary hover-lift">
                 <i className="bi bi-people-fill text-info fs-3 mb-3"></i>
-                <h5 className="fw-bold mb-2">Roster & Bulk Import</h5>
+                <h5 className="fw-bold mb-2">Roster &amp; Bulk CSV Import</h5>
                 <p className="text-secondary small mb-0">
                   Import hundreds of student records via CSV in seconds. Track real-time term enrollment, active directory counts, and batch promote year levels.
                 </p>
               </div>
             </div>
 
-            {/* 🚀 NEW: Updated to explicitly mention Treasury & Cash on Hand */}
             <div className="col-12 col-md-6 col-lg-4">
               <div className="card h-100 p-4 border-secondary hover-lift">
                 <i className="bi bi-bank text-success fs-3 mb-3"></i>
-                <h5 className="fw-bold mb-2">Treasury & Collections</h5>
+                <h5 className="fw-bold mb-2">Treasury &amp; Safekeeping</h5>
                 <p className="text-secondary small mb-0">
                   Log official receipts, track Physical Cash on Hand vs. University Cashier Safekeeping, compute outstanding balances, and authorize clearances.
                 </p>
@@ -221,20 +219,20 @@ export default async function RootPage() {
 
             <div className="col-12 col-md-6 col-lg-4">
               <div className="card h-100 p-4 border-secondary hover-lift">
-                <i className="bi bi-file-earmark-spreadsheet text-warning fs-3 mb-3"></i>
-                <h5 className="fw-bold mb-2">Reports & Analytics</h5>
+                <i className="bi bi-qr-code-scan text-warning fs-3 mb-3"></i>
+                <h5 className="fw-bold mb-2">Cryptographic Clearance QR</h5>
                 <p className="text-secondary small mb-0">
-                  Generate comprehensive CSV exports, breakdown collection percentages by year level, and review audited expense balances with one click.
+                  Students generate secure SHA-256 signed QR certificates upon full settlement, enabling instant scanning and verification by advisers and custodians.
                 </p>
               </div>
             </div>
 
             <div className="col-12 col-md-6 col-lg-4">
               <div className="card h-100 p-4 border-secondary hover-lift">
-                <i className="bi bi-journal-text text-accent fs-3 mb-3"></i>
-                <h5 className="fw-bold mb-2">Immutable Audit Trails</h5>
+                <i className="bi bi-wallet2 text-accent fs-3 mb-3"></i>
+                <h5 className="fw-bold mb-2">Online Remittance Queue</h5>
                 <p className="text-secondary small mb-0">
-                  Every user interaction, cash void request, and privilege modification is captured with exact timestamps for administrative accountability.
+                  Allow students to upload GCash, Maya, or bank transfer receipts for officer verification and automated Official Receipt (OR) issuance.
                 </p>
               </div>
             </div>
@@ -244,18 +242,17 @@ export default async function RootPage() {
                 <i className="bi bi-building-gear text-danger fs-3 mb-3"></i>
                 <h5 className="fw-bold mb-2">Multi-Tenant Isolation</h5>
                 <p className="text-secondary small mb-0">
-                  Host independent departments—Engineering, Nursing, Business, and more—with isolated ledgers, distinct rosters, and individual admin teams.
+                  Host independent departments—Engineering, Nursing, Business, and student chapters—with isolated ledgers, distinct rosters, and custom admin teams.
                 </p>
               </div>
             </div>
 
-            {/* 🚀 NEW: Updated to mention Cash Remittance Vouchers */}
             <div className="col-12 col-md-6 col-lg-4">
               <div className="card h-100 p-4 border-secondary hover-lift">
                 <i className="bi bi-printer text-info fs-3 mb-3"></i>
-                <h5 className="fw-bold mb-2">Printable Vouchers</h5>
+                <h5 className="fw-bold mb-2">Printable Reports and Voucher</h5>
                 <p className="text-secondary small mb-0">
-                  Built-in formal print stylesheets instantly generate black-and-white Cash Remittance Vouchers, Ledgers, and dynamic signature blocks.
+                  Built-in formal print stylesheets instantly generate black-and-white Cash Remittance Vouchers, Audited Liquidation Reports, and dynamic signatory blocks.
                 </p>
               </div>
             </div>
