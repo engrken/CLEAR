@@ -152,7 +152,7 @@ export default function DashboardClient({
           </div>
         </div>
 
-        {/* 🚀 NEW: FUND LOCATION TRACKER (Safekeeping vs Cash on Hand) */}
+        {/* FUND LOCATION TRACKER (Safekeeping vs Cash on Hand) */}
         <div className="row g-3 mt-1">
           <div className="col-12 col-md-6">
             <div className="card h-100 border-info shadow-sm bg-info bg-opacity-10 transition-all">
@@ -224,7 +224,7 @@ export default function DashboardClient({
           </div>
         </div>
 
-        {/* WIDGET PANEL (Tables) */}
+        {/* WIDGET PANEL (Tables) - 🚀 Fixed F43: Added Initial & Transfers columns */}
         <div className="card p-3 p-md-4 border-secondary shadow-sm bg-card mt-2">
           <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
             <h6 className="fw-bold text-body m-0">
@@ -242,22 +242,24 @@ export default function DashboardClient({
                 <thead>
                   <tr className="text-secondary small border-bottom border-secondary">
                     <th className="py-2">Account Pool</th>
-                    <th className="text-end py-2">Allocated</th>
+                    <th className="text-end py-2">Initial / Rollover</th>
+                    <th className="text-end py-2">Net Transfers</th>
+                    <th className="text-end py-2">Collected</th>
                     <th className="text-end py-2">Disbursed</th>
-                    <th className="text-end py-2">Liquidated</th>
                     <th className="text-end py-2">Balance</th>
                   </tr>
                 </thead>
                 <tbody>
                   {overview.fundsList.length === 0 ? (
-                    <tr><td colSpan={5} className="text-center py-4 text-secondary">No fund activity recorded.</td></tr>
+                    <tr><td colSpan={6} className="text-center py-4 text-secondary">No fund activity recorded.</td></tr>
                   ) : (
                     overview.fundsList.map((f: any) => (
                       <tr key={f.name} className="border-bottom border-secondary">
                         <td className="py-2"><strong>{f.name}</strong></td>
-                        <td className="text-end text-info py-2">{fmt(f.collected)}</td>
-                        <td className="text-end text-warning py-2">{fmt(f.unliquidated)}</td>
-                        <td className="text-end text-danger py-2">{fmt(f.spent)}</td>
+                        <td className="text-end text-secondary py-2">{fmt(f.initialAllocation || 0)}</td>
+                        <td className="text-end text-muted py-2">{fmt(f.netTransfers || 0)}</td>
+                        <td className="text-end text-info py-2">{fmt(f.collected || 0)}</td>
+                        <td className="text-end text-danger py-2">{fmt(f.spent || 0)}</td>
                         <td className={`text-end fw-bold py-2 ${f.balance < 0 ? "text-danger" : "text-success"}`}>{fmt(f.balance)}</td>
                       </tr>
                     ))
@@ -283,12 +285,12 @@ export default function DashboardClient({
                   ) : (
                     overview.unliquidatedAdvances.map((ca: any) => (
                       <tr key={ca.id} className="border-bottom border-secondary">
-                        <td className="font-monospace text-secondary py-2">{ca.id}</td>
+                        <td className="font-monospace text-secondary py-2">{ca.advanceId || ca.id}</td>
                         <td className="py-2"><strong className="text-accent">{ca.requestor}</strong></td>
-                        <td className="text-end text-warning fw-bold py-2">{fmt(ca.amount)}</td>
+                        <td className="text-end text-warning fw-bold py-2">{fmt(ca.amountApproved || ca.amount)}</td>
                         <td className="py-2"><span className="badge bg-warning text-dark">{ca.status}</span></td>
                         <td className="text-center py-2">
-                          <Link href={`${basePath}/liquidations?caId=${encodeURIComponent(ca.id)}&ay=${encodeURIComponent(ay)}&term=${encodeURIComponent(term)}`} className="btn btn-outline-info btn-sm py-0 fw-bold">
+                          <Link href={`${basePath}/liquidations?caId=${encodeURIComponent(ca.advanceId || ca.id)}&ay=${encodeURIComponent(ay)}&term=${encodeURIComponent(term)}`} className="btn btn-outline-info btn-sm py-0 fw-bold">
                             Liquidate
                           </Link>
                         </td>
