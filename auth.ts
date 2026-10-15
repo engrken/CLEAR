@@ -2,6 +2,7 @@
 
 import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
+import crypto from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { isSuperAdminEmail, parseAllowedTabs } from "@/lib/permissions";
 
@@ -74,7 +75,6 @@ export const {
         // SUPER ADMIN
         // =====================================================
 
-        // 🚀 SECURITY FIX (F2): Use central isSuperAdminEmail helper
         if (isSuperAdminEmail(email)) {
           console.log("AUTH MODE: SUPER ADMIN");
 
@@ -91,7 +91,12 @@ export const {
             );
           }
 
-          if (tokenRecord.token !== code) {
+          // 🚀 FIX: Hash incoming code with SHA-256 to match the database hash
+          const submittedHash = crypto.createHash('sha256').update(code).digest('hex');
+          const storedBuf = Buffer.from(tokenRecord.token, 'utf8');
+          const submittedBuf = Buffer.from(submittedHash, 'utf8');
+
+          if (storedBuf.length !== submittedBuf.length || !crypto.timingSafeEqual(storedBuf, submittedBuf)) {
             throw new CustomAuthError(
               "Invalid Super Admin verification code."
             );
@@ -140,10 +145,6 @@ export const {
           );
         }
 
-        // =====================================================
-        // FIND ORGANIZATION
-        // =====================================================
-
         const organization =
           await prisma.organization.findUnique({
             where: {
@@ -157,16 +158,6 @@ export const {
           );
         }
 
-        console.log(
-          "AUTH ORGANIZATION:",
-          organization.id,
-          organization.subdomain
-        );
-
-        // =====================================================
-        // FIND USER
-        // =====================================================
-
         const user =
           await prisma.tenantUser.findFirst({
             where: {
@@ -176,39 +167,17 @@ export const {
             },
           });
 
-        console.log("AUTH USER FOUND:", !!user);
-        console.log("AUTH USER ID:", user?.id);
-        console.log(
-          "AUTH OTP EXISTS:",
-          !!user?.otpCode
-        );
-
-        console.log(
-          "AUTH OTP EXPIRED:",
-          user?.otpExpires
-            ? user.otpExpires < new Date()
-            : false
-        );
-
         if (!user) {
           throw new CustomAuthError(
             "This account is not authorized for this department."
           );
         }
 
-        // =====================================================
-        // CHECK OTP EXISTENCE
-        // =====================================================
-
         if (!user.otpCode) {
           throw new CustomAuthError(
             "No department verification code requested."
           );
         }
-
-        // =====================================================
-        // CHECK OTP EXPIRATION
-        // =====================================================
 
         if (
           !user.otpExpires ||
@@ -219,15 +188,13 @@ export const {
           );
         }
 
-        // =====================================================
-        // CHECK OTP VALUE
-        // =====================================================
+        // 🚀 FIX: Hash incoming department OTP code before timing-safe comparison
+        const submittedUserHash = crypto.createHash('sha256').update(code).digest('hex');
+        const storedUserBuf = Buffer.from(user.otpCode.trim(), 'utf8');
+        const submittedUserBuf = Buffer.from(submittedUserHash, 'utf8');
 
-        if (
-          user.otpCode.trim() !== code.trim()
-        ) {
+        if (storedUserBuf.length !== submittedUserBuf.length || !crypto.timingSafeEqual(storedUserBuf, submittedUserBuf)) {
           console.log("AUTH OTP MISMATCH");
-
           throw new CustomAuthError(
             "Invalid verification code."
           );
@@ -239,13 +206,10 @@ export const {
         // CONSUME OTP
         // =====================================================
 
-        console.log("AUTH CLEARING OTP...");
-
         await prisma.tenantUser.update({
           where: {
             id: user.id,
           },
-
           data: {
             otpCode: null,
             otpExpires: null,
@@ -254,20 +218,7 @@ export const {
 
         console.log("AUTH OTP CLEARED.");
 
-        // =====================================================
-        // PARSE ALLOWED TABS (Using centralized helper)
-        // =====================================================
-
         const allowedTabs = parseAllowedTabs(user.allowedTabs);
-
-        console.log(
-          "AUTH ALLOWED TABS:",
-          allowedTabs
-        );
-
-        // =====================================================
-        // SUCCESS
-        // =====================================================
 
         console.log(
           "========== AUTH SUCCESS =========="
