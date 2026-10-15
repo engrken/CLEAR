@@ -63,16 +63,16 @@ export async function assessStudentDue(
     throw new Error("Valid student identification is required.");
   }
 
-  // 4. Create Database Record with complete student and item details
+  // 4. Create Database Record conforming strictly to the Collectible model schema fields
+  const formattedDescription = `${payload.itemDescription} - ${payload.studentName} (${payload.studentId})`;
+
   await prisma.collectible.create({
     data: {
       organizationId: orgId,
       academicYear: payload.ay,
       term: payload.term,
       category: String(payload.category || "").trim(),
-      studentId: payload.studentId,
-      studentName: payload.studentName,
-      itemDescription: String(payload.itemDescription || "").trim(),
+      headcount: 1,
       balanceDue: amountDue,
       status: "Unpaid",
       encodedBy: officerName,
