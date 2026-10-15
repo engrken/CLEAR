@@ -1,6 +1,7 @@
 // /app/department/[department]/(protected)/reports/page.tsx
 
 import { prisma } from '@/lib/prisma';
+import { requireTabAccess } from '@/lib/permissions';
 import ReportsClient from './ReportsClient';
 import { Metadata } from 'next';
 import { getDepartmentFinancials } from '../../actions';
@@ -18,16 +19,20 @@ export default async function InstitutionalReportsPage({
 }) {
   const { department } = await params;
   const cleanDepartment = decodeURIComponent(department).trim().toLowerCase();
-  const resolvedSearch = searchParams ? await searchParams : {};
-  const ay = resolvedSearch.ay || 'A.Y. 2026 - 2027';
-  const term = resolvedSearch.term || '1st Sem';
 
-const organization = await prisma.organization.findUnique({
+  // 🚀 SECURITY FIX: Enforce tab-level permissions for reports access
+  await requireTabAccess('tab-reports', cleanDepartment);
+
+  const resolvedSearch = searchParams ? await searchParams : {};
+
+  const organization = await prisma.organization.findUnique({
     where: { subdomain: cleanDepartment },
     select: { 
       id: true, 
       name: true, 
       logo: true,
+      activeAy: true,
+      activeTerm: true,
       signatories: { orderBy: { order: 'asc' } } 
     }
   });
@@ -35,6 +40,10 @@ const organization = await prisma.organization.findUnique({
   if (!organization) {
     return <div className="alert alert-danger p-4">Department Not Found</div>;
   }
+
+  // 🚀 Dynamically link academic year and term to organization database defaults
+  const ay = resolvedSearch.ay || organization.activeAy || 'A.Y. 2026 - 2027';
+  const term = resolvedSearch.term || organization.activeTerm || '1st Sem';
 
   // 1. Fetch Dynamic Package from Central Engine
   const financials = await getDepartmentFinancials(organization.id, ay, term);
@@ -72,11 +81,11 @@ const organization = await prisma.organization.findUnique({
   return (
     <div className="module card p-3 p-md-4 border-secondary shadow-sm">
       <ReportsClient 
-        department={department}
-        orgName={organization.name} // PASSED FULL DYNAMIC ORGANIZATION NAME
+        department={cleanDepartment}
+        orgName={organization.name}
         ay={ay}
         term={term}
-		orgId={organization.id}
+        orgId={organization.id}
         logoUrl={organization.logo}
         initialSignatories={organization.signatories || []}
         students={serialize(students)}

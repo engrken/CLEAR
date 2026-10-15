@@ -1,6 +1,7 @@
 // /app/department/[department]/(protected)/void/page.tsx
 
 import { prisma } from '@/lib/prisma';
+import { requireTabAccess } from '@/lib/permissions';
 import VoidClient from './VoidClient';
 import { Metadata } from 'next';
 
@@ -19,6 +20,9 @@ export default async function VoidTransactionsPage({ params, searchParams }: Pag
   
   const department = resolvedParams?.department || 'engineering';
   const cleanDepartment = decodeURIComponent(department).toLowerCase().trim();
+
+  // 🚀 SECURITY FIX: Enforce tab-level permissions for transaction voiding access
+  await requireTabAccess('tab-void', cleanDepartment);
   
   const category = resolvedSearch?.category || 'collections';
   const page = parseInt(resolvedSearch?.page || '1', 10);
@@ -41,8 +45,6 @@ export default async function VoidTransactionsPage({ params, searchParams }: Pag
   let records: any[] = [];
   let totalCount = 0;
 
-  // FIX: Remove 'mode: insensitive' completely to prevent Prisma crashes.
-  // Instead, explicitly filter out both "VOID" and "Void" variations safely.
   if (category === 'collections') {
     const where = { 
       organizationId: organization.id, 

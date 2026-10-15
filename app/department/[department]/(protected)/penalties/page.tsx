@@ -1,6 +1,7 @@
 // /app/department/[department]/(protected)/penalties/page.tsx
 
 import { prisma } from '@/lib/prisma';
+import { requireTabAccess } from '@/lib/permissions';
 import PenaltiesManager from './PenaltiesManager';
 import { Metadata } from 'next';
 
@@ -16,12 +17,20 @@ export default async function PenaltiesPage({
   searchParams?: Promise<{ ay?: string; term?: string }>;
 }) {
   const { department } = await params;
+  const cleanDepartment = decodeURIComponent(department).trim().toLowerCase();
+
+  // 🚀 SECURITY FIX: Enforce tab-level permissions for penalties access
+  await requireTabAccess('tab-penalties', cleanDepartment);
+
   const resolvedSearch = searchParams ? await searchParams : {};
-  const ay = resolvedSearch.ay || 'A.Y. 2026 - 2027';
-  const term = resolvedSearch.term || '1st Sem';
 
   const organization = await prisma.organization.findUnique({
-    where: { subdomain: department },
+    where: { subdomain: cleanDepartment },
+    select: {
+      id: true,
+      activeAy: true,
+      activeTerm: true,
+    }
   });
 
   if (!organization) {
@@ -33,6 +42,10 @@ export default async function PenaltiesPage({
     );
   }
 
+  // 🚀 Dynamically link academic year and term to organization database defaults
+  const ay = resolvedSearch.ay || organization.activeAy || 'A.Y. 2026 - 2027';
+  const term = resolvedSearch.term || organization.activeTerm || '1st Sem';
+
   // Fetch Students and Logged Penalties in parallel
   const [students, penalties] = await Promise.all([
     prisma.student.findMany({
@@ -40,21 +53,21 @@ export default async function PenaltiesPage({
       select: { studentId: true, fullName: true, email: true }
     }),
     prisma.penalty.findMany({
-  where: {
-    organizationId: organization.id,
-    academicYear: ay,
-    term,
-    status: {
-      not: {
-        contains: 'Voided',
+      where: {
+        organizationId: organization.id,
+        academicYear: ay,
+        term,
+        status: {
+          not: {
+            contains: 'Voided',
+          },
+        },
       },
-    },
-  },
-  orderBy: {
-    date: 'desc',
-  },
-})
-]);
+      orderBy: {
+        date: 'desc',
+      },
+    })
+  ]);
 
   return (
     <div className="module card p-3 p-md-4 border-secondary shadow-sm">
@@ -62,7 +75,7 @@ export default async function PenaltiesPage({
       <p className="text-secondary small mb-3">Standard rate: <strong>₱50.00 / hour late</strong>. Unsettled fines automatically place a clearance hold.</p>
       
       <PenaltiesManager 
-        department={department}
+        department={cleanDepartment}
         ay={ay}
         term={term}
         students={students}

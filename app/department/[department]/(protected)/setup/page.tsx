@@ -1,6 +1,7 @@
 // /app/department/[department]/(protected)/setup/page.tsx
 
 import { prisma } from '@/lib/prisma';
+import { requireTabAccess } from '@/lib/permissions';
 import SetupClient from './SetupClient';
 import { Metadata } from 'next';
 
@@ -14,9 +15,13 @@ export default async function SetupPage({
   params: Promise<{ department: string }>;
 }) {
   const { department } = await params;
+  const cleanDepartment = decodeURIComponent(department).trim().toLowerCase();
+
+  // 🚀 SECURITY FIX: Enforce tab-level permissions for institutional setup access
+  await requireTabAccess('tab-setup', cleanDepartment);
 
   const organization = await prisma.organization.findUnique({
-    where: { subdomain: department },
+    where: { subdomain: cleanDepartment },
   });
 
   if (!organization) {
@@ -43,10 +48,10 @@ export default async function SetupPage({
   return (
     <div className="module card p-3 p-md-4 border-secondary shadow-sm">
       <SetupClient 
-        department={department} 
+        department={cleanDepartment} 
         organizationId={organization.id} 
         initialFundNames={initialFunds}
-		currentLogo={organization.logo}
+        currentLogo={organization.logo}
       />
     </div>
   );

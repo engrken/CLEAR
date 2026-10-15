@@ -1,6 +1,7 @@
 // /app/department/[department]/(protected)/realign/page.tsx
 
 import { prisma } from '@/lib/prisma';
+import { requireTabAccess } from '@/lib/permissions';
 import RealignManager from './RealignManager';
 import { Metadata } from 'next';
 
@@ -16,12 +17,20 @@ export default async function RealignPage({
   searchParams?: Promise<{ ay?: string; term?: string }>;
 }) {
   const { department } = await params;
+  const cleanDepartment = decodeURIComponent(department).trim().toLowerCase();
+
+  // 🚀 SECURITY FIX: Enforce tab-level permissions for fund realignment access
+  await requireTabAccess('tab-setup', cleanDepartment);
+
   const resolvedSearch = searchParams ? await searchParams : {};
-  const ay = resolvedSearch.ay || 'A.Y. 2026 - 2027';
-  const term = resolvedSearch.term || '1st Sem';
 
   const organization = await prisma.organization.findUnique({
-    where: { subdomain: department },
+    where: { subdomain: cleanDepartment },
+    select: {
+      id: true,
+      activeAy: true,
+      activeTerm: true,
+    }
   });
 
   if (!organization) {
@@ -32,6 +41,10 @@ export default async function RealignPage({
       </div>
     );
   }
+
+  // 🚀 Dynamically link academic year and term to organization database defaults
+  const ay = resolvedSearch.ay || organization.activeAy || 'A.Y. 2026 - 2027';
+  const term = resolvedSearch.term || organization.activeTerm || '1st Sem';
 
   const [collections, audits, cashAdvances, initialFunds, fundTransfers] = await Promise.all([
     prisma.collection.findMany({ where: { organizationId: organization.id, academicYear: ay, term } }),
@@ -102,7 +115,7 @@ export default async function RealignPage({
     <div className="module card p-3 p-md-4 border-secondary shadow-sm">
       <h5 className="text-accent mb-3"><i className="bi bi-arrow-left-right me-2"></i>Fund Realignments & Carry-Over</h5>
       <RealignManager 
-        department={department}
+        department={cleanDepartment}
         ay={ay}
         term={term}
         funds={fundsList}
