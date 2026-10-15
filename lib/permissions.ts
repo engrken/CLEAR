@@ -1,13 +1,17 @@
 import { auth } from "@/auth";
 
-// =========================================================================
-// HELPER
-// =========================================================================
-export function parseAllowedTabs(tabs: any): string[] {
-  if (Array.isArray(tabs)) return tabs;
+export function isSuperAdminEmail(email?: string | null): boolean {
+  const clean = String(email || "").trim().toLowerCase();
+  const configured = String(process.env.SUPER_ADMIN_EMAIL || "kent.bsece@gmail.com").trim().toLowerCase();
+  return Boolean(clean && configured && clean === configured);
+}
+
+export function parseAllowedTabs(tabs: unknown): string[] {
+  if (Array.isArray(tabs)) return tabs.filter((v): v is string => typeof v === "string");
   if (typeof tabs === "string") {
     try {
-      return JSON.parse(tabs);
+      const parsed = JSON.parse(tabs);
+      return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === "string") : [];
     } catch {
       return [];
     }
@@ -15,13 +19,27 @@ export function parseAllowedTabs(tabs: any): string[] {
   return [];
 }
 
-// =========================================================================
-// AUTHORIZATION GUARDS
-// =========================================================================
+export async function requireSuperAdmin() {
+  const session = await auth();
+  if (!session?.user) {
+    throw new Error("401 Unauthorized: Session expired or invalid.");
+  }
+
+  const user = session.user as any;
+  const role = String(user.role || "").trim().toLowerCase().replace(/[\s_-]+/g, "");
+  const sessionEmail = String(user.email || "").trim().toLowerCase();
+
+  const isSuperRole = role === "superadmin" || role === "master" || role === "super_admin";
+
+  if (!isSuperRole || !isSuperAdminEmail(sessionEmail)) {
+    throw new Error("403 Forbidden: Super administrator privileges are required.");
+  }
+
+  return user;
+}
 
 export async function requireTabAccess(requiredTab: string) {
   const session = await auth();
-
   if (!session?.user) {
     throw new Error("401 Unauthorized: Session expired or invalid.");
   }
@@ -29,15 +47,11 @@ export async function requireTabAccess(requiredTab: string) {
   const customUser = session.user as any;
   const sessionEmail = String(customUser.email || "").trim().toLowerCase();
   
-  // SUPER ADMIN & ROLE BYPASS
-  const configuredSuperAdminEmail = String(process.env.SUPER_ADMIN_EMAIL || "").trim().toLowerCase();
-  const isMasterAdmin = sessionEmail === "kent.bsece@gmail.com" || (configuredSuperAdminEmail !== "" && sessionEmail === configuredSuperAdminEmail);
-  
-  const role = String(customUser.role || "").trim().toLowerCase();
-  const roleIsAdmin = role === "admin" || role === "administrator" || role === "superadmin" || role === "super admin" || role === "super_admin";
+  const role = String(customUser.role || "viewer").trim().toLowerCase();
+  const roleIsAdmin = ["admin", "administrator", "master", "superadmin", "super admin", "super_admin"].includes(role);
 
-  if (isMasterAdmin || roleIsAdmin) {
-    return customUser; // Bypass restrictions for admins
+  if (isSuperAdminEmail(sessionEmail) || roleIsAdmin) {
+    return customUser; // Bypass tab restrictions for global/tenant admins
   }
 
   const allowedTabs = parseAllowedTabs(customUser.allowedTabs);
@@ -47,31 +61,4 @@ export async function requireTabAccess(requiredTab: string) {
   }
 
   return customUser;
-}
-
-export async function requireSuperAdmin() {
-  const session = await auth();
-
-  if (!session?.user) {
-    throw new Error("401 Unauthorized: Session expired or invalid.");
-  }
-
-  const user = session.user as any;
-  const role = String(user.role || "").trim().toLowerCase();
-  const allowedTabs = parseAllowedTabs(user.allowedTabs);
-  
-  const configuredSuperAdminEmail = String(process.env.SUPER_ADMIN_EMAIL || "").trim().toLowerCase();
-  const sessionEmail = String(user.email || "").trim().toLowerCase();
-
-  const roleIsAdmin = role === "admin" || role === "administrator" || role === "superadmin" || role === "super admin" || role === "super_admin";
-  const hasProvisionPermission = allowedTabs.includes("tab-provision");
-  
-  // Includes your master account explicitly
-  const matchesConfiguredEmail = sessionEmail === "kent.bsece@gmail.com" || (configuredSuperAdminEmail !== "" && sessionEmail === configuredSuperAdminEmail);
-
-  if (!roleIsAdmin && !hasProvisionPermission && !matchesConfiguredEmail) {
-    throw new Error("403 Forbidden: Super administrator privileges are required.");
-  }
-
-  return user;
 }
