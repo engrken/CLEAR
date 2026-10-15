@@ -31,15 +31,13 @@ export async function requestOtp(
   // SUPER ADMIN (F2 Fix)
   // =========================================================
   if (isSuperAdminEmail(cleanEmail)) {
-    await prisma.verificationToken.upsert({
-      where: {
-        identifier: cleanEmail,
-      },
-      update: {
-        token: hashedOtp, // 🚀 Store hashed token securely
-        expires: otpExpires,
-      },
-      create: {
+    // Clear out any existing tokens for this identifier first to avoid composite key conflicts
+    await prisma.verificationToken.deleteMany({
+      where: { identifier: cleanEmail },
+    });
+
+    await prisma.verificationToken.create({
+      data: {
         identifier: cleanEmail,
         token: hashedOtp, // 🚀 Store hashed token securely
         expires: otpExpires,
@@ -250,7 +248,7 @@ export async function requestOtp(
 }
 
 // =========================================================
-// VERIFY OTP (Fixed to match SHA-256 Hashed Tokens)
+// VERIFY OTP (Fixed to query VerificationToken properly)
 // =========================================================
 export async function verifyOtp(
   department: string,
@@ -270,8 +268,10 @@ export async function verifyOtp(
 
   // Handle Super Admin Verification
   if (isSuperAdminEmail(cleanEmail)) {
-    const tokenRecord = await prisma.verificationToken.findUnique({
+    // Find valid token by identifier (email)
+    const tokenRecord = await prisma.verificationToken.findFirst({
       where: { identifier: cleanEmail },
+      orderBy: { expires: 'desc' },
     });
 
     if (!tokenRecord || !tokenRecord.token || tokenRecord.expires < new Date()) {
@@ -286,7 +286,7 @@ export async function verifyOtp(
     }
 
     // Clean up used token
-    await prisma.verificationToken.delete({
+    await prisma.verificationToken.deleteMany({
       where: { identifier: cleanEmail },
     });
 
