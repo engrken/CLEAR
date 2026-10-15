@@ -1,6 +1,7 @@
 // /app/department/[department]/(protected)/collections/page.tsx
 
 import { prisma } from "@/lib/prisma";
+import { requireTabAccess } from "@/lib/permissions";
 import CollectionsForm from "./CollectionsForm";
 import { Metadata } from "next";
 
@@ -24,10 +25,12 @@ export default async function CollectionsPage({
   }>;
 }) {
   const { department } = await params;
-  const resolvedSearch = searchParams ? await searchParams : {};
+  const cleanDepartment = decodeURIComponent(department).toLowerCase().trim();
 
-  const ay = resolvedSearch.ay || "A.Y. 2026 - 2027";
-  const term = resolvedSearch.term || "1st Sem";
+  // 🚀 SECURITY FIX: Enforce tab-level permissions for collections access
+  await requireTabAccess('tab-payment', cleanDepartment);
+
+  const resolvedSearch = searchParams ? await searchParams : {};
   const prefillId = resolvedSearch.prefillId || "";
   const penaltyId = resolvedSearch.penaltyId || "";
   const prefillCategory = resolvedSearch.prefillCategory || "";
@@ -35,7 +38,7 @@ export default async function CollectionsPage({
   const prefillAmount = resolvedSearch.prefillAmount || "";
 
   const organization = await prisma.organization.findUnique({
-    where: { subdomain: department },
+    where: { subdomain: cleanDepartment },
   });
 
   if (!organization) {
@@ -46,6 +49,10 @@ export default async function CollectionsPage({
       </div>
     );
   }
+
+  // 🚀 Dynamically link academic year and term to organization database defaults
+  const ay = resolvedSearch.ay || organization.activeAy || "A.Y. 2026 - 2027";
+  const term = resolvedSearch.term || organization.activeTerm || "1st Sem";
 
   const students = await prisma.student.findMany({
     where: { organizationId: organization.id },
@@ -93,7 +100,7 @@ export default async function CollectionsPage({
         <i className="bi bi-cash-stack me-2"></i> Collection Remittance
       </h5>
       <CollectionsForm
-        department={department}
+        department={cleanDepartment}
         ay={ay}
         term={term}
         students={students}
