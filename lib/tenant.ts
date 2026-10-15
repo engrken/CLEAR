@@ -1,3 +1,5 @@
+// /lib/tenant.ts
+
 import { prisma } from "./prisma";
 
 const TENANT_MODELS = new Set([
@@ -6,12 +8,15 @@ const TENANT_MODELS = new Set([
   "Penalty",
   "CashAdvance",
   "Audit",
-  "ExpenseItem",
   "Collectible",
   "CollectionSetup",
   "Fund",
   "FundTransfer",
   "OnlineRemittance",
+  "CashierRemittance",
+  "VoidTransaction",
+  "FundRealignment",
+  "Signatory",
   "TenantUser",
 ]);
 
@@ -31,11 +36,22 @@ export function withTenant(organizationId: string) {
           const a = (args ?? {}) as any;
 
           // -------------------------------------------------------------
-          // READ OPERATIONS
+          // READ OPERATIONS (Safely handle findUnique vs findFirst)
           // -------------------------------------------------------------
+          if (operation === "findUnique") {
+            // Prisma findUnique requires matching unique constraints. 
+            // Convert to findFirst to safely inject organizationId scoping.
+            return (prisma as any)[model].findFirst({
+              ...a,
+              where: {
+                ...(a.where ?? {}),
+                organizationId,
+              },
+            });
+          }
+
           if (
             [
-              "findUnique",
               "findFirst",
               "findMany",
               "count",
