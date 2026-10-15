@@ -1,4 +1,5 @@
-// app/dashboard/components/AdminOtpModal.tsx
+// /app/dashboard/components/AdminOtpModal.tsx
+
 'use client';
 import { useState, useEffect } from 'react';
 import { signIn } from 'next-auth/react';
@@ -35,10 +36,6 @@ export default function AdminOtpModal() {
     if (e) e.preventDefault();
     const cleanEmail = email.trim().toLowerCase();
       
-    // SECURITY FIX (F2): Removed hardcoded client check. The server-side 
-    // /api/auth/send-otp route securely validates the authorized super-admin 
-    // email using isSuperAdminEmail().
-    
     setLoading(true);
     setDevNotice('');
     try {
@@ -68,7 +65,6 @@ export default function AdminOtpModal() {
         'Verification code sent successfully.'
       );
       setStep('code');
-      // 60-second resend cooldown
       setResendTimer(60);
     } catch (error) {
       console.error(
@@ -106,8 +102,11 @@ export default function AdminOtpModal() {
           redirect: false,
         }
       );
+
+      // 🚀 FIX: Properly extract result.code (CustomAuthError message) instead of showing "CredentialsSignin"
       if (result?.error) {
-        alert(result.error);
+        const errorMsg = (result as any).code || result.error;
+        alert(errorMsg === 'CredentialsSignin' ? 'Invalid verification code or unauthorized access.' : errorMsg);
         setCode('');
         return;
       }
