@@ -75,6 +75,9 @@ export default async function EntityOverviewPage({
   // 5. PREMIUM UNAUTHENTICATED ENTRY (PUBLIC TENANT PORTAL)
   // =========================================================
   if (!isAuthenticated) {
+    // 🚀 Fixed F35: Graceful fallback for missing organization logo
+    const orgLogo = organization.logo || `/${cleanSubdomain}_logo.png`;
+
     return (
       <>
         <div className="container py-5 d-flex flex-column align-items-center justify-content-center" style={{ minHeight: '80vh' }}>
@@ -88,9 +91,14 @@ export default async function EntityOverviewPage({
             <div className="mb-4 position-relative" style={{ zIndex: 1 }}>
               <div className="d-inline-flex align-items-center justify-content-center bg-body-tertiary border border-secondary-subtle rounded-circle mb-3 shadow" style={{ width: '100px', height: '100px', padding: '15px' }}>
                 <img 
-                  src={organization.logo || `/${cleanSubdomain}_logo.png`} 
+                  src={orgLogo} 
                   alt={`${organization.name} Logo`} 
                   style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                  onError={(e: any) => {
+                    // Fallback to generic icon if image fails to load
+                    e.target.style.display = 'none';
+                    e.target.parentNode.innerHTML = '<i class="bi bi-building fs-1 text-info"></i>';
+                  }}
                 />
               </div>
               
@@ -112,7 +120,7 @@ export default async function EntityOverviewPage({
             {resolvedSearch.forbidden === "true" && (
               <div className="alert alert-danger text-start small border-danger shadow-sm position-relative" style={{ zIndex: 1 }}>
                 <i className="bi bi-shield-exclamation me-2"></i>
-                You are not authorized to access this {organization.type.toLowerCase()}.
+                You are not authorized to access this {organization.type?.toLowerCase() || 'department'}.
               </div>
             )}
 
@@ -156,10 +164,10 @@ export default async function EntityOverviewPage({
           </div>
         </div>
         <OtpModal
-			department={cleanSubdomain}
-			orgName={organization.name}
-			orgType={organization.type}
-			/>
+            department={cleanSubdomain}
+            orgName={organization.name}
+            orgType={organization.type || 'Department'}
+          />
       </>
     );
   }
