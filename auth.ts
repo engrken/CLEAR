@@ -3,6 +3,7 @@
 import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { prisma } from "@/lib/prisma";
+import { isSuperAdminEmail, parseAllowedTabs } from "@/lib/permissions";
 
 class CustomAuthError extends CredentialsSignin {
   constructor(message: string) {
@@ -73,7 +74,8 @@ export const {
         // SUPER ADMIN
         // =====================================================
 
-        if (email === "kent.bsece@gmail.com") {
+        // 🚀 SECURITY FIX (F2): Use central isSuperAdminEmail helper
+        if (isSuperAdminEmail(email)) {
           console.log("AUTH MODE: SUPER ADMIN");
 
           const tokenRecord =
@@ -116,7 +118,7 @@ export const {
             role: "SuperAdmin",
             organizationId: null,
             department: null,
-			username: "SuperAdmin",
+            username: "SuperAdmin",
             allowedTabs: [
               'tab-overview', 'tab-students', 'tab-clearance', 'tab-payment', 
               'tab-remittances', 'tab-penalties', 'tab-advances', 'tab-audit', 
@@ -253,23 +255,10 @@ export const {
         console.log("AUTH OTP CLEARED.");
 
         // =====================================================
-        // PARSE ALLOWED TABS
+        // PARSE ALLOWED TABS (Using centralized helper)
         // =====================================================
 
-        let allowedTabs: string[] = [];
-
-        try {
-          if (user.allowedTabs) {
-            const parsed =
-              JSON.parse(user.allowedTabs);
-
-            if (Array.isArray(parsed)) {
-              allowedTabs = parsed;
-            }
-          }
-        } catch {
-          allowedTabs = [];
-        }
+        const allowedTabs = parseAllowedTabs(user.allowedTabs);
 
         console.log(
           "AUTH ALLOWED TABS:",
@@ -291,7 +280,7 @@ export const {
           role: user.role,
           organizationId: organization.id,
           department: organization.subdomain,
-		  username: user.username,
+          username: user.username,
           allowedTabs,
         };
       },
@@ -314,7 +303,7 @@ export const {
         if (authenticatedUser.role) token.role = authenticatedUser.role;
         if (authenticatedUser.organizationId) token.organizationId = authenticatedUser.organizationId;
         if (authenticatedUser.department) token.department = authenticatedUser.department;
-        if (authenticatedUser.username) token.username = authenticatedUser.username; // ADDED
+        if (authenticatedUser.username) token.username = authenticatedUser.username;
         token.allowedTabs = authenticatedUser.allowedTabs || [];
       }
       return token;
@@ -326,7 +315,7 @@ export const {
         if (token.role) sessionUser.role = token.role;
         if (token.organizationId) sessionUser.organizationId = token.organizationId;
         if (token.department) sessionUser.department = token.department;
-        if (token.username) sessionUser.username = token.username; // ADDED
+        if (token.username) sessionUser.username = token.username;
         sessionUser.allowedTabs = token.allowedTabs || [];
       }
       return session;

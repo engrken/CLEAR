@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import LiquidationsClient from './LiquidationsClient';
 import { redirect } from 'next/navigation';
 import { Metadata } from 'next';
+import { isSuperAdminEmail, requireTabAccess } from '@/lib/permissions';
 
 export const metadata: Metadata = {
   title: 'Centralized Liquidation of Expenses & Audit Records',
@@ -31,7 +32,7 @@ export default async function LiquidationsPage({
     .toLowerCase();
 
   // =========================================================
-  // 2. AUTHENTICATION
+  // 2. AUTHENTICATION & AUTHORIZATION
   // =========================================================
   const session = await auth();
 
@@ -41,42 +42,17 @@ export default async function LiquidationsPage({
     );
   }
 
-  // =========================================================
-  // 3. SUPERADMIN / ROLE AUTHORIZATION
-  // =========================================================
-  const userWithRole = session.user as typeof session.user & {
-    role?: string | null;
-  };
-
-  const userRole = String(userWithRole.role ?? '')
-    .trim()
-    .toLowerCase()
-    .replace(/[\s_-]+/g, '');
-
-  const userEmail = String(userWithRole.email ?? '')
-    .trim()
-    .toLowerCase();
-
-  const isSuperAdmin =
-    userRole === 'superadmin' ||
-    userRole === 'master' ||
-    userEmail === 'kent.bsece@gmail.com';
-
-  const allowedRoles = [
-    'admin',
-    'administrator',
-    'auditor',
-    'audit',
-  ];
-
-  if (!isSuperAdmin && !allowedRoles.includes(userRole)) {
+  // 🚀 SECURITY FIX (F2 & F70): Use centralized permission & super-admin helpers
+  try {
+    await requireTabAccess('tab-audit', cleanDepartment);
+  } catch {
     redirect(
       `/department/${encodeURIComponent(cleanDepartment)}?forbidden=true`
     );
   }
 
   // =========================================================
-  // 4. RESOLVE SEARCH PARAMS
+  // 3. RESOLVE SEARCH PARAMS
   // =========================================================
   const resolvedSearch = searchParams ? await searchParams : {};
 
@@ -85,7 +61,7 @@ export default async function LiquidationsPage({
   const prefillCaId = resolvedSearch.caId || '';
 
   // =========================================================
-  // 5. FIND DEPARTMENT & SIGNATORIES
+  // 4. FIND DEPARTMENT & SIGNATORIES
   // =========================================================
   const organization = await prisma.organization.findUnique({
     where: { subdomain: cleanDepartment },
@@ -108,11 +84,11 @@ export default async function LiquidationsPage({
     );
   }
 
-// =========================================================
-  // 6. FETCH PENDING ADVANCES, FUNDS, AND PAST AUDITS
+  // =========================================================
+  // 5. FETCH PENDING ADVANCES, FUNDS, AND PAST AUDITS
   // =========================================================
   const [pendingAdvances, funds, rawPastAudits] = await Promise.all([
-    // 6a. Pending Cash Advances
+    // 5a. Pending Cash Advances
     prisma.cashAdvance.findMany({
       where: {
         organizationId: organization.id,
@@ -127,7 +103,7 @@ export default async function LiquidationsPage({
       },
     }),
 
-    // 6b. Existing Funds
+    // 5b. Existing Funds
     prisma.fund.findMany({
       where: {
         organizationId: organization.id,
@@ -136,7 +112,7 @@ export default async function LiquidationsPage({
       },
     }),
 
-    // 6c. Historical Liquidations (Your schema calls this 'Audit')
+    // 5c. Historical Liquidations
     prisma.audit.findMany({
       where: {
         organizationId: organization.id,
@@ -144,7 +120,7 @@ export default async function LiquidationsPage({
         term,
       },
       include: {
-        expenseItems: true, // Your schema calls the relation 'expenseItems'
+        expenseItems: true,
       },
       orderBy: {
         date: 'desc',
@@ -159,12 +135,12 @@ export default async function LiquidationsPage({
   }));
 
   // =========================================================
-  // 7. RENDER WRAPPER CLIENT COMPONENT
+  // 6. RENDER WRAPPER CLIENT COMPONENT
   // =========================================================
   return (
     <div className="module card p-0 border-secondary shadow-sm overflow-hidden bg-body text-body">
       <LiquidationsClient
-	    orgId={organization.id}
+        orgId={organization.id}
         department={cleanDepartment}
         orgName={organization.name}
         logoUrl={organization.logo}

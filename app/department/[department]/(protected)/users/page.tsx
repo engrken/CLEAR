@@ -3,6 +3,8 @@
 import { prisma } from '@/lib/prisma';
 import UserManagementClient from './UserManagementClient';
 import { Metadata } from 'next';
+import { redirect } from 'next/navigation';
+import { isSuperAdminEmail, requireTabAccess } from '@/lib/permissions'; // 🚀 CENTRALIZED PERMISSION & GUARD
 
 export const metadata: Metadata = {
   title: 'Centralized Liquidation of Expenses & Audit Records',
@@ -35,7 +37,16 @@ interface PageProps {
 export default async function UserManagementPage({ params }: PageProps) {
   const resolvedParams = await params;
   const department = resolvedParams?.department || 'engineering';
-  const cleanSubdomain = department.toLowerCase();
+  const cleanSubdomain = decodeURIComponent(department).trim().toLowerCase();
+
+  // =========================================================
+  // AUTHORIZATION GUARD (F70 Fix)
+  // =========================================================
+  try {
+    await requireTabAccess('tab-users', cleanSubdomain);
+  } catch {
+    redirect(`/department/${encodeURIComponent(cleanSubdomain)}?forbidden=true`);
+  }
 
   let users: any[] = []; 
   try {
@@ -48,13 +59,13 @@ export default async function UserManagementPage({ params }: PageProps) {
       organization = await prisma.organization.create({
         data: {
           subdomain: cleanSubdomain,
-          name: `College of ${department.charAt(0).toUpperCase() + department.slice(1)}`,
+          name: `College of ${cleanSubdomain.charAt(0).toUpperCase() + cleanSubdomain.slice(1)}`,
         },
       });
     }
 
-    // 2. Ensure Master Admin is ALWAYS seeded for this tenant
-    const masterEmail = 'kent.bsece@gmail.com';
+    // 2. Ensure Master Admin is ALWAYS seeded for this tenant (F2 Fix)
+    const masterEmail = process.env.SUPER_ADMIN_EMAIL || 'kent.bsece@gmail.com';
     const existingMaster = await prisma.tenantUser.findFirst({
       where: { 
         organizationId: organization.id,

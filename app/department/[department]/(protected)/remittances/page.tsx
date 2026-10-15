@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import RemittanceVerificationQueue from './RemittanceVerificationQueue';
 import { redirect } from 'next/navigation';
 import { Metadata } from 'next';
+import { requireTabAccess } from '@/lib/permissions'; // 🚀 CENTRALIZED PERMISSION GUARD
 
 export const metadata: Metadata = {
   title: 'Online Remittance Verification | CLEAR',
@@ -29,16 +30,11 @@ export default async function RemittancesPage({
   }
 
   // =========================================================
-  // 2. AUTHORIZATION
+  // 2. AUTHORIZATION (F70 Fix)
   // =========================================================
-  const userWithRole = session.user as typeof session.user & { role?: string | null; };
-  const userRole = String(userWithRole.role ?? '').trim().toLowerCase().replace(/[\s_-]+/g, '');
-  const userEmail = String(userWithRole.email ?? '').trim().toLowerCase();
-
-  const isSuperAdmin = userRole === 'superadmin' || userRole === 'master' || userEmail === 'kent.bsece@gmail.com';
-  const allowedRoles = ['admin', 'administrator', 'auditor', 'audit', 'treasurer'];
-
-  if (!isSuperAdmin && !allowedRoles.includes(userRole)) {
+  try {
+    await requireTabAccess('tab-remittances', cleanDepartment);
+  } catch {
     redirect(`/department/${encodeURIComponent(cleanDepartment)}?forbidden=true`);
   }
 

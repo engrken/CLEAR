@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import LogsClient from './LogsClient';
 import { redirect } from 'next/navigation';
 import { Metadata } from 'next';
+import { requireTabAccess } from '@/lib/permissions'; // 🚀 CENTRALIZED PERMISSION GUARD
 
 export const metadata: Metadata = {
   title: 'System Audit Logs | CLEAR',
@@ -29,16 +30,12 @@ export default async function SystemLogsPage({
   }
 
   // =========================================================
-  // 2. AUTHORIZATION (SuperAdmin & Auditors Only)
+  // 2. AUTHORIZATION (F31 & F70 Fix)
   // =========================================================
-  const userWithRole = session.user as typeof session.user & { role?: string | null; };
-  const userRole = String(userWithRole.role ?? '').trim().toLowerCase().replace(/[\s_-]+/g, '');
-  const userEmail = String(userWithRole.email ?? '').trim().toLowerCase();
-
-  const isSuperAdmin = userRole === 'superadmin' || userRole === 'master' || userEmail === 'kent.bsece@gmail.com';
-  const allowedRoles = ['admin', 'administrator', 'auditor', 'audit'];
-
-  if (!isSuperAdmin && !allowedRoles.includes(userRole)) {
+  try {
+    // System logs require admin or auditor privileges in this tenant
+    await requireTabAccess('tab-users', cleanDepartment);
+  } catch {
     redirect(`/department/${encodeURIComponent(cleanDepartment)}?forbidden=true`);
   }
 
@@ -63,16 +60,17 @@ export default async function SystemLogsPage({
     );
   }
 
-  const totalCount = await prisma.systemLog.count({
-    where: { organizationId: organization.id }
-  });
-
-  const logs = await prisma.systemLog.findMany({
-    where: { organizationId: organization.id },
-    orderBy: { timestamp: 'desc' },
-    skip,
-    take: pageSize,
-  });
+  const [totalCount, logs] = await Promise.all([
+    prisma.systemLog.count({
+      where: { organizationId: organization.id }
+    }),
+    prisma.systemLog.findMany({
+      where: { organizationId: organization.id },
+      orderBy: { timestamp: 'desc' },
+      skip,
+      take: pageSize,
+    }),
+  ]);
 
   const totalPages = Math.ceil(totalCount / pageSize) || 1;
 

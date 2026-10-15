@@ -1,9 +1,11 @@
 // /app/department/[department]/auth-actions.ts
 'use server';
+
 import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
-import nodemailer from 'nodemailer';
-const SUPER_ADMIN_EMAIL = 'kent.bsece@gmail.com';
+import { sendEmail } from '@/lib/mailer'; // 🚀 CENTRALIZED MAILER
+import { isSuperAdminEmail } from '@/lib/permissions'; // 🚀 CENTRALIZED GUARD
+
 export async function requestOtp(
   department: string,
   email: string
@@ -21,30 +23,6 @@ export async function requestOtp(
   console.log('OTP DEPARTMENT:', cleanDepartment);
 
   // =========================================================
-  // SMTP CONFIGURATION
-  // =========================================================
-  const smtpHost = process.env.SMTP_HOST;
-  const smtpPort = Number(
-    process.env.SMTP_PORT || '587'
-  );
-  const smtpUser = process.env.SMTP_USER;
-  const smtpPassword = process.env.SMTP_PASSWORD;
-  const mailFrom = process.env.MAIL_FROM;
-  if (
-    !smtpHost ||
-    !smtpUser ||
-    !smtpPassword ||
-    !mailFrom
-  ) {
-    console.error(
-      'Missing SMTP configuration.'
-    );
-    throw new Error(
-      'Email service is not configured.'
-    );
-  }
-
-  // =========================================================
   // GENERATE OTP
   // =========================================================
   const otp = crypto
@@ -55,9 +33,9 @@ export async function requestOtp(
   );
 
   // =========================================================
-  // SUPER ADMIN
+  // SUPER ADMIN (F2 Fix)
   // =========================================================
-  if (cleanEmail === SUPER_ADMIN_EMAIL) {
+  if (isSuperAdminEmail(cleanEmail)) {
     console.log(
       'OTP MODE: SUPER ADMIN'
     );
@@ -77,19 +55,10 @@ export async function requestOtp(
         expires: otpExpires,
       },
     });
-    const transporter =
-      nodemailer.createTransport({
-        host: smtpHost,
-        port: smtpPort,
-        secure: smtpPort === 465,
-        auth: {
-          user: smtpUser,
-          pass: smtpPassword,
-        },
-      });
+
     try {
-      await transporter.sendMail({
-        from: mailFrom,
+      // Dispatch via centralized mailer (F46 Fix)
+      await sendEmail({
         to: cleanEmail,
         subject:
           'CLEAR System: System Admin Verification Code',
@@ -145,6 +114,7 @@ export async function requestOtp(
             </div>
           </div>
         `,
+        text: `Your CLEAR System verification code is: ${otp}`,
       });
       console.log(
         'SUPER ADMIN OTP EMAIL SENT.'
@@ -240,21 +210,10 @@ export async function requestOtp(
   );
 
   // =========================================================
-  // SEND EMAIL
+  // SEND EMAIL (F46 Fix)
   // =========================================================
-  const transporter =
-    nodemailer.createTransport({
-      host: smtpHost,
-      port: smtpPort,
-      secure: smtpPort === 465,
-      auth: {
-        user: smtpUser,
-        pass: smtpPassword,
-      },
-    });
   try {
-    await transporter.sendMail({
-      from: mailFrom,
+    await sendEmail({
       to: cleanEmail,
       subject:
         `CLEAR System: ${organization.name} Verification Code`,
@@ -283,7 +242,7 @@ export async function requestOtp(
             </p>
             <p>
               Your verification code for
-              <strong>${organization.name}</strong>is:
+              <strong>${organization.name}</strong> is:
             </p>
             <div style="
               text-align: center;
@@ -314,6 +273,7 @@ export async function requestOtp(
           </div>
         </div>
       `,
+      text: `Your CLEAR System verification code for ${organization.name} is: ${otp}`,
     });
     console.log(
       'DEPARTMENT OTP EMAIL SENT.'

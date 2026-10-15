@@ -1,55 +1,46 @@
 // /app/api/auth/send-otp/route.ts
 
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma'; // Adjust path based on your folder structure
-import nodemailer from 'nodemailer';
+import { prisma } from '@/lib/prisma';
+import { sendEmail } from '@/lib/mailer'; // 🚀 CENTRALIZED MAILER
+import { isSuperAdminEmail } from '@/lib/permissions'; // 🚀 CENTRALIZED GUARD
+import crypto from 'crypto';
 
 export async function POST(request: Request) {
   try {
     const { email } = await request.json();
+    const cleanEmail = String(email || '').trim().toLowerCase();
 
-    // 1. Strict Security Gate
-    if (email !== 'kent.bsece@gmail.com') {
+    // 1. Strict Security Gate (F2 Fix)
+    if (!isSuperAdminEmail(cleanEmail)) {
       return NextResponse.json(
         { success: false, message: 'Unauthorized super administrator email.' },
         { status: 403 }
       );
     }
 
-    // 2. Generate a 6-digit numeric OTP
-    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    // 2. Generate a 6-digit cryptographic numeric OTP (F14 Fix)
+    const otpCode = crypto.randomInt(100000, 1000000).toString();
     // Set expiration to 5 minutes from now
     const expires = new Date(Date.now() + 5 * 60 * 1000);
 
     // 3. Save or Update the OTP in the database
     await prisma.verificationToken.upsert({
-      where: { identifier: email },
+      where: { identifier: cleanEmail },
       update: {
         token: otpCode,
         expires: expires,
       },
       create: {
-        identifier: email,
+        identifier: cleanEmail,
         token: otpCode,
         expires: expires,
       },
     });
 
-    // 4. Configure Nodemailer Transporter using your SMTP environment variables
-    const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT),
-      secure: process.env.SMTP_PORT === '465', // Use true for port 465
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASSWORD,
-      },
-    });
-
-    // 5. Dispatch the email via Gmail SMTP
-    await transporter.sendMail({
-      from: process.env.MAIL_FROM, 
-      to: email,
+    // 4. Dispatch the email via the centralized mailer library (F46 Fix)[cite: 15]
+    await sendEmail({
+      to: cleanEmail,
       subject: 'CLEAR System: System Admin Verification Code',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
@@ -66,6 +57,7 @@ export async function POST(request: Request) {
           </p>
         </div>
       `,
+      text: `Your CLEAR System verification code is: ${otpCode}`,
     });
 
     return NextResponse.json({ 

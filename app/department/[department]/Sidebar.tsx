@@ -4,7 +4,8 @@
 
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { useState, useEffect } from 'react'; // 🚀 NEW: Import React hooks
+import { useState, useEffect } from 'react';
+import { isSuperAdminEmail } from '@/lib/permissions'; // 🚀 SECURITY FIX (F2)
 
 const PRESET_ROLE_TABS: Record<string, string[]> = {
   admin: [
@@ -44,10 +45,10 @@ export default function DepartmentSidebar({
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  // 🚀 NEW: State to control mobile visibility
+  // State to control mobile visibility
   const [isOpen, setIsOpen] = useState(false);
 
-  // 🚀 NEW: Listen for the toggle event from TopHeader
+  // Listen for the toggle event from TopHeader
   useEffect(() => {
     const toggleSidebar = () => setIsOpen(prev => !prev);
     window.addEventListener('toggle-sidebar', toggleSidebar);
@@ -77,8 +78,8 @@ export default function DepartmentSidebar({
     : 'engineering';
 
   const basePath = `/department/${encodeURIComponent(deptKey)}`;
-  const ay = searchParams.get('ay') || 'A.Y. 2026 - 2027';
-  const term = searchParams.get('term') || '1st Sem';
+  const ay = searchParams.get('ay') || defaultAy;
+  const term = searchParams.get('term') || defaultTerm;
   const queryString = `?ay=${encodeURIComponent(ay)}&term=${encodeURIComponent(term)}`;
 
   const fallbackLogoPath = '/engineering_logo.png';
@@ -95,7 +96,7 @@ export default function DepartmentSidebar({
     return pathname === fullPath || pathname.startsWith(`${fullPath}/`);
   };
 
-  // 🚀 NEW: Close state nicely on navigation instead of manual class removal
+  // Close state nicely on navigation instead of manual class removal
   const handleNavClick = () => {
     if (typeof window !== 'undefined' && window.innerWidth < 992) {
       setIsOpen(false); 
@@ -108,7 +109,8 @@ export default function DepartmentSidebar({
   `;
 
   const canAccess = (tabId: string) => {
-    if (currentUser?.email === 'kent.bsece@gmail.com') return true;
+    // SECURITY FIX (F2): Use central isSuperAdminEmail helper
+    if (isSuperAdminEmail(currentUser?.email)) return true;
     return effectiveTabs.includes(tabId);
   };
 
@@ -187,7 +189,7 @@ export default function DepartmentSidebar({
           )}
           {canAccess('tab-payment') && <Link href={`${basePath}/collections${queryString}`} onClick={handleNavClick} className={navItemClass('/collections')}><i className="bi bi-cash-stack me-3 fs-6"></i>Collections</Link>}
           {canAccess('tab-remittances') && <Link href={`${basePath}/remittances${queryString}`} onClick={handleNavClick} className={navItemClass('/remittances')}><i className="bi bi-upload me-3 fs-6"></i>Remittance Queue</Link>}
-		  {canAccess('tab-payment') && <Link href={`${basePath}/cashier-remittance${queryString}`} onClick={handleNavClick} className={navItemClass('/cashier-remittance')}><i className="bi bi-safe2 me-3 fs-6"></i>Univ. Cashier Deposit</Link>}
+          {canAccess('tab-payment') && <Link href={`${basePath}/cashier-remittance${queryString}`} onClick={handleNavClick} className={navItemClass('/cashier-remittance')}><i className="bi bi-safe2 me-3 fs-6"></i>Univ. Cashier Deposit</Link>}
           {canAccess('tab-advances') && <Link href={`${basePath}/advances${queryString}`} onClick={handleNavClick} className={navItemClass('/advances')}><i className="bi bi-journal-arrow-up me-3 fs-6"></i>Cash Advances</Link>}
           {canAccess('tab-audit') && <Link href={`${basePath}/liquidations${queryString}`} onClick={handleNavClick} className={navItemClass('/liquidations')}><i className="bi bi-receipt me-3 fs-6"></i>Liquidations</Link>}
           {canAccess('tab-penalties') && <Link href={`${basePath}/penalties${queryString}`} onClick={handleNavClick} className={navItemClass('/penalties')}><i className="bi bi-exclamation-octagon me-3 fs-6"></i>Penalties & Fines</Link>}
@@ -212,3 +214,4 @@ export default function DepartmentSidebar({
     </>
   );
 }
+```[cite: 1]

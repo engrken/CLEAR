@@ -33,15 +33,12 @@ export default function AdminOtpModal() {
     e?: React.FormEvent
   ) => {
     if (e) e.preventDefault();
-    const cleanEmail =
-      email.trim().toLowerCase();
-    // Super Admin restriction
-    if (cleanEmail !== 'kent.bsece@gmail.com') {
-      alert(
-        'Access Denied: Unrecognized system administrator email.'
-      );
-      return;
-    }
+    const cleanEmail = email.trim().toLowerCase();
+      
+    // SECURITY FIX (F2): Removed hardcoded client check. The server-side 
+    // /api/auth/send-otp route securely validates the authorized super-admin 
+    // email using isSuperAdminEmail().
+    
     setLoading(true);
     setDevNotice('');
     try {
@@ -104,8 +101,7 @@ export default function AdminOtpModal() {
       const result = await signIn(
         'credentials',
         {
-          email:
-            email.trim().toLowerCase(),
+          email: email.trim().toLowerCase(),
           code: code.trim(),
           redirect: false,
         }
@@ -223,7 +219,7 @@ export default function AdminOtpModal() {
                     setEmail(e.target.value)
                   }
                   className="form-control bg-body text-color border-secondary py-2"
-                  placeholder="user@email.com"
+                  placeholder="admin@domain.com"
                   autoComplete="email"
                   required
                 />
@@ -251,7 +247,7 @@ export default function AdminOtpModal() {
             </form>
           ) : (
             /* ==================================================
-               OTP STEP
+                OTP STEP
             ================================================== */
             <form onSubmit={handleVerifyOtp}>
               <div className="mb-3 text-center">

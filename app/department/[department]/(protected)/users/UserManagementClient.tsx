@@ -5,6 +5,7 @@
 import { useState } from "react";
 import { saveTenantUser, deleteTenantUser } from "./actions";
 import { ThemedAlert } from '@/lib/alerts';
+import { isSuperAdminEmail } from "@/lib/permissions"; // 🚀 CENTRALIZED GUARD
 
 interface TenantUser {
   id: string;
@@ -228,7 +229,7 @@ export default function UserManagementClient({
                           <button className="btn btn-sm btn-outline-info" onClick={() => openEditModal(u)}>
                             <i className="bi bi-pencil me-1"></i>Edit
                           </button>
-                          {u.email !== 'kent.bsece@gmail.com' && (
+                          {!isSuperAdminEmail(u.email) && (
                             <button className="btn btn-sm btn-outline-danger" onClick={() => handleDeleteUser(u.id, u.name)}>
                               <i className="bi bi-trash me-1"></i>Delete
                             </button>

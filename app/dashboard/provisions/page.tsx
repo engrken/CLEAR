@@ -6,9 +6,10 @@ import LogoutButton from '../components/LogoutButton';
 import ProvisionModal from '../components/ProvisionModal';
 import { redirect } from 'next/navigation';
 import { Metadata } from 'next';
+import { isSuperAdminEmail } from '@/lib/permissions'; // 🚀 SECURITY FIX (F2)
 
 export const metadata: Metadata = {
-  title: 'CLEAR System Master Admin',
+  title: 'Centralized Liquidation of Expenses & Audit Records',
 };
 
 export default async function ProvisionPage() {
@@ -18,7 +19,8 @@ export default async function ProvisionPage() {
   // --------------------------------------------------
   const session = await auth();
 
-  if (!session || session.user?.email !== 'kent.bsece@gmail.com') {
+  // 🚀 SECURITY FIX (F2): Use central isSuperAdminEmail helper instead of hardcoded literal
+  if (!session || !isSuperAdminEmail(session.user?.email)) {
     redirect('/dashboard');
   }
 
