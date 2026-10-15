@@ -5,6 +5,7 @@
 import { useState } from "react";
 import { fmt } from "@/lib/utils";
 import { format } from "date-fns";
+import { ThemedAlert } from "@/lib/alerts";
 import { verifyOnlineRemittance, invalidateOnlineRemittance } from "./actions";
 
 interface OnlineRemittanceItem {
@@ -31,21 +32,21 @@ export default function RemittanceVerificationQueue({
   term,
   remittances,
   nextOr,
-  funds // <--- NEW PROP
+  funds
 }: {
   department: string;
   ay: string;
   term: string;
   remittances: OnlineRemittanceItem[];
   nextOr: string;
-  funds: Fund[]; // <--- NEW PROP
+  funds: Fund[];
 }) {
   const [filterStatus, setFilterStatus] = useState("Pending");
   const [activeProof, setActiveProof] = useState<{ url: string; name: string } | null>(null);
   
   const [verifyingItem, setVerifyingItem] = useState<OnlineRemittanceItem | null>(null);
   const [orNumber, setOrNumber] = useState(nextOr);
-  const [fundAllocation, setFundAllocation] = useState(funds[0]?.fundName || "General Fund (Carried Over)"); // <--- NEW STATE
+  const [fundAllocation, setFundAllocation] = useState(funds[0]?.fundName || "General Fund (Carried Over)");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const filteredRemittances = remittances.filter(r => {
@@ -77,32 +78,57 @@ export default function RemittanceVerificationQueue({
         amount: verifyingItem.amountPaid,
         ay,
         term,
-        fundAllocation // <--- SENT TO DATABASE
+        fundAllocation
       });
 
-      alert(`Remittance verified successfully! Official Receipt #${orNumber} issued.`);
+      await ThemedAlert.fire({
+        icon: 'success',
+        title: 'Remittance Verified',
+        text: `Remittance verified successfully! Official Receipt #${orNumber} issued.`
+      });
+
       setVerifyingItem(null);
     } catch (err: any) {
-      alert("Error: " + err.message);
+      await ThemedAlert.fire({
+        icon: 'error',
+        title: 'Verification Failed',
+        text: err?.message || 'Failed to verify online remittance.'
+      });
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleInvalidate = async (id: string, refNo: string) => {
-    if (!confirm(`Are you sure you want to mark reference #${refNo} as INVALID? It will be moved to the Rejected tab.`)) return;
+    const result = await ThemedAlert.fire({
+      icon: 'warning',
+      title: 'Reject Remittance?',
+      text: `Are you sure you want to mark reference #${refNo} as INVALID? It will be moved to the Rejected tab.`,
+      showCancelButton: true,
+      confirmButtonText: 'Yes, Reject',
+      cancelButtonText: 'Cancel'
+    });
+
+    if (!result.isConfirmed) return;
 
     try {
       await invalidateOnlineRemittance(department, id);
-      alert("Submission successfully rejected.");
+      await ThemedAlert.fire({
+        icon: 'success',
+        title: 'Rejected',
+        text: 'Submission successfully rejected.'
+      });
     } catch (err: any) {
-      alert("Error: " + err.message);
+      await ThemedAlert.fire({
+        icon: 'error',
+        title: 'Action Failed',
+        text: err?.message || 'Failed to invalidate remittance.'
+      });
     }
   };
 
   return (
     <div>
-      {/* FILTER TOOLBAR */}
       <div className="d-flex justify-content-between align-items-center mb-3">
         <select 
           className="form-select form-select-sm bg-body-secondary text-body border-secondary fw-semibold" 
@@ -121,7 +147,6 @@ export default function RemittanceVerificationQueue({
         </button>
       </div>
 
-      {/* VERIFICATION QUEUE TABLE */}
       <div className="table-responsive mb-4">
         <table className="table table-hover align-middle text-body border-secondary">
           <thead>
@@ -187,7 +212,6 @@ export default function RemittanceVerificationQueue({
         </table>
       </div>
 
-      {/* PROOF INSPECTION MODAL */}
       {activeProof && (
         <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.7)' }}>
           <div className="modal-dialog modal-dialog-centered modal-lg">
@@ -207,7 +231,6 @@ export default function RemittanceVerificationQueue({
         </div>
       )}
 
-      {/* VERIFICATION ISSUANCE MODAL */}
       {verifyingItem && (
         <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.7)' }}>
           <div className="modal-dialog modal-dialog-centered">
@@ -247,7 +270,6 @@ export default function RemittanceVerificationQueue({
                     <input type="text" className="form-control font-monospace border-success bg-body text-body fw-bold" value={orNumber} onChange={e => setOrNumber(e.target.value)} required />
                   </div>
 
-                  {/* RESTORED: TARGET FUND ALLOCATION DROPDOWN */}
                   <div className="mb-2">
                     <label className="form-label text-muted small fw-semibold">Target Fund Allocation</label>
                     <select 

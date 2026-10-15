@@ -1,10 +1,10 @@
 // /app/department/[department]/(protected)/remittances/actions.ts
 
-
 "use server";
 
 import { prisma } from '@/lib/prisma';
 import { requireTabAccess } from '@/lib/permissions';
+import { logSystemAction } from '@/lib/logger';
 import { revalidatePath } from 'next/cache';
 
 // =========================================================================
@@ -14,13 +14,7 @@ import { revalidatePath } from 'next/cache';
 function money(val: any, fieldName: string): number {
   const parsed = parseFloat(val);
   if (isNaN(parsed)) throw new Error(`Invalid monetary value for ${fieldName}`);
-  return parsed;
-}
-
-function parseDate(val: any, fieldName: string): Date {
-  const date = new Date(val);
-  if (isNaN(date.getTime())) throw new Error(`Invalid date format for ${fieldName}`);
-  return date;
+  return Math.round(parsed * 100) / 100;
 }
 
 function generateReference(prefix: string): string {
@@ -29,13 +23,20 @@ function generateReference(prefix: string): string {
   return `${prefix}-${randomStr}-${timestamp}`;
 }
 
-// Public Helper: Resolves Org ID without requiring an active session
-async function resolveOrganizationId(department: string) {
-  const org = await prisma.organization.findUnique({
-    where: { subdomain: department.toLowerCase() }
+async function resolveStudentDbId(orgId: string, identifier: string | null) {
+  if (!identifier) return null;
+
+  let student = await prisma.student.findFirst({
+    where: { id: identifier, organizationId: orgId }
   });
-  if (!org) throw new Error(`Organization "${department}" not found.`);
-  return org.id;
+
+  if (!student) {
+    student = await prisma.student.findFirst({
+      where: { studentId: identifier, organizationId: orgId }
+    });
+  }
+
+  return student ? student.id : null;
 }
 
 // =========================================================================
@@ -53,16 +54,17 @@ export async function verifyOnlineRemittance(
     amount: number;
     ay: string;
     term: string;
-    fundAllocation: string; // <--- ADDED THIS
+    fundAllocation: string;
   }
 ) {
-  const customUser = await requireTabAccess("tab-remittances");
-  const officerName = customUser.fullName || customUser.email || "System Administrator";
+  const cleanDepartment = decodeURIComponent(department).trim().toLowerCase();
+  const customUser = await requireTabAccess("tab-remittances", cleanDepartment);
+  const officerName = customUser.name || customUser.fullName || customUser.email || "System Administrator";
 
   const organization = await prisma.organization.findUnique({
-    where: { subdomain: department.toLowerCase() }
+    where: { subdomain: cleanDepartment }
   });
-  if (!organization) throw new Error(`Organization subdomain "${department}" not found.`);
+  if (!organization) throw new Error(`Organization subdomain "${cleanDepartment}" not found.`);
   const orgId = organization.id;
 
   const orNumber = String(data.orNumber || "").trim();
@@ -79,7 +81,8 @@ export async function verifyOnlineRemittance(
     const amount = Math.max(0, Number(remittance.amountPaid) || 0);
     if (amount <= 0) throw new Error("The remittance contains an invalid amount.");
 
-    const studentDbId = remittance.studentId ? String(remittance.studentId).trim() : null;
+    // 🚀 FIX: Resolve student UUID properly to avoid foreign-key constraint violations
+    const studentDbId = await resolveStudentDbId(orgId, remittance.studentId);
 
     await tx.onlineRemittance.update({
       where: { id: remittance.id },
@@ -101,35 +104,36 @@ export async function verifyOnlineRemittance(
         standardRate: amount,
         amountPaid: amount,
         balanceDue: 0,
-        fundAllocation: data.fundAllocation, // <--- NOW DYNAMICALLY ASSIGNED
+        fundAllocation: data.fundAllocation,
         status: "Valid",
         encodedBy: officerName,
       },
     });
   });
 
-  try {
-    await prisma.systemLog.create({
-      data: {
-        organizationId: orgId,
-        user: officerName,
-        action: "VERIFY_REMITTANCE",
-        details: `Verified online remittance [${data.remittanceId}] and issued OR: ${orNumber}.`,
-      }
-    });
-  } catch (e) { console.warn(e); }
+  await logSystemAction(
+    orgId,
+    officerName,
+    "VERIFY_REMITTANCE",
+    `Verified online remittance [${data.remittanceId}] and issued OR: ${orNumber}.`
+  );
 
-  revalidatePath(`/department/${department}/remittances`);
-  revalidatePath(`/department/${department}/collections`);
-  revalidatePath(`/department/${department}/clearance`);
-  revalidatePath(`/department/${department}`);
+  revalidatePath(`/department/${cleanDepartment}/remittances`);
+  revalidatePath(`/department/${cleanDepartment}/collections`);
+  revalidatePath(`/department/${cleanDepartment}/clearance`);
+  revalidatePath(`/department/${cleanDepartment}`);
 }
 
 export async function invalidateOnlineRemittance(department: string, remittanceId: string) {
-  const customUser = await requireTabAccess("tab-remittances");
-  const officerName = customUser.fullName || customUser.email || "System Administrator";
+  const cleanDepartment = decodeURIComponent(department).trim().toLowerCase();
+  const customUser = await requireTabAccess("tab-remittances", cleanDepartment);
+  const officerName = customUser.name || customUser.fullName || customUser.email || "System Administrator";
 
-  const orgId = await resolveOrganizationId(department);
+  const organization = await prisma.organization.findUnique({
+    where: { subdomain: cleanDepartment }
+  });
+  if (!organization) throw new Error(`Organization "${cleanDepartment}" not found.`);
+  const orgId = organization.id;
 
   const remittance = await prisma.onlineRemittance.findFirst({
     where: { id: remittanceId, organizationId: orgId },
@@ -141,7 +145,6 @@ export async function invalidateOnlineRemittance(department: string, remittanceI
     throw new Error("A verified remittance cannot be invalidated from the pending queue.");
   }
 
-  // FIX APPLIED: Update status to "Rejected" instead of permanently deleting the record
   await prisma.onlineRemittance.update({
     where: { id: remittance.id },
     data: {
@@ -151,18 +154,14 @@ export async function invalidateOnlineRemittance(department: string, remittanceI
     }
   });
 
-  try {
-    await prisma.systemLog.create({
-      data: {
-        organizationId: orgId,
-        user: officerName,
-        action: "INVALIDATE_REMITTANCE",
-        details: `Invalidated remittance [Ref: ${remittance.referenceNumber}] from ${remittance.studentName}.`,
-      }
-    });
-  } catch (e) { console.warn(e); }
+  await logSystemAction(
+    orgId,
+    officerName,
+    "INVALIDATE_REMITTANCE",
+    `Invalidated remittance [Ref: ${remittance.referenceNumber}] from ${remittance.studentName}.`
+  );
 
-  revalidatePath(`/department/${department}/remittances`);
+  revalidatePath(`/department/${cleanDepartment}/remittances`);
 
   return { success: true, message: "Remittance submission marked as invalid and moved to Rejected tab." };
 }
@@ -186,6 +185,7 @@ export async function submitOnlineRemittance(
     term: string;
   }
 ) {
+  const cleanDepartment = decodeURIComponent(department).trim().toLowerCase();
   let data;
 
   if (typeof (payload as FormData).get === 'function') {
@@ -213,9 +213,13 @@ export async function submitOnlineRemittance(
     data = payload as any;
   }
 
-  const orgId = await resolveOrganizationId(department);
-  const cleanEmail = String(data.email || "").trim().toLowerCase();
+  const organization = await prisma.organization.findUnique({
+    where: { subdomain: cleanDepartment }
+  });
+  if (!organization) throw new Error(`Organization "${cleanDepartment}" not found.`);
+  const orgId = organization.id;
 
+  const cleanEmail = String(data.email || "").trim().toLowerCase();
   if (!cleanEmail || !cleanEmail.includes("@")) throw new Error("Please provide a valid email address.");
 
   const amount = money(data.amount, "Online remittance amount");
@@ -243,19 +247,15 @@ export async function submitOnlineRemittance(
     },
   });
 
-  try {
-    await prisma.systemLog.create({
-      data: {
-        organizationId: orgId,
-        user: "Public Submission",
-        action: "SUBMIT_REMITTANCE",
-        details: `Received ₱${amount.toFixed(2)} online payment proof from ${data.studentName} via ${data.paymentChannel}.`,
-      }
-    });
-  } catch (e) { console.warn(e); }
+  await logSystemAction(
+    orgId,
+    "Public Submission",
+    "SUBMIT_REMITTANCE",
+    `Received ₱${amount.toFixed(2)} online payment proof from ${data.studentName} via ${data.paymentChannel}.`
+  );
 
-  revalidatePath(`/department/${department}/remittances`);
-  revalidatePath(`/department/${department}/clearance`);
+  revalidatePath(`/department/${cleanDepartment}/remittances`);
+  revalidatePath(`/department/${cleanDepartment}/clearance`);
 }
 
 export async function submitOnlineRemittanceDirect(

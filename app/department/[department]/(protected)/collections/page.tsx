@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireTabAccess } from "@/lib/permissions";
-import CollectionsForm from "./CollectionsForms";
+import CollectionsForm from "./CollectionsForm";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {

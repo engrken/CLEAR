@@ -1,11 +1,9 @@
 // /app/department/[department]/(protected)/remittances/page.tsx
 
-import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
 import RemittanceVerificationQueue from './RemittanceVerificationQueue';
-import { redirect } from 'next/navigation';
 import { Metadata } from 'next';
-import { requireTabAccess } from '@/lib/permissions'; // 🚀 CENTRALIZED PERMISSION GUARD
+import { requireTabAccess } from '@/lib/permissions';
 
 export const metadata: Metadata = {
   title: 'Online Remittance Verification | CLEAR',
@@ -18,35 +16,21 @@ export default async function RemittancesPage({
   params: Promise<{ department: string }>;
   searchParams?: Promise<{ ay?: string; term?: string; }>;
 }) {
-  // =========================================================
-  // 1. EXTRACT PARAMS & AUTHENTICATION
-  // =========================================================
   const { department } = await params;
   const cleanDepartment = decodeURIComponent(department).toLowerCase().trim();
 
-  const session = await auth();
-  if (!session?.user) {
-    redirect(`/department/${encodeURIComponent(cleanDepartment)}?login=true`);
-  }
+  // 🚀 SECURITY FIX: Enforce tab-level permissions for remittances access
+  await requireTabAccess('tab-remittances', cleanDepartment);
 
-  // =========================================================
-  // 2. AUTHORIZATION (F70 Fix)
-  // =========================================================
-  try {
-    await requireTabAccess('tab-remittances', cleanDepartment);
-  } catch {
-    redirect(`/department/${encodeURIComponent(cleanDepartment)}?forbidden=true`);
-  }
-
-  // =========================================================
-  // 3. RESOLVE SEARCH PARAMS & DB FETCH
-  // =========================================================
   const resolvedSearch = searchParams ? await searchParams : {};
-  const ay = resolvedSearch.ay || 'A.Y. 2026 - 2027';
-  const term = resolvedSearch.term || '1st Sem';
 
   const organization = await prisma.organization.findUnique({
     where: { subdomain: cleanDepartment },
+    select: {
+      id: true,
+      activeAy: true,
+      activeTerm: true,
+    }
   });
 
   if (!organization) {
@@ -58,15 +42,16 @@ export default async function RemittancesPage({
     );
   }
 
-  // BULLETPROOF SERIALIZATION
+  // 🚀 Dynamically link academic year and term to organization database defaults
+  const ay = resolvedSearch.ay || organization.activeAy || 'A.Y. 2026 - 2027';
+  const term = resolvedSearch.term || organization.activeTerm || '1st Sem';
+
   const serialize = (data: any[]) => JSON.parse(JSON.stringify(data || []));
 
-  // --- FETCH FUNDS FOR ALLOCATION DROPDOWN ---
   const funds = await prisma.fund.findMany({
     where: { organizationId: organization.id, academicYear: ay, term }
   });
 
-  // --- DATA FOR VERIFICATION QUEUE ---
   const rawRemittances = await prisma.onlineRemittance.findMany({
     where: { organizationId: organization.id, academicYear: ay, term },
     orderBy: { timestamp: 'desc' }
