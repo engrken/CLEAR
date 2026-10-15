@@ -55,7 +55,6 @@ export async function executeVoidTransaction(formData: {
         data: { 
           status: 'VOID', 
           paymentType: 'VOID (Reversed)',
-          // 🚀 FIX: Preserve original amount/particulars and rely on status === 'VOID' to exclude from calculations
         },
       });
       
@@ -87,7 +86,8 @@ export async function executeVoidTransaction(formData: {
       }
 
       originalRecordId = ca.id;
-      originalAmount = Number(ca.amountApproved || ca.amount) || 0;
+      // 🚀 FIX: Use amountApproved exclusively since amount does not exist on CashAdvance model
+      originalAmount = Number(ca.amountApproved) || 0;
 
       await tx.cashAdvance.update({
         where: { id: ca.id },
@@ -113,7 +113,6 @@ export async function executeVoidTransaction(formData: {
       transactionDetails = `Voided Collectible Assessment #${referenceId}. Reason: ${reason}`;
     }
 
-    // 🚀 FIX: Create audit record in the dedicated VoidTransaction model if supported by schema
     if ((tx as any).voidTransaction) {
       await (tx as any).voidTransaction.create({
         data: {
