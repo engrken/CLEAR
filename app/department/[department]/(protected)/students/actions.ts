@@ -3,9 +3,13 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
+import { requireTabAccess } from '@/lib/permissions';
 import { revalidatePath } from 'next/cache';
 
 export async function toggleStudentStatus(department: string, studentId: string, currentStatus: string, ay: string, term: string) {
+  const cleanDept = decodeURIComponent(department).trim().toLowerCase();
+  await requireTabAccess('tab-students', cleanDept);
+
   const newStatus = currentStatus === 'Enrolled' ? 'Inactive' : 'Enrolled';
   const student = await prisma.student.findUnique({ where: { id: studentId } });
   if (!student) return { success: false, message: "Student not found" };
@@ -30,11 +34,14 @@ export async function toggleStudentStatus(department: string, studentId: string,
       },
     });
   }
-  revalidatePath(`/department/${department}/students`);
+  revalidatePath(`/department/${cleanDept}/students`);
   return { success: true };
 }
 
 export async function confirmAllEnrolled(department: string, organizationId: string, ay: string, term: string) {
+  const cleanDept = decodeURIComponent(department).trim().toLowerCase();
+  await requireTabAccess('tab-students', cleanDept);
+
   const allStudents = await prisma.student.findMany({ where: { organizationId } });
   for (const student of allStudents) {
     const existing = await prisma.enrollment.findFirst({
@@ -48,11 +55,14 @@ export async function confirmAllEnrolled(department: string, organizationId: str
       });
     }
   }
-  revalidatePath(`/department/${department}/students`);
+  revalidatePath(`/department/${cleanDept}/students`);
   return { success: true, count: allStudents.length };
 }
 
 export async function promoteYearLevels(department: string, organizationId: string) {
+  const cleanDept = decodeURIComponent(department).trim().toLowerCase();
+  await requireTabAccess('tab-students', cleanDept);
+
   const students = await prisma.student.findMany({ where: { organizationId } });
   let promoted = 0;
   for (const s of students) {
@@ -67,7 +77,7 @@ export async function promoteYearLevels(department: string, organizationId: stri
       promoted++;
     }
   }
-  revalidatePath(`/department/${department}/students`);
+  revalidatePath(`/department/${cleanDept}/students`);
   return { success: true, promoted };
 }
 
@@ -81,6 +91,9 @@ export async function saveStudent(department: string, organizationId: string, ay
   isEdit: boolean;
   originalId?: string;
 }) {
+  const cleanDept = decodeURIComponent(department).trim().toLowerCase();
+  await requireTabAccess('tab-students', cleanDept);
+
   if (!formData.studentId || !formData.fullName) {
     throw new Error("Student ID and Full Name are required.");
   }
@@ -133,18 +146,41 @@ export async function saveStudent(department: string, organizationId: string, ay
     });
   }
 
-  revalidatePath(`/department/${department}/students`);
+  revalidatePath(`/department/${cleanDept}/students`);
   return { success: true };
 }
 
 export async function deleteStudent(department: string, studentInternalId: string) {
-  await prisma.enrollment.deleteMany({ where: { studentId: studentInternalId } });
-  await prisma.student.delete({ where: { id: studentInternalId } });
-  revalidatePath(`/department/${department}/students`);
+  const cleanDept = decodeURIComponent(department).trim().toLowerCase();
+  await requireTabAccess('tab-students', cleanDept);
+
+  const org = await prisma.organization.findUnique({
+    where: { subdomain: cleanDept },
+    select: { id: true },
+  });
+
+  if (!org) throw new Error('Department not found.');
+
+  const student = await prisma.student.findFirst({
+    where: { id: studentInternalId, organizationId: org.id },
+  });
+
+  if (!student) throw new Error('Student record not found.');
+
+  // Perform atomic transaction cleanup to maintain relational integrity (Item 4 fix)
+  await prisma.$transaction(async (tx) => {
+    await tx.enrollment.deleteMany({ where: { studentId: studentInternalId, organizationId: org.id } });
+    await tx.student.delete({ where: { id: studentInternalId } });
+  });
+
+  revalidatePath(`/department/${cleanDept}/students`);
   return { success: true };
 }
 
 export async function bulkImportStudents(department: string, organizationId: string, ay: string, term: string, records: Array<{ studentId: string; fullName: string; yearLevel: string; email?: string }>) {
+  const cleanDept = decodeURIComponent(department).trim().toLowerCase();
+  await requireTabAccess('tab-students', cleanDept);
+
   let added = 0;
   let updated = 0;
 
@@ -194,6 +230,6 @@ export async function bulkImportStudents(department: string, organizationId: str
     }
   }
 
-  revalidatePath(`/department/${department}/students`);
+  revalidatePath(`/department/${cleanDept}/students`);
   return { success: true, message: `Successfully imported: ${added} added, ${updated} updated.` };
 }
