@@ -3,7 +3,7 @@
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/auth';
 import { fmt, money } from '@/lib/utils';
-import { canAccessTab } from '@/lib/permissions';
+import { requireTabAccess } from '@/lib/permissions';
 import { formatInTimeZone } from 'date-fns-tz';
 import { headers } from 'next/headers';
 import crypto from 'node:crypto';
@@ -65,6 +65,15 @@ function verifyClearanceSignature(
     const b = Buffer.from(String(providedSig || '').trim().toLowerCase(), 'utf8');
     if (a.length !== b.length) return false;
     return crypto.timingSafeEqual(a, b);
+  } catch {
+    return false;
+  }
+}
+
+async function checkOfficerClearanceAccess(department: string): Promise<boolean> {
+  try {
+    await requireTabAccess('tab-clearance', department);
+    return true;
   } catch {
     return false;
   }
@@ -189,7 +198,7 @@ export default async function ClearancePage({
   // 🚀 SECURITY FIX (F31): Verify both session AND tenant/tab authorization before granting Officer view
   const session = await auth();
   const hasSession = Boolean(session?.user);
-  const isOfficer = hasSession ? await canAccessTab('tab-clearance', cleanDepartment) : false;
+  const isOfficer = hasSession ? await checkOfficerClearanceAccess(cleanDepartment) : false;
 
   // 🚀 SECURITY FIX (F30): Compute termPkg directly from collectionSetup without invoking internal treasury engine
   const collectionSetups = await prisma.collectionSetup.findMany({
