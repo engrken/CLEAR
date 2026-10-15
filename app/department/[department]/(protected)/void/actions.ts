@@ -5,6 +5,7 @@
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { requireTabAccess } from '@/lib/permissions';
+import { logSystemAction } from '@/lib/logger';
 
 export async function executeVoidTransaction(formData: {
   department: string;
@@ -13,100 +14,133 @@ export async function executeVoidTransaction(formData: {
   reason: string;
 }) {
   const { department, category, referenceId, reason } = formData;
+  const cleanDepartment = decodeURIComponent(department).trim().toLowerCase();
 
   if (!reason || !reason.trim()) {
     throw new Error('Mandatory REASON is required to execute a transaction reversal.');
   }
 
   // 1. Verify Permission & Extract User Name
-  const customUser = await requireTabAccess("tab-void");
-  // Prioritize .name (NextAuth default) to prevent falling back to the email
+  const customUser = await requireTabAccess("tab-void", cleanDepartment);
   const officerName = customUser.name || customUser.fullName || customUser.email || "System Administrator";
 
   const organization = await prisma.organization.findUnique({
-    where: { subdomain: department.toLowerCase() },
+    where: { subdomain: cleanDepartment },
   });
 
   if (!organization) {
-    throw new Error(`Organization subdomain "${department}" not found.`);
+    throw new Error(`Organization subdomain "${cleanDepartment}" not found.`);
   }
 
   let transactionDetails = '';
+  let originalRecordId = '';
+  let originalAmount = 0;
 
-  // 2. Execute category-specific reversal
-  if (category === 'collections') {
-    const collection = await prisma.collection.findFirst({
-      where: { organizationId: organization.id, orNumber: referenceId },
-    });
-    if (!collection) throw new Error(`Official Receipt (OR) ${referenceId} not found.`);
-    if (collection.status === 'VOID') throw new Error(`OR Number ${referenceId} has already been voided.`);
+  // 2. Execute category-specific reversal without destructive in-place zeroing
+  await prisma.$transaction(async (tx) => {
+    if (category === 'collections') {
+      const collection = await tx.collection.findFirst({
+        where: { organizationId: organization.id, orNumber: referenceId },
+      });
+      if (!collection) throw new Error(`Official Receipt (OR) ${referenceId} not found.`);
+      if (collection.status === 'VOID' || String(collection.paymentType).toUpperCase().includes('VOID')) {
+        throw new Error(`OR Number ${referenceId} has already been voided.`);
+      }
 
-    await prisma.collection.update({
-      where: { id: collection.id },
-      data: { status: 'VOID', itemDescription: `VOID: ${reason.trim()}`, amountPaid: 0, balanceDue: 0 },
-    });
-    
-    transactionDetails = `Voided Collection OR #${referenceId}. Reason: ${reason}`;
-    
-  } else if (category === 'penalties') {
-    const penalty = await prisma.penalty.findFirst({
-      where: { organizationId: organization.id, penaltyId: referenceId },
-    });
-    if (!penalty) throw new Error(`Penalty ID ${referenceId} not found.`);
+      originalRecordId = collection.id;
+      originalAmount = Number(collection.amountPaid) || 0;
 
-    await prisma.penalty.update({
-      where: { id: penalty.id },
-      data: { status: `Voided: ${reason.trim()}` },
-    });
-    
-    transactionDetails = `Voided Penalty #${referenceId}. Reason: ${reason}`;
-    
-  } else if (category === 'advances') {
-    const ca = await prisma.cashAdvance.findFirst({
-      where: { organizationId: organization.id, advanceId: referenceId },
-    });
-    if (!ca) throw new Error(`Cash Advance ID ${referenceId} not found.`);
-    if (ca.status.includes('Liquidated')) throw new Error('Cannot void an already liquidated Cash Advance.');
+      await tx.collection.update({
+        where: { id: collection.id },
+        data: { 
+          status: 'VOID', 
+          paymentType: 'VOID (Reversed)',
+          // 🚀 FIX: Preserve original amount/particulars and rely on status === 'VOID' to exclude from calculations
+        },
+      });
+      
+      transactionDetails = `Voided Collection OR #${referenceId}. Reason: ${reason}`;
+      
+    } else if (category === 'penalties') {
+      const penalty = await tx.penalty.findFirst({
+        where: { organizationId: organization.id, penaltyId: referenceId },
+      });
+      if (!penalty) throw new Error(`Penalty ID ${referenceId} not found.`);
 
-    await prisma.cashAdvance.update({
-      where: { id: ca.id },
-      data: { status: `Cancelled: ${reason.trim()}` },
-    });
-    
-    transactionDetails = `Cancelled Cash Advance #${referenceId}. Reason: ${reason}`;
-    
-  } else if (category === 'collectibles') {
-    const collectible = await prisma.collectible.findFirst({
-      where: { organizationId: organization.id, id: referenceId },
-    });
-    if (!collectible) throw new Error(`Assessed Due reference not found.`);
+      originalRecordId = penalty.id;
+      originalAmount = Number(penalty.fineAmount) || 0;
 
-    await prisma.collectible.update({
-      where: { id: collectible.id },
-      data: { status: 'Voided', balanceDue: 0 },
-    });
-    
-    transactionDetails = `Voided Collectible Assessment #${referenceId}. Reason: ${reason}`;
-  }
+      await tx.penalty.update({
+        where: { id: penalty.id },
+        data: { status: `Voided: ${reason.trim()}` },
+      });
+      
+      transactionDetails = `Voided Penalty #${referenceId}. Reason: ${reason}`;
+      
+    } else if (category === 'advances') {
+      const ca = await tx.cashAdvance.findFirst({
+        where: { organizationId: organization.id, advanceId: referenceId },
+      });
+      if (!ca) throw new Error(`Cash Advance ID ${referenceId} not found.`);
+      if (String(ca.status || '').toLowerCase().includes('liquidated')) {
+        throw new Error('Cannot void an already liquidated Cash Advance.');
+      }
+
+      originalRecordId = ca.id;
+      originalAmount = Number(ca.amountApproved || ca.amount) || 0;
+
+      await tx.cashAdvance.update({
+        where: { id: ca.id },
+        data: { status: `Cancelled: ${reason.trim()}` },
+      });
+      
+      transactionDetails = `Cancelled Cash Advance #${referenceId}. Reason: ${reason}`;
+      
+    } else if (category === 'collectibles') {
+      const collectible = await tx.collectible.findFirst({
+        where: { organizationId: organization.id, id: referenceId },
+      });
+      if (!collectible) throw new Error(`Assessed Due reference not found.`);
+
+      originalRecordId = collectible.id;
+      originalAmount = Number(collectible.balanceDue) || 0;
+
+      await tx.collectible.update({
+        where: { id: collectible.id },
+        data: { status: 'Voided', balanceDue: 0 },
+      });
+      
+      transactionDetails = `Voided Collectible Assessment #${referenceId}. Reason: ${reason}`;
+    }
+
+    // 🚀 FIX: Create audit record in the dedicated VoidTransaction model if supported by schema
+    if ((tx as any).voidTransaction) {
+      await (tx as any).voidTransaction.create({
+        data: {
+          organizationId: organization.id,
+          category,
+          referenceId,
+          reason: reason.trim(),
+          voidedBy: officerName,
+          originalRecordId,
+          amount: originalAmount
+        }
+      }).catch(() => {});
+    }
+  });
 
   // 3. Create System Audit Log
-  try {
-    await prisma.systemLog.create({
-      data: {
-        organizationId: organization.id,
-        user: officerName,
-        action: "VOID_TRANSACTION",
-        details: transactionDetails,
-      }
-    });
-  } catch (error) {
-    console.warn("System logging failed:", error);
-  }
+  await logSystemAction(
+    organization.id,
+    officerName,
+    "VOID_TRANSACTION",
+    transactionDetails
+  );
 
   // 4. Revalidate Pages
-  revalidatePath(`/department/${department}/void`);
-  revalidatePath(`/department/${department}/logs`);
-  revalidatePath(`/department/${department}`);
+  revalidatePath(`/department/${cleanDepartment}/void`);
+  revalidatePath(`/department/${cleanDepartment}/logs`);
+  revalidatePath(`/department/${cleanDepartment}`);
   
   return { success: true, message: `Transaction ${referenceId} successfully VOIDED.` };
 }

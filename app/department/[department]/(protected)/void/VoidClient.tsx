@@ -25,7 +25,6 @@ export default function VoidClient({
   const router = useRouter();
   const pathname = usePathname();
 
-  // FIX: Sync local records state whenever props update from category or page changes
   useEffect(() => {
     setRecords(initialRecords);
   }, [initialRecords]);
@@ -40,20 +39,31 @@ export default function VoidClient({
   };
 
   const handleVoidClick = async (refId: string, amount: number) => {
-    const reason = prompt(`Enter mandatory REASON for voiding ${refId} (₱${amount.toFixed(2)}):`);
-    if (!reason || !reason.trim()) {
-      alert("Void cancelled. A specific reason is required.");
+    const reasonResult = await ThemedAlert.fire({
+      title: `Void Transaction ${refId}`,
+      text: `Enter mandatory REASON for voiding ${refId} (₱${amount.toFixed(2)}):`,
+      input: 'text',
+      inputPlaceholder: 'Reason for reversal...',
+      showCancelButton: true,
+      confirmButtonText: 'Proceed to Void',
+      confirmButtonColor: '#dc3545'
+    });
+
+    if (!reasonResult.isConfirmed || !reasonResult.value?.trim()) {
       return;
     }
+    const reason = reasonResult.value.trim();
 
-    if (!confirm(`Permanently VOID and REVERSE ${refId}?\n\nReason: ${reason.trim()}`)) return;
+    const confirmResult = await ThemedAlert.fire({
+      icon: 'warning',
+      title: 'Confirm Reversal',
+      text: `Permanently VOID and REVERSE ${refId}?\nReason: ${reason}`,
+      showCancelButton: true,
+      confirmButtonText: 'Yes, Permanently Void',
+      confirmButtonColor: '#dc3545'
+    });
 
-    let pin = undefined;
-    const needsPin = confirm("Do you need to enter a Master Void Authorization PIN? (Click Cancel if logged in as Admin)");
-    if (needsPin) {
-      pin = prompt("Enter Master Void Authorization PIN:") || undefined;
-      if (!pin) return alert("Void cancelled. Authorization PIN required.");
-    }
+    if (!confirmResult.isConfirmed) return;
 
     setIsProcessing(true);
     try {
@@ -61,15 +71,23 @@ export default function VoidClient({
         department,
         category,
         referenceId: refId,
-        reason: reason.trim()
+        reason
       });
 
       if (res.success) {
         setRecords(prev => prev.filter(r => r.refId !== refId));
-        alert(res.message);
+        await ThemedAlert.fire({
+          icon: 'success',
+          title: 'Successfully Voided',
+          text: res.message
+        });
       }
     } catch (err: any) {
-      alert(err.message || "Failed to execute transaction reversal.");
+      await ThemedAlert.fire({
+        icon: 'error',
+        title: 'Void Failed',
+        text: err.message || "Failed to execute transaction reversal."
+      });
     } finally {
       setIsProcessing(false);
     }
@@ -91,7 +109,6 @@ export default function VoidClient({
         </button>
       </div>
 
-      {/* CATEGORY SELECTOR */}
       <div className="card p-3 border-secondary bg-surface mb-4">
         <div className="row g-3 align-items-end">
           <div className="col-md-12">
@@ -110,7 +127,6 @@ export default function VoidClient({
         </div>
       </div>
 
-      {/* RECORDS TABLE */}
       <div className="table-responsive">
         <table className="table table-hover align-middle text-color">
           <thead>
@@ -156,7 +172,6 @@ export default function VoidClient({
         </table>
       </div>
 
-      {/* PAGINATION CONTROLS */}
       {totalPages > 1 && (
         <div className="d-flex justify-content-between align-items-center mt-3 pt-3 border-top border-secondary">
           <small className="text-secondary">

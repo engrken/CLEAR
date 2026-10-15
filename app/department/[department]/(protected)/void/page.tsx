@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 
 interface PageProps {
   params: Promise<{ department: string }>;
-  searchParams: Promise<{ category?: string; page?: string }>;
+  searchParams: Promise<{ category?: string; page?: string; ay?: string; term?: string }>;
 }
 
 export default async function VoidTransactionsPage({ params, searchParams }: PageProps) {
@@ -24,13 +24,18 @@ export default async function VoidTransactionsPage({ params, searchParams }: Pag
   // 🚀 SECURITY FIX: Enforce tab-level permissions for transaction voiding access
   await requireTabAccess('tab-void', cleanDepartment);
   
-  const category = resolvedSearch?.category || 'collections';
+  // 🚀 FIX: Whitelist allowed categories
+  const rawCategory = resolvedSearch?.category || 'collections';
+  const allowedCategories = ['collections', 'penalties', 'advances', 'collectibles'];
+  const category = allowedCategories.includes(rawCategory) ? rawCategory : 'collections';
+
   const page = parseInt(resolvedSearch?.page || '1', 10);
   const pageSize = 10;
   const skip = (page - 1) * pageSize;
 
   const organization = await prisma.organization.findUnique({
     where: { subdomain: cleanDepartment },
+    select: { id: true, activeAy: true, activeTerm: true }
   });
 
   if (!organization) {
@@ -42,12 +47,19 @@ export default async function VoidTransactionsPage({ params, searchParams }: Pag
     );
   }
 
+  // 🚀 Dynamically link academic year and term to organization database defaults
+  const ay = resolvedSearch?.ay || organization.activeAy || 'A.Y. 2026 - 2027';
+  const term = resolvedSearch?.term || organization.activeTerm || '1st Sem';
+
   let records: any[] = [];
   let totalCount = 0;
 
+  // 🚀 FIX: Filter Prisma queries by active academicYear and term
   if (category === 'collections') {
     const where = { 
-      organizationId: organization.id, 
+      organizationId: organization.id,
+      academicYear: ay,
+      term,
       NOT: [
         { status: { contains: 'VOID' } },
         { status: { contains: 'Void' } },
@@ -65,7 +77,9 @@ export default async function VoidTransactionsPage({ params, searchParams }: Pag
     });
   } else if (category === 'penalties') {
     const where = { 
-      organizationId: organization.id, 
+      organizationId: organization.id,
+      academicYear: ay,
+      term,
       NOT: [
         { status: { contains: 'VOID' } },
         { status: { contains: 'Void' } }
@@ -80,7 +94,9 @@ export default async function VoidTransactionsPage({ params, searchParams }: Pag
     });
   } else if (category === 'advances') {
     const where = { 
-      organizationId: organization.id, 
+      organizationId: organization.id,
+      academicYear: ay,
+      term,
       NOT: [
         { status: { contains: 'CANCEL' } },
         { status: { contains: 'Cancel' } }
@@ -95,7 +111,9 @@ export default async function VoidTransactionsPage({ params, searchParams }: Pag
     });
   } else if (category === 'collectibles') {
     const where = { 
-      organizationId: organization.id, 
+      organizationId: organization.id,
+      academicYear: ay,
+      term,
       NOT: [
         { status: { contains: 'VOID' } },
         { status: { contains: 'Void' } }
