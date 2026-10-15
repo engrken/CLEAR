@@ -1,6 +1,7 @@
 // /app/department/[department]/(protected)/advances/page.tsx
 
 import { prisma } from '@/lib/prisma';
+import { requireTabAccess } from '@/lib/permissions';
 import AdvancesForm from './AdvancesForm';
 import { Metadata } from 'next';
 
@@ -16,12 +17,15 @@ export default async function CashAdvancesPage({
   searchParams?: Promise<{ ay?: string; term?: string }>;
 }) {
   const { department } = await params;
+  const cleanDepartment = decodeURIComponent(department).toLowerCase().trim();
+
+  // 🚀 SECURITY FIX: Enforce tab-level permissions for cash advances access
+  await requireTabAccess('tab-advances', cleanDepartment);
+
   const resolvedSearch = searchParams ? await searchParams : {};
-  const ay = resolvedSearch.ay || 'A.Y. 2026 - 2027';
-  const term = resolvedSearch.term || '1st Sem';
 
   const organization = await prisma.organization.findUnique({
-    where: { subdomain: department },
+    where: { subdomain: cleanDepartment },
   });
 
   if (!organization) {
@@ -32,6 +36,10 @@ export default async function CashAdvancesPage({
       </div>
     );
   }
+
+  // 🚀 Dynamically link academic year and term to organization database defaults
+  const ay = resolvedSearch.ay || organization.activeAy || 'A.Y. 2026 - 2027';
+  const term = resolvedSearch.term || organization.activeTerm || '1st Sem';
 
   // 1. Fetch Students for the Datalist
   const students = await prisma.student.findMany({
@@ -90,8 +98,8 @@ export default async function CashAdvancesPage({
 
   const initialAllocMap: Record<string, number> = {};
   initialFunds.forEach(f => {
-    if (f.fundName) { // Fixed: schema uses fundName instead of name[cite: 1]
-      initialAllocMap[f.fundName] = Number(f.initialAllocation) || 0; // Fixed: schema uses initialAllocation instead of amount[cite: 1]
+    if (f.fundName) {
+      initialAllocMap[f.fundName] = Number(f.initialAllocation) || 0;
     }
   });
 
@@ -109,7 +117,7 @@ export default async function CashAdvancesPage({
     <div className="module card p-3 p-md-4 border-secondary shadow-sm">
       <h5 className="text-accent mb-3"><i className="bi bi-journal-arrow-up me-2"></i>Cash Advance Register</h5>
       <AdvancesForm 
-        department={department} 
+        department={cleanDepartment} 
         ay={ay} 
         term={term} 
         students={students} 
