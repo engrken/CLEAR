@@ -1,6 +1,7 @@
-// /app/department/[department]/(protected)/students/page.tsx
+// /app/department/[department]/students/page.tsx
 
 import { prisma } from '@/lib/prisma';
+import { requireTabAccess } from '@/lib/permissions';
 import StudentsClient from './StudentsClient';
 import { Metadata } from 'next';
 
@@ -16,17 +17,20 @@ export default async function StudentsPage({
   searchParams?: Promise<{ search?: string; year?: string; status?: string; page?: string; ay?: string; term?: string }>;
 }) {
   const { department } = await params;
+  const cleanDepartment = decodeURIComponent(department).toLowerCase().trim();
+
+  // 🚀 SECURITY FIX: Enforce tab-level permissions for student roster access
+  await requireTabAccess('tab-students', cleanDepartment);
+
   const resolvedSearch = searchParams ? await searchParams : {};
   const search = resolvedSearch.search || '';
   const yearFilter = resolvedSearch.year || 'ALL';
   const statusFilter = resolvedSearch.status || 'ALL';
-  const page = parseInt(resolvedSearch.page || '1', 10);
+  const page = Math.max(1, parseInt(resolvedSearch.page || '1', 10));
   const pageSize = 10;
-  const ay = resolvedSearch.ay || 'A.Y. 2026 - 2027';
-  const term = resolvedSearch.term || '1st Sem';
 
   const organization = await prisma.organization.findUnique({
-    where: { subdomain: department },
+    where: { subdomain: cleanDepartment },
   });
 
   if (!organization) {
@@ -37,6 +41,10 @@ export default async function StudentsPage({
       </div>
     );
   }
+
+  // 🚀 Dynamically link academic year and term to organization database defaults
+  const ay = resolvedSearch.ay || organization.activeAy || 'A.Y. 2026 - 2027';
+  const term = resolvedSearch.term || organization.activeTerm || '1st Sem';
 
   // 1. Build dynamic Prisma where clause for the main list
   const whereClause: any = {
@@ -66,10 +74,7 @@ export default async function StudentsPage({
 
   // 2. Fetch overall metrics and paginated records concurrently
   const [totalDirectory, absoluteInactiveCount, totalFiltered, students] = await Promise.all([
-    // A. Grand total of all students in this department
     prisma.student.count({ where: { organizationId: organization.id } }),
-    
-    // B. Grand total of inactive students for this specific term
     prisma.student.count({
       where: {
         organizationId: organization.id,
@@ -78,11 +83,7 @@ export default async function StudentsPage({
         }
       }
     }),
-
-    // C. Total count matching current search & filters (for pagination math)
     prisma.student.count({ where: whereClause }),
-
-    // D. The actual paginated student records
     prisma.student.findMany({
       where: whereClause,
       include: {
@@ -96,11 +97,9 @@ export default async function StudentsPage({
     }),
   ]);
 
-  // 3. Calculate accurate top-level department metrics
   const notEnrolledCount = absoluteInactiveCount;
   const enrolledCount = totalDirectory - notEnrolledCount;
 
-  // 4. Format the final output array
   const formattedStudents = students.map(s => {
     const termEnrollment = s.enrollments[0];
     const status = termEnrollment?.enrollmentStatus || 'Enrolled';
@@ -115,13 +114,12 @@ export default async function StudentsPage({
     };
   });
 
-  // Safe pagination division
-  const totalPages = Math.ceil(totalFiltered / pageSize);
+  const totalPages = Math.ceil(totalFiltered / pageSize) || 1;
 
   return (
     <div className="module p-0 bg-transparent border-0 shadow-none">
       <StudentsClient 
-        department={department}
+        department={cleanDepartment}
         organizationId={organization.id}
         ay={ay}
         term={term}
