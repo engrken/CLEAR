@@ -7,6 +7,7 @@ import { useState, useEffect, Suspense, useTransition } from 'react';
 import { signOut } from "next-auth/react";
 import LoginModal from './LoginModal'; 
 import { updateMyEmail } from './actions';
+import { ThemedAlert } from '@/lib/alerts'; // 🚀 Fixed F11: Theme-adaptive SweetAlerts
 
 const MODULE_LABELS: Record<string, string> = {
   'tab-overview': 'Overview',
@@ -49,7 +50,7 @@ function TopHeaderContent({
   const isLoggedIn = !!currentUser;
   const userName = currentUser?.name || currentUser?.fullName || 'System Officer';
   const role = currentUser?.role || 'OFFICER';
-  const username = currentUser?.username || 'N/A';
+  const username = currentUser?.username || 'N/A'; // 🚀 Fixed F40: Correctly maps username
   const initialEmail = currentUser?.email || '';
   const allowedTabs = currentUser?.allowedTabs || [];
   
@@ -119,7 +120,13 @@ function TopHeaderContent({
         console.error("Logout failed", e);
       }
       
-      alert("Signed out successfully.");
+      await ThemedAlert.fire({
+        icon: 'success',
+        title: 'Signed Out',
+        text: 'Signed out successfully.',
+        timer: 1500,
+        showConfirmButton: false,
+      });
       window.location.reload();
     } else {
       setShowModal(true);
@@ -132,12 +139,20 @@ function TopHeaderContent({
       try {
         const res = await updateMyEmail(department, editableEmail);
         if (res.success) {
-          alert(res.message);
+          await ThemedAlert.fire({
+            icon: 'success',
+            title: 'Success',
+            text: res.message || 'Email updated successfully.',
+          });
           setShowProfileModal(false);
           window.location.reload();
         }
       } catch (err: any) {
-        alert(err.message || "Failed to update email.");
+        ThemedAlert.fire({
+          icon: 'error',
+          title: 'Update Failed',
+          text: err.message || "Failed to update email.",
+        });
       }
     });
   };
@@ -148,7 +163,6 @@ function TopHeaderContent({
         <div className="d-flex align-items-center justify-content-between w-100">
           <div className="d-flex align-items-center gap-3">
             
-            {/* 📱 MOBILE FIX: Uses a global event instead of direct DOM manipulation */}
             <button 
               className="btn btn-outline-secondary btn-sm d-lg-none" 
               type="button" 
@@ -158,7 +172,6 @@ function TopHeaderContent({
             </button>
 
             <div className="d-flex align-items-center gap-3">
-              {/* 🖥️ DESKTOP VIEW: Show the actual logo */}
               {!fcuError ? (
                 <div style={{ width: '96px', flexShrink: 0 }} className="text-center d-none d-md-block">
                   <img 
@@ -175,12 +188,10 @@ function TopHeaderContent({
               )}
 
               <div>
-                {/* 🖥️ DESKTOP VIEW: Full spelled-out title */}
                 <span className="text-secondary d-none d-md-inline" style={{ fontSize: '2.16rem', lineHeight: '1.2' }}>
                   <b>C</b>entralized <b>L</b>iquidation of <b>E</b>xpenses & <b>A</b>udit <b>R</b>ecords <b>System</b>
                 </span>
 
-                {/* 📱 MOBILE VIEW: Compact bold text instead of the large logo */}
                 <span className="text-accent d-inline d-md-none fw-bold" style={{ fontSize: '1.25rem', letterSpacing: '0.5px' }}>
                   <b>C</b>entralized <b>L</b>iquidation of <b>E</b>xpenses & <b>A</b>udit <b>R</b>ecords <b>System</b>
                 </span>
@@ -225,36 +236,31 @@ function TopHeaderContent({
           </button>
 
           <div>
-            {isLoggedIn ? (
-              <div 
-                className="d-flex align-items-center border border-info border-opacity-25 rounded bg-info bg-opacity-10 px-2 py-1 shadow-sm transition-all"
-                style={{ cursor: 'pointer' }}
-                onClick={() => setShowProfileModal(true)}
-                title="Click to view and edit profile"
-              >
-                <i className="bi bi-person-circle text-info me-2"></i>
-                <span className="text-info fw-bold me-2" style={{ fontSize: '0.8rem' }}>
-                  {userName}
-                </span>
-                <span className="badge bg-info text-dark text-uppercase" style={{ fontSize: '0.65rem' }}>
-                  {role}
-                </span>
-              </div>
-            ) : (
-              <span className="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 px-2 py-1 text-uppercase fw-bold" style={{ fontSize: '0.75rem' }}>
-                GUEST / PUBLIC
+            {/* 🚀 Fixed F36: Removed unreachable unauthenticated fallback since layout guards protected routes */}
+            <div 
+              className="d-flex align-items-center border border-info border-opacity-25 rounded bg-info bg-opacity-10 px-2 py-1 shadow-sm transition-all"
+              style={{ cursor: 'pointer' }}
+              onClick={() => setShowProfileModal(true)}
+              title="Click to view and edit profile"
+            >
+              <i className="bi bi-person-circle text-info me-2"></i>
+              <span className="text-info fw-bold me-2" style={{ fontSize: '0.8rem' }}>
+                {userName}
               </span>
-            )}
+              <span className="badge bg-info text-dark text-uppercase" style={{ fontSize: '0.65rem' }}>
+                {role}
+              </span>
+            </div>
           </div>
 
           <button 
-            className={`btn btn-sm d-flex align-items-center gap-1 px-2 py-1 ${isLoggedIn ? 'btn-outline-danger' : 'btn-primary'}`} 
+            className="btn btn-sm d-flex align-items-center gap-1 px-2 py-1 btn-outline-danger" 
             onClick={handleAuthAction}
-            title={isLoggedIn ? "Sign Out" : "Sign In"}
+            title="Sign Out"
             style={{ fontSize: '0.8rem' }}
           >
-            <i className={`bi ${isLoggedIn ? 'bi-box-arrow-right' : 'bi-shield-lock-fill'}`}></i>
-            <span className="fw-bold">{isLoggedIn ? "Sign Out" : "Sign In"}</span>
+            <i className="bi bi-box-arrow-right"></i>
+            <span className="fw-bold">Sign Out</span>
           </button>
         </div>
       </header>
