@@ -1,4 +1,4 @@
-// /(protected)/reports/ReportsClient.tsx
+// /app/department/[department]/(protected)/reports/ReportsClient.tsx
 
 "use client";
 

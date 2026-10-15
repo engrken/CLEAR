@@ -1,3 +1,5 @@
+// /app/api/auth/send-otp/route.ts
+
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma'; // Adjust path based on your folder structure
 import nodemailer from 'nodemailer';

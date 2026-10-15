@@ -1,4 +1,4 @@
-//department/[department]/auth-actions.ts
+// /app/department/[department]/auth-actions.ts
 'use server';
 import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';

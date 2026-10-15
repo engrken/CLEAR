@@ -1,4 +1,4 @@
-// (protected)/liquidations/LiquidationsClient.tsx
+// /app/department/[department]/(protected)/liquidations/LiquidationsClient.tsx
 "use client";
 
 import { useState } from "react";

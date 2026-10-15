@@ -1,3 +1,5 @@
+// /app/department/[department]/(protected)/users/UserManagementClient.tsx
+
 "use client";
 
 import { useState } from "react";

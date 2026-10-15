@@ -1,3 +1,5 @@
+// /app/department/[department]/(protected)/realign/RealignManager.tsx
+
 "use client";
 
 import { useState } from "react";

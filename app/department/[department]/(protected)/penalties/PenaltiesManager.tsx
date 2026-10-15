@@ -1,3 +1,5 @@
+// /app/department/[department]/(protected)/penalties/PenaltiesManager.tsx
+
 "use client";
 
 import { useState, useMemo } from "react";

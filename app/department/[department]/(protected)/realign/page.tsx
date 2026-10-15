@@ -1,3 +1,5 @@
+// /app/department/[department]/(protected)/realign/page.tsx
+
 import { prisma } from '@/lib/prisma';
 import RealignManager from './RealignManager';
 import { Metadata } from 'next';

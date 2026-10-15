@@ -1,3 +1,5 @@
+// /app/department/[department]/(protected)/collections/page.tsx
+
 import { prisma } from "@/lib/prisma";
 import CollectionsForm from "./CollectionsForm";
 import { Metadata } from "next";

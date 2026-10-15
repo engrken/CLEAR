@@ -1,4 +1,4 @@
-// app/department/[department]/DashboardClient.tsx
+// /app/department/[department]/DashboardClient.tsx
 "use client";
 import { useState } from "react";
 import Link from "next/link";

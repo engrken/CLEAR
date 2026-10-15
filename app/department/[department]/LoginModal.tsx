@@ -1,4 +1,4 @@
-// [department]/LoginModal.tsx
+// /app/department/[department]/LoginModal.tsx
 "use client";
 import { useState } from "react";
 import { signIn } from "next-auth/react";

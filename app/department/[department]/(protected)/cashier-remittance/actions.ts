@@ -1,3 +1,5 @@
+// /app/department/[department]/(protected)/cashier-remittance/actions.ts
+
 "use server";
 
 import { prisma } from '@/lib/prisma';

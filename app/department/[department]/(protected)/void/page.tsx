@@ -1,3 +1,5 @@
+// /app/department/[department]/(protected)/void/page.tsx
+
 import { prisma } from '@/lib/prisma';
 import VoidClient from './VoidClient';
 import { Metadata } from 'next';

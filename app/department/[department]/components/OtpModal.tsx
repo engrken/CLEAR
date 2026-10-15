@@ -1,4 +1,6 @@
-// [department]/components/OtpModal.tsx
+// /app/department/[department]/components/OtpModal.tsx
+
+
 "use client";
 
 import { useState } from "react";

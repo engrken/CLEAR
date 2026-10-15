@@ -1,4 +1,4 @@
-// /(protected)/remittances/RemittanceVerificationQueue.tsx
+// /app/department/[department]/(protected)/remittances/RemittanceVerificationQueue.tsx
 
 "use client";
 

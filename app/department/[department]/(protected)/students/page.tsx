@@ -1,3 +1,5 @@
+// /app/department/[department]/(protected)/students/page.tsx
+
 import { prisma } from '@/lib/prisma';
 import StudentsClient from './StudentsClient';
 import { Metadata } from 'next';

@@ -1,3 +1,5 @@
+// /app/department/[department]/(protected)/setup/SetupClient.tsx
+
 "use client";
 
 import { useState } from "react";

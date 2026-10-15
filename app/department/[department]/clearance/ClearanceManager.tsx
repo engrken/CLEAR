@@ -1,4 +1,4 @@
-// /[department]/clearance/ClearanceManager.tsx
+// /app/department/[department]/clearance/ClearanceManager.tsx
 
 "use client";
 

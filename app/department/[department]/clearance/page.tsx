@@ -1,3 +1,5 @@
+// /app/department/[department]/clearance/page.tsx
+
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/auth';
 import { fmt } from '@/lib/utils';

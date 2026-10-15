@@ -1,3 +1,5 @@
+// /app/department/[department]/(protected)/summary/PrintButton.tsx
+
 "use client";
 
 export default function PrintButton() {

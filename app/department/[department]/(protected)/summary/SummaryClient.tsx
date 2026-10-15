@@ -1,4 +1,4 @@
-// /(protected)/summary/SummaryClient.tsx
+// /app/department/[department]/(protected)/summary/SummaryClient.tsx
 
 "use client";
 

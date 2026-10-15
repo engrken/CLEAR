@@ -1,3 +1,5 @@
+// /app/department/[department]/(protected)/collectibles/CollectiblesManager.tsx
+
 "use client";
 
 import { useState } from "react";

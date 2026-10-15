@@ -1,4 +1,4 @@
-// /(protected)/liquidations/page.tsx
+// /app/department/[department]/(protected)/liquidations/page.tsx
 
 import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';

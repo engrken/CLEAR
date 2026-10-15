@@ -1,3 +1,5 @@
+// /app/department/[department]/(protected)/void/VoidClient.tsx
+
 "use client";
 
 import { useState, useEffect } from "react";

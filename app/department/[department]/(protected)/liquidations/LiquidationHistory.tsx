@@ -1,4 +1,4 @@
-// /(protected)/liquidations/LiquidationHistory.tsx
+// /app/department/[department]/(protected)/liquidations/LiquidationHistory.tsx
 
 "use client";
 

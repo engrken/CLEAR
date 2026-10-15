@@ -1,3 +1,5 @@
+// /app/department/[department]/(protected)/penalties/page.tsx
+
 import { prisma } from '@/lib/prisma';
 import PenaltiesManager from './PenaltiesManager';
 import { Metadata } from 'next';

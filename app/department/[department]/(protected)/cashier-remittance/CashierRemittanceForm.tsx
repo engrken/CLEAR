@@ -1,3 +1,5 @@
+// /app/department/[department]/(protected)/cashier-remittance/CashierRemittanceForm.tsx
+
 "use client";
 
 import { useState, useEffect } from "react";

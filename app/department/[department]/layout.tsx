@@ -1,4 +1,4 @@
-// /[department]/layout.tsx
+// /app/department/[department]/layout.tsx
 import type { ReactNode } from "react";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";

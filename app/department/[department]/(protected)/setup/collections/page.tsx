@@ -1,3 +1,5 @@
+// /app/department/[department]/(protected)/setup/collections/page.tsx
+
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 

@@ -1,3 +1,5 @@
+// /app/department/[department]/(protected)/cashier-remittance/page.tsx
+
 import { prisma } from "@/lib/prisma";
 import CashierRemittanceForm from "./CashierRemittanceForm";
 import { Metadata } from "next";

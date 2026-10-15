@@ -1,3 +1,5 @@
+// /app/department/[department]/(protected)/collectibles/page.tsx
+
 import { prisma } from '@/lib/prisma';
 import CollectiblesManager from './CollectiblesManager';
 import { Metadata } from 'next';

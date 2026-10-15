@@ -1,3 +1,5 @@
+// /app/department/[department]/loading.tsx
+
 export default async function DepartmentLoading() {
   // Always use a clean root-relative absolute path for Vercel & production
   const fcuLogoPath = '/fcu.png';

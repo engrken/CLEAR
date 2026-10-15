@@ -1,3 +1,5 @@
+// /app/department/[department]/(protected)/setup/page.tsx
+
 import { prisma } from '@/lib/prisma';
 import SetupClient from './SetupClient';
 import { Metadata } from 'next';

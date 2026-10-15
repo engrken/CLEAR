@@ -1,4 +1,4 @@
-// /(protected)/reports/page.tsx
+// /app/department/[department]/(protected)/reports/page.tsx
 
 import { prisma } from '@/lib/prisma';
 import ReportsClient from './ReportsClient';

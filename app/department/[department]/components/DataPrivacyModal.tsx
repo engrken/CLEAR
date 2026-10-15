@@ -1,3 +1,5 @@
+// /app/department/[department]/components/DataPrivacyModal.tsx
+
 'use client';
 
 import { useEffect } from 'react';

@@ -1,3 +1,5 @@
+// /app/department/[department]/(protected)/advances/page.tsx
+
 import { prisma } from '@/lib/prisma';
 import AdvancesForm from './AdvancesForm';
 import { Metadata } from 'next';

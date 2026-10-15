@@ -1,3 +1,5 @@
+// /app/department/[department]/(protected)/students/StudentsClient.tsx
+
 "use client";
 
 import { useState } from "react";

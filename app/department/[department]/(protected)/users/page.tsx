@@ -1,3 +1,5 @@
+// /app/department/[department]/(protected)/users/page.tsx
+
 import { prisma } from '@/lib/prisma';
 import UserManagementClient from './UserManagementClient';
 import { Metadata } from 'next';

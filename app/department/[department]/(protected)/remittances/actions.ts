@@ -1,4 +1,4 @@
-// /(protected)/remittances/actions.ts
+// /app/department/[department]/(protected)/remittances/actions.ts
 
 
 "use server";

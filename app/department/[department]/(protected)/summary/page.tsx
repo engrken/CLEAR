@@ -1,3 +1,5 @@
+// /app/department/[department]/(protected)/summary/page.tsx
+
 import { prisma } from '@/lib/prisma';
 import SummaryClient from './SummaryClient';
 import { Metadata } from 'next';

@@ -1,3 +1,5 @@
+// /app/department/[department]/(protected)/setup/actions.ts
+
 "use server";
 
 import { prisma } from '@/lib/prisma';
