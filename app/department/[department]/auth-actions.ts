@@ -3,6 +3,7 @@
 
 import { prisma } from '@/lib/prisma';
 import crypto from 'node:crypto';
+import { cookies } from 'next/headers';
 import { sendEmail } from '@/lib/mailer'; // 🚀 CENTRALIZED MAILER
 import { isSuperAdminEmail } from '@/lib/permissions'; // 🚀 CENTRALIZED GUARD
 
@@ -30,24 +31,22 @@ export async function requestOtp(
   // SUPER ADMIN (F2 Fix)
   // =========================================================
   if (isSuperAdminEmail(cleanEmail)) {
-    // The VerificationToken model uses identifier as its primary key, so use the email as identifier.
     await prisma.verificationToken.upsert({
       where: {
         identifier: cleanEmail,
       },
       update: {
-        token: hashedOtp, // 🚀 Fixed F14: Store hashed token
+        token: hashedOtp, // 🚀 Store hashed token securely
         expires: otpExpires,
       },
       create: {
         identifier: cleanEmail,
-        token: hashedOtp, // 🚀 Fixed F14: Store hashed token
+        token: hashedOtp, // 🚀 Store hashed token securely
         expires: otpExpires,
       },
     });
 
     try {
-      // Dispatch via centralized mailer (F46 Fix)
       await sendEmail({
         to: cleanEmail,
         subject: 'CLEAR System: System Admin Verification Code',
@@ -106,7 +105,6 @@ export async function requestOtp(
         text: `Your CLEAR System verification code is: ${otp}`,
       });
     } catch (error) {
-      // Clear OTP if email failed.
       await prisma.verificationToken.deleteMany({
         where: {
           identifier: cleanEmail,
@@ -159,7 +157,7 @@ export async function requestOtp(
       id: user.id,
     },
     data: {
-      otpCode: hashedOtp, // 🚀 Fixed F14: Store SHA-256 hash instead of plaintext
+      otpCode: hashedOtp, // 🚀 Store SHA-256 hash instead of plaintext
       otpExpires,
     },
   });
@@ -230,7 +228,6 @@ export async function requestOtp(
       text: `Your CLEAR System verification code for ${organization.name} is: ${otp}`,
     });
   } catch (error) {
-    // Clear OTP if email failed.
     await prisma.tenantUser.update({
       where: {
         id: user.id,
@@ -249,5 +246,126 @@ export async function requestOtp(
     success: true,
     message:
       'A verification code has been sent to your registered email address.',
+  };
+}
+
+// =========================================================
+// VERIFY OTP (Fixed to match SHA-256 Hashed Tokens)
+// =========================================================
+export async function verifyOtp(
+  department: string,
+  email: string,
+  submittedOtp: string
+) {
+  const cleanDepartment = decodeURIComponent(department).trim().toLowerCase();
+  const cleanEmail = String(email || '').trim().toLowerCase();
+  const cleanOtp = String(submittedOtp || '').trim();
+
+  if (!/^\d{6}$/.test(cleanOtp)) {
+    throw new Error('Verification code must be exactly 6 digits.');
+  }
+
+  const submittedHash = crypto.createHash('sha256').update(cleanOtp).digest('hex');
+  const cookieStore = await cookies();
+
+  // Handle Super Admin Verification
+  if (isSuperAdminEmail(cleanEmail)) {
+    const tokenRecord = await prisma.verificationToken.findUnique({
+      where: { identifier: cleanEmail },
+    });
+
+    if (!tokenRecord || !tokenRecord.token || tokenRecord.expires < new Date()) {
+      throw new Error('Verification code has expired or is invalid. Please request a new one.');
+    }
+
+    const storedHashBuf = Buffer.from(tokenRecord.token, 'utf8');
+    const submittedHashBuf = Buffer.from(submittedHash, 'utf8');
+
+    if (storedHashBuf.length !== submittedHashBuf.length || !crypto.timingSafeEqual(storedHashBuf, submittedHashBuf)) {
+      throw new Error('Invalid verification code.');
+    }
+
+    // Clean up used token
+    await prisma.verificationToken.delete({
+      where: { identifier: cleanEmail },
+    });
+
+    cookieStore.set('fcu_session', `superadmin:${cleanEmail}`, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 86400,
+    });
+
+    return {
+      success: true,
+      user: {
+        id: 'superadmin',
+        fullName: 'Super Administrator',
+        email: cleanEmail,
+        role: 'SuperAdmin',
+        allowedTabs: ['*'],
+      },
+    };
+  }
+
+  // Handle Department Tenant User Verification
+  const organization = await prisma.organization.findUnique({
+    where: { subdomain: cleanDepartment },
+  });
+  if (!organization) {
+    throw new Error('Department not found.');
+  }
+
+  const user = await prisma.tenantUser.findFirst({
+    where: {
+      organizationId: organization.id,
+      email: { equals: cleanEmail, mode: 'insensitive' },
+      status: 'Active',
+    },
+  });
+
+  if (!user || !user.otpCode || !user.otpExpires || user.otpExpires < new Date()) {
+    throw new Error('Verification code has expired or is invalid. Please request a new one.');
+  }
+
+  const storedHashBuf = Buffer.from(user.otpCode, 'utf8');
+  const submittedHashBuf = Buffer.from(submittedHash, 'utf8');
+
+  if (storedHashBuf.length !== submittedHashBuf.length || !crypto.timingSafeEqual(storedHashBuf, submittedHashBuf)) {
+    throw new Error('Invalid verification code.');
+  }
+
+  // Clear OTP code after successful verification
+  await prisma.tenantUser.update({
+    where: { id: user.id },
+    data: { otpCode: null, otpExpires: null },
+  });
+
+  cookieStore.set('fcu_session', user.id, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 86400,
+  });
+
+  let parsedTabs: string[] = [];
+  try {
+    parsedTabs = typeof user.allowedTabs === 'string' ? JSON.parse(user.allowedTabs) : (user.allowedTabs || []);
+  } catch {
+    parsedTabs = [];
+  }
+
+  return {
+    success: true,
+    user: {
+      id: user.id,
+      fullName: user.fullName,
+      email: user.email,
+      role: user.role,
+      allowedTabs: parsedTabs,
+    },
   };
 }
