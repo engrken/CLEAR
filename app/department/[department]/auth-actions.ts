@@ -2,7 +2,7 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import { sendEmail } from '@/lib/mailer'; // 🚀 CENTRALIZED MAILER
 import { isSuperAdminEmail } from '@/lib/permissions'; // 🚀 CENTRALIZED GUARD
 
@@ -10,48 +10,38 @@ export async function requestOtp(
   department: string,
   email: string
 ) {
-  const cleanDepartment = decodeURIComponent(
-    department
-  )
+  const cleanDepartment = decodeURIComponent(department)
     .trim()
     .toLowerCase();
-  const cleanEmail = email
-    .trim()
-    .toLowerCase();
-  console.log('========== REQUEST OTP ==========');
-  console.log('OTP EMAIL:', cleanEmail);
-  console.log('OTP DEPARTMENT:', cleanDepartment);
+  const cleanEmail = String(email || '').trim().toLowerCase();
+
+  if (!cleanEmail || !cleanEmail.includes('@')) {
+    throw new Error('Please provide a valid email address.');
+  }
 
   // =========================================================
   // GENERATE OTP
   // =========================================================
-  const otp = crypto
-    .randomInt(100000, 1000000)
-    .toString();
-  const otpExpires = new Date(
-    Date.now() + 5 * 60 * 1000
-  );
+  const otp = crypto.randomInt(100000, 1000000).toString();
+  const hashedOtp = crypto.createHash('sha256').update(otp).digest('hex');
+  const otpExpires = new Date(Date.now() + 5 * 60 * 1000);
 
   // =========================================================
   // SUPER ADMIN (F2 Fix)
   // =========================================================
   if (isSuperAdminEmail(cleanEmail)) {
-    console.log(
-      'OTP MODE: SUPER ADMIN'
-    );
-
     // The VerificationToken model uses identifier as its primary key, so use the email as identifier.
     await prisma.verificationToken.upsert({
       where: {
         identifier: cleanEmail,
       },
       update: {
-        token: otp,
+        token: hashedOtp, // 🚀 Fixed F14: Store hashed token
         expires: otpExpires,
       },
       create: {
         identifier: cleanEmail,
-        token: otp,
+        token: hashedOtp, // 🚀 Fixed F14: Store hashed token
         expires: otpExpires,
       },
     });
@@ -60,8 +50,7 @@ export async function requestOtp(
       // Dispatch via centralized mailer (F46 Fix)
       await sendEmail({
         to: cleanEmail,
-        subject:
-          'CLEAR System: System Admin Verification Code',
+        subject: 'CLEAR System: System Admin Verification Code',
         html: `
           <div style="
             font-family: Arial, sans-serif;
@@ -116,14 +105,7 @@ export async function requestOtp(
         `,
         text: `Your CLEAR System verification code is: ${otp}`,
       });
-      console.log(
-        'SUPER ADMIN OTP EMAIL SENT.'
-      );
     } catch (error) {
-      console.error(
-        'Super Admin OTP email error:',
-        error
-      );
       // Clear OTP if email failed.
       await prisma.verificationToken.deleteMany({
         where: {
@@ -134,9 +116,6 @@ export async function requestOtp(
         'Unable to send verification email. Please try again.'
       );
     }
-    console.log(
-      '========== REQUEST OTP SUCCESS =========='
-    );
     return {
       success: true,
       message:
@@ -147,67 +126,43 @@ export async function requestOtp(
   // =========================================================
   // FIND ORGANIZATION
   // =========================================================
-  const organization =
-    await prisma.organization.findUnique({
-      where: {
-        subdomain: cleanDepartment,
-      },
-    });
+  const organization = await prisma.organization.findUnique({
+    where: {
+      subdomain: cleanDepartment,
+    },
+  });
   if (!organization) {
-    console.error(
-      'Organization not found:',
-      cleanDepartment
-    );
-    throw new Error(
-      'Department not found.'
-    );
+    throw new Error('Department not found.');
   }
-  console.log(
-    'OTP ORGANIZATION:',
-    organization.id
-  );
 
   // =========================================================
   // FIND DEPARTMENT USER
   // =========================================================
-  const user =
-    await prisma.tenantUser.findFirst({
-      where: {
-        organizationId:
-          organization.id,
-        email: cleanEmail,
-        status: 'Active',
-      },
-    });
+  const user = await prisma.tenantUser.findFirst({
+    where: {
+      organizationId: organization.id,
+      email: { equals: cleanEmail, mode: 'insensitive' },
+      status: 'Active',
+    },
+  });
   if (!user) {
-    console.error(
-      'Department user not found:',
-      cleanEmail
-    );
     throw new Error(
       'This account is not registered or is currently inactive.'
     );
   }
-  console.log(
-    'OTP USER FOUND:',
-    user.id
-  );
 
   // =========================================================
-  // STORE DEPARTMENT USER OTP
+  // STORE DEPARTMENT USER OTP (Hashed for security - F14)
   // =========================================================
   await prisma.tenantUser.update({
     where: {
       id: user.id,
     },
     data: {
-      otpCode: otp,
+      otpCode: hashedOtp, // 🚀 Fixed F14: Store SHA-256 hash instead of plaintext
       otpExpires,
     },
   });
-  console.log(
-    'DEPARTMENT OTP STORED.'
-  );
 
   // =========================================================
   // SEND EMAIL (F46 Fix)
@@ -215,8 +170,7 @@ export async function requestOtp(
   try {
     await sendEmail({
       to: cleanEmail,
-      subject:
-        `CLEAR System: ${organization.name} Verification Code`,
+      subject: `CLEAR System: ${organization.name} Verification Code`,
       html: `
         <div style="
           font-family: Arial, sans-serif;
@@ -275,14 +229,7 @@ export async function requestOtp(
       `,
       text: `Your CLEAR System verification code for ${organization.name} is: ${otp}`,
     });
-    console.log(
-      'DEPARTMENT OTP EMAIL SENT.'
-    );
   } catch (error) {
-    console.error(
-      'OTP email error:',
-      error
-    );
     // Clear OTP if email failed.
     await prisma.tenantUser.update({
       where: {
@@ -297,9 +244,7 @@ export async function requestOtp(
       'Unable to send verification email. Please try again.'
     );
   }
-  console.log(
-    '========== REQUEST OTP SUCCESS =========='
-  );
+
   return {
     success: true,
     message:
