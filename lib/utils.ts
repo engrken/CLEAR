@@ -1,11 +1,20 @@
-// lib/utils.ts
+// /lib/utils.ts
+
+/**
+ * Rounds a numeric value precisely to 2 decimal places (centavo level) 
+ * to prevent floating-point accumulation errors in financial calculations.
+ */
+export function money(val: number | string | null | undefined): number {
+  const num = parseFloat(String(val)) || 0;
+  return Math.round((num + Number.EPSILON) * 100) / 100;
+}
 
 /**
  * Formats a numeric value into Philippine Peso (₱) currency string.
  * Migrated from the legacy fmt() function in app.js.
  */
 export function fmt(val: number | string | null | undefined): string {
-  const num = parseFloat(String(val)) || 0;
+  const num = money(val);
   return "₱" + num.toLocaleString("en-US", { 
     minimumFractionDigits: 2, 
     maximumFractionDigits: 2 
