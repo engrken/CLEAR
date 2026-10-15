@@ -4,8 +4,9 @@
 
 import { prisma } from '@/lib/prisma';
 import { requireTabAccess } from '@/lib/permissions';
+import { sendEmail } from '@/lib/mailer';
+import { logSystemAction } from '@/lib/logger';
 import { revalidatePath } from 'next/cache';
-import nodemailer from 'nodemailer';
 
 // =========================================================================
 // HELPER FUNCTIONS (Internal to this module)
@@ -14,7 +15,7 @@ import nodemailer from 'nodemailer';
 function money(val: any, fieldName: string): number {
   const parsed = parseFloat(val);
   if (isNaN(parsed)) throw new Error(`Invalid monetary value for ${fieldName}`);
-  return parsed;
+  return Math.round(parsed * 100) / 100;
 }
 
 function parseDate(val: any, fieldName: string): Date {
@@ -59,14 +60,6 @@ async function sendEmailReceipt(
   if (!studentEmail) return;
 
   try {
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: process.env.GMAIL_USER,
-        pass: process.env.GMAIL_APP_PASSWORD,
-      },
-    });
-
     const formattedAmount = `₱${data.amountPaid.toFixed(2)}`;
     const formattedBalance = `₱${data.balanceDue.toFixed(2)}`;
     const formattedDate = data.date.toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' });
@@ -118,8 +111,8 @@ async function sendEmailReceipt(
       </div>
     `;
 
-    await transporter.sendMail({
-      from: `"${orgName} Finance" <${process.env.GMAIL_USER}>`,
+    // 🚀 FIX: Use centralized sendEmail from @/lib/mailer
+    await sendEmail({
       to: studentEmail,
       subject: `Official Receipt [${data.orNumber}] - ${orgName}`,
       html: htmlContent,
@@ -133,8 +126,7 @@ async function sendEmailReceipt(
 
 async function getPreviouslyPaid(
   orgId: string, 
-  studentId: string, 
-  studentName: string, 
+  studentDbId: string, 
   ay: string, 
   term: string, 
   itemDescription: string
@@ -144,9 +136,10 @@ async function getPreviouslyPaid(
       organizationId: orgId,
       academicYear: ay,
       term: term,
-      studentId: studentId,
+      studentId: studentDbId,
       itemDescription: itemDescription,
-      paymentType: { not: { contains: "Voided" } }
+      paymentType: { not: { contains: "Void" } },
+      status: { not: { contains: "Void" } }
     },
     select: { amountPaid: true }
   });
@@ -174,20 +167,22 @@ export async function recordPayment(
     fundAllocation: string;
     ay: string;
     term: string;
-    penaltyId?: string; // <-- ADDED SUPPORT FOR PENALTY SETTLEMENT
+    penaltyId?: string;
   }
 ) {
+  const cleanDepartment = decodeURIComponent(department).trim().toLowerCase();
+
   // 1. Verify Permission via Shared Guard
-  const customUser = await requireTabAccess("tab-payment");
-  const officerName = customUser.fullName || customUser.email || "System Administrator";
+  const customUser = await requireTabAccess("tab-payment", cleanDepartment);
+  const officerName = customUser.name || customUser.fullName || customUser.email || "System Administrator";
 
   // 2. Resolve Organization ID
   const organization = await prisma.organization.findUnique({
-    where: { subdomain: department.toLowerCase() }
+    where: { subdomain: cleanDepartment }
   });
 
   if (!organization) {
-    throw new Error(`Organization subdomain "${department}" not found.`);
+    throw new Error(`Organization subdomain "${cleanDepartment}" not found.`);
   }
   const orgId = organization.id;
 
@@ -214,7 +209,6 @@ export async function recordPayment(
   const alreadyPaid = await getPreviouslyPaid(
     orgId,
     studentDbId,
-    studentName,
     data.ay,
     data.term,
     itemDescription
@@ -256,7 +250,6 @@ export async function recordPayment(
       },
     });
 
-    // 🚀 PENALTY SETTLEMENT HOOK
     if (data.penaltyId) {
       const targetPen = await tx.penalty.findFirst({
         where: { penaltyId: data.penaltyId, organizationId: orgId },
@@ -279,22 +272,29 @@ export async function recordPayment(
   });
 
   // 6. Audit Log
-  try {
-    await prisma.systemLog.create({
-      data: {
-        organizationId: orgId,
-        user: officerName,
-        action: "RECORD_PAYMENT",
-        details: `Recorded payment of ₱${paid.toFixed(2)} from ${studentName} [OR: ${data.orNumber}] for ${itemDescription}.${data.penaltyId ? ` Settled penalty [${data.penaltyId}].` : ''}`,
-      }
-    });
-  } catch (error) {
-    console.warn("System logging failed:", error);
+  await logSystemAction(
+    orgId,
+    officerName,
+    "RECORD_PAYMENT",
+    `Recorded payment of ₱${paid.toFixed(2)} from ${studentName} [OR: ${data.orNumber}] for ${itemDescription}.${data.penaltyId ? ` Settled penalty [${data.penaltyId}].` : ''}`
+  );
+
+  // 7. Dispatch Email Receipt asynchronously
+  if (data.studentEmail) {
+    sendEmailReceipt(organization.name, data.studentEmail, {
+      orNumber: String(data.orNumber || "").trim(),
+      date,
+      studentName,
+      itemDescription,
+      amountPaid: paid,
+      balanceDue,
+      paymentType: actualPaymentType,
+    }).catch(err => console.error("Async email receipt error:", err));
   }
 
-  // 7. Revalidate Cache
-  revalidatePath(`/department/${department}/collections`);
-  revalidatePath(`/department/${department}/penalties`);
-  revalidatePath(`/department/${department}/clearance`);
-  revalidatePath(`/department/${department}`);
+  // 8. Revalidate Cache
+  revalidatePath(`/department/${cleanDepartment}/collections`);
+  revalidatePath(`/department/${cleanDepartment}/penalties`);
+  revalidatePath(`/department/${cleanDepartment}/clearance`);
+  revalidatePath(`/department/${cleanDepartment}`);
 }

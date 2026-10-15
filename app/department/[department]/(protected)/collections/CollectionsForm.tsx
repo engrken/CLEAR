@@ -5,6 +5,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { fmt } from "@/lib/utils";
 import { recordPayment } from "./actions";
+import { ThemedAlert } from "@/lib/alerts";
 
 interface Student {
   studentId: string;
@@ -79,12 +80,10 @@ export default function CollectionsForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [receiptData, setReceiptData] = useState<any>(null);
 
-  // Filter items belonging to the currently selected category drop-down
   const currentCategoryItems = useMemo(() => {
     return collectionItems.filter((item) => item.category === category);
   }, [category, collectionItems]);
 
-  // Filter by isPackage boolean
   const packageItems = useMemo(() => {
     return currentCategoryItems.filter((item) => item.isPackage !== false);
   }, [currentCategoryItems]);
@@ -93,7 +92,6 @@ export default function CollectionsForm({
     return packageItems.reduce((sum, item) => sum + Number(item.amount || 0), 0);
   }, [packageItems]);
 
-  // Handle default or prefilled initialization for student
   useEffect(() => {
     if (!prefillId) return;
 
@@ -106,14 +104,12 @@ export default function CollectionsForm({
     }
   }, [prefillId, students]);
 
-  // Handle prefill overrides if coming from penalty logs
   useEffect(() => {
     if (prefillCategory) setCategory(prefillCategory);
     if (prefillDesc) setItemDescription(prefillDesc);
     if (prefillAmount) setAmountPaid(prefillAmount);
   }, [prefillCategory, prefillDesc, prefillAmount]);
 
-  // Auto-select item descriptions if NOT prefilled
   useEffect(() => {
     if (prefillDesc) {
       setFundAllocation("Others");
@@ -180,10 +176,17 @@ export default function CollectionsForm({
     e.preventDefault();
     const paid = parseFloat(amountPaid) || 0;
 
-    if (!studentId) return alert("Please select a valid student.");
-    if (paid <= 0) return alert("Please enter an amount greater than ₱0.00.");
+    if (!studentId) {
+      await ThemedAlert.fire({ icon: 'warning', title: 'Student Required', text: 'Please select a valid student.' });
+      return;
+    }
+    if (paid <= 0) {
+      await ThemedAlert.fire({ icon: 'warning', title: 'Invalid Amount', text: 'Please enter an amount greater than ₱0.00.' });
+      return;
+    }
     if (!prefillAmount && paid > standardRate) {
-      return alert(`Amount paid cannot exceed the standard rate of ${fmt(standardRate)}.`);
+      await ThemedAlert.fire({ icon: 'warning', title: 'Exceeds Rate', text: `Amount paid cannot exceed the standard rate of ${fmt(standardRate)}.` });
+      return;
     }
 
     setIsSubmitting(true);
@@ -202,7 +205,7 @@ export default function CollectionsForm({
         fundAllocation,
         ay,
         term,
-        penaltyId: penaltyId || undefined, // Sends penalty settlement hook
+        penaltyId: penaltyId || undefined,
       });
 
       setReceiptData({
@@ -230,7 +233,7 @@ export default function CollectionsForm({
       }
 
     } catch (err: any) {
-      alert("Error recording payment: " + (err?.message || "Unknown error"));
+      await ThemedAlert.fire({ icon: 'error', title: 'Transaction Failed', text: err?.message || 'Unknown error occurred.' });
     } finally {
       setIsSubmitting(false);
     }
@@ -245,15 +248,12 @@ export default function CollectionsForm({
     );
   }
 
-  // =========================================================
-  // 🖨️ PRINTABLE DIGITAL RECEIPT UI
-  // =========================================================
   if (receiptData) {
     return (
       <div className="d-flex flex-column align-items-center animation-fade-in text-body">
         <div className="alert alert-success w-100 shadow-sm border-success mb-4 text-center">
           <i className="bi bi-check-circle-fill fs-4 d-block mb-2 text-success"></i>
-          <strong>Payment successfully recorded!</strong> Penalty balance updated automatically.
+          <strong>Payment successfully recorded!</strong> Receipt dispatched and balances updated.
         </div>
 
         <div id="printable-receipt" className="card border-secondary shadow w-100 bg-body text-body" style={{ maxWidth: '450px' }}>
@@ -315,9 +315,6 @@ export default function CollectionsForm({
     );
   }
 
-  // =========================================================
-  // 📝 STANDARD PAYMENT FORM UI
-  // =========================================================
   return (
     <form onSubmit={handleSubmit} className="text-body">
       <div className="row g-2 mb-2">
@@ -356,7 +353,6 @@ export default function CollectionsForm({
         </div>
       </div>
 
-      {/* COLLECTION CATEGORY: Supports dropdown normally, or locks/prefills if penalty */}
       <div className="mb-2">
         <label className="form-label text-muted small fw-semibold">Collection Category</label>
         {prefillDesc ? (
@@ -375,7 +371,6 @@ export default function CollectionsForm({
         )}
       </div>
 
-      {/* ITEM DESCRIPTION: Supports dropdown normally, or locks/prefills if penalty */}
       <div className="mb-2">
         <label className="form-label text-muted small fw-semibold">Item Description</label>
         {prefillDesc ? (

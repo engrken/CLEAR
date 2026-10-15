@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireTabAccess } from "@/lib/permissions";
-import CollectionsForm from "./CollectionsForm";
+import CollectionsForm from "./CollectionsForms";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -39,6 +39,12 @@ export default async function CollectionsPage({
 
   const organization = await prisma.organization.findUnique({
     where: { subdomain: cleanDepartment },
+    select: {
+      id: true,
+      name: true,
+      activeAy: true,
+      activeTerm: true,
+    }
   });
 
   if (!organization) {
