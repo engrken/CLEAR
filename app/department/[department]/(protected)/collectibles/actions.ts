@@ -4,17 +4,17 @@
 
 import { prisma } from '@/lib/prisma';
 import { requireTabAccess } from '@/lib/permissions';
+import { logSystemAction } from '@/lib/logger';
 import { revalidatePath } from 'next/cache';
 
 // =========================================================================
 // HELPER FUNCTIONS (Internal to this module)
 // =========================================================================
 
-// Safe money parser
 function money(val: any, fieldName: string): number {
   const parsed = parseFloat(val);
   if (isNaN(parsed)) throw new Error(`Invalid monetary value for ${fieldName}`);
-  return parsed;
+  return Math.round(parsed * 100) / 100;
 }
 
 // =========================================================================
@@ -35,17 +35,19 @@ export async function assessStudentDue(
     term: string;
   }
 ) {
-  // 1. Verify Permission via Shared Guard
-  const customUser = await requireTabAccess("tab-collectibles");
-  const officerName = customUser.fullName || customUser.email || "System Administrator";
+  const cleanDepartment = decodeURIComponent(department).trim().toLowerCase();
+
+  // 1. Verify Permission via Shared Guard & Tenant scope
+  const customUser = await requireTabAccess("tab-collectibles", cleanDepartment);
+  const officerName = customUser.name || customUser.fullName || customUser.email || "System Administrator";
 
   // 2. Resolve Organization ID
   const organization = await prisma.organization.findUnique({
-    where: { subdomain: department.toLowerCase() }
+    where: { subdomain: cleanDepartment }
   });
 
   if (!organization) {
-    throw new Error(`Organization subdomain "${department}" not found.`);
+    throw new Error(`Organization subdomain "${cleanDepartment}" not found.`);
   }
 
   const orgId = organization.id;
@@ -57,30 +59,36 @@ export async function assessStudentDue(
     throw new Error("Amount due must be greater than zero.");
   }
 
-  // 4. Create Database Record
-  /*
-   * Collectible schema currently contains only:
-   * id, organizationId, category, AY, term,
-   * headcount, balanceDue, status, encodedBy.
-   *
-   * Therefore studentId, studentName, itemDescription,
-   * fundAllocation and date are intentionally NOT written
-   * here because those fields do not exist in the model.
-   */
+  if (!payload.studentId || !payload.studentName) {
+    throw new Error("Valid student identification is required.");
+  }
+
+  // 4. Create Database Record with complete student and item details
   await prisma.collectible.create({
     data: {
       organizationId: orgId,
       academicYear: payload.ay,
       term: payload.term,
       category: String(payload.category || "").trim(),
+      studentId: payload.studentId,
+      studentName: payload.studentName,
+      itemDescription: String(payload.itemDescription || "").trim(),
       balanceDue: amountDue,
       status: "Unpaid",
       encodedBy: officerName,
     },
   });
 
-  // 5. Revalidate Cache
-  revalidatePath(`/department/${department}/collectibles`);
+  // 5. Audit Logging
+  await logSystemAction(
+    orgId,
+    officerName,
+    "ASSESS_STUDENT_DUE",
+    `Assessed ₱${amountDue.toFixed(2)} (${payload.itemDescription}) for student ${payload.studentName} (${payload.studentId}).`
+  );
+
+  // 6. Revalidate Cache
+  revalidatePath(`/department/${cleanDepartment}/collectibles`);
 
   return {
     success: true,
@@ -94,17 +102,19 @@ export async function saveBulkCollectibles(
   ay: string,
   term: string
 ) {
+  const cleanDepartment = decodeURIComponent(department).trim().toLowerCase();
+
   // 1. Verify Permission via Shared Guard
-  const customUser = await requireTabAccess("tab-collectibles");
-  const officerName = customUser.fullName || customUser.email || "System Administrator";
+  const customUser = await requireTabAccess("tab-collectibles", cleanDepartment);
+  const officerName = customUser.name || customUser.fullName || customUser.email || "System Administrator";
 
   // 2. Resolve Organization ID
   const organization = await prisma.organization.findUnique({
-    where: { subdomain: department.toLowerCase() }
+    where: { subdomain: cleanDepartment }
   });
 
   if (!organization) {
-    throw new Error(`Organization subdomain "${department}" not found.`);
+    throw new Error(`Organization subdomain "${cleanDepartment}" not found.`);
   }
 
   const orgId = organization.id;
@@ -121,7 +131,7 @@ export async function saveBulkCollectibles(
       term,
       category: String(r?.category || "").trim(),
       headcount: Math.max(1, parseInt(r?.headcount, 10) || 1),
-      balanceDue: Math.max(0, Number.parseFloat(r?.total) || 0),
+      balanceDue: money(r?.total || 0, "Bulk total"),
       status: "Outstanding",
       encodedBy: officerName,
     }))
@@ -134,20 +144,14 @@ export async function saveBulkCollectibles(
     });
   }
 
-  // 5. Audit Log (If SystemLog table exists)
-  try {
-    await prisma.systemLog.create({
-      data: {
-        organizationId: orgId,
-        user: officerName,
-        action: "SAVE_COLLECTIBLES",
-        details: `Assessed bulk collectibles across ${prepared.length} categories.`,
-      }
-    });
-  } catch (error) {
-    console.warn("System logging failed (table might not exist yet):", error);
-  }
+  // 5. Audit Log
+  await logSystemAction(
+    orgId,
+    officerName,
+    "SAVE_BULK_COLLECTIBLES",
+    `Assessed bulk collectibles across ${prepared.length} categories.`
+  );
 
   // 6. Revalidate Cache
-  revalidatePath(`/department/${department}/collectibles`);
+  revalidatePath(`/department/${cleanDepartment}/collectibles`);
 }

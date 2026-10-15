@@ -1,6 +1,7 @@
 // /app/department/[department]/(protected)/collectibles/page.tsx
 
 import { prisma } from '@/lib/prisma';
+import { requireTabAccess } from '@/lib/permissions';
 import CollectiblesManager from './CollectiblesManager';
 import { Metadata } from 'next';
 
@@ -16,12 +17,20 @@ export default async function CollectiblesPage({
   searchParams?: Promise<{ ay?: string; term?: string }>;
 }) {
   const { department } = await params;
+  const cleanDepartment = decodeURIComponent(department).trim().toLowerCase();
+
+  // 🚀 SECURITY FIX: Enforce tab-level permissions for collectibles access
+  await requireTabAccess('tab-collectibles', cleanDepartment);
+
   const resolvedSearch = searchParams ? await searchParams : {};
-  const ay = resolvedSearch.ay || 'A.Y. 2026 - 2027';
-  const term = resolvedSearch.term || '1st Sem';
 
   const organization = await prisma.organization.findUnique({
-    where: { subdomain: department },
+    where: { subdomain: cleanDepartment },
+    select: {
+      id: true,
+      activeAy: true,
+      activeTerm: true,
+    }
   });
 
   if (!organization) {
@@ -32,6 +41,10 @@ export default async function CollectiblesPage({
       </div>
     );
   }
+
+  // 🚀 Dynamically link academic year and term to organization database defaults
+  const ay = resolvedSearch.ay || organization.activeAy || 'A.Y. 2026 - 2027';
+  const term = resolvedSearch.term || organization.activeTerm || '1st Sem';
 
   const [students, collectibles, funds] = await Promise.all([
     prisma.student.findMany({
@@ -51,7 +64,7 @@ export default async function CollectiblesPage({
     <div className="module card p-3 p-md-4 border-secondary shadow-sm">
       <h5 className="text-accent mb-3"><i className="bi bi-inbox me-2"></i>Receivables & Collectibles Ledger</h5>
       <CollectiblesManager 
-        department={department} 
+        department={cleanDepartment} 
         ay={ay} 
         term={term} 
         students={students} 

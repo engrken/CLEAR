@@ -111,7 +111,12 @@ export default function CollectiblesManager({
     const itemDesc = selectedItem === "CUSTOM" ? customName : selectedItem;
 
     if (!studentId || !itemDesc || amt <= 0) {
-      return alert("Please provide a valid student, description, and amount greater than ₱0.00.");
+      await ThemedAlert.fire({
+        icon: 'warning',
+        title: 'Validation Error',
+        text: 'Please provide a valid student, description, and amount greater than ₱0.00.'
+      });
+      return;
     }
 
     setIsSubmittingDue(true);
@@ -127,14 +132,24 @@ export default function CollectiblesManager({
         ay,
         term
       });
-      alert(`Assessed ₱${amt.toFixed(2)} for ${itemDesc} to ${studentName}. Clearance hold active.`);
+
+      await ThemedAlert.fire({
+        icon: 'success',
+        title: 'Collectible Assessed',
+        text: `Assessed ₱${amt.toFixed(2)} for ${itemDesc} to ${studentName}. Clearance hold active.`
+      });
+
       setDueSearch("");
       setStudentId("");
       setStudentName("");
       setAmountDue("0");
       setCustomName("");
     } catch (err: any) {
-      alert("Error: " + err.message);
+      await ThemedAlert.fire({
+        icon: 'error',
+        title: 'Assessment Failed',
+        text: err.message || 'Failed to record student due.'
+      });
     } finally {
       setIsSubmittingDue(false);
     }
@@ -251,7 +266,6 @@ export default function CollectiblesManager({
                 let desc = col.itemDescription || col.category;
                 const amt = col.balanceDue || col.amountDue || 0;
                 
-                // Regex fallback parser for migrated legacy data
                 if (!col.studentId || sName === 'Student') {
                   const match = desc.match(/(.+) - (.+) \((.+)\)$/);
                   if (match) {
