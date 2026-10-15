@@ -22,13 +22,12 @@ export default async function SummaryReportPage({
   const ay = resolvedSearch.ay || 'A.Y. 2026 - 2027';
   const term = resolvedSearch.term || '1st Sem';
 
-const organization = await prisma.organization.findUnique({
+  const organization = await prisma.organization.findUnique({
     where: { subdomain: cleanDepartment },
     select: { 
       id: true, 
       name: true, 
       logo: true,
-      // NEW: Fetch the signatories sorted by the 'order' column
       signatories: {
         orderBy: { order: 'asc' }
       } 
@@ -46,10 +45,10 @@ const organization = await prisma.organization.findUnique({
     <div className="mx-auto" style={{ maxWidth: '1150px', minWidth: 0 }}>
       <SummaryClient 
         department={department}
-		orgId={organization.id}
-        orgName={organization.name} // NEW: Passing the full name from the database
-		logoUrl={organization.logo}
-		initialSignatories={organization.signatories || []}
+        orgId={organization.id}
+        orgName={organization.name}
+        logoUrl={organization.logo}
+        initialSignatories={organization.signatories || []}
         ay={ay}
         term={term}
         termPkg={financials.termPkg}
@@ -59,9 +58,10 @@ const organization = await prisma.organization.findUnique({
         grandExpenseTotal={financials.grandExpenseTotal}
         collectibles={financials.collectiblesList}
         totalCollectiblesSum={financials.totalCollectibles}
-		cashierBalance={financials.cashierBalance}
+        cashierBalance={financials.cashierBalance}
         totalDeposited={financials.totalDeposited}
         totalWithdrawn={financials.totalWithdrawn}
+        remainingBalance={financials.remainingBalance}
       />
     </div>
   );

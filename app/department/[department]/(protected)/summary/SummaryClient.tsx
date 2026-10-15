@@ -22,12 +22,14 @@ export default function SummaryClient({
   grandExpenseTotal,
   collectibles,
   totalCollectiblesSum,
-  cashierBalance, // 🚀 NEW: Receive tracking data
+  cashierBalance,
   totalDeposited,
-  totalWithdrawn
+  totalWithdrawn,
+  remainingBalance
 }: any) {
   const router = useRouter();
-  const netBalance = grandCollectionTotal - grandExpenseTotal;
+  // 🚀 Use centralized engine remainingBalance (incorporates initial funds, rollovers, and unliquidated advances)
+  const netBalance = remainingBalance !== undefined ? remainingBalance : (grandCollectionTotal - grandExpenseTotal);
   const safeBalance = cashierBalance || 0;
 
   const [mounted, setMounted] = useState(false);
@@ -42,9 +44,6 @@ export default function SummaryClient({
 
   const displayLogo = logoUrl || getAssetUrl('engineering_logo.png');
 
-  // =========================================================
-  // SETTINGS MODAL STATE
-  // =========================================================
   const [showSettings, setShowSettings] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [signatories, setSignatories] = useState(initialSignatories || []);
@@ -102,7 +101,6 @@ export default function SummaryClient({
 
       <div className="card p-3 p-md-4 border-secondary shadow-sm bg-body text-body print-container">
         
-        {/* HEADER TOOLBAR */}
         <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4 d-print-none">
           <div>
             <h5 className="text-info m-0 fw-bold">COLLECTIONS & EXPENSES SUMMARY ({term})</h5>
@@ -118,7 +116,6 @@ export default function SummaryClient({
           </div>
         </div>
 
-        {/* ISO / INSTITUTIONAL PRINT HEADER */}
         <div className="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom border-dark border-opacity-50">
           <div style={{ width: '90px', flexShrink: 0 }} className="text-center">
             <img src={getAssetUrl('fcu.png')} alt="FCU Logo" style={{ width: '100%', maxHeight: '90px', objectFit: 'contain' }} />
@@ -140,7 +137,6 @@ export default function SummaryClient({
           </div>
         </div>
 
-        {/* COLLECTIONS SECTION */}
         <h6 className="text-info text-uppercase fw-bold mt-2">Collections ({term})</h6>
         <div className="table-responsive mb-4">
           <table className="table table-sm table-bordered border-dark align-middle text-body mb-0" style={{ fontSize: '0.85rem' }}>
@@ -203,7 +199,6 @@ export default function SummaryClient({
           </table>
         </div>
 
-        {/* EXPENSES SECTION */}
         <h6 className="text-danger text-uppercase fw-bold mt-3">Expenses ({term})</h6>
         <div className="table-responsive mb-4">
           <table className="table table-sm table-bordered border-dark align-middle text-body mb-0" style={{ fontSize: '0.85rem' }}>
@@ -238,7 +233,6 @@ export default function SummaryClient({
           </table>
         </div>
 
-        {/* COLLECTIBLES & RECEIVABLES SECTION */}
         <h6 className="text-warning text-uppercase fw-bold mt-3">Collectibles & Receivables ({term})</h6>
         <div className="text-muted small fst-italic mb-1" style={{ fontSize: '0.75rem' }}>NOTE: These are amounts to be collected from students who have not paid.</div>
         <div className="table-responsive mb-4">
@@ -274,18 +268,16 @@ export default function SummaryClient({
           </table>
         </div>
 
-        {/* REMAINING BALANCE (NET ENDING POSITION) */}
         <div className="card p-2 d-flex flex-row justify-content-between align-items-center flex-wrap gap-2 mb-4 bg-body-secondary border-dark print-border rounded-0">
           <div>
             <span className="fw-bold text-uppercase text-body">NET TREASURY BALANCE (NET ENDING POSITION):</span>
-            <div className="text-muted small" style={{ fontSize: '0.75rem' }}>Total Collections minus Total Liquidated Expenses</div>
+            <div className="text-muted small" style={{ fontSize: '0.75rem' }}>Total Dynamic Balance (including initial funds, rollovers & advances)</div>
           </div>
           <div className={`fs-5 fw-bold ${netBalance >= 0 ? 'text-success' : 'text-danger'}`}>
             {fmt(netBalance as any)}
           </div>
         </div>
 
-        {/* 🚀 NEW: FUND LOCATION / SAFEKEEPING STATUS */}
         <div className="card p-3 mb-4 bg-transparent border-dark text-body rounded-0 print-border">
           <h6 className="fw-bold text-uppercase mb-3"><i className="bi bi-safe2 me-2"></i>Fund Location / Safekeeping Status</h6>
           <div className="d-flex justify-content-between small mb-1">
@@ -307,7 +299,6 @@ export default function SummaryClient({
           </div>
         </div>
 
-        {/* DYNAMIC SIGNATURE BLOCK */}
         <div className="row mt-5 pt-3 text-body signature-block" style={{ fontSize: '0.85rem' }}>
           {signatories && signatories.length > 0 ? (
             signatories.map((sig: any, idx: number) => (
@@ -330,9 +321,6 @@ export default function SummaryClient({
         </div>
       </div>
       
-      {/* =========================================================
-          REPORT SETTINGS MODAL
-      ========================================================= */}
       {showSettings && (
         <div className="modal fade show d-block d-print-none" tabIndex={-1} style={{ backgroundColor: "rgba(0,0,0,0.6)" }}>
           <div className="modal-dialog modal-dialog-centered modal-lg">
@@ -345,7 +333,7 @@ export default function SummaryClient({
               </div>
               <div className="modal-body p-4">
                 <p className="small text-muted mb-3">
-                  Customize the official signatories for this department. These will appear at the bottom of the Summary and Liquidation reports. Dragging/reordering is determined by the order they appear below.
+                  Customize the official signatories for this department. These will appear at the bottom of the Summary and Liquidation reports.
                 </p>
 
                 {signatories.map((sig: any, idx: number) => (
