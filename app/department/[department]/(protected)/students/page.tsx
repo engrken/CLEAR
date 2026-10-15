@@ -1,4 +1,4 @@
-// /app/department/[department]/students/page.tsx
+// /app/department/[department]/(protected)/students/page.tsx
 
 import { prisma } from '@/lib/prisma';
 import { requireTabAccess } from '@/lib/permissions';
@@ -31,6 +31,11 @@ export default async function StudentsPage({
 
   const organization = await prisma.organization.findUnique({
     where: { subdomain: cleanDepartment },
+    select: {
+      id: true,
+      activeAy: true,
+      activeTerm: true,
+    }
   });
 
   if (!organization) {
@@ -46,7 +51,6 @@ export default async function StudentsPage({
   const ay = resolvedSearch.ay || organization.activeAy || 'A.Y. 2026 - 2027';
   const term = resolvedSearch.term || organization.activeTerm || '1st Sem';
 
-  // 1. Build dynamic Prisma where clause for the main list
   const whereClause: any = {
     organizationId: organization.id,
     ...(search ? {
@@ -59,27 +63,33 @@ export default async function StudentsPage({
     ...(yearFilter !== 'ALL' ? { yearLevel: yearFilter } : {}),
   };
 
-  // Push status filtering to DB layer to ensure accurate pagination
-  if (statusFilter === 'Inactive') {
+  // 🚀 FIX: Require an explicit Enrollment row to determine active enrollment status correctly
+  if (statusFilter === 'Enrolled') {
     whereClause.enrollments = {
-      some: { academicYear: ay, term, enrollmentStatus: { not: 'Enrolled' } }
+      some: { academicYear: ay, term, enrollmentStatus: 'Enrolled' }
     };
-  } else if (statusFilter === 'Enrolled') {
-    whereClause.NOT = {
-      enrollments: {
-        some: { academicYear: ay, term, enrollmentStatus: { not: 'Enrolled' } }
+  } else if (statusFilter === 'Inactive') {
+    whereClause.OR = [
+      {
+        enrollments: {
+          some: { academicYear: ay, term, enrollmentStatus: { not: 'Enrolled' } }
+        }
+      },
+      {
+        enrollments: {
+          none: { academicYear: ay, term }
+        }
       }
-    };
+    ];
   }
 
-  // 2. Fetch overall metrics and paginated records concurrently
-  const [totalDirectory, absoluteInactiveCount, totalFiltered, students] = await Promise.all([
+  const [totalDirectory, absoluteEnrolledCount, totalFiltered, students] = await Promise.all([
     prisma.student.count({ where: { organizationId: organization.id } }),
     prisma.student.count({
       where: {
         organizationId: organization.id,
         enrollments: {
-          some: { academicYear: ay, term, enrollmentStatus: { not: 'Enrolled' } }
+          some: { academicYear: ay, term, enrollmentStatus: 'Enrolled' }
         }
       }
     }),
@@ -97,12 +107,12 @@ export default async function StudentsPage({
     }),
   ]);
 
-  const notEnrolledCount = absoluteInactiveCount;
-  const enrolledCount = totalDirectory - notEnrolledCount;
+  const enrolledCount = absoluteEnrolledCount;
+  const notEnrolledCount = Math.max(0, totalDirectory - enrolledCount);
 
   const formattedStudents = students.map(s => {
     const termEnrollment = s.enrollments[0];
-    const status = termEnrollment?.enrollmentStatus || 'Enrolled';
+    const status = termEnrollment?.enrollmentStatus || 'Inactive';
     
     return {
       id: s.id,

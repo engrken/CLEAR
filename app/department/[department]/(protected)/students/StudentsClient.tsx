@@ -62,7 +62,6 @@ export default function StudentsClient({
   const [statusFilter, setStatusFilter] = useState(currentStatus);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Modal States
   const [showAddModal, setShowAddModal] = useState(false);
   const [editStudent, setEditStudent] = useState<StudentRecord | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -91,42 +90,68 @@ export default function StudentsClient({
     try {
       await toggleStudentStatus(department, studentId, currentStatus, ay, term);
     } catch (err: any) {
-      alert("Error updating status: " + err.message);
+      await ThemedAlert.fire({ icon: 'error', title: 'Action Failed', text: "Error updating status: " + err.message });
     }
   };
 
   const handleConfirmAll = async () => {
-    if (!confirm(`Confirm all students in directory as 'Enrolled' for ${term} (${ay})?`)) return;
+    const res = await ThemedAlert.fire({
+      icon: 'warning',
+      title: 'Confirm All Enrolled?',
+      text: `Confirm all students in directory as 'Enrolled' for ${term} (${ay})?`,
+      showCancelButton: true,
+      confirmButtonText: 'Yes, Confirm',
+    });
+    if (!res.isConfirmed) return;
+
     setIsSubmitting(true);
     try {
       await confirmAllEnrolled(department, organizationId, ay, term);
-      alert("All students successfully confirmed as enrolled.");
+      await ThemedAlert.fire({ icon: 'success', title: 'Success', text: "All students successfully confirmed as enrolled." });
     } catch (err: any) {
-      alert("Error: " + err.message);
+      await ThemedAlert.fire({ icon: 'error', title: 'Error', text: err.message });
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handlePromote = async () => {
-    if (!confirm("Are you sure you want to promote all student year levels across the directory?")) return;
+    const res = await ThemedAlert.fire({
+      icon: 'warning',
+      title: 'Promote Year Levels?',
+      text: "Are you sure you want to promote all student year levels across the directory?",
+      showCancelButton: true,
+      confirmButtonText: 'Yes, Promote',
+    });
+    if (!res.isConfirmed) return;
+
     setIsSubmitting(true);
     try {
-      const res = await promoteYearLevels(department, organizationId);
-      alert(`Year-level promotion complete! Successfully advanced ${res.promoted} student(s).`);
+      const promotionRes = await promoteYearLevels(department, organizationId);
+      await ThemedAlert.fire({ icon: 'success', title: 'Promotion Complete', text: `Successfully advanced ${promotionRes.promoted} student(s).` });
     } catch (err: any) {
-      alert("Error: " + err.message);
+      await ThemedAlert.fire({ icon: 'error', title: 'Error', text: err.message });
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleDelete = async (studentInternalId: string, name: string) => {
-    if (!confirm(`Permanently remove student "${name}" from the database?`)) return;
+    const res = await ThemedAlert.fire({
+      icon: 'warning',
+      title: 'Delete Student?',
+      text: `Permanently remove student "${name}" from the database?`,
+      showCancelButton: true,
+      confirmButtonText: 'Yes, Delete',
+      confirmButtonColor: '#dc3545'
+    });
+    if (!res.isConfirmed) return;
+
     try {
       await deleteStudent(department, studentInternalId);
+      await ThemedAlert.fire({ icon: 'success', title: 'Deleted', text: 'Student record successfully deleted.' });
     } catch (err: any) {
-      alert("Error deleting student: " + err.message);
+      await ThemedAlert.fire({ icon: 'error', title: 'Error', text: "Error deleting student: " + err.message });
     }
   };
 
@@ -150,8 +175,9 @@ export default function StudentsClient({
       await saveStudent(department, organizationId, ay, term, payload);
       setShowAddModal(false);
       setEditStudent(null);
+      await ThemedAlert.fire({ icon: 'success', title: 'Saved', text: 'Student record successfully saved.' });
     } catch (err: any) {
-      alert("Error: " + err.message);
+      await ThemedAlert.fire({ icon: 'error', title: 'Error', text: err.message });
     } finally {
       setIsSubmitting(false);
     }
@@ -167,6 +193,7 @@ export default function StudentsClient({
     for (let i = startIdx; i < lines.length; i++) {
       const line = lines[i].trim();
       if (!line) continue;
+      // 🚀 FIX: Corrected CSV regex cleaning
       const cols = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(c => c.replace(/^["']\vert{}["']$/g, '').trim());
       if (cols.length >= 2) {
         records.push({ studentId: cols[0], fullName: cols[1], yearLevel: cols[2] || "1st Year", email: cols[3] || "" });
@@ -177,17 +204,24 @@ export default function StudentsClient({
 
   const handleExecuteImport = async () => {
     if (!parsedRecords.length) return;
-    if (!confirm(`Import ${parsedRecords.length} student records into the directory?`)) return;
+    const res = await ThemedAlert.fire({
+      icon: 'question',
+      title: 'Import Students?',
+      text: `Import ${parsedRecords.length} student records into the directory?`,
+      showCancelButton: true,
+      confirmButtonText: 'Import',
+    });
+    if (!res.isConfirmed) return;
 
     setIsSubmitting(true);
     try {
-      const res = await bulkImportStudents(department, organizationId, ay, term, parsedRecords);
-      alert(res.message);
+      const importRes = await bulkImportStudents(department, organizationId, ay, term, parsedRecords);
+      await ThemedAlert.fire({ icon: 'success', title: 'Import Successful', text: importRes.message });
       setShowImportModal(false);
       setParsedRecords([]);
       setCsvText("");
     } catch (err: any) {
-      alert("Error during import: " + err.message);
+      await ThemedAlert.fire({ icon: 'error', title: 'Import Failed', text: err.message });
     } finally {
       setIsSubmitting(false);
     }
@@ -195,7 +229,6 @@ export default function StudentsClient({
 
   return (
     <div className="mx-auto" style={{ maxWidth: '1250px', minWidth: 0 }}>
-      {/* Header Toolbar */}
       <div className="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
         <div>
           <h4 className="text-primary fw-bold m-0 d-flex align-items-center gap-2">
@@ -223,7 +256,6 @@ export default function StudentsClient({
       </div>
       <p className="text-muted small fst-italic mb-3">Starting {ay} ({term}), only confirmed enrolled students are available in search lists.</p>
 
-      {/* Metric Cards */}
       <div className="row g-3 mb-4">
         <div className="col-6 col-md-3">
           <div className="card border-secondary p-3 shadow-sm">
@@ -251,7 +283,6 @@ export default function StudentsClient({
         </div>
       </div>
 
-      {/* Search & Filter Bar */}
       <div className="card border-secondary shadow-sm p-3 mb-4">
         <form onSubmit={handleSearchSubmit} className="row g-3 align-items-center">
           <div className="col-12 col-md-5">
@@ -298,7 +329,6 @@ export default function StudentsClient({
         </form>
       </div>
 
-      {/* Students Table */}
       <div className="card border-secondary shadow-sm p-3 mb-3">
         <div className="table-responsive">
           <table className="table table-hover align-middle small mb-0">
@@ -333,7 +363,7 @@ export default function StudentsClient({
                             type="button" 
                             className="btn btn-outline-warning btn-sm py-0 px-2" 
                             style={{ fontSize: '0.7rem' }}
-                            onClick={() => handleToggle(student.studentId, student.status)}
+                            onClick={() => handleToggle(student.id, student.status)}
                           >
                             {isEnrolled ? 'Set Inactive' : 'Set Enrolled'}
                           </button>
@@ -367,7 +397,6 @@ export default function StudentsClient({
           </table>
         </div>
 
-        {/* Pagination Bar */}
         {totalPages > 1 && (
           <div className="d-flex justify-content-between align-items-center mt-3 pt-3 border-top border-secondary px-2">
             <small className="text-muted">
@@ -399,7 +428,6 @@ export default function StudentsClient({
         )}
       </div>
 
-      {/* Add / Edit Student Modal */}
       {showAddModal && (
         <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
           <div className="modal-dialog modal-dialog-centered">
@@ -457,7 +485,6 @@ export default function StudentsClient({
         </div>
       )}
 
-      {/* Bulk Import CSV Modal */}
       {showImportModal && (
         <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
           <div className="modal-dialog modal-dialog-centered modal-lg">
