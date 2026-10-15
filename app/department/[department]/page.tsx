@@ -90,17 +90,12 @@ export default async function EntityOverviewPage({
             
             <div className="mb-4 position-relative" style={{ zIndex: 1 }}>
               <div className="d-inline-flex align-items-center justify-content-center bg-body-tertiary border border-secondary-subtle rounded-circle mb-3 shadow" style={{ width: '100px', height: '100px', padding: '15px' }}>
-                <img 
-                  src={orgLogo} 
-                  alt={`${organization.name} Logo`} 
-                  style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                  onError={(e: any) => {
-                    // Fallback to generic icon if image fails to load
-                    e.target.style.display = 'none';
-                    e.target.parentNode.innerHTML = '<i class="bi bi-building fs-1 text-info"></i>';
-                  }}
-                />
-              </div>
+  <img 
+    src={orgLogo} 
+    alt={`${organization.name} Logo`} 
+    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+  />
+</div>
               
               <h3 className="fw-bold mb-2" style={{ lineHeight: '1.3' }}>
                 {organization.name}

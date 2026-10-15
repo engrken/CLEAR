@@ -1,6 +1,7 @@
 // /app/department/[department]/(protected)/cashier-remittance/page.tsx
 
 import { prisma } from "@/lib/prisma";
+import { requireTabAccess } from "@/lib/permissions";
 import CashierRemittanceForm from "./CashierRemittanceForm";
 import { Metadata } from "next";
 
@@ -16,13 +17,15 @@ export default async function CashierRemittancePage({
   searchParams?: Promise<{ ay?: string; term?: string; }>;
 }) {
   const { department } = await params;
+  const cleanDepartment = decodeURIComponent(department).toLowerCase().trim();
+
+  // 🚀 SECURITY FIX: Enforce tab-level permissions for cashier deposit access
+  await requireTabAccess('tab-payment', cleanDepartment);
+
   const resolvedSearch = searchParams ? await searchParams : {};
 
-  const ay = resolvedSearch.ay || "A.Y. 2026 - 2027";
-  const term = resolvedSearch.term || "1st Sem";
-
   const organization = await prisma.organization.findUnique({
-    where: { subdomain: department },
+    where: { subdomain: cleanDepartment },
   });
 
   if (!organization) {
@@ -32,6 +35,10 @@ export default async function CashierRemittancePage({
       </div>
     );
   }
+
+  // 🚀 Dynamically link academic year and term to organization database defaults
+  const ay = resolvedSearch.ay || organization.activeAy || "A.Y. 2026 - 2027";
+  const term = resolvedSearch.term || organization.activeTerm || "1st Sem";
 
   const funds = await prisma.fund.findMany({
     where: { organizationId: organization.id, academicYear: ay, term },
@@ -49,7 +56,7 @@ export default async function CashierRemittancePage({
         <i className="bi bi-safe me-2"></i> University Cashier Safekeeping
       </h5>
       <CashierRemittanceForm 
-        department={department} 
+        department={cleanDepartment} 
         ay={ay} 
         term={term} 
         funds={funds} 
