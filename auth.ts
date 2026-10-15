@@ -61,10 +61,6 @@ export const {
               .toLowerCase()
           : undefined;
 
-        console.log("AUTH EMAIL:", email);
-        console.log("AUTH DEPARTMENT:", department);
-        console.log("AUTH CODE RECEIVED:", !!code);
-
         if (!email || !code) {
           throw new CustomAuthError(
             "Email and verification code are required."
@@ -91,12 +87,17 @@ export const {
             );
           }
 
-          // 🚀 FIX: Hash incoming code with SHA-256 to match the database hash
-          const submittedHash = crypto.createHash('sha256').update(code).digest('hex');
-          const storedBuf = Buffer.from(tokenRecord.token, 'utf8');
-          const submittedBuf = Buffer.from(submittedHash, 'utf8');
+          // 🚀 FIX: Compare plaintext stored token securely using timingSafeEqual
+          const storedCode = String(tokenRecord.token || '').trim();
+          const submittedCode = String(code || '').trim();
 
-          if (storedBuf.length !== submittedBuf.length || !crypto.timingSafeEqual(storedBuf, submittedBuf)) {
+          const storedBuf = Buffer.from(storedCode, 'utf8');
+          const submittedBuf = Buffer.from(submittedCode, 'utf8');
+
+          if (
+            storedBuf.length !== submittedBuf.length ||
+            !crypto.timingSafeEqual(storedBuf, submittedBuf)
+          ) {
             throw new CustomAuthError(
               "Invalid Super Admin verification code."
             );
@@ -188,12 +189,17 @@ export const {
           );
         }
 
-        // 🚀 FIX: Hash incoming department OTP code before timing-safe comparison
-        const submittedUserHash = crypto.createHash('sha256').update(code).digest('hex');
-        const storedUserBuf = Buffer.from(user.otpCode.trim(), 'utf8');
-        const submittedUserBuf = Buffer.from(submittedUserHash, 'utf8');
+        // 🚀 FIX: Compare user plaintext otpCode securely using timingSafeEqual
+        const storedUserCode = String(user.otpCode || '').trim();
+        const submittedUserCode = String(code || '').trim();
 
-        if (storedUserBuf.length !== submittedUserBuf.length || !crypto.timingSafeEqual(storedUserBuf, submittedUserBuf)) {
+        const storedUserBuf = Buffer.from(storedUserCode, 'utf8');
+        const submittedUserBuf = Buffer.from(submittedUserCode, 'utf8');
+
+        if (
+          storedUserBuf.length !== submittedUserBuf.length ||
+          !crypto.timingSafeEqual(storedUserBuf, submittedUserBuf)
+        ) {
           console.log("AUTH OTP MISMATCH");
           throw new CustomAuthError(
             "Invalid verification code."
