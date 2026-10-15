@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 
-import DepartmentSidebar from "@/app/department/[department]/Sidebar"; // Make sure this path exactly matches your file structure
+import DepartmentSidebar from "@/app/department/[department]/Sidebar";
 import TopHeader from "@/app/department/[department]/TopHeader";
 import Footer from "@/app/department/[department]/components/Footer";
 import DataPrivacyModal from "@/app/department/[department]/components/DataPrivacyModal";
@@ -13,11 +13,11 @@ interface ProtectedDepartmentLayoutProps {
   params: Promise<{ department: string }>;
 }
 
-// 1. Define the custom user type for NextAuth to satisfy TypeScript
 interface ExtendedUser {
   id?: string;
   name?: string | null;
   email?: string | null;
+  username?: string | null;
   role?: string;
   organizationId?: string;
   department?: string;
@@ -34,9 +34,6 @@ export default async function ProtectedDepartmentLayout({
     .trim()
     .toLowerCase();
 
-  // ---------------------------------------------------------
-  // INVALID DEPARTMENT CHECK
-  // ---------------------------------------------------------
   if (!cleanDepartment) {
     return (
       <div className="d-flex min-vh-100 align-items-center justify-content-center">
@@ -45,23 +42,13 @@ export default async function ProtectedDepartmentLayout({
     );
   }
 
-  // ---------------------------------------------------------
-  // AUTHENTICATION STATE
-  // ---------------------------------------------------------
   const session = await auth();
 
-  // If unauthenticated, DO NOT redirect (prevents infinite loops).
-  // Return raw children so page.tsx can render the OtpModal/Login UI.
   if (!session?.user) {
     return <>{children}</>;
   }
 
-  // ---------------------------------------------------------
-  // USER INFORMATION FROM NEXTAUTH (WITH TYPESCRIPT FIX)
-  // ---------------------------------------------------------
-  // 2. Cast session.user to ExtendedUser
   const authUser = session.user as ExtendedUser;
-
   const userRole = authUser.role?.trim().toLowerCase() || "officer";
 
   const allowedTabs = Array.isArray(authUser.allowedTabs)
@@ -71,6 +58,7 @@ export default async function ProtectedDepartmentLayout({
   const currentUser = {
     id: authUser.id || "",
     fullName: authUser.name || "Department Officer",
+    username: authUser.username || "N/A", // 🚀 Fixed F40: Added username property
     role: authUser.role || "OFFICER",
     email: authUser.email || "",
     organizationId: authUser.organizationId || "",
@@ -78,14 +66,10 @@ export default async function ProtectedDepartmentLayout({
     allowedTabs,
   };
 
-  // ---------------------------------------------------------
-  // ORGANIZATION / DEPARTMENT CHECK
-  // ---------------------------------------------------------
   const organization = await prisma.organization.findUnique({
     where: {
       subdomain: cleanDepartment,
     },
-    // ADDED: Make sure we fetch the logo and name so the sidebar can use them
     select: {
       id: true,
       name: true,
@@ -111,18 +95,17 @@ export default async function ProtectedDepartmentLayout({
     );
   }
 
-  // ---------------------------------------------------------
-  // AUTHORIZATION & TENANT ISOLATION
-  // ---------------------------------------------------------
-  // Note: "officer" was added to prevent default department officers from being locked out.
+  // 🚀 Fixed F34: Included treasurer, auditor, and viewer explicitly in allowedRoles
   const allowedRoles = new Set([
     "admin",
     "administrator",
     "master",
     "auditor",
     "audit",
+    "treasurer",
+    "viewer",
     "superadmin",
-    "officer" 
+    "officer"
   ]);
 
   const isGlobalAdmin = userRole === "superadmin" || userRole === "master";
@@ -141,9 +124,6 @@ export default async function ProtectedDepartmentLayout({
     }
   }
 
-  // ---------------------------------------------------------
-  // PROTECTED APPLICATION SHELL
-  // ---------------------------------------------------------
   return (
     <div
       className="d-flex min-vh-100"
@@ -154,8 +134,8 @@ export default async function ProtectedDepartmentLayout({
     >
       <DepartmentSidebar
         department={cleanDepartment}
-        orgName={organization.name} // NEW: Pass the name to the sidebar
-        logoUrl={organization.logo} // NEW: Pass the blob URL to the sidebar
+        orgName={organization.name}
+        logoUrl={organization.logo}
         currentUser={currentUser}
         defaultAy={organization.activeAy || undefined}
         defaultTerm={organization.activeTerm || undefined}
