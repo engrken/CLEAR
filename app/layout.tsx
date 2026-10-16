@@ -30,7 +30,8 @@ export default function RootLayout({
         {/* Components must be strictly inside the body */}
         <DataPrivacyModal />
         
-        <Analytics />
+        {/* Vercel Analytics only works on Vercel; elsewhere (the VPS) its script 404s */}
+        {process.env.VERCEL && <Analytics />}
         
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" async />
 		
