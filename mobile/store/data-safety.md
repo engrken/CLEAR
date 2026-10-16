@@ -8,7 +8,7 @@ Play Console → **Policy and programs → App content → Data safety**. The an
 | --- | --- |
 | Does your app collect or share any of the required user data types? | **Yes** |
 | Is all of the user data collected by your app encrypted in transit? | **Yes**: release builds talk only to `https://clear.rupertbulquerin.com/api/mobile`. (The `development` build profile uses plain HTTP to a local server; it is never shipped to Play.) |
-| Do you provide a way for users to request that their data is deleted? | **Yes**: by email to the CLEAR administrator today. A web request page is recommended (see [NOTES.md](NOTES.md)). |
+| Do you provide a way for users to request that their data is deleted? | **Yes**: https://clear.rupertbulquerin.com/account-deletion (request by email to clearsysadmin@gmail.com). Live after the next web deploy. |
 
 ## Data types
 
@@ -47,4 +47,4 @@ Still state a deletion process in the privacy policy and on a web page, because 
 3. Financial records (payments, OR numbers, remittances) are kept for the organization's audit period, because they are the organization's books and other students' clearance depends on them. Say this plainly in the policy.
 4. Payment proof images are deleted on request once the remittance has been verified or invalidated.
 
-Steps 2–4 need a real procedure on the web side; see [NOTES.md](NOTES.md).
+These steps are published at https://clear.rupertbulquerin.com/account-deletion (commit 23392e8, live after the next web deploy). It keeps financial records for the academic year plus up to 5 years.

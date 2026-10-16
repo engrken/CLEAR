@@ -9,6 +9,8 @@ Checked 2026-10-16. The page is live (HTTP 200), public, not behind a login, and
 - That financial records, liquidations and audit logs are stored, and in an encrypted database.
 - A contact email (`clearsysadmin@gmail.com`).
 
+> **Status 2026-10-16:** the Play Store compliance session rewrote `/privacy` to cover all 11 gaps below and added `/account-deletion` (commit 23392e8). **Neither is live until `deploy\deploy.ps1` runs.** Re-check https://clear.rupertbulquerin.com/privacy after the deploy, before entering the URL in Play Console.
+
 ## Gaps to fix before submitting to Play
 
 Play rejects policies that don't match the Data safety form, so the page should be updated to say:
