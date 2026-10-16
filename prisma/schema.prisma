@@ -36,6 +36,7 @@ model Organization {
   realignments      FundRealignment[]
   collectionSetups  CollectionSetup[]
   signatories   Signatory[]
+  mobileSessions MobileSession[]
 }
 
 model Signatory {
@@ -296,6 +297,8 @@ model TenantUser {
   
   updatedAt      DateTime     @updatedAt
 
+  mobileSessions MobileSession[]
+
   @@unique([organizationId, userId])
   @@unique([organizationId, username])
   @@unique([organizationId, email])
@@ -360,4 +363,25 @@ model AuthThrottle {
   lockedUntil DateTime?
   lastSentAt  DateTime?
   updatedAt   DateTime  @updatedAt
+}
+
+// Mobile app sign-ins (Phase 2). The app holds an opaque bearer token; only its
+// SHA-256 hash is stored. A session is bound to one officer in one organization
+// and can be revoked (sign-out, account deactivation) before it expires.
+model MobileSession {
+  id             String       @id @default(cuid())
+  tokenHash      String       @unique
+  tenantUserId   String
+  organizationId String
+  createdAt      DateTime     @default(now())
+  expiresAt      DateTime
+  lastUsedAt     DateTime     @default(now())
+  revokedAt      DateTime?
+  userAgent      String?
+
+  tenantUser     TenantUser   @relation(fields: [tenantUserId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([tenantUserId])
+  @@index([organizationId])
 }
