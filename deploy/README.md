@@ -81,6 +81,9 @@ return to `main`. `~/clear-sys/REVISION` shows the deployed commit.
 
 - Vercel Analytics is only rendered on Vercel; the Blob store (logos) keeps working
   with its token.
-- Emails go out through the same Gmail SMTP account as before.
+- Emails (sign-in codes, receipts) go out through **Resend** SMTP as
+  `CLEAR System <noreply@clear.rupertbulquerin.com>` (Resend account `rupert2133`,
+  Tokyo region). DKIM/SPF/DMARC records for it are in Cloudflare. To replace the
+  API key: `powershell -File deploy\set-resend-smtp.ps1` (prompts, input hidden).
 - Once the VPS is live, retire the Vercel deployment (or keep it as a fallback
   until the new domain has been verified).
