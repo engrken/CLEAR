@@ -202,7 +202,7 @@ export async function submitOnlineRemittance(
   const orgId = organization.id;
 
   // =========================================================
-  // 1. IP-BASED RATE LIMITING (Using AuthThrottle Table)
+  // 1. IP-BASED RATE LIMITING (Using AuthThrottle Model)
   // =========================================================
   const headersList = await headers();
   const clientIp = headersList.get('x-forwarded-for') || 'unknown';
@@ -212,30 +212,31 @@ export async function submitOnlineRemittance(
   const windowStartThreshold = new Date(now.getTime() - RATE_LIMIT_WINDOW_MS);
 
   let throttle = await prisma.authThrottle.findUnique({
-    where: { identifier: throttleKey },
+    where: { key: throttleKey },
   });
 
   if (throttle) {
-    if (throttle.windowStart > windowStartThreshold) {
-      if (throttle.attempts >= MAX_SUBMISSIONS_IN_WINDOW) {
+    const lastSent = throttle.lastSentAt ? new Date(throttle.lastSentAt) : null;
+    if (lastSent && lastSent > windowStartThreshold) {
+      if (throttle.failedCount >= MAX_SUBMISSIONS_IN_WINDOW) {
         throw new Error('Too many payment proof submissions from your network. Please wait 10 minutes before trying again.');
       }
       await prisma.authThrottle.update({
-        where: { identifier: throttleKey },
-        data: { attempts: throttle.attempts + 1 },
+        where: { key: throttleKey },
+        data: { failedCount: throttle.failedCount + 1 },
       });
     } else {
       await prisma.authThrottle.update({
-        where: { identifier: throttleKey },
-        data: { attempts: 1, windowStart: now },
+        where: { key: throttleKey },
+        data: { failedCount: 1, lastSentAt: now },
       });
     }
   } else {
     await prisma.authThrottle.create({
       data: {
-        identifier: throttleKey,
-        attempts: 1,
-        windowStart: now,
+        key: throttleKey,
+        failedCount: 1,
+        lastSentAt: now,
       },
     });
   }
