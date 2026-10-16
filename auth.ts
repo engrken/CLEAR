@@ -87,12 +87,17 @@ export const {
             );
           }
 
-          // 🚀 FIX: Compare plaintext stored token securely using timingSafeEqual
-          const storedCode = String(tokenRecord.token || '').trim();
-          const submittedCode = String(code || '').trim();
+          if (tokenRecord.expires < new Date()) {
+            throw new CustomAuthError(
+              "Super Admin verification code has expired."
+            );
+          }
 
-          const storedBuf = Buffer.from(storedCode, 'utf8');
-          const submittedBuf = Buffer.from(submittedCode, 'utf8');
+          const submittedHash = crypto.createHash('sha256').update(code).digest('hex');
+          const storedHash = String(tokenRecord.token || '').trim();
+
+          const storedBuf = Buffer.from(storedHash, 'utf8');
+          const submittedBuf = Buffer.from(submittedHash, 'utf8');
 
           if (
             storedBuf.length !== submittedBuf.length ||
@@ -100,12 +105,6 @@ export const {
           ) {
             throw new CustomAuthError(
               "Invalid Super Admin verification code."
-            );
-          }
-
-          if (tokenRecord.expires < new Date()) {
-            throw new CustomAuthError(
-              "Super Admin verification code has expired."
             );
           }
 
@@ -146,10 +145,11 @@ export const {
           );
         }
 
+        // 🚀 Synchronized: Case-insensitive organization lookup
         const organization =
-          await prisma.organization.findUnique({
+          await prisma.organization.findFirst({
             where: {
-              subdomain: department,
+              subdomain: { equals: department, mode: 'insensitive' },
             },
           });
 
@@ -159,11 +159,12 @@ export const {
           );
         }
 
+        // 🚀 Synchronized: Case-insensitive email lookup for tenant users
         const user =
           await prisma.tenantUser.findFirst({
             where: {
               organizationId: organization.id,
-              email,
+              email: { equals: email, mode: 'insensitive' },
               status: "Active",
             },
           });
@@ -189,12 +190,11 @@ export const {
           );
         }
 
-        // 🚀 FIX: Compare user plaintext otpCode securely using timingSafeEqual
-        const storedUserCode = String(user.otpCode || '').trim();
-        const submittedUserCode = String(code || '').trim();
+        const submittedUserHash = crypto.createHash('sha256').update(code).digest('hex');
+        const storedUserHash = String(user.otpCode || '').trim();
 
-        const storedUserBuf = Buffer.from(storedUserCode, 'utf8');
-        const submittedUserBuf = Buffer.from(submittedUserCode, 'utf8');
+        const storedUserBuf = Buffer.from(storedUserHash, 'utf8');
+        const submittedUserBuf = Buffer.from(submittedUserHash, 'utf8');
 
         if (
           storedUserBuf.length !== submittedUserBuf.length ||
