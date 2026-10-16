@@ -125,14 +125,17 @@ The bundle ID is already set. You'll need an Apple Developer account (USD 99/yea
 
 ## Play Console App content status (2026-10-16)
 
-| Section | Status | Answers |
-| --- | --- | --- |
-| Ads | Saved | No ads |
-| Government apps | Saved | No |
-| Health | Saved | No health features |
-| Financial features | Saved | "My app doesn't provide any financial features" (record-keeping only) |
-| Content rating | Saved (IARC completed) | All Other App Types; user content sharing Yes (receipt images to org officers), interactions limited to invited members, no public sharing, no block/report/chat; everything else No. Result: Everyone / PEGI 3 / USK 0 / 3+. IARC contact: clearsysadmin@gmail.com |
-| Data safety | **Draft** | As [data-safety.md](data-safety.md); no in-app account creation, accounts made outside the app ("employment or enterprise"); deletion URL `/account-deletion`. Final Save unlocks after Target audience. |
-| Sign in details (App access) | Not started | Waits for the web deploy and the production demo code ([app-access.md](app-access.md)) |
-| Target audience | Blocked | Play requires Sign in details first. Planned: 18+ (add 16–17 if first-years use it) |
-| Privacy policy | Not started | Enter `https://clear.rupertbulquerin.com/privacy` after the deploy |
+All App content sections are saved (nothing is sent to Google until a release is sent for review).
+
+| Section | Answers |
+| --- | --- |
+| Privacy policy | `https://clear.rupertbulquerin.com/privacy` |
+| Sign in details | Demo officer (treasurer), `reviewer@demo.clear.invalid`, code = `DEMO_REVIEWER_CODE` (pasted by the user; never commit it), full access ticked; instructions as in [app-access.md](app-access.md), shortened to 490 chars |
+| Ads | No ads |
+| Content rating | IARC completed: All Other App Types; user content sharing Yes (receipt images to org officers), interactions limited to invited members, no public sharing, no block/report/chat; everything else No. Everyone / PEGI 3 / USK 0 / 3+. IARC contact clearsysadmin@gmail.com |
+| Target audience | 18 and over |
+| Data safety | As [data-safety.md](data-safety.md); no in-app account creation (enterprise accounts made outside the app); deletion URL `/account-deletion` |
+| Advertising ID | No (`com.google.android.gms.permission.AD_ID` is also in `blockedPermissions`) |
+| Government apps / Financial features / Health | No / none / none |
+
+Builds (EAS, @rupert2133s-team/clear-mobile, EAS-managed upload key): preview APK versionCode 1, production AAB versionCode 2.
