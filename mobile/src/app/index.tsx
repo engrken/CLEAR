@@ -4,7 +4,8 @@ import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { api } from '@/api';
 import fcuSeal from '@/assets/images/fcu-seal.png';
-import { Banner, Card, Icon, OrgMark, Screen, Text } from '@/components/ui';
+import { Banner, Button, Card, Icon, OrgMark, Screen, Text } from '@/components/ui';
+import { PRIVACY_URL, openWebPage } from '@/lib/links';
 import { useAsync } from '@/lib/use-async';
 import { radius, spacing, useTheme } from '@/theme';
 
@@ -59,6 +60,10 @@ export default function Gateway() {
           Filamer Christian University, Inc. Your data is processed under the Data Privacy Act of 2012 (RA 10173).
         </Text>
       </Card>
+
+      <Button variant="ghost" size="sm" icon="shield" style={{ alignSelf: 'center' }} onPress={() => openWebPage(PRIVACY_URL)}>
+        Privacy policy
+      </Button>
     </Screen>
   );
 }

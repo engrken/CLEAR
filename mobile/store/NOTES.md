@@ -21,6 +21,7 @@ Things this release prep couldn't do inside its scope (`eas.json`, `app.json` bu
 - **Play reviewer access.** Officer sign-in sends a code to the officer's email; a Google reviewer can't read that inbox, and Play rejects apps whose restricted parts reviewers can't open. Option: a `demo` organization with seeded fake data and one viewer/treasurer officer whose code is fixed or delivered somewhere the reviewer can see, limited to that org only and easy to switch off. Don't weaken sign-in for real organizations.
 - **Privacy policy** (`app/privacy/page.tsx`): see [privacy-policy-review.md](privacy-policy-review.md).
 - **Deletion requests:** an `/account-deletion` web page and an admin procedure (deactivate officer, revoke mobile sessions, delete proof images on request). See [data-safety.md](data-safety.md#account-deletion).
+- ~~**In-app links:** `/account-deletion` link from the More screen.~~ Done 2026-10-16: the officer More screen links "Privacy policy" and "Delete my account or data", and the signed-out gateway links the privacy policy (URLs in `src/lib/links.ts`).
 
 ## For the user (Rupert)
 

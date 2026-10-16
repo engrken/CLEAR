@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Button, Card, Icon, Screen, Text, type IconName } from '@/components/ui';
+import { ACCOUNT_DELETION_URL, PRIVACY_URL, openWebPage } from '@/lib/links';
 import { useOfficerSession, useSession } from '@/lib/session';
 import { spacing, useTheme } from '@/theme';
 
@@ -14,6 +15,12 @@ const MODULES: { tab: string; title: string; body: string; icon: IconName }[] = 
   { tab: 'tab-void', title: 'Void center', body: 'Reverse ORs and penalties', icon: 'alert' },
   { tab: 'tab-reports', title: 'Reports', body: 'Financial summary and exports', icon: 'wallet' },
   { tab: 'tab-users', title: 'Officers', body: 'Accounts and permissions', icon: 'people' },
+];
+
+// Public web pages, opened in the browser.
+const LINKS: { url: string; title: string; body: string; icon: IconName }[] = [
+  { url: PRIVACY_URL, title: 'Privacy policy', body: 'What CLEAR collects and why', icon: 'shield' },
+  { url: ACCOUNT_DELETION_URL, title: 'Delete my account or data', body: 'How to request deletion', icon: 'person' },
 ];
 
 export default function More() {
@@ -46,6 +53,28 @@ export default function More() {
               <Text variant="bodySm" color="inkMuted">{m.body}</Text>
             </View>
             <Text variant="caption" color="inkMuted">Soon</Text>
+          </Pressable>
+        ))}
+      </Card>
+
+      <Card padded={false} style={{ overflow: 'hidden' }}>
+        {LINKS.map((l, i) => (
+          <Pressable
+            key={l.url}
+            accessibilityRole="link"
+            accessibilityHint="Opens in the browser"
+            onPress={() => openWebPage(l.url)}
+            style={({ pressed }) => [
+              styles.item,
+              { backgroundColor: pressed ? c.accentTint : c.card },
+              i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border },
+            ]}>
+            <Icon name={l.icon} size={20} color="accentInk" />
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text variant="bodyStrong">{l.title}</Text>
+              <Text variant="bodySm" color="inkMuted">{l.body}</Text>
+            </View>
+            <Icon name="forward" size={16} color="inkMuted" />
           </Pressable>
         ))}
       </Card>
