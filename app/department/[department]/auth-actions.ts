@@ -9,6 +9,8 @@ import { isSuperAdminEmail } from '@/lib/permissions';
 import { auth } from '@/auth';
 
 const MAX_OTP_ATTEMPTS = 5;
+const MAX_OTP_REQUESTS_PER_DAY = 10;
+const RATE_LIMIT_WINDOW_MS = 24 * 60 * 60 * 1000; // 24 Hours
 
 export async function requestOtp(
   department: string,
@@ -79,7 +81,7 @@ export async function requestOtp(
   }
 
   // =========================================================
-  // FIND ORGANIZATION (Case-Insensitive Fix)
+  // FIND ORGANIZATION
   // =========================================================
   const organization = await prisma.organization.findFirst({
     where: {
@@ -91,7 +93,7 @@ export async function requestOtp(
   }
 
   // =========================================================
-  // FIND DEPARTMENT USER & CHECK ACCOUNT STATUS
+  // FIND DEPARTMENT USER & CHECK STATUS / RATE LIMIT
   // =========================================================
   const user = await prisma.tenantUser.findFirst({
     where: {
@@ -115,14 +117,34 @@ export async function requestOtp(
   }
 
   // =========================================================
-  // STORE DEPARTMENT USER OTP
+  // 🚀 24-HOUR RATE LIMIT CHECK (Max 10 Requests)
+  // =========================================================
+  const now = new Date();
+  let requestCount = user.otpRequestCount || 0;
+  let windowStart = user.otpLastRequestedAt ? new Date(user.otpLastRequestedAt) : null;
+
+  if (!windowStart || now.getTime() - windowStart.getTime() > RATE_LIMIT_WINDOW_MS) {
+    // Reset window if 24 hours have passed since the first request
+    requestCount = 0;
+    windowStart = now;
+  }
+
+  if (requestCount >= MAX_OTP_REQUESTS_PER_DAY) {
+    throw new Error(
+      'Daily OTP request limit (10 requests per 24 hours) has been reached. Please try again later tomorrow.'
+    );
+  }
+
+  // =========================================================
+  // STORE DEPARTMENT USER OTP & INCREMENT RATE LIMIT COUNTER
   // =========================================================
   await prisma.tenantUser.update({
     where: { id: user.id },
     data: {
       otpCode: hashedOtp,
       otpExpires,
-      // Keep existing otpAttempts so requesting a new code doesn't bypass the 5-strike limit
+      otpRequestCount: requestCount + 1,
+      otpLastRequestedAt: windowStart,
     },
   });
 

@@ -277,6 +277,8 @@ model TenantUser {
   otpCode        String?
   otpExpires     DateTime?
   otpAttempts    Int             @default(0)
+  otpRequestCount    Int             @default(0)
+  otpLastRequestedAt DateTime?
   updatedAt      DateTime        @updatedAt
   MobileSession  MobileSession[]
   organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
