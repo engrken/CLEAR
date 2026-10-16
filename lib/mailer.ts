@@ -13,6 +13,15 @@ export async function sendEmail({
   html: string;
   text?: string;
 }) {
+  // Local development: MAIL_TRANSPORT=console prints the message (including OTP codes)
+  // to the server log instead of sending it. Never honoured in production.
+  if (process.env.MAIL_TRANSPORT === 'console' && process.env.NODE_ENV !== 'production') {
+    console.log(
+      `\n[mail:console] to=${to}\n[mail:console] subject=${subject}\n[mail:console] ${text || html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()}\n`
+    );
+    return { messageId: 'console' };
+  }
+
   const smtpUser = process.env.SMTP_USER;
   const smtpPassword = process.env.SMTP_PASSWORD;
 
