@@ -5,20 +5,47 @@ import { prisma } from '@/lib/prisma';
 import crypto from 'node:crypto';
 import { sendEmail } from '@/lib/mailer';
 import { isSuperAdminEmail } from '@/lib/permissions';
-import { assertCanSendOtp, otpThrottleKey, recordOtpSent } from '@/lib/auth-throttle';
-import { findOrganizationBySlug, sendDepartmentOtp } from '@/lib/otp';
+import { ThrottleError, assertCanSendOtp, otpThrottleKey, recordOtpSent } from '@/lib/auth-throttle';
+import { OtpError, findOrganizationBySlug, sendDepartmentOtp } from '@/lib/otp';
+
+export type RequestOtpResult =
+  | { success: true; message: string }
+  | { success: false; code: string; message: string };
+
+// Expected failures (unknown officer, cooldown, lockout, email failure) are
+// returned, not thrown: production builds replace a thrown server-action error
+// with a generic React error, so the sign-in modal could not show the reason.
+class RequestOtpError extends Error {
+  constructor(message: string, public code: string) {
+    super(message);
+  }
+}
 
 export async function requestOtp(
   department: string,
   email: string
-) {
+): Promise<RequestOtpResult> {
+  try {
+    return await sendRequestedOtp(department, email);
+  } catch (err) {
+    if (err instanceof OtpError || err instanceof ThrottleError || err instanceof RequestOtpError) {
+      return { success: false, code: err.code, message: err.message };
+    }
+    throw err;
+  }
+}
+
+async function sendRequestedOtp(
+  department: string,
+  email: string
+): Promise<RequestOtpResult> {
   const cleanDepartment = decodeURIComponent(department)
     .trim()
     .toLowerCase();
   const cleanEmail = String(email || '').trim().toLowerCase();
 
   if (!cleanEmail || !cleanEmail.includes('@')) {
-    throw new Error('Please provide a valid email address.');
+    throw new RequestOtpError('Please provide a valid email address.', 'invalid');
   }
 
   // =========================================================
@@ -71,7 +98,7 @@ export async function requestOtp(
       await prisma.verificationToken.deleteMany({
         where: { identifier: cleanEmail },
       });
-      throw new Error('Unable to send verification email. Please try again.');
+      throw new RequestOtpError('Unable to send verification email. Please try again.', 'send_failed');
     }
     await recordOtpSent(throttleKey);
     return {
@@ -85,7 +112,7 @@ export async function requestOtp(
   // =========================================================
   const organization = await findOrganizationBySlug(cleanDepartment);
   if (!organization) {
-    throw new Error('Department not found.');
+    throw new RequestOtpError('Department not found.', 'not_found');
   }
 
   await sendDepartmentOtp(organization, cleanEmail);

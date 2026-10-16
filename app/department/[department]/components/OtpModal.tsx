@@ -34,10 +34,12 @@ export default function OtpModal({
       const cleanEmail = email.trim().toLowerCase();
       const result = await requestOtp(department, cleanEmail);
 
-      if (result.success) {
-        setDevNotice(result.message);
-        setStep("code");
+      if (!result.success) {
+        alert(result.message);
+        return;
       }
+      setDevNotice(result.message);
+      setStep("code");
     } catch (error) {
       console.error("OTP request error:", error);
       alert(
