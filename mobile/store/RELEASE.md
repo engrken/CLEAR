@@ -122,3 +122,17 @@ npx eas-cli@latest submit -p android --profile production --latest
 ## iOS (later)
 
 The bundle ID is already set. You'll need an Apple Developer account (USD 99/year), then `npx eas-cli@latest build -p ios --profile production` and `npx eas-cli@latest submit -p ios`; EAS creates the certificates. iOS uses the root `icon` PNG for now; a `.icon` (Icon Composer) file can replace it later.
+
+## Play Console App content status (2026-10-16)
+
+| Section | Status | Answers |
+| --- | --- | --- |
+| Ads | Saved | No ads |
+| Government apps | Saved | No |
+| Health | Saved | No health features |
+| Financial features | Saved | "My app doesn't provide any financial features" (record-keeping only) |
+| Content rating | Saved (IARC completed) | All Other App Types; user content sharing Yes (receipt images to org officers), interactions limited to invited members, no public sharing, no block/report/chat; everything else No. Result: Everyone / PEGI 3 / USK 0 / 3+. IARC contact: clearsysadmin@gmail.com |
+| Data safety | **Draft** | As [data-safety.md](data-safety.md); no in-app account creation, accounts made outside the app ("employment or enterprise"); deletion URL `/account-deletion`. Final Save unlocks after Target audience. |
+| Sign in details (App access) | Not started | Waits for the web deploy and the production demo code ([app-access.md](app-access.md)) |
+| Target audience | Blocked | Play requires Sign in details first. Planned: 18+ (add 16–17 if first-years use it) |
+| Privacy policy | Not started | Enter `https://clear.rupertbulquerin.com/privacy` after the deploy |
