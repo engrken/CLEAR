@@ -77,6 +77,32 @@ ssh myvps "pm2 restart clear-sys"
 Rollback: check out the previous commit locally, run `deploy\deploy.ps1`, then
 return to `main`. `~/clear-sys/REVISION` shows the deployed commit.
 
+## Play review demo sign-in
+
+Google Play reviewers sign in to the `demo` organization (fake data only) with a
+fixed code instead of an emailed one (`lib/demo-reviewer.ts`). It is off unless
+`DEMO_REVIEWER_EMAIL` and `DEMO_REVIEWER_CODE` (six digits) are both set, and it
+never applies to another email or organization.
+
+1. Add both keys to your local `.env.production.backup` (the seed uses the same
+   `DEMO_REVIEWER_EMAIL`; default `reviewer@demo.clear.invalid`).
+
+2. Seed the `demo` org in Neon from your PC (it asks you to type the database host):
+
+   ```powershell
+   node --env-file=.env.production.backup prisma/seed-demo.js
+   ```
+
+3. Copy the keys to the VPS and restart:
+
+   ```powershell
+   powershell -File deploy\push-env.ps1 -Domain clear.rupertbulquerin.com
+   ssh myvps "pm2 restart clear-sys --update-env"
+   ```
+
+To switch it off, remove both keys from `.env.production.backup`, run
+`push-env.ps1` again and restart the same way.
+
 ## Notes
 
 - Vercel Analytics is only rendered on Vercel; the Blob store (logos) keeps working
