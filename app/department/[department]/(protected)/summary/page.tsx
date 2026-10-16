@@ -3,7 +3,9 @@
 import { prisma } from '@/lib/prisma';
 import SummaryClient from './SummaryClient';
 import { Metadata } from 'next';
-import { getDepartmentFinancials } from '../../actions'; 
+import { getDepartmentFinancials } from '../../actions';
+import { redirect } from 'next/navigation';
+import { requireTabAccess } from '@/lib/permissions';
 
 export const metadata: Metadata = {
   title: 'Centralized Liquidation of Expenses & Audit Records',
@@ -18,6 +20,13 @@ export default async function SummaryReportPage({
 }) {
   const { department } = await params;
   const cleanDepartment = decodeURIComponent(department).trim().toLowerCase();
+
+  try {
+    await requireTabAccess('tab-report', cleanDepartment);
+  } catch {
+    redirect(`/department/${encodeURIComponent(cleanDepartment)}?forbidden=true`);
+  }
+
   const resolvedSearch = searchParams ? await searchParams : {};
   const ay = resolvedSearch.ay || 'A.Y. 2026 - 2027';
   const term = resolvedSearch.term || '1st Sem';

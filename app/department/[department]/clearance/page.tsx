@@ -47,20 +47,24 @@ function getClearanceSecret(): string {
   return secret;
 }
 
-function generateClearanceSignature(studentId: string, ay: string, term: string): string {
+// F49: the signature is bound to the organization, so a QR issued by one
+// department cannot be replayed on another department's verification page.
+// The "v2" prefix separates it from the old, tenant-less format.
+function generateClearanceSignature(organizationId: string, studentId: string, ay: string, term: string): string {
   const secret = getClearanceSecret();
-  const payload = `${studentId.trim().toLowerCase()}|${ay.trim()}|${term.trim()}`;
+  const payload = `clearance-v2|${organizationId}|${studentId.trim().toLowerCase()}|${ay.trim()}|${term.trim()}`;
   return crypto.createHmac('sha256', secret).update(payload).digest('hex');
 }
 
 function verifyClearanceSignature(
+  organizationId: string,
   studentId: string,
   ay: string,
   term: string,
   providedSig: string
 ): boolean {
   try {
-    const expectedSig = generateClearanceSignature(studentId, ay, term);
+    const expectedSig = generateClearanceSignature(organizationId, studentId, ay, term);
     const a = Buffer.from(expectedSig.toLowerCase(), 'utf8');
     const b = Buffer.from(String(providedSig || '').trim().toLowerCase(), 'utf8');
     if (a.length !== b.length) return false;
@@ -352,7 +356,7 @@ export default async function ClearancePage({
   // 1. DIGITAL QR SIGNATURE VERIFICATION VIEW
   // =========================================================================
   if (sigParam && q) {
-    const isCryptoValid = verifyClearanceSignature(q, ay, term, sigParam);
+    const isCryptoValid = verifyClearanceSignature(organization.id, q, ay, term, sigParam);
     let isLiveCleared = false;
     let verifiedStudent: any = null;
     let liveUnpaid: { category: string; itemDescription: string; balanceDue: number }[] = [];
@@ -525,7 +529,7 @@ export default async function ClearancePage({
 
     const queriedClearanceSig =
       queriedStudent && queriedStudent.isCleared
-        ? generateClearanceSignature(queriedStudent.studentId, ay, term)
+        ? generateClearanceSignature(organization.id, queriedStudent.studentId, ay, term)
         : '';
     const queriedVerifyUrl =
       queriedStudent && queriedStudent.isCleared
@@ -686,7 +690,7 @@ export default async function ClearancePage({
       isCleared = unpaidItems.length === 0;
 
       if (isCleared) {
-        clearanceSig = generateClearanceSignature(studentRecord.studentId, ay, term);
+        clearanceSig = generateClearanceSignature(organization.id, studentRecord.studentId, ay, term);
         verifyUrl = `${absoluteBaseUrl}${basePath}/clearance?ay=${encodeURIComponent(ay)}&term=${encodeURIComponent(term)}&q=${encodeURIComponent(studentRecord.studentId)}&sig=${encodeURIComponent(clearanceSig)}`;
       }
     }

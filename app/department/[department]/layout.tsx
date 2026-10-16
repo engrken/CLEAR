@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import DepartmentSidebar from "@/app/department/[department]/Sidebar";
 import TopHeader from "@/app/department/[department]/TopHeader";
 import Footer from "@/app/department/[department]/components/Footer";
+import { isSuperAdminEmail } from "@/lib/permissions";
 import DataPrivacyModal from "@/app/department/[department]/components/DataPrivacyModal";
 
 interface ProtectedDepartmentLayoutProps {
@@ -108,7 +109,7 @@ export default async function ProtectedDepartmentLayout({
     "officer"
   ]);
 
-  const isGlobalAdmin = userRole === "superadmin" || userRole === "master";
+  const isGlobalAdmin = isSuperAdminEmail(authUser.email);
   let isForbidden = false;
   let forbiddenReason = "";
 

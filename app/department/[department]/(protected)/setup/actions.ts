@@ -3,9 +3,8 @@
 "use server";
 
 import { prisma } from '@/lib/prisma';
-import { requireTabAccess } from '@/lib/permissions';
+import { requireDepartmentAccess } from '@/lib/permissions';
 import { revalidatePath } from 'next/cache';
-import { auth } from '@/auth';
 import { put, del } from '@vercel/blob';
 
 // =========================================================================
@@ -32,17 +31,9 @@ export async function saveInitialFunds(
   }[]
 ) {
   // 1. Verify Permission via Shared Guard
-  const customUser = await requireTabAccess("tab-setup");
+  const { user: customUser, org: organization } = await requireDepartmentAccess("tab-setup", department);
   const officerName = customUser.fullName || customUser.email || "System Administrator";
 
-  // 2. Resolve Organization ID
-  const organization = await prisma.organization.findUnique({
-    where: { subdomain: department.toLowerCase() }
-  });
-
-  if (!organization) {
-    throw new Error(`Organization subdomain "${department}" not found.`);
-  }
   const orgId = organization.id;
 
   // 3. Validate Inputs
@@ -113,10 +104,10 @@ export async function saveInitialFunds(
 // ORGANIZATION BRANDING ACTIONS
 // =========================================================================
 
-export async function updateEntityLogo(formData: FormData) {
-  const session = await auth();
-  if (!session?.user) throw new Error('401 Unauthorized');
+const MAX_LOGO_BYTES = 2 * 1024 * 1024;
+const LOGO_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/svg+xml']);
 
+export async function updateEntityLogo(formData: FormData) {
   const organizationId = formData.get('organizationId') as string;
   const logoFile = formData.get('logo') as File | null;
 
@@ -124,13 +115,24 @@ export async function updateEntityLogo(formData: FormData) {
     return { success: false, message: 'Organization ID and a new file are required.' };
   }
 
-  try {
-    const org = await prisma.organization.findUnique({
-      where: { id: organizationId },
-      select: { logo: true, subdomain: true }
-    });
+  const target = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: { subdomain: true },
+  });
+  if (!target) return { success: false, message: 'Organization not found.' };
 
-    if (!org) throw new Error('Organization not found.');
+  // The caller must hold tab-setup in THIS organization (or be Super Admin).
+  const { org: guardedOrg } = await requireDepartmentAccess('tab-setup', target.subdomain);
+
+  if (!LOGO_TYPES.has(logoFile.type)) {
+    return { success: false, message: 'Logo must be a PNG, JPEG, WebP, GIF or SVG image.' };
+  }
+  if (logoFile.size > MAX_LOGO_BYTES) {
+    return { success: false, message: 'Logo must be 2 MB or smaller.' };
+  }
+
+  try {
+    const org = { logo: guardedOrg.logo, subdomain: guardedOrg.subdomain };
 
     // 1. Delete the old logo from Vercel Blob
     if (org.logo && org.logo.includes('vercel-storage.com')) {
@@ -154,7 +156,7 @@ export async function updateEntityLogo(formData: FormData) {
 
     // 3. Update the database
     await prisma.organization.update({
-      where: { id: organizationId },
+      where: { id: guardedOrg.id },
       data: { logo: newLogoPath }
     });
 

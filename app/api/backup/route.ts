@@ -3,7 +3,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
-import { isSuperAdminEmail } from '@/lib/permissions';
+import { requireDepartmentAccess } from '@/lib/permissions';
 
 export async function GET(req: Request) {
   try {
@@ -12,10 +12,6 @@ export async function GET(req: Request) {
       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = session.user as any;
-    const isSuper = isSuperAdminEmail(user.email) || user.role === 'SuperAdmin';
-    const userOrgId = user.organizationId;
-
     const { searchParams } = new URL(req.url);
     const orgId = searchParams.get('orgId');
 
@@ -23,20 +19,24 @@ export async function GET(req: Request) {
       return NextResponse.json({ success: false, message: 'Missing orgId parameter' }, { status: 400 });
     }
 
-    // 🚀 SECURITY FIX (F16): Prevent Cross-Tenant IDOR.
-    // Non-SuperAdmin users can only export their own organization's data.
-    if (!isSuper && userOrgId !== orgId) {
-      return NextResponse.json({ success: false, message: 'Forbidden: Cannot export data for another organization' }, { status: 403 });
-    }
-
-    // Verify organization exists
-    const organization = await prisma.organization.findUnique({
+    const target = await prisma.organization.findUnique({
       where: { id: orgId },
+      select: { subdomain: true },
     });
 
-    if (!organization) {
+    if (!target) {
       return NextResponse.json({ success: false, message: 'Organization not found' }, { status: 404 });
     }
+
+    // 🚀 SECURITY FIX (F16): A full export needs User Management rights (admins)
+    // in THAT organization, or Super Admin. Plain members and viewers are refused.
+    let access;
+    try {
+      access = await requireDepartmentAccess('tab-users', target.subdomain);
+    } catch {
+      return NextResponse.json({ success: false, message: 'Forbidden: Backup export requires administrator access to this organization' }, { status: 403 });
+    }
+    const { user, org: organization } = access;
 
     // Comprehensive multi-tenant data dump matching your exact schema models
     const [
@@ -114,7 +114,7 @@ export async function GET(req: Request) {
     await prisma.systemLog.create({
       data: {
         organizationId: orgId,
-        user: user.email || 'System Admin',
+        user: user.fullName || user.email || 'System Admin',
         action: 'EXPORT_DATABASE_BACKUP',
         details: `Exported full database backup for ${organization.name}`,
       }

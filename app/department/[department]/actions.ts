@@ -71,9 +71,10 @@ async function requireOrganizationAccess(organizationId: string) {
     throw new Error('401 Unauthorized: Session expired or missing email.');
   }
 
-  // Allow SuperAdmin global inspection access
-  const role = String(sessionUser?.role || '').trim().toLowerCase();
-  if (isSuperAdminEmail(email) || role === 'superadmin' || role === 'master') {
+  // Allow SuperAdmin global inspection access. Only the configured Super Admin
+  // email qualifies: a tenant role string such as "master" must never grant
+  // cross-tenant access.
+  if (isSuperAdminEmail(email)) {
     return {
       id: sessionUser?.id || 'superadmin',
       organizationId,

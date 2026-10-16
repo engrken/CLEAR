@@ -5,11 +5,26 @@ import Credentials from "next-auth/providers/credentials";
 import crypto from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { isSuperAdminEmail, parseAllowedTabs } from "@/lib/permissions";
+import {
+  assertNotLocked,
+  clearOtpFailures,
+  otpThrottleKey,
+  recordOtpFailure,
+} from "@/lib/auth-throttle";
 
 class CustomAuthError extends CredentialsSignin {
   constructor(message: string) {
     super(message);
     this.code = message;
+  }
+}
+
+// Lockout check that surfaces its message to the login form (F7)
+async function assertIdentityNotLocked(key: string) {
+  try {
+    await assertNotLocked(key);
+  } catch (err) {
+    throw new CustomAuthError((err as Error).message);
   }
 }
 
@@ -41,7 +56,6 @@ export const {
       },
 
       async authorize(credentials) {
-        console.log("========== AUTH START ==========");
 
         const email = credentials?.email
           ? String(credentials.email)
@@ -72,7 +86,8 @@ export const {
         // =====================================================
 
         if (isSuperAdminEmail(email)) {
-          console.log("AUTH MODE: SUPER ADMIN");
+          const throttleKey = otpThrottleKey("superadmin", email);
+          await assertIdentityNotLocked(throttleKey);
 
           const tokenRecord =
             await prisma.verificationToken.findUnique({
@@ -103,6 +118,12 @@ export const {
             storedBuf.length !== submittedBuf.length ||
             !crypto.timingSafeEqual(storedBuf, submittedBuf)
           ) {
+            if (await recordOtpFailure(throttleKey)) {
+              await prisma.verificationToken.deleteMany({ where: { identifier: email } });
+              throw new CustomAuthError(
+                "Too many failed attempts. Request a new code in 15 minutes."
+              );
+            }
             throw new CustomAuthError(
               "Invalid Super Admin verification code."
             );
@@ -114,7 +135,7 @@ export const {
             },
           });
 
-          console.log("SUPER ADMIN AUTH SUCCESS");
+          await clearOtpFailures(throttleKey);
 
           return {
             id: "SuperAdmin",
@@ -137,7 +158,6 @@ export const {
         // NORMAL DEPARTMENT USER
         // =====================================================
 
-        console.log("AUTH MODE: DEPARTMENT USER");
 
         if (!department) {
           throw new CustomAuthError(
@@ -175,6 +195,9 @@ export const {
           );
         }
 
+        const throttleKey = otpThrottleKey(organization.subdomain, email);
+        await assertIdentityNotLocked(throttleKey);
+
         if (!user.otpCode) {
           throw new CustomAuthError(
             "No department verification code requested."
@@ -200,13 +223,20 @@ export const {
           storedUserBuf.length !== submittedUserBuf.length ||
           !crypto.timingSafeEqual(storedUserBuf, submittedUserBuf)
         ) {
-          console.log("AUTH OTP MISMATCH");
+          if (await recordOtpFailure(throttleKey)) {
+            await prisma.tenantUser.update({
+              where: { id: user.id },
+              data: { otpCode: null, otpExpires: null },
+            });
+            throw new CustomAuthError(
+              "Too many failed attempts. Request a new code in 15 minutes."
+            );
+          }
           throw new CustomAuthError(
             "Invalid verification code."
           );
         }
 
-        console.log("AUTH OTP VALID.");
 
         // =====================================================
         // CONSUME OTP
@@ -222,13 +252,10 @@ export const {
           },
         });
 
-        console.log("AUTH OTP CLEARED.");
+        await clearOtpFailures(throttleKey);
 
         const allowedTabs = parseAllowedTabs(user.allowedTabs);
 
-        console.log(
-          "========== AUTH SUCCESS =========="
-        );
 
         return {
           id: user.id,

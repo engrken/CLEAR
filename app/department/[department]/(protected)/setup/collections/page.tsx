@@ -2,6 +2,9 @@
 
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
+import { requireDepartmentAccess, normalizeDepartmentSlug } from '@/lib/permissions';
+import { logSystemAction } from '@/lib/logger';
 
 export default async function CollectionSetupPage({
   params,
@@ -10,16 +13,19 @@ export default async function CollectionSetupPage({
   params: Promise<{ department: string }>;
   searchParams?: Promise<{ ay?: string; term?: string }>;
 }) {
-  const { department } = await params;
+  const { department: rawDepartment } = await params;
+  const department = normalizeDepartmentSlug(rawDepartment);
   const resolvedSearch = searchParams ? await searchParams : {};
-  const ay = resolvedSearch.ay || 'A.Y. 2026 - 2027';
-  const term = resolvedSearch.term || '1st Sem';
 
-  const organization = await prisma.organization.findUnique({
-    where: { subdomain: department },
-  });
+  let organization;
+  try {
+    ({ org: organization } = await requireDepartmentAccess('tab-setup', department));
+  } catch {
+    redirect(`/department/${encodeURIComponent(department)}?forbidden=true`);
+  }
 
-  if (!organization) return <div>Department not found.</div>;
+  const ay = resolvedSearch.ay || organization.activeAy;
+  const term = resolvedSearch.term || organization.activeTerm;
 
   const collectionItems = await prisma.collectionSetup.findMany({
     where: { organizationId: organization.id, academicYear: ay, term },
@@ -30,21 +36,33 @@ export default async function CollectionSetupPage({
     where: { organizationId: organization.id, academicYear: ay, term }
   });
 
-  // Server Action to add a new collection item
+  // Server Action to add a new collection item.
+  // Server actions are public endpoints: re-check access on every call.
   async function addCollectionItem(formData: FormData) {
     'use server';
+    const { user, org } = await requireDepartmentAccess('tab-setup', department);
+
+    const category = String(formData.get('category') || '').trim();
+    const name = String(formData.get('name') || '').trim();
+    const targetFund = String(formData.get('targetFund') || '').trim();
+    const amount = Number(formData.get('amount'));
+    if (!name || !targetFund || !Number.isFinite(amount) || amount < 0) {
+      throw new Error('Name, target fund and a valid non-negative amount are required.');
+    }
+
     await prisma.collectionSetup.create({
       data: {
-        organizationId: organization!.id,
+        organizationId: org.id,
         academicYear: ay,
         term: term,
-        category: formData.get('category') as string,
-        name: formData.get('name') as string,
-        amount: parseFloat(formData.get('amount') as string),
-        targetFund: formData.get('targetFund') as string,
+        category,
+        name,
+        amount: Math.round(amount * 100) / 100,
+        targetFund,
         isPackage: formData.get('isPackage') === 'on', // NEW: Capture the checkbox state
       }
     });
+    await logSystemAction(org.id, user.fullName || user.email, 'CREATE_COLLECTION_SETUP', `Created collection setup item '${name}' (₱${amount.toFixed(2)} -> ${targetFund}).`);
     revalidatePath(`/department/${department}/setup/collections`);
     // Revalidate other modules so they immediately catch the new fee logic
     revalidatePath(`/department/${department}/collections`);
@@ -52,10 +70,14 @@ export default async function CollectionSetupPage({
     revalidatePath(`/department/${department}/reports`);
   }
 
-  // Server Action to delete a collection item
+  // Server Action to delete a collection item. The bound id comes from the
+  // client, so the delete is scoped to the caller's organization.
   async function deleteItem(id: string) {
     'use server';
-    await prisma.collectionSetup.delete({ where: { id } });
+    const { user, org } = await requireDepartmentAccess('tab-setup', department);
+    const result = await prisma.collectionSetup.deleteMany({ where: { id: String(id), organizationId: org.id } });
+    if (result.count === 0) throw new Error('Collection setup item not found.');
+    await logSystemAction(org.id, user.fullName || user.email, 'DELETE_COLLECTION_SETUP', `Removed collection setup item ${id}.`);
     revalidatePath(`/department/${department}/setup/collections`);
     revalidatePath(`/department/${department}/collections`);
     revalidatePath(`/department/${department}/clearance`);

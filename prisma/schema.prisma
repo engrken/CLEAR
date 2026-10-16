@@ -352,3 +352,12 @@ model CashierRemittance {
   encodedBy        String
   createdAt        DateTime     @default(now())
 }
+// Sign-in throttling (F7): one row per OTP identity, e.g. "otp:devdept:alice@x.edu"
+// or "otp:superadmin:boss@x.edu". Not tenant-scoped data; never exported.
+model AuthThrottle {
+  key         String    @id
+  failedCount Int       @default(0)
+  lockedUntil DateTime?
+  lastSentAt  DateTime?
+  updatedAt   DateTime  @updatedAt
+}

@@ -2,6 +2,7 @@
 
 "use server";
 
+import crypto from 'node:crypto';
 import { prisma } from '@/lib/prisma';
 import { requireTabAccess } from '@/lib/permissions';
 import { logSystemAction } from '@/lib/logger';
@@ -18,9 +19,27 @@ function money(val: any, fieldName: string): number {
 }
 
 function generateReference(prefix: string): string {
-  const randomStr = Math.random().toString(36).substring(2, 8).toUpperCase();
+  const randomStr = crypto.randomBytes(4).toString('hex').toUpperCase();
   const timestamp = Date.now().toString().slice(-4);
   return `${prefix}-${randomStr}-${timestamp}`;
+}
+
+// Public payment-proof uploads: images only, capped in size (validated server-side;
+// the browser's accept="image/*" is only a hint).
+const MAX_PROOF_BYTES = 4 * 1024 * 1024;
+const PROOF_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
+
+function validateProofDataUrl(dataUrl: string | null | undefined): string | null {
+  if (!dataUrl) return null;
+  const match = /^data:([a-z0-9.+/-]+);base64,([A-Za-z0-9+/=s]+)$/i.exec(String(dataUrl));
+  if (!match || !PROOF_MIME_TYPES.has(match[1].toLowerCase())) {
+    throw new Error('Payment proof must be a PNG, JPEG, WebP or GIF image.');
+  }
+  const bytes = Buffer.byteLength(match[2].replace(/s/g, ''), 'base64');
+  if (bytes > MAX_PROOF_BYTES) {
+    throw new Error('Payment proof image must be 4 MB or smaller.');
+  }
+  return dataUrl;
 }
 
 async function resolveStudentDbId(orgId: string, identifier: string | null) {
@@ -204,7 +223,13 @@ export async function submitOnlineRemittance(
     };
 
     const receiptFile = formData.get('receipt') as File | null;
-    if (receiptFile) {
+    if (receiptFile && receiptFile.size > 0) {
+      if (!PROOF_MIME_TYPES.has(receiptFile.type)) {
+        throw new Error('Payment proof must be a PNG, JPEG, WebP or GIF image.');
+      }
+      if (receiptFile.size > MAX_PROOF_BYTES) {
+        throw new Error('Payment proof image must be 4 MB or smaller.');
+      }
       const arrayBuffer = await receiptFile.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
       data.proofBase64 = `data:${receiptFile.type};base64,${buffer.toString('base64')}`;
@@ -218,6 +243,11 @@ export async function submitOnlineRemittance(
   });
   if (!organization) throw new Error(`Organization "${cleanDepartment}" not found.`);
   const orgId = organization.id;
+
+  data.proofBase64 = validateProofDataUrl(data.proofBase64);
+  if (!String(data.studentName || "").trim() || !String(data.referenceNo || "").trim()) {
+    throw new Error("Student name and payment reference number are required.");
+  }
 
   const cleanEmail = String(data.email || "").trim().toLowerCase();
   if (!cleanEmail || !cleanEmail.includes("@")) throw new Error("Please provide a valid email address.");

@@ -3,17 +3,18 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import { requireTabAccess } from '@/lib/permissions';
+import { requireDepartmentAccess } from '@/lib/permissions';
 import { logSystemAction } from '@/lib/logger';
 import { revalidatePath } from 'next/cache';
 
 export async function toggleStudentStatus(department: string, studentId: string, currentStatus: string, ay: string, term: string) {
-  const cleanDept = decodeURIComponent(department).trim().toLowerCase();
-  const user = await requireTabAccess('tab-students', cleanDept);
+  const { user, org } = await requireDepartmentAccess('tab-students', department);
+  const cleanDept = org.subdomain;
+  const organizationId = org.id;
   const officerName = user.name || user.fullName || user.email || "System Administrator";
 
   const newStatus = currentStatus === 'Enrolled' ? 'Inactive' : 'Enrolled';
-  const student = await prisma.student.findUnique({ where: { id: studentId } });
+  const student = await prisma.student.findFirst({ where: { id: studentId, organizationId } });
   if (!student) return { success: false, message: "Student not found" };
 
   const existingEnrollment = await prisma.enrollment.findFirst({
@@ -48,9 +49,10 @@ export async function toggleStudentStatus(department: string, studentId: string,
   return { success: true };
 }
 
-export async function confirmAllEnrolled(department: string, organizationId: string, ay: string, term: string) {
-  const cleanDept = decodeURIComponent(department).trim().toLowerCase();
-  const user = await requireTabAccess('tab-students', cleanDept);
+export async function confirmAllEnrolled(department: string, _clientOrganizationId: string, ay: string, term: string) {
+  const { user, org } = await requireDepartmentAccess('tab-students', department);
+  const cleanDept = org.subdomain;
+  const organizationId = org.id;
   const officerName = user.name || user.fullName || user.email || "System Administrator";
 
   const allStudents = await prisma.student.findMany({ where: { organizationId } });
@@ -78,9 +80,10 @@ export async function confirmAllEnrolled(department: string, organizationId: str
   return { success: true, count: allStudents.length };
 }
 
-export async function promoteYearLevels(department: string, organizationId: string) {
-  const cleanDept = decodeURIComponent(department).trim().toLowerCase();
-  const user = await requireTabAccess('tab-students', cleanDept);
+export async function promoteYearLevels(department: string, _clientOrganizationId: string) {
+  const { user, org } = await requireDepartmentAccess('tab-students', department);
+  const cleanDept = org.subdomain;
+  const organizationId = org.id;
   const officerName = user.name || user.fullName || user.email || "System Administrator";
 
   const students = await prisma.student.findMany({ where: { organizationId } });
@@ -109,7 +112,7 @@ export async function promoteYearLevels(department: string, organizationId: stri
   return { success: true, promoted };
 }
 
-export async function saveStudent(department: string, organizationId: string, ay: string, term: string, formData: {
+export async function saveStudent(department: string, _clientOrganizationId: string, ay: string, term: string, formData: {
   id?: string;
   studentId: string;
   fullName: string;
@@ -119,8 +122,9 @@ export async function saveStudent(department: string, organizationId: string, ay
   isEdit: boolean;
   originalId?: string;
 }) {
-  const cleanDept = decodeURIComponent(department).trim().toLowerCase();
-  const user = await requireTabAccess('tab-students', cleanDept);
+  const { user, org } = await requireDepartmentAccess('tab-students', department);
+  const cleanDept = org.subdomain;
+  const organizationId = org.id;
   const officerName = user.name || user.fullName || user.email || "System Administrator";
 
   if (!formData.studentId || !formData.fullName) {
@@ -130,8 +134,10 @@ export async function saveStudent(department: string, organizationId: string, ay
   let studentRecordId: string;
 
   if (formData.isEdit && formData.id) {
+    const owned = await prisma.student.findFirst({ where: { id: formData.id, organizationId }, select: { id: true } });
+    if (!owned) throw new Error("Student record not found in this department.");
     const updated = await prisma.student.update({
-      where: { id: formData.id },
+      where: { id: owned.id },
       data: {
         studentId: formData.studentId,
         fullName: formData.fullName,
@@ -191,16 +197,9 @@ export async function saveStudent(department: string, organizationId: string, ay
 }
 
 export async function deleteStudent(department: string, studentInternalId: string) {
-  const cleanDept = decodeURIComponent(department).trim().toLowerCase();
-  const user = await requireTabAccess('tab-students', cleanDept);
+  const { user, org } = await requireDepartmentAccess('tab-students', department);
+  const cleanDept = org.subdomain;
   const officerName = user.name || user.fullName || user.email || "System Administrator";
-
-  const org = await prisma.organization.findUnique({
-    where: { subdomain: cleanDept },
-    select: { id: true },
-  });
-
-  if (!org) throw new Error('Department not found.');
 
   const student = await prisma.student.findFirst({
     where: { id: studentInternalId, organizationId: org.id },
@@ -213,7 +212,7 @@ export async function deleteStudent(department: string, studentInternalId: strin
     await tx.enrollment.deleteMany({ where: { studentId: studentInternalId, organizationId: org.id } });
     // Disconnect or set null on collections if necessary, or delete
     await tx.collection.updateMany({
-      where: { studentId: studentInternalId },
+      where: { studentId: studentInternalId, organizationId: org.id },
       data: { studentId: null }
     });
     await tx.student.delete({ where: { id: studentInternalId } });
@@ -230,9 +229,10 @@ export async function deleteStudent(department: string, studentInternalId: strin
   return { success: true };
 }
 
-export async function bulkImportStudents(department: string, organizationId: string, ay: string, term: string, records: Array<{ studentId: string; fullName: string; yearLevel: string; email?: string }>) {
-  const cleanDept = decodeURIComponent(department).trim().toLowerCase();
-  const user = await requireTabAccess('tab-students', cleanDept);
+export async function bulkImportStudents(department: string, _clientOrganizationId: string, ay: string, term: string, records: Array<{ studentId: string; fullName: string; yearLevel: string; email?: string }>) {
+  const { user, org } = await requireDepartmentAccess('tab-students', department);
+  const cleanDept = org.subdomain;
+  const organizationId = org.id;
   const officerName = user.name || user.fullName || user.email || "System Administrator";
 
   let added = 0;

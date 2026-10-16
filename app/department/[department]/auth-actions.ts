@@ -3,9 +3,9 @@
 
 import { prisma } from '@/lib/prisma';
 import crypto from 'node:crypto';
-import { cookies } from 'next/headers';
 import { sendEmail } from '@/lib/mailer';
 import { isSuperAdminEmail } from '@/lib/permissions';
+import { assertCanSendOtp, otpThrottleKey, recordOtpSent } from '@/lib/auth-throttle';
 
 export async function requestOtp(
   department: string,
@@ -31,6 +31,9 @@ export async function requestOtp(
   // SUPER ADMIN
   // =========================================================
   if (isSuperAdminEmail(cleanEmail)) {
+    const throttleKey = otpThrottleKey('superadmin', cleanEmail);
+    await assertCanSendOtp(throttleKey);
+
     await prisma.verificationToken.deleteMany({
       where: { identifier: cleanEmail },
     });
@@ -69,6 +72,7 @@ export async function requestOtp(
       });
       throw new Error('Unable to send verification email. Please try again.');
     }
+    await recordOtpSent(throttleKey);
     return {
       success: true,
       message: 'A verification code has been sent to your registered email address.',
@@ -100,6 +104,9 @@ export async function requestOtp(
   if (!user) {
     throw new Error('This account is not registered or is currently inactive.');
   }
+
+  const throttleKey = otpThrottleKey(organization.subdomain, cleanEmail);
+  await assertCanSendOtp(throttleKey);
 
   // =========================================================
   // STORE DEPARTMENT USER OTP
@@ -143,130 +150,10 @@ export async function requestOtp(
     });
     throw new Error('Unable to send verification email. Please try again.');
   }
+  await recordOtpSent(throttleKey);
 
   return {
     success: true,
     message: 'A verification code has been sent to your registered email address.',
-  };
-}
-
-// =========================================================
-// VERIFY OTP
-// =========================================================
-export async function verifyOtp(
-  department: string,
-  email: string,
-  submittedOtp: string
-) {
-  const cleanDepartment = decodeURIComponent(department).trim().toLowerCase();
-  const cleanEmail = String(email || '').trim().toLowerCase();
-  const cleanOtp = String(submittedOtp || '').trim();
-
-  if (!/^\d{6}$/.test(cleanOtp)) {
-    throw new Error('Verification code must be exactly 6 digits.');
-  }
-
-  const submittedHash = crypto.createHash('sha256').update(cleanOtp).digest('hex');
-  const cookieStore = await cookies();
-
-  // Handle Super Admin Verification
-  if (isSuperAdminEmail(cleanEmail)) {
-    const tokenRecord = await prisma.verificationToken.findFirst({
-      where: { identifier: cleanEmail },
-      orderBy: { expires: 'desc' },
-    });
-
-    if (!tokenRecord || !tokenRecord.token || tokenRecord.expires < new Date()) {
-      throw new Error('Verification code has expired or is invalid. Please request a new one.');
-    }
-
-    const storedHashBuf = Buffer.from(tokenRecord.token, 'utf8');
-    const submittedHashBuf = Buffer.from(submittedHash, 'utf8');
-
-    if (storedHashBuf.length !== submittedHashBuf.length || !crypto.timingSafeEqual(storedHashBuf, submittedHashBuf)) {
-      throw new Error('Invalid verification code.');
-    }
-
-    await prisma.verificationToken.deleteMany({
-      where: { identifier: cleanEmail },
-    });
-
-    cookieStore.set('fcu_session', `superadmin:${cleanEmail}`, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 86400,
-    });
-
-    return {
-      success: true,
-      user: {
-        id: 'superadmin',
-        fullName: 'Super Administrator',
-        email: cleanEmail,
-        role: 'SuperAdmin',
-        allowedTabs: ['*'],
-      },
-    };
-  }
-
-  // Handle Department Tenant User Verification (Case-Insensitive Organization Lookup)
-  const organization = await prisma.organization.findFirst({
-    where: { subdomain: { equals: cleanDepartment, mode: 'insensitive' } },
-  });
-  if (!organization) {
-    throw new Error('Department not found.');
-  }
-
-  const user = await prisma.tenantUser.findFirst({
-    where: {
-      organizationId: organization.id,
-      email: { equals: cleanEmail, mode: 'insensitive' },
-      status: 'Active',
-    },
-  });
-
-  if (!user || !user.otpCode || !user.otpExpires || user.otpExpires < new Date()) {
-    throw new Error('Verification code has expired or is invalid. Please request a new one.');
-  }
-
-  const storedHashBuf = Buffer.from(user.otpCode, 'utf8');
-  const submittedHashBuf = Buffer.from(submittedHash, 'utf8');
-
-  if (storedHashBuf.length !== submittedHashBuf.length || !crypto.timingSafeEqual(storedHashBuf, submittedHashBuf)) {
-    throw new Error('Invalid verification code.');
-  }
-
-  // Clear OTP code after successful verification
-  await prisma.tenantUser.update({
-    where: { id: user.id },
-    data: { otpCode: null, otpExpires: null },
-  });
-
-  cookieStore.set('fcu_session', user.id, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    path: '/',
-    maxAge: 86400,
-  });
-
-  let parsedTabs: string[] = [];
-  try {
-    parsedTabs = typeof user.allowedTabs === 'string' ? JSON.parse(user.allowedTabs) : (user.allowedTabs || []);
-  } catch {
-    parsedTabs = [];
-  }
-
-  return {
-    success: true,
-    user: {
-      id: user.id,
-      fullName: user.fullName,
-      email: user.email,
-      role: user.role,
-      allowedTabs: parsedTabs,
-    },
   };
 }

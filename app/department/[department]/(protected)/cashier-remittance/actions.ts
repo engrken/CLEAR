@@ -2,8 +2,9 @@
 
 "use server";
 
+import crypto from 'node:crypto';
 import { prisma } from '@/lib/prisma';
-import { requireTabAccess } from '@/lib/permissions';
+import { requireDepartmentAccess } from '@/lib/permissions';
 import { revalidatePath } from 'next/cache';
 
 function money(val: any, fieldName: string): number {
@@ -19,7 +20,7 @@ function parseDate(val: any, fieldName: string): Date {
 }
 
 function generateReference(prefix: string): string {
-  const randomStr = Math.random().toString(36).substring(2, 8).toUpperCase();
+  const randomStr = crypto.randomBytes(4).toString('hex').toUpperCase();
   const timestamp = Date.now().toString().slice(-4);
   return `${prefix}-${randomStr}-${timestamp}`;
 }
@@ -38,13 +39,9 @@ export async function recordCashierRemittance(
     term: string;
   }
 ) {
-  const customUser = await requireTabAccess("tab-payment");
+  const { user: customUser, org: organization } = await requireDepartmentAccess("tab-payment", department);
   const officerName = customUser.fullName || customUser.email || "System Administrator";
 
-  const organization = await prisma.organization.findUnique({
-    where: { subdomain: department.toLowerCase() }
-  });
-  if (!organization) throw new Error(`Organization not found.`);
   const orgId = organization.id;
 
   const amount = money(data.amount, "Transaction Amount");
@@ -92,13 +89,9 @@ export async function recordCashierRemittance(
 }
 
 export async function voidCashierRemittance(department: string, id: string) {
-  const customUser = await requireTabAccess("tab-void");
+  const { user: customUser, org: organization } = await requireDepartmentAccess("tab-void", department);
   const officerName = customUser.fullName || customUser.email || "System Administrator";
 
-  const organization = await prisma.organization.findUnique({
-    where: { subdomain: department.toLowerCase() }
-  });
-  if (!organization) throw new Error(`Organization not found.`);
   
   const existing = await prisma.cashierRemittance.findFirst({
     where: { id, organizationId: organization.id }

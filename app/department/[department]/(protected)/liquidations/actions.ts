@@ -2,8 +2,9 @@
 
 "use server";
 
+import crypto from 'node:crypto';
 import { prisma } from '@/lib/prisma';
-import { requireTabAccess } from '@/lib/permissions';
+import { requireDepartmentAccess } from '@/lib/permissions';
 import { revalidatePath } from 'next/cache';
 
 // =========================================================================
@@ -23,7 +24,7 @@ function parseDate(val: any, fieldName: string): Date {
 }
 
 function generateReference(prefix: string): string {
-  const randomStr = Math.random().toString(36).substring(2, 8).toUpperCase();
+  const randomStr = crypto.randomBytes(4).toString('hex').toUpperCase();
   const timestamp = Date.now().toString().slice(-4);
   return `${prefix}-${randomStr}-${timestamp}`;
 }
@@ -54,17 +55,9 @@ export async function recordAudit(
   }
 ) {
   // 1. Verify Permission via Shared Guard
-  const customUser = await requireTabAccess("tab-audit");
+  const { user: customUser, org: organization } = await requireDepartmentAccess("tab-audit", department);
   const officerName = customUser.fullName || customUser.email || "System Administrator";
 
-  // 2. Resolve Organization ID
-  const organization = await prisma.organization.findUnique({
-    where: { subdomain: department.toLowerCase() }
-  });
-
-  if (!organization) {
-    throw new Error(`Organization subdomain "${department}" not found.`);
-  }
   const orgId = organization.id;
 
   // 3. Validate Inputs

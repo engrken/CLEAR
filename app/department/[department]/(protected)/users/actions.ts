@@ -2,54 +2,15 @@
 
 'use server';
 
+import crypto from 'node:crypto';
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
-import { auth } from '@/auth';
+import { requireDepartmentAccess, isSuperAdminEmail, PRESET_ROLE_TABS } from '@/lib/permissions';
+import { logSystemAction } from '@/lib/logger';
 
-const ROLE_PERMISSIONS_MAP: Record<string, string[]> = {
-  admin: [
-    'tab-overview', 'tab-students', 'tab-clearance', 'tab-reports',
-    'tab-payment', 'tab-remittances', 'tab-penalties', 'tab-advances',
-    'tab-audit', 'tab-collectibles', 'tab-void', 'tab-report', 'tab-transfer',
-    'tab-users', 'tab-setup'
-  ],
-  treasurer: [
-    'tab-overview', 'tab-clearance', 'tab-reports',
-    'tab-payment', 'tab-remittances', 'tab-penalties', 'tab-advances',
-    'tab-collectibles', 'tab-report', 'tab-transfer'
-  ],
-  auditor: [
-    'tab-overview', 'tab-clearance', 'tab-reports', 'tab-audit', 'tab-report'
-  ],
-  viewer: [
-    'tab-overview', 'tab-clearance', 'tab-reports', 'tab-report'
-  ]
-};
-
-/**
- * Validates if the active session has the required tab permission.
- * Throws an error if unauthorized, halting the server action.
- */
-export async function requireTabAccess(requiredTab: string) {
-  const session = await auth();
-  
-  if (!session?.user) {
-    throw new Error("401 Unauthorized: Session expired or invalid.");
-  }
-
-  const customUser = session.user as any;
-  const allowedTabs = (customUser.allowedTabs as string[]) || [];
-
-  // ❌ REMOVED THE HARDCODED ADMIN OVERRIDE HERE
-  // The system will now STRICTLY respect the allowedTabs array for ALL roles.
-
-  // Reject if the assigned scope lacks the necessary tab
-  if (!allowedTabs.includes(requiredTab)) {
-    throw new Error(`403 Forbidden: Your account scope lacks permission for the ${requiredTab} module.`);
-  }
-
-  return customUser;
-}
+const VALID_ROLES = new Set(Object.keys(PRESET_ROLE_TABS));
+const VALID_TABS = new Set(PRESET_ROLE_TABS.admin);
+const VALID_STATUSES = new Set(['Active', 'Inactive']);
 
 export async function saveTenantUser(formData: {
   id?: string | null;
@@ -62,65 +23,76 @@ export async function saveTenantUser(formData: {
   allowedTabs: string[];
   department: string;
 }) {
-  // STRICT GUARD: User must have access to the User Management module
-  await requireTabAccess('tab-users');
+  // Membership in THIS department plus the User Management tab (or Super Admin)
+  const { user: actor, org } = await requireDepartmentAccess('tab-users', formData.department);
 
-  const { id, userId, fullName, email, username, role, status, allowedTabs, department } = formData;
+  const id = formData.id ? String(formData.id) : null;
+  const fullName = String(formData.fullName || '').trim();
+  const email = String(formData.email || '').trim().toLowerCase();
+  const username = String(formData.username || '').trim().toLowerCase();
+  const status = VALID_STATUSES.has(formData.status) ? formData.status : 'Active';
 
   if (!email || !username || !fullName) {
     throw new Error('Full Name, Username, and Email are required.');
   }
-
-  const normalizedRole = ['master', 'administrator', 'admin'].includes(role.toLowerCase()) ? 'admin' : role.toLowerCase();
-  const tabsToSave = allowedTabs && allowedTabs.length > 0 ? allowedTabs : (ROLE_PERMISSIONS_MAP[normalizedRole] || ROLE_PERMISSIONS_MAP.viewer);
-  const tabsJsonString = JSON.stringify(tabsToSave);
-
-  const organization = await prisma.organization.findUnique({
-    where: { subdomain: department.toLowerCase() },
-  });
-
-  if (!organization) {
-    throw new Error(`Organization subdomain "${department}" not found.`);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new Error('Please provide a valid email address.');
   }
 
+  const rawRole = String(formData.role || '').trim().toLowerCase();
+  const normalizedRole = ['master', 'administrator', 'admin'].includes(rawRole) ? 'admin' : rawRole;
+  if (!VALID_ROLES.has(normalizedRole)) {
+    throw new Error(`Unknown role "${formData.role}".`);
+  }
+
+  const requestedTabs = Array.isArray(formData.allowedTabs)
+    ? formData.allowedTabs.filter((t) => VALID_TABS.has(t))
+    : [];
+  const tabsToSave = requestedTabs.length > 0 ? requestedTabs : PRESET_ROLE_TABS[normalizedRole];
+  const tabsJsonString = JSON.stringify(tabsToSave);
+
   const existingUsers = await prisma.tenantUser.findMany({
-    where: { organizationId: organization.id },
+    where: { organizationId: org.id },
   });
+
+  if (id && !existingUsers.some((u) => u.id === id)) {
+    throw new Error('User not found in this department.');
+  }
 
   for (const u of existingUsers) {
     if (id && u.id === id) continue;
-    if (u.username.toLowerCase() === username.toLowerCase()) {
+    if (u.username.toLowerCase() === username) {
       throw new Error('Username is already taken by another account.');
     }
-    if (u.email.toLowerCase() === email.toLowerCase()) {
+    if (u.email.toLowerCase() === email) {
       throw new Error('Email is already registered by another account.');
     }
   }
 
   if (id) {
-    // Update existing user record
-    await prisma.tenantUser.update({
-      where: { id },
+    await prisma.tenantUser.updateMany({
+      where: { id, organizationId: org.id },
       data: {
         fullName,
-        email: email.toLowerCase(),
-        username: username.toLowerCase(),
+        email,
+        username,
         role: normalizedRole,
         status,
         allowedTabs: tabsJsonString,
       },
     });
   } else {
-    // Generate and explicitly supply userId to satisfy schema requirements
-    const generatedUserId = userId || 'USR-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+    const generatedUserId =
+      String(formData.userId || '').trim() ||
+      'USR-' + crypto.randomBytes(4).toString('hex').toUpperCase();
 
     await prisma.tenantUser.create({
       data: {
-        organizationId: organization.id,
+        organizationId: org.id,
         userId: generatedUserId,
         fullName,
-        email: email.toLowerCase(),
-        username: username.toLowerCase(),
+        email,
+        username,
         role: normalizedRole,
         status,
         allowedTabs: tabsJsonString,
@@ -128,30 +100,49 @@ export async function saveTenantUser(formData: {
     });
   }
 
-  revalidatePath(`/department/${department}/users`);
+  await logSystemAction(
+    org.id,
+    actor.fullName || actor.email,
+    id ? 'UPDATE_TENANT_USER' : 'CREATE_TENANT_USER',
+    `${id ? 'Updated' : 'Created'} officer account ${username} (${email}) with role ${normalizedRole}.`
+  );
+
+  revalidatePath(`/department/${org.subdomain}/users`);
   return { success: true, message: 'User record saved successfully.' };
 }
 
 export async function deleteTenantUser(userId: string, department: string) {
-  // STRICT GUARD: User must have access to the User Management module
-  await requireTabAccess('tab-users');
+  const { user: actor, org } = await requireDepartmentAccess('tab-users', department);
 
   if (!userId) {
     throw new Error('User ID is required.');
   }
 
-  const targetUser = await prisma.tenantUser.findUnique({
-    where: { id: userId },
+  const targetUser = await prisma.tenantUser.findFirst({
+    where: { id: String(userId), organizationId: org.id },
   });
-
-  if (targetUser && targetUser.email === 'kent.bsece@gmail.com') {
-    throw new Error('Action denied: Cannot delete the primary master administrator account.');
+  if (!targetUser) {
+    throw new Error('User not found in this department.');
   }
 
-  await prisma.tenantUser.delete({
-    where: { id: userId },
+  if (isSuperAdminEmail(targetUser.email)) {
+    throw new Error('Action denied: Cannot delete the primary master administrator account.');
+  }
+  if (targetUser.email.toLowerCase() === String(actor.email || '').toLowerCase()) {
+    throw new Error('Action denied: You cannot delete your own account.');
+  }
+
+  await prisma.tenantUser.deleteMany({
+    where: { id: targetUser.id, organizationId: org.id },
   });
 
-  revalidatePath(`/department/${department}/users`);
+  await logSystemAction(
+    org.id,
+    actor.fullName || actor.email,
+    'DELETE_TENANT_USER',
+    `Removed officer account ${targetUser.username} (${targetUser.email}).`
+  );
+
+  revalidatePath(`/department/${org.subdomain}/users`);
   return { success: true, message: 'User account successfully removed.' };
 }

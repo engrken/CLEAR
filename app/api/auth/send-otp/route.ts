@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { sendEmail } from '@/lib/mailer'; // 🚀 CENTRALIZED MAILER
 import { isSuperAdminEmail } from '@/lib/permissions'; // 🚀 CENTRALIZED GUARD
 import crypto from 'crypto';
+import { assertCanSendOtp, otpThrottleKey, recordOtpSent } from '@/lib/auth-throttle';
 
 export async function POST(request: Request) {
   try {
@@ -19,8 +20,19 @@ export async function POST(request: Request) {
       );
     }
 
+    // Lockout + resend cooldown (F7)
+    const throttleKey = otpThrottleKey('superadmin', cleanEmail);
+    try {
+      await assertCanSendOtp(throttleKey);
+    } catch (err) {
+      return NextResponse.json({ success: false, message: (err as Error).message }, { status: 429 });
+    }
+
     // 2. Generate a 6-digit cryptographic numeric OTP (F14 Fix)
     const otpCode = crypto.randomInt(100000, 1000000).toString();
+    // Store only the SHA-256 hash: auth.ts compares hashes, so storing the
+    // plaintext code made Super Admin sign-in always fail.
+    const hashedOtp = crypto.createHash('sha256').update(otpCode).digest('hex');
     // Set expiration to 5 minutes from now
     const expires = new Date(Date.now() + 5 * 60 * 1000);
 
@@ -28,12 +40,12 @@ export async function POST(request: Request) {
     await prisma.verificationToken.upsert({
       where: { identifier: cleanEmail },
       update: {
-        token: otpCode,
+        token: hashedOtp,
         expires: expires,
       },
       create: {
         identifier: cleanEmail,
-        token: otpCode,
+        token: hashedOtp,
         expires: expires,
       },
     });
@@ -59,6 +71,8 @@ export async function POST(request: Request) {
       `,
       text: `Your CLEAR System verification code is: ${otpCode}`,
     });
+
+    await recordOtpSent(throttleKey);
 
     return NextResponse.json({ 
       success: true, 

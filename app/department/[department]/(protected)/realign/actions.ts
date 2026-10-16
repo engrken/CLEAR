@@ -3,7 +3,7 @@
 "use server";
 
 import { prisma } from '@/lib/prisma';
-import { requireTabAccess } from '@/lib/permissions';
+import { requireDepartmentAccess } from '@/lib/permissions';
 import { revalidatePath } from 'next/cache';
 
 // =========================================================================
@@ -32,14 +32,9 @@ export async function transferFunds(
   }
 ) {
   // 1. Verify Permission
-  const customUser = await requireTabAccess("tab-transfer");
+  const { user: customUser, org: organization } = await requireDepartmentAccess("tab-transfer", department);
   const officerName = customUser.fullName || customUser.email || "System Administrator";
 
-  // 2. Resolve Organization ID
-  const organization = await prisma.organization.findUnique({
-    where: { subdomain: department.toLowerCase() }
-  });
-  if (!organization) throw new Error(`Organization subdomain "${department}" not found.`);
   const orgId = organization.id;
 
   // 3. Validate Inputs
@@ -98,14 +93,9 @@ export async function carryOverTermBalance(
   }
 ) {
   // 1. Verify Permission
-  const customUser = await requireTabAccess("tab-transfer");
+  const { user: customUser, org: organization } = await requireDepartmentAccess("tab-transfer", department);
   const officerName = customUser.fullName || customUser.email || "System Administrator";
 
-  // 2. Resolve Organization ID
-  const organization = await prisma.organization.findUnique({
-    where: { subdomain: department.toLowerCase() }
-  });
-  if (!organization) throw new Error(`Organization subdomain "${department}" not found.`);
   const orgId = organization.id;
 
   // 3. Validate Inputs
