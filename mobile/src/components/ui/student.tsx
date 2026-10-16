@@ -15,7 +15,8 @@ type ClearanceProps = {
   studentName: string;
   studentId: string;
   status: 'cleared' | 'hold';
-  outstanding?: number;
+  /** Pesos due; null on public lookups, which show status only. */
+  outstanding?: number | null;
   /** Signed, organization-bound token from the API. Never built on the device. */
   qrToken?: string;
   ay: string;
@@ -23,7 +24,7 @@ type ClearanceProps = {
 };
 
 /** What a student sees after a clearance lookup. Shows status and total only. */
-export function ClearanceCard({ orgName, studentName, studentId, status, outstanding = 0, qrToken, ay, term }: ClearanceProps) {
+export function ClearanceCard({ orgName, studentName, studentId, status, outstanding = null, qrToken, ay, term }: ClearanceProps) {
   const { c } = useTheme();
   const cleared = status === 'cleared';
   return (
@@ -53,10 +54,18 @@ export function ClearanceCard({ orgName, studentName, studentId, status, outstan
       ) : (
         <View style={{ gap: spacing[1] }}>
           <Text variant="label" color="inkMuted">Outstanding balance</Text>
-          <Money value={outstanding} size="xl" tone="danger" />
-          <Text variant="bodySm" color="inkMuted">
-            Settle this with your treasurer, or upload a GCash or Maya receipt below.
-          </Text>
+          {outstanding === null ? (
+            <Text variant="bodySm" color="inkMuted">
+              You have dues to settle. Ask your treasurer for the amount, or upload a GCash or Maya receipt below.
+            </Text>
+          ) : (
+            <>
+              <Money value={outstanding} size="xl" tone="danger" />
+              <Text variant="bodySm" color="inkMuted">
+                Settle this with your treasurer, or upload a GCash or Maya receipt below.
+              </Text>
+            </>
+          )}
         </View>
       )}
 
@@ -68,7 +77,7 @@ export function ClearanceCard({ orgName, studentName, studentId, status, outstan
 }
 
 // ------------------------------------------------------------------ ProofUpload
-export type PickedFile = { uri: string; name: string; sizeBytes?: number };
+export type PickedFile = { uri: string; name: string; mimeType: string; sizeBytes?: number };
 
 type UploadProps = {
   file?: PickedFile;
@@ -97,7 +106,7 @@ export function ProofUpload({ file, progress, error, onPick, onRemove }: UploadP
         <Icon name="upload" size={28} color="accentInk" />
         <Text variant="bodyStrong">Add receipt screenshot</Text>
         <Text variant="bodySm" color={error ? 'dangerInk' : 'inkMuted'} style={{ textAlign: 'center' }}>
-          {error ?? 'JPG or PNG, up to 5 MB. Hide your mobile number and wallet balance first.'}
+          {error ?? 'JPG or PNG, up to 4 MB. Hide your mobile number and wallet balance first.'}
         </Text>
       </Pressable>
     );

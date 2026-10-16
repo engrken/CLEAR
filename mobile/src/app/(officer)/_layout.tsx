@@ -44,7 +44,7 @@ export default function OfficerTabs() {
       />
       <Tabs.Screen
         name="students"
-        options={{ title: 'Students', tabBarIcon: icon('people'), href: can('tab-students') || can('tab-clearance') ? undefined : null }}
+        options={{ title: 'Students', tabBarIcon: icon('people'), href: can('tab-students') || can('tab-payment') ? undefined : null }}
       />
       <Tabs.Screen name="more" options={{ title: 'More', tabBarIcon: icon('more') }} />
     </Tabs>

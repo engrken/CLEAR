@@ -80,7 +80,7 @@ export default function Home() {
                 amount={fromCentavos(l.amountCentavos)}
                 status={l.status}
                 onPress={
-                  l.status === 'Pending Verification' && can('tab-remittances')
+                  l.kind === 'online-remittance' && l.status === 'Pending Verification' && can('tab-remittances')
                     ? () => router.push({ pathname: '/officer/verify/[id]', params: { id: l.id } })
                     : undefined
                 }

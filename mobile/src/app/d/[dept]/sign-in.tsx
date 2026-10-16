@@ -7,7 +7,7 @@ import { Banner, Button, OtpInput, Screen, Text, TextField } from '@/components/
 import { useSession } from '@/lib/session';
 import { spacing } from '@/theme';
 
-const RESEND_AFTER = 30;
+const RESEND_AFTER = 60; // the server refuses a new code within 60 s (429 cooldown)
 
 /** Officer sign-in: email, then the 6-digit code that expires in 5 minutes. */
 export default function SignIn() {
@@ -49,7 +49,7 @@ export default function SignIn() {
     setError(undefined);
     try {
       // The root layout's guard redirects to /home once the session is set.
-      signIn(await api.verifyCode(dept, sentTo!, value));
+      await signIn(await api.verifyCode(dept, sentTo!, value));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -80,9 +80,11 @@ export default function SignIn() {
           onSubmitEditing={send}
           error={error}
         />
-        <Banner tone="info" title="Demo build">
-          Sign in as admin, treasurer, auditor or viewer@{dept}.local.
-        </Banner>
+        {api.mode === 'mock' ? (
+          <Banner tone="info" title="Offline demo">
+            Sign in as admin, treasurer, auditor or viewer@{dept}.local.
+          </Banner>
+        ) : null}
       </Screen>
     );
   }
@@ -97,7 +99,7 @@ export default function SignIn() {
           Sent to <Text variant="bodyStrong">{sentTo}</Text>. It expires in 5 minutes.
         </Text>
       </View>
-      <OtpInput value={code} onChange={(v) => { setCode(v); setError(undefined); }} onComplete={verify} error={error} helper={`Demo build: use ${DEMO_OTP}.`} />
+      <OtpInput value={code} onChange={(v) => { setCode(v); setError(undefined); }} onComplete={verify} error={error} helper={api.mode === 'mock' ? `Offline demo: use ${DEMO_OTP}.` : 'Check your inbox and spam folder.'} />
       <View style={{ flexDirection: 'row', gap: spacing[2], flexWrap: 'wrap' }}>
         <Button variant="ghost" size="sm" onPress={send} disabled={cooldown > 0 || busy}>
           {cooldown > 0 ? `Resend code in ${cooldown}s` : 'Resend code'}

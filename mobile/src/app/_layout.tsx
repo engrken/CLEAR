@@ -20,10 +20,6 @@ export default function RootLayout() {
     IBMPlexMono_400Regular, IBMPlexMono_500Medium, IBMPlexMono_600SemiBold,
   });
 
-  useEffect(() => {
-    if (loaded || error) SplashScreen.hideAsync();
-  }, [loaded, error]);
-
   if (!loaded && !error) return null;
 
   return (
@@ -37,13 +33,20 @@ export default function RootLayout() {
 
 function Navigator() {
   const { name, c } = useTheme();
-  const { session } = useSession();
+  const { session, restoring } = useSession();
+
+  // Keep the splash up until fonts are in and any stored session is re-checked.
+  useEffect(() => {
+    if (!restoring) SplashScreen.hideAsync();
+  }, [restoring]);
+
   const base = name === 'dark' ? DarkTheme : DefaultTheme;
   const navTheme = {
     ...base,
     colors: { ...base.colors, background: c.canvas, card: c.surface, text: c.ink, border: c.border, primary: c.accent },
   };
   const header = { fontFamily: 'IBMPlexSans_600SemiBold' };
+  if (restoring) return null;
 
   return (
     <NavThemeProvider value={navTheme}>

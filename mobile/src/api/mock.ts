@@ -1,11 +1,10 @@
-// In-memory stand-in for the Phase 2 REST API, seeded like prisma/seed-dev.js.
-// Every function is async and throws ApiError so screens behave as they will
-// against the network.
+// In-memory stand-in for the mobile REST API, seeded like prisma/seed-dev.js.
+// Selected with EXPO_PUBLIC_API_MODE=mock for offline demos. Mirrors the
+// server's rules (error codes, hidden public balances, officer-typed OR numbers).
 
 import {
   ApiError,
-  type ClearanceResult, type DashboardSummary, type FeeItem, type LedgerEntry, type Officer,
-  type Organization, type ProofSubmission, type Session, type Student,
+  type ClearApi, type FeeItem, type LedgerEntry, type Officer, type Organization, type Session, type Student,
 } from './types';
 
 export const DEMO_OTP = '123456';
@@ -17,7 +16,7 @@ const TERM = '1st Sem';
 
 const ORGS: Organization[] = [
   { subdomain: 'devdept', name: 'Dev Department of Engineering', type: 'Department', logoUrl: null, activeAy: AY, activeTerm: TERM },
-  { subdomain: 'jiecep', name: 'Junior Institute of Electronics Engineers of the Philippines - FCU Student Chapter', type: 'Organization', logoUrl: null, activeAy: AY, activeTerm: TERM },
+  { subdomain: 'otherdept', name: 'Other Department (isolation test)', type: 'Department', logoUrl: null, activeAy: AY, activeTerm: TERM },
 ];
 
 const ALL_TABS = [
@@ -36,13 +35,8 @@ function officerFor(dept: string, email: string): Officer | undefined {
   const m = /^(admin|treasurer|auditor|viewer)@(.+)\.local$/.exec(email.trim().toLowerCase());
   if (!m || m[2] !== dept) return undefined;
   const role = m[1] as Officer['role'];
-  return {
-    id: `USR-${dept}-${role}`,
-    fullName: `${dept === 'devdept' ? 'DEV' : dept.toUpperCase()} ${role[0].toUpperCase()}${role.slice(1)}`,
-    email: email.trim().toLowerCase(),
-    role,
-    allowedTabs: ROLE_TABS[role],
-  };
+  const prefix = dept === 'devdept' ? 'DEV' : 'OTH';
+  return { id: `USR-${dept}-${role}`, fullName: `${prefix} ${role[0].toUpperCase()}${role.slice(1)}`, email: email.trim().toLowerCase(), role, allowedTabs: ROLE_TABS[role] };
 }
 
 const STUDENTS: Student[] = [
@@ -65,152 +59,204 @@ const today = (h: number, m: number) => {
   return d.toISOString();
 };
 
-let LEDGER: LedgerEntry[] = [
+type Remit = LedgerEntry & { studentId: string; paymentChannel: string; itemDescription: string };
+
+let LEDGER: (LedgerEntry | Remit)[] = [
   { id: 'l1', kind: 'collection', title: 'Ana Reyes', reference: 'OR-2026-000184', subtitle: 'Membership Fee', amountCentavos: 15000, status: 'Valid', at: today(9, 42) },
-  { id: 'l2', kind: 'online-remittance', title: 'Ben Santos', reference: 'GC 7731 0042', subtitle: 'Org Shirt · GCash', amountCentavos: 35000, status: 'Pending Verification', at: today(9, 15) },
-  { id: 'l3', kind: 'online-remittance', title: 'Dario Lim', reference: 'MY 5520 1187', subtitle: 'Acquaintance Party · Maya', amountCentavos: 20000, status: 'Pending Verification', at: today(8, 51) },
+  { id: 'l2', kind: 'online-remittance', title: 'Ben Santos', reference: 'GC 7731 0042', subtitle: 'Org Shirt · GCash', amountCentavos: 35000, status: 'Pending Verification', at: today(9, 15), studentId: 'DEV-2026-0002', paymentChannel: 'GCash', itemDescription: 'Org Shirt' },
+  { id: 'l3', kind: 'online-remittance', title: 'Dario Lim', reference: 'MY 5520 1187', subtitle: 'Acquaintance Party · Maya', amountCentavos: 20000, status: 'Pending Verification', at: today(8, 51), studentId: 'DEV-2026-0004', paymentChannel: 'Maya', itemDescription: 'Acquaintance Party' },
   { id: 'l4', kind: 'collection', title: 'Carla Cruz', reference: 'OR-2026-000179', subtitle: 'Acquaintance Party', amountCentavos: 20000, status: 'Voided', at: today(8, 30) },
   { id: 'l5', kind: 'cashier-remittance', title: 'DEV Treasurer', reference: 'REM-26-0007', subtitle: 'General Fund · Deposit', amountCentavos: 500000, status: 'Remitted', at: today(8, 5) },
   { id: 'l6', kind: 'penalty', title: 'Ben Santos', reference: 'PEN-26-0012', subtitle: 'General Assembly · 2 hrs late', amountCentavos: 10000, status: 'Unsettled', at: today(7, 40) },
 ];
 
-// ------------------------------------------------------------------ public
-export async function listOrganizations(): Promise<Organization[]> {
-  await wait(250);
-  return ORGS;
+const findOrg = (slug: string) => {
+  const o = ORGS.find((x) => x.subdomain === slug);
+  if (!o) throw new ApiError('This department is not registered in CLEAR.', 'not_found', 404);
+  return o;
+};
+
+const tokens = new Map<string, Session>();
+
+function authed(s: Session, ...tabs: string[]) {
+  const live = tokens.get(s.token);
+  if (!live || Date.parse(live.expiresAt) < Date.now()) throw new ApiError('Your session has ended. Sign in again.', 'unauthorized', 401);
+  if (!tabs.some((t) => live.officer.allowedTabs.includes(t))) throw new ApiError('Your role can’t use this module.', 'forbidden', 403);
 }
 
-export async function getOrganization(subdomain: string): Promise<Organization> {
-  await wait(200);
-  const org = ORGS.find((o) => o.subdomain === subdomain);
-  if (!org) throw new ApiError('This department is not registered in CLEAR.', 'not_found');
-  return org;
-}
-
-export async function lookupClearance(subdomain: string, query: string): Promise<ClearanceResult> {
-  await wait();
-  const org = await getOrganization(subdomain);
-  const q = query.trim().toLowerCase();
-  const s = STUDENTS.find((x) => x.studentId.toLowerCase() === q || `${x.studentId.toLowerCase()}@students.local` === q);
-  if (!s) throw new ApiError('No student with that ID or email is on this department’s roster.', 'not_found');
-  const hold = s.studentId.endsWith('0002') || s.studentId.endsWith('0004');
-  return {
-    studentName: s.fullName,
-    studentId: s.studentId,
-    status: hold ? 'hold' : 'cleared',
-    outstandingCentavos: hold ? 70000 : 0,
-    qrToken: hold ? null : `CLEAR-DEMO:${org.subdomain}:${s.studentId}:${org.activeAy}:${org.activeTerm}`,
-    ay: org.activeAy,
-    term: org.activeTerm,
-  };
-}
-
-export async function listFeeItems(subdomain: string): Promise<FeeItem[]> {
-  await getOrganization(subdomain);
-  return FEES;
-}
-
-export async function submitProof(subdomain: string, p: ProofSubmission): Promise<{ submissionId: string }> {
-  await wait(900);
-  if (!STUDENTS.some((s) => s.studentId.toLowerCase() === p.studentId.trim().toLowerCase()))
-    throw new ApiError('Check your student ID. It must match the department roster.', 'invalid_student');
-  const submissionId = `SUB-${Date.now().toString(36).toUpperCase()}`;
-  LEDGER = [
-    {
-      id: submissionId, kind: 'online-remittance', title: STUDENTS.find((s) => s.studentId.toLowerCase() === p.studentId.toLowerCase())!.fullName,
-      reference: p.referenceNumber, subtitle: `${p.itemDescription} · ${p.paymentChannel}`, amountCentavos: p.amountCentavos,
-      status: 'Pending Verification', at: new Date().toISOString(),
-    },
-    ...LEDGER,
-  ];
-  void subdomain;
-  return { submissionId };
-}
-
-// ------------------------------------------------------------------ auth
 const pending = new Map<string, Officer>();
 
-export async function requestCode(subdomain: string, email: string): Promise<{ sentTo: string }> {
-  await wait(700);
-  const officer = officerFor(subdomain, email);
-  if (!officer) throw new ApiError('This email is not an active officer account for this department.', 'not_officer');
-  pending.set(`${subdomain}:${officer.email}`, officer);
-  return { sentTo: officer.email };
-}
+export const mockApi: ClearApi = {
+  mode: 'mock',
 
-export async function verifyCode(subdomain: string, email: string, code: string): Promise<Session> {
-  await wait(600);
-  const key = `${subdomain}:${email.trim().toLowerCase()}`;
-  const officer = pending.get(key);
-  if (!officer) throw new ApiError('That code has expired. Request a new one.', 'expired');
-  if (code !== DEMO_OTP) throw new ApiError('That code doesn’t match. Check the latest email or resend.', 'mismatch');
-  pending.delete(key);
-  return {
-    token: `demo.${officer.id}`,
-    officer,
-    org: await getOrganization(subdomain),
-    expiresAt: new Date(Date.now() + 6 * 3600 * 1000).toISOString(),
-  };
-}
+  async listOrganizations() {
+    await wait(250);
+    return ORGS;
+  },
 
-// ------------------------------------------------------------------ officer
-function authed(session: Session) {
-  if (!session.token || Date.parse(session.expiresAt) < Date.now())
-    throw new ApiError('Your session has ended. Sign in again.', 'unauthorized');
-}
+  async getOrganization(slug) {
+    await wait(200);
+    return findOrg(slug);
+  },
 
-export async function getDashboard(session: Session): Promise<DashboardSummary> {
-  authed(session);
-  await wait(300);
-  const pendingRows = LEDGER.filter((l) => l.status === 'Pending Verification');
-  return {
-    cashOnHandCentavos: 845000,
-    safekeepingCentavos: 1500000,
-    pendingCentavos: pendingRows.reduce((a, l) => a + l.amountCentavos, 0),
-    pendingCount: pendingRows.length,
-    outstandingCentavos: 420000,
-    outstandingStudents: 18,
-    collectionsToday: LEDGER.filter((l) => l.kind === 'collection' && l.status === 'Valid').length,
-  };
-}
+  async lookupClearance(slug, query, session) {
+    await wait();
+    const org = findOrg(slug);
+    const q = query.trim().toLowerCase();
+    const s = STUDENTS.find((x) => x.studentId.toLowerCase() === q || `${x.studentId.toLowerCase()}@students.local` === q);
+    if (!s) throw new ApiError('No student with that ID or email is on this department’s roster.', 'not_found', 404);
+    const hold = s.studentId.endsWith('0002') || s.studentId.endsWith('0004');
+    const officerView = !!session && session.org.subdomain === slug && session.officer.allowedTabs.includes('tab-clearance');
+    return {
+      studentName: s.fullName,
+      studentId: s.studentId,
+      status: hold ? 'hold' : 'cleared',
+      outstandingCentavos: officerView ? (hold ? 70000 : 0) : null,
+      qrToken: hold ? null : `https://clear.rupertbulquerin.com/department/${org.subdomain}/clearance?q=${s.studentId}&sig=demo`,
+      ay: org.activeAy,
+      term: org.activeTerm,
+    };
+  },
 
-export async function listLedger(session: Session, filter?: { status?: string }): Promise<LedgerEntry[]> {
-  authed(session);
-  await wait(300);
-  return filter?.status ? LEDGER.filter((l) => l.status === filter.status) : LEDGER;
-}
+  async listFeeItems(slug) {
+    await wait(200);
+    findOrg(slug);
+    return FEES;
+  },
 
-export async function reviewRemittance(session: Session, id: string, decision: 'verify' | 'invalidate'): Promise<{ orNumber?: string }> {
-  await wait(700);
-  const orNumber = decision === 'verify' ? `OR-2026-000${185 + Math.floor(Math.random() * 10)}` : undefined;
-  LEDGER = LEDGER.map((l) =>
-    l.id === id ? { ...l, status: decision === 'verify' ? 'Verified' : 'Invalidated', reference: orNumber ?? l.reference } : l
-  );
-  return { orNumber };
-}
+  async submitProof(slug, p) {
+    await wait(900);
+    findOrg(slug);
+    const student = STUDENTS.find((s) => s.studentId.toLowerCase() === p.studentId.trim().toLowerCase());
+    if (!student) throw new ApiError('Check your student ID. It must match the department roster.', 'invalid_student', 422);
+    const submissionId = `SUB-${Date.now().toString(36).toUpperCase()}`;
+    LEDGER = [
+      {
+        id: submissionId, kind: 'online-remittance', title: student.fullName, reference: p.referenceNumber,
+        subtitle: `${p.itemDescription} · ${p.paymentChannel}`, amountCentavos: p.amountCentavos,
+        status: 'Pending Verification', at: new Date().toISOString(),
+        studentId: student.studentId, paymentChannel: p.paymentChannel, itemDescription: p.itemDescription,
+      },
+      ...LEDGER,
+    ];
+    return { submissionId };
+  },
 
-export async function listStudents(session: Session): Promise<Student[]> {
-  authed(session);
-  authed(session);
-  await wait(300);
-  return STUDENTS;
-}
+  async requestCode(slug, email) {
+    await wait(700);
+    findOrg(slug);
+    const officer = officerFor(slug, email);
+    if (!officer) throw new ApiError('This email is not an active officer account for this department.', 'not_officer', 403);
+    pending.set(`${slug}:${officer.email}`, officer);
+    return { sentTo: officer.email };
+  },
 
-export async function recordPayment(
-  session: Session,
-  p: { studentId: string; feeId: string; amountCentavos: number; orNumber: string }
-): Promise<LedgerEntry> {
-  authed(session);
-  await wait(800);
-  if (LEDGER.some((l) => l.reference.toLowerCase() === p.orNumber.trim().toLowerCase()))
-    throw new ApiError('This OR number is already used. Check the receipt booklet.', 'duplicate_or');
-  const student = STUDENTS.find((s) => s.id === p.studentId);
-  const fee = FEES.find((f) => f.id === p.feeId);
-  if (!student || !fee) throw new ApiError('Choose a student and a fee item.', 'invalid');
-  const entry: LedgerEntry = {
-    id: `l${Date.now()}`, kind: 'collection', title: student.fullName, reference: p.orNumber.trim().toUpperCase(),
-    subtitle: fee.name, amountCentavos: p.amountCentavos, status: 'Valid', at: new Date().toISOString(),
-  };
-  LEDGER = [entry, ...LEDGER];
-  return entry;
-}
+  async verifyCode(slug, email, code) {
+    await wait(600);
+    const key = `${slug}:${email.trim().toLowerCase()}`;
+    const officer = pending.get(key);
+    if (!officer) throw new ApiError('No code was requested for this email. Request a new one.', 'no_code', 400);
+    if (code !== DEMO_OTP) throw new ApiError('That code doesn’t match. Check the latest email or resend.', 'mismatch', 400);
+    pending.delete(key);
+    const session: Session = {
+      token: `demo.${officer.id}.${Date.now()}`,
+      officer,
+      org: findOrg(slug),
+      expiresAt: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
+    };
+    tokens.set(session.token, session);
+    return session;
+  },
+
+  async restoreSession(_slug, token) {
+    await wait(150);
+    const s = tokens.get(token);
+    // The mock forgets tokens on reload, like a revoked token on the server.
+    if (!s) throw new ApiError('Your session has ended. Sign in again.', 'unauthorized', 401);
+    return s;
+  },
+
+  async signOut(s) {
+    tokens.delete(s.token);
+  },
+
+  async getDashboard(s) {
+    await wait(300);
+    authed(s, 'tab-overview');
+    const pendingRows = LEDGER.filter((l) => l.status === 'Pending Verification');
+    return {
+      ay: s.org.activeAy,
+      term: s.org.activeTerm,
+      cashOnHandCentavos: 845000,
+      safekeepingCentavos: 1500000,
+      pendingCentavos: pendingRows.reduce((a, l) => a + l.amountCentavos, 0),
+      pendingCount: pendingRows.length,
+      outstandingCentavos: 420000,
+      outstandingStudents: 18,
+      collectionsToday: LEDGER.filter((l) => l.kind === 'collection' && l.status === 'Valid').length,
+    };
+  },
+
+  async listLedger(s, filter) {
+    await wait(300);
+    authed(s, 'tab-overview');
+    const rows = filter?.status ? LEDGER.filter((l) => l.status === filter.status) : LEDGER;
+    return rows.slice(0, filter?.limit ?? 100).map(({ id, kind, title, reference, subtitle, amountCentavos, status, at }) => ({
+      id, kind, title, reference, subtitle, amountCentavos, status, at,
+    }));
+  },
+
+  async listStudents(s, q) {
+    await wait(300);
+    authed(s, 'tab-students', 'tab-payment');
+    const needle = q?.trim().toLowerCase();
+    return needle ? STUDENTS.filter((x) => x.fullName.toLowerCase().includes(needle) || x.studentId.toLowerCase().includes(needle)) : STUDENTS;
+  },
+
+  async recordPayment(s, p) {
+    await wait(800);
+    authed(s, 'tab-payment');
+    if (LEDGER.some((l) => l.reference.toLowerCase() === p.orNumber.trim().toLowerCase()))
+      throw new ApiError('This OR number is already used. Check the receipt booklet.', 'duplicate_or', 409);
+    const student = STUDENTS.find((x) => x.id === p.studentId);
+    const fee = FEES.find((f) => f.id === p.feeId);
+    if (!student || !fee) throw new ApiError('Choose a student and a fee item.', 'invalid', 400);
+    const entry: LedgerEntry = {
+      id: `l${Date.now()}`, kind: 'collection', title: student.fullName, reference: p.orNumber.trim().toUpperCase(),
+      subtitle: fee.name, amountCentavos: p.amountCentavos, status: 'Valid', at: new Date().toISOString(),
+    };
+    LEDGER = [entry, ...LEDGER];
+    return entry;
+  },
+
+  async getRemittance(s, id) {
+    await wait(300);
+    authed(s, 'tab-remittances');
+    const r = LEDGER.find((l) => l.id === id && l.kind === 'online-remittance') as Remit | undefined;
+    if (!r) throw new ApiError('This remittance no longer exists.', 'not_found', 404);
+    return { ...r, studentEmail: `${r.studentId.toLowerCase()}@students.local`, proofDataUrl: null, reviewNotes: null, reviewedBy: null };
+  },
+
+  async verifyRemittance(s, id, p) {
+    await wait(700);
+    authed(s, 'tab-remittances');
+    const r = LEDGER.find((l) => l.id === id);
+    if (!r) throw new ApiError('This remittance no longer exists.', 'not_found', 404);
+    if (r.status !== 'Pending Verification') throw new ApiError('This remittance was already reviewed.', 'conflict', 409);
+    const orNumber = p.orNumber.trim().toUpperCase();
+    if (LEDGER.some((l) => l.reference.toUpperCase() === orNumber))
+      throw new ApiError('This OR number is already used. Check the receipt booklet.', 'duplicate_or', 409);
+    LEDGER = LEDGER.map((l) => (l.id === id ? { ...l, status: 'Verified', reference: orNumber } : l));
+    return { orNumber };
+  },
+
+  async invalidateRemittance(s, id) {
+    await wait(600);
+    authed(s, 'tab-remittances');
+    const r = LEDGER.find((l) => l.id === id);
+    if (!r) throw new ApiError('This remittance no longer exists.', 'not_found', 404);
+    if (r.status !== 'Pending Verification') throw new ApiError('This remittance was already reviewed.', 'conflict', 409);
+    LEDGER = LEDGER.map((l) => (l.id === id ? { ...l, status: 'Invalidated' } : l));
+    return { ok: true };
+  },
+};

@@ -5,6 +5,7 @@ import { View } from 'react-native';
 import { api, type ClearanceResult, type Organization } from '@/api';
 import { Banner, Button, ClearanceCard, Screen, Text, TextField } from '@/components/ui';
 import { fromCentavos } from '@/lib/money';
+import { useSession } from '@/lib/session';
 import { useAsync } from '@/lib/use-async';
 import { spacing } from '@/theme';
 
@@ -12,6 +13,7 @@ import { spacing } from '@/theme';
 export default function Clearance() {
   const { dept } = useLocalSearchParams<{ dept: string }>();
   const router = useRouter();
+  const { session } = useSession();
   const org = useAsync<Organization>(() => api.getOrganization(dept), dept);
   const [query, setQuery] = useState('');
   const [result, setResult] = useState<ClearanceResult | null>(null);
@@ -23,7 +25,8 @@ export default function Clearance() {
     setBusy(true);
     setError(undefined);
     try {
-      setResult(await api.lookupClearance(dept, query));
+      // An officer signed in to this department sees the amount due too.
+      setResult(await api.lookupClearance(dept, query, session));
     } catch (e) {
       setResult(null);
       setError((e as Error).message);
@@ -63,7 +66,7 @@ export default function Clearance() {
             studentName={result.studentName}
             studentId={result.studentId}
             status={result.status}
-            outstanding={fromCentavos(result.outstandingCentavos)}
+            outstanding={result.outstandingCentavos === null ? null : fromCentavos(result.outstandingCentavos)}
             qrToken={result.qrToken ?? undefined}
             ay={result.ay}
             term={result.term}

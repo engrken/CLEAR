@@ -3,14 +3,15 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { api, type FeeItem } from '@/api';
+import { api, type ApiError, type FeeItem } from '@/api';
 import { Banner, Button, ProofUpload, Screen, Text, TextField, type PickedFile } from '@/components/ui';
 import { formatPeso } from '@/lib/money';
 import { useAsync } from '@/lib/use-async';
 import { radius, spacing, useTheme } from '@/theme';
 
 const CHANNELS = ['GCash', 'Maya', 'Bank transfer'] as const;
-const MAX_BYTES = 5 * 1024 * 1024;
+const MAX_BYTES = 4 * 1024 * 1024; // server limit (413 payload_too_large above this)
+const ACCEPTED = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 
 /** A student's online remittance: channel, reference, fee item and receipt. */
 export default function SubmitProof() {
@@ -35,13 +36,20 @@ export default function SubmitProof() {
     const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7 });
     if (res.canceled) return;
     const a = res.assets[0];
+    const mimeType = a.mimeType ?? 'image/jpeg';
+    if (!ACCEPTED.includes(mimeType)) {
+      setFile(undefined);
+      setFileError('Use a JPG, PNG, WebP or GIF screenshot. HEIC photos must be converted first.');
+      return;
+    }
     if (a.fileSize && a.fileSize > MAX_BYTES) {
       setFile(undefined);
-      setFileError('This file is over 5 MB. Choose a smaller screenshot.');
+      setFileError('This file is over 4 MB. Choose a smaller screenshot.');
       return;
     }
     setFileError(undefined);
-    setFile({ uri: a.uri, name: a.fileName ?? 'receipt.jpg', sizeBytes: a.fileSize });
+    const ext = mimeType.split('/')[1].replace('jpeg', 'jpg');
+    setFile({ uri: a.uri, name: a.fileName ?? `receipt.${ext}`, mimeType, sizeBytes: a.fileSize });
   };
 
   const submit = async () => {
@@ -57,11 +65,15 @@ export default function SubmitProof() {
     try {
       const { submissionId } = await api.submitProof(dept, {
         studentId, paymentChannel: channel, referenceNumber: reference.trim(),
-        amountCentavos: fee.amountCentavos, itemDescription: fee.name, fileUri: file.uri,
+        amountCentavos: fee.amountCentavos, itemDescription: fee.name,
+        file: { uri: file.uri, name: file.name, mimeType: file.mimeType },
       });
       setDone(submissionId);
     } catch (err) {
-      setErrors({ studentId: (err as Error).message });
+      const e = err as ApiError;
+      if (e.code === 'payload_too_large') setFileError(e.message);
+      else if (e.code === 'invalid_student') setErrors({ studentId: e.message });
+      else setErrors({ form: e.message });
     } finally {
       setBusy(false);
     }
@@ -85,6 +97,7 @@ export default function SubmitProof() {
           Submit payment proof
         </Button>
       }>
+      {errors.form ? <Banner tone="danger" title="Couldn’t submit">{errors.form}</Banner> : null}
       <TextField
         label="Student ID"
         value={studentId}
