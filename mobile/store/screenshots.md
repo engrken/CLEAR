@@ -1,5 +1,7 @@
 # Screenshot shot list
 
+Uploaded 2026-10-16: `screenshots/02-org.png` … `06-signin.png` (emulator 1080x2400 scaled onto a 1080x1920 9:16 canvas, because Play allows at most 2:1). Officer screens were not captured: the reviewer code is a credential and was not typed by Claude.
+
 Play needs **2–8 phone screenshots**, PNG or JPEG, 9:16 portrait. Capture at **1080×1920** (or 1080×2400 then crop) so they qualify for Play's larger placements. Use the **dev seed** data (`devdept`, students `DEV-2026-0001` / `DEV-2026-0002`), never real student names, IDs or receipts.
 
 | # | Screen | State to show | Caption idea (optional overlay) |

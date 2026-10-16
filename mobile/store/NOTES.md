@@ -31,3 +31,9 @@ Things this release prep couldn't do inside its scope (`eas.json`, `app.json` bu
 - **Contact email:** `clearsysadmin@gmail.com` (decided 2026-10-16), on both the privacy page and the Play listing.
 - **Play account:** publish from **RUPERT I.T. SOLUTIONS** (personal account, ID 7443810319444220314, apps since 2017). The 12-testers-for-14-days rule targets personal accounts created after 13 Nov 2023, so it should not apply; confirm in Play Console when applying for production.
 - **Icons:** the new icons (`assets/images/clear-*.png`, `store/graphics/`) use the app's own mark: the Bootstrap Icons shield-check (MIT license) in the brand sky `#38bdf8` on navy `#0b1329`. Swap in a designed logo whenever you have one; keep the adaptive foreground inside the centre 66% circle. The old template images (`android-icon-*.png`, `splash-icon.png`, `assets/expo.icon`) are no longer referenced and can be deleted.
+
+## App issues seen while taking screenshots (2026-10-16)
+
+- Clearance lookup placeholder shows a dev ID (`DEV-2026-0001`) and the officer sign-in placeholder shows `treasurer@devdept.local`; use neutral examples in production builds.
+- Submit payment proof: a large blank gap under "Paid through" (probably a channel/account-details block that renders empty).
+
