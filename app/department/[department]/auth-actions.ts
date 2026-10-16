@@ -6,6 +6,7 @@ import crypto from 'node:crypto';
 import { sendEmail } from '@/lib/mailer';
 import { isSuperAdminEmail } from '@/lib/permissions';
 import { assertCanSendOtp, otpThrottleKey, recordOtpSent } from '@/lib/auth-throttle';
+import { findOrganizationBySlug, sendDepartmentOtp } from '@/lib/otp';
 
 export async function requestOtp(
   department: string,
@@ -80,77 +81,14 @@ export async function requestOtp(
   }
 
   // =========================================================
-  // FIND ORGANIZATION (Case-Insensitive Fix)
+  // DEPARTMENT OFFICER (shared with the mobile API: lib/otp.ts)
   // =========================================================
-  const organization = await prisma.organization.findFirst({
-    where: {
-      subdomain: { equals: cleanDepartment, mode: 'insensitive' },
-    },
-  });
+  const organization = await findOrganizationBySlug(cleanDepartment);
   if (!organization) {
     throw new Error('Department not found.');
   }
 
-  // =========================================================
-  // FIND DEPARTMENT USER
-  // =========================================================
-  const user = await prisma.tenantUser.findFirst({
-    where: {
-      organizationId: organization.id,
-      email: { equals: cleanEmail, mode: 'insensitive' },
-      status: 'Active',
-    },
-  });
-  if (!user) {
-    throw new Error('This account is not registered or is currently inactive.');
-  }
-
-  const throttleKey = otpThrottleKey(organization.subdomain, cleanEmail);
-  await assertCanSendOtp(throttleKey);
-
-  // =========================================================
-  // STORE DEPARTMENT USER OTP
-  // =========================================================
-  await prisma.tenantUser.update({
-    where: { id: user.id },
-    data: {
-      otpCode: hashedOtp,
-      otpExpires,
-    },
-  });
-
-  // =========================================================
-  // SEND EMAIL
-  // =========================================================
-  try {
-    await sendEmail({
-      to: cleanEmail,
-      subject: `CLEAR System: ${organization.name} Verification Code`,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 30px; background: #f8f9fa;">
-          <div style="background: #ffffff; border-radius: 12px; padding: 30px; border: 1px solid #dee2e6;">
-            <h2 style="margin-top: 0; color: #212529;">CLEAR System</h2>
-            <p>Hello <strong>${user.fullName}</strong>,</p>
-            <p>Your verification code for <strong>${organization.name}</strong> is:</p>
-            <div style="text-align: center; margin: 30px 0;">
-              <div style="display: inline-block; padding: 15px 25px; font-size: 32px; font-weight: bold; letter-spacing: 8px; background: #f1f3f5; border-radius: 10px; color: #212529;">
-                ${otp}
-              </div>
-            </div>
-            <p>This verification code will expire in <strong>5 minutes</strong>.</p>
-          </div>
-        </div>
-      `,
-      text: `Your CLEAR System verification code for ${organization.name} is: ${otp}`,
-    });
-  } catch (error) {
-    await prisma.tenantUser.update({
-      where: { id: user.id },
-      data: { otpCode: null, otpExpires: null },
-    });
-    throw new Error('Unable to send verification email. Please try again.');
-  }
-  await recordOtpSent(throttleKey);
+  await sendDepartmentOtp(organization, cleanEmail);
 
   return {
     success: true,

@@ -2,39 +2,15 @@
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { PRESET_ROLE_TABS, effectiveTabs, hasTabAccess, isAdminRole, normalizeDepartmentSlug, parseAllowedTabs } from "@/lib/roles";
 
-export const PRESET_ROLE_TABS: Record<string, string[]> = {
-  admin: [
-    "tab-overview", "tab-students", "tab-clearance", "tab-payment",
-    "tab-remittances", "tab-penalties", "tab-advances", "tab-audit",
-    "tab-collectibles", "tab-reports", "tab-void", "tab-report",
-    "tab-transfer", "tab-users", "tab-setup",
-  ],
-  treasurer: [
-    "tab-overview", "tab-clearance", "tab-reports", "tab-payment",
-    "tab-remittances", "tab-penalties", "tab-advances", "tab-collectibles",
-    "tab-report", "tab-transfer",
-  ],
-  auditor: ["tab-overview", "tab-clearance", "tab-reports", "tab-audit", "tab-report"],
-  viewer: ["tab-overview", "tab-clearance", "tab-reports", "tab-report"],
-};
+export { PRESET_ROLE_TABS, effectiveTabs, hasTabAccess, isAdminRole, normalizeDepartmentSlug, parseAllowedTabs };
 
 export function isSuperAdminEmail(email?: string | null): boolean {
   const clean = String(email || "").trim().toLowerCase();
   // No hardcoded fallback (F2): with SUPER_ADMIN_EMAIL unset, nobody is Super Admin.
   const configured = String(process.env.SUPER_ADMIN_EMAIL || "").trim().toLowerCase();
   return Boolean(clean && configured && clean === configured);
-}
-
-export function parseAllowedTabs(tabs: unknown): string[] {
-  if (Array.isArray(tabs)) return tabs.filter((v): v is string => typeof v === "string");
-  if (typeof tabs === "string") {
-    try {
-      const parsed = JSON.parse(tabs);
-      return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === "string") : [];
-    } catch { return []; }
-  }
-  return [];
 }
 
 export async function requireSuperAdmin() {
@@ -59,22 +35,6 @@ export interface AccessUser {
   allowedTabs?: unknown;
   organizationId: string;
   department: string;
-}
-
-export function normalizeDepartmentSlug(department: string): string {
-  let raw = String(department || "");
-  try {
-    raw = decodeURIComponent(raw);
-  } catch {
-    // Malformed escape sequence: fall through with the raw value (it will not match a subdomain)
-  }
-  return raw.trim().toLowerCase();
-}
-
-export function isAdminRole(role?: string | null): boolean {
-  return ["admin", "administrator", "master", "superadmin", "super_admin"].includes(
-    String(role || "").trim().toLowerCase()
-  );
 }
 
 /**
@@ -126,13 +86,8 @@ export async function requireDepartmentAccess(requiredTab: string | null, depart
     user.username = member.username;
   }
 
-  if (requiredTab && !isSuper && !isAdminRole(user.role)) {
-    const role = String(user.role || "viewer").trim().toLowerCase();
-    const explicitTabs = parseAllowedTabs(user.allowedTabs);
-    const effectiveTabs = explicitTabs.length > 0 ? explicitTabs : (PRESET_ROLE_TABS[role] || PRESET_ROLE_TABS.viewer);
-    if (!effectiveTabs.includes(requiredTab)) {
-      throw new Error(`403 Forbidden: Your account scope lacks permission for the ${requiredTab} module.`);
-    }
+  if (requiredTab && !isSuper && !hasTabAccess(user.role, user.allowedTabs, requiredTab)) {
+    throw new Error(`403 Forbidden: Your account scope lacks permission for the ${requiredTab} module.`);
   }
 
   return { user, org, isSuperAdmin: isSuper };

@@ -5,7 +5,6 @@
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import { isSuperAdminEmail } from '@/lib/permissions'; // 🚀 SECURITY FIX (F2)
 
 const PRESET_ROLE_TABS: Record<string, string[]> = {
   admin: [
@@ -33,7 +32,8 @@ export default function DepartmentSidebar({
   logoUrl,
   currentUser,
   defaultAy = 'A.Y. 2026 - 2027',
-  defaultTerm = '1st Sem'
+  defaultTerm = '1st Sem',
+  isSuperAdmin = false
 }: {
   department: string;
   orgName?: string; 
@@ -41,6 +41,8 @@ export default function DepartmentSidebar({
   currentUser?: any;
   defaultAy?: string;
   defaultTerm?: string;
+  /** Computed on the server (SUPER_ADMIN_EMAIL is not available in the browser). */
+  isSuperAdmin?: boolean;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -109,8 +111,7 @@ export default function DepartmentSidebar({
   `;
 
   const canAccess = (tabId: string) => {
-    // SECURITY FIX (F2): Use central isSuperAdminEmail helper
-    if (isSuperAdminEmail(currentUser?.email)) return true;
+    if (isSuperAdmin) return true;
     return effectiveTabs.includes(tabId);
   };
 

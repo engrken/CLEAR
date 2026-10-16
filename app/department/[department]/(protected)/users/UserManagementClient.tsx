@@ -5,7 +5,6 @@
 import { useState } from "react";
 import { saveTenantUser, deleteTenantUser } from "./actions";
 import { ThemedAlert } from '@/lib/alerts';
-import { isSuperAdminEmail } from "@/lib/permissions"; // 🚀 CENTRALIZED GUARD
 
 interface TenantUser {
   id: string;
@@ -16,6 +15,8 @@ interface TenantUser {
   role: string;
   status: string;
   allowedTabs?: string[];
+  /** The configured Super Admin account (cannot be deleted); computed on the server. */
+  isSuperAdmin?: boolean;
 }
 
 const CLEAR_SYSTEM_TABS = [
@@ -229,7 +230,7 @@ export default function UserManagementClient({
                           <button className="btn btn-sm btn-outline-info" onClick={() => openEditModal(u)}>
                             <i className="bi bi-pencil me-1"></i>Edit
                           </button>
-                          {!isSuperAdminEmail(u.email) && (
+                          {!u.isSuperAdmin && (
                             <button className="btn btn-sm btn-outline-danger" onClick={() => handleDeleteUser(u.id, u.name)}>
                               <i className="bi bi-trash me-1"></i>Delete
                             </button>

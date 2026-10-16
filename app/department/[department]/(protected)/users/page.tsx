@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import UserManagementClient from './UserManagementClient';
 import { Metadata } from 'next';
 import { redirect } from 'next/navigation';
-import { requireDepartmentAccess, normalizeDepartmentSlug, parseAllowedTabs } from '@/lib/permissions';
+import { requireDepartmentAccess, normalizeDepartmentSlug, parseAllowedTabs, isSuperAdminEmail } from '@/lib/permissions';
 
 export const metadata: Metadata = {
   title: 'Centralized Liquidation of Expenses & Audit Records',
@@ -45,6 +45,7 @@ export default async function UserManagementPage({ params }: PageProps) {
     role: u.role,
     status: u.status,
     allowedTabs: parseAllowedTabs(u.allowedTabs),
+    isSuperAdmin: isSuperAdminEmail(u.email),
   }));
 
   return <UserManagementClient initialUsers={users} department={cleanSubdomain} />;

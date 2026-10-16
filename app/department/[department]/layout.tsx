@@ -140,6 +140,7 @@ export default async function ProtectedDepartmentLayout({
         currentUser={currentUser}
         defaultAy={organization.activeAy || undefined}
         defaultTerm={organization.activeTerm || undefined}
+        isSuperAdmin={isGlobalAdmin}
       />
 
       <div

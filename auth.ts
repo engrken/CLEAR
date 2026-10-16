@@ -11,6 +11,7 @@ import {
   otpThrottleKey,
   recordOtpFailure,
 } from "@/lib/auth-throttle";
+import { OtpError, verifyDepartmentOtp } from "@/lib/otp";
 
 class CustomAuthError extends CredentialsSignin {
   constructor(message: string) {
@@ -179,80 +180,15 @@ export const {
           );
         }
 
-        // 🚀 Synchronized: Case-insensitive email lookup for tenant users
-        const user =
-          await prisma.tenantUser.findFirst({
-            where: {
-              organizationId: organization.id,
-              email: { equals: email, mode: 'insensitive' },
-              status: "Active",
-            },
-          });
-
-        if (!user) {
-          throw new CustomAuthError(
-            "This account is not authorized for this department."
-          );
+        // Shared with the mobile API (lib/otp.ts): lockout, expiry,
+        // timing-safe hash check, single use.
+        let user;
+        try {
+          user = await verifyDepartmentOtp(organization, email, code);
+        } catch (err) {
+          if (err instanceof OtpError) throw new CustomAuthError(err.message);
+          throw err;
         }
-
-        const throttleKey = otpThrottleKey(organization.subdomain, email);
-        await assertIdentityNotLocked(throttleKey);
-
-        if (!user.otpCode) {
-          throw new CustomAuthError(
-            "No department verification code requested."
-          );
-        }
-
-        if (
-          !user.otpExpires ||
-          user.otpExpires < new Date()
-        ) {
-          throw new CustomAuthError(
-            "Verification code has expired."
-          );
-        }
-
-        const submittedUserHash = crypto.createHash('sha256').update(code).digest('hex');
-        const storedUserHash = String(user.otpCode || '').trim();
-
-        const storedUserBuf = Buffer.from(storedUserHash, 'utf8');
-        const submittedUserBuf = Buffer.from(submittedUserHash, 'utf8');
-
-        if (
-          storedUserBuf.length !== submittedUserBuf.length ||
-          !crypto.timingSafeEqual(storedUserBuf, submittedUserBuf)
-        ) {
-          if (await recordOtpFailure(throttleKey)) {
-            await prisma.tenantUser.update({
-              where: { id: user.id },
-              data: { otpCode: null, otpExpires: null },
-            });
-            throw new CustomAuthError(
-              "Too many failed attempts. Request a new code in 15 minutes."
-            );
-          }
-          throw new CustomAuthError(
-            "Invalid verification code."
-          );
-        }
-
-
-        // =====================================================
-        // CONSUME OTP
-        // =====================================================
-
-        await prisma.tenantUser.update({
-          where: {
-            id: user.id,
-          },
-          data: {
-            otpCode: null,
-            otpExpires: null,
-          },
-        });
-
-        await clearOtpFailures(throttleKey);
 
         const allowedTabs = parseAllowedTabs(user.allowedTabs);
 

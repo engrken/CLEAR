@@ -12,6 +12,14 @@ export const MAX_FAILED_ATTEMPTS = 5;
 export const LOCKOUT_MINUTES = 15;
 export const RESEND_COOLDOWN_SECONDS = 60;
 
+/** Thrown by the throttle checks; `code` lets API callers map it to a status. */
+export class ThrottleError extends Error {
+  constructor(message: string, public code: 'locked' | 'cooldown') {
+    super(message);
+    this.name = 'ThrottleError';
+  }
+}
+
 export function otpThrottleKey(scope: string, email: string) {
   return `otp:${String(scope || '').trim().toLowerCase()}:${String(email || '').trim().toLowerCase()}`;
 }
@@ -24,8 +32,9 @@ function minutesLeft(until: Date) {
 export async function assertNotLocked(key: string) {
   const row = await prisma.authThrottle.findUnique({ where: { key } });
   if (row?.lockedUntil && row.lockedUntil > new Date()) {
-    throw new Error(
-      `Too many failed attempts. Try again in ${minutesLeft(row.lockedUntil)} minute(s).`
+    throw new ThrottleError(
+      `Too many failed attempts. Try again in ${minutesLeft(row.lockedUntil)} minute(s).`,
+      'locked'
     );
   }
   return row;
@@ -37,8 +46,9 @@ export async function assertCanSendOtp(key: string) {
   if (row?.lastSentAt) {
     const elapsed = (Date.now() - row.lastSentAt.getTime()) / 1000;
     if (elapsed < RESEND_COOLDOWN_SECONDS) {
-      throw new Error(
-        `Please wait ${Math.ceil(RESEND_COOLDOWN_SECONDS - elapsed)} seconds before requesting another code.`
+      throw new ThrottleError(
+        `Please wait ${Math.ceil(RESEND_COOLDOWN_SECONDS - elapsed)} seconds before requesting another code.`,
+        'cooldown'
       );
     }
   }
