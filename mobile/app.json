@@ -3,23 +3,40 @@
     "name": "CLEAR",
     "slug": "clear-mobile",
     "version": "1.0.0",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/clear-icon.png",
     "scheme": "clearsys",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon",
-      "bundleIdentifier": "app.clearsys.mobile"
+      "bundleIdentifier": "com.rupertbulquerin.clear",
+      "buildNumber": "1",
+      "supportsTablet": false,
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
     "android": {
+      "package": "com.rupertbulquerin.clear",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#0b1329",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "foregroundImage": "./assets/images/clear-adaptive-foreground.png",
+        "monochromeImage": "./assets/images/clear-adaptive-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "app.clearsys.mobile"
+      "blockedPermissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ]
     },
     "web": {
       "output": "static",
@@ -31,8 +48,8 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#0b1329",
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "image": "./assets/images/clear-splash.png",
+          "imageWidth": 96
         }
       ],
       [
