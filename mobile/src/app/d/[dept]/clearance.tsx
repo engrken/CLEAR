@@ -21,7 +21,7 @@ export default function Clearance() {
   const [busy, setBusy] = useState(false);
 
   const check = async () => {
-    if (!query.trim()) return setError('Enter your student ID, for example DEV-2026-0001.');
+    if (!query.trim()) return setError('Enter your student ID or the email registered with your department.');
     setBusy(true);
     setError(undefined);
     try {
@@ -47,7 +47,7 @@ export default function Clearance() {
           label="Student ID or email"
           value={query}
           onChangeText={(t) => { setQuery(t); setError(undefined); }}
-          placeholder="DEV-2026-0001"
+          placeholder="Your student ID"
           autoCapitalize="characters"
           autoCorrect={false}
           returnKeyType="search"

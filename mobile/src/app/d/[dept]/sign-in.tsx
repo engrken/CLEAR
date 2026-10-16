@@ -70,7 +70,7 @@ export default function SignIn() {
           label="Email address"
           value={email}
           onChangeText={(t) => { setEmail(t); setError(undefined); }}
-          placeholder="treasurer@devdept.local"
+          placeholder="officer@school.edu.ph"
           keyboardType="email-address"
           inputMode="email"
           autoCapitalize="none"

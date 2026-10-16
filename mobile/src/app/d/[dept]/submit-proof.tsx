@@ -1,7 +1,7 @@
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { api, type ApiError, type FeeItem } from '@/api';
 import { Banner, Button, ProofUpload, Screen, Text, TextField, type PickedFile } from '@/components/ui';
@@ -102,7 +102,7 @@ export default function SubmitProof() {
         label="Student ID"
         value={studentId}
         onChangeText={setStudentId}
-        placeholder="DEV-2026-0001"
+        placeholder="Your student ID"
         autoCapitalize="characters"
         autoCorrect={false}
         error={errors.studentId}
@@ -112,7 +112,7 @@ export default function SubmitProof() {
         <Text variant="label" color="inkMuted">Paid through</Text>
         <View style={styles.segment}>
           {CHANNELS.map((ch) => (
-            <Option key={ch} label={ch} selected={channel === ch} onPress={() => setChannel(ch)} />
+            <Option key={ch} label={ch} selected={channel === ch} onPress={() => setChannel(ch)} style={styles.segmentOption} />
           ))}
         </View>
       </View>
@@ -152,7 +152,7 @@ export default function SubmitProof() {
   );
 }
 
-function Option({ label, detail, selected, onPress }: { label: string; detail?: string; selected: boolean; onPress: () => void }) {
+function Option({ label, detail, selected, onPress, style }: { label: string; detail?: string; selected: boolean; onPress: () => void; style?: StyleProp<ViewStyle> }) {
   const { c } = useTheme();
   return (
     <Pressable
@@ -162,6 +162,7 @@ function Option({ label, detail, selected, onPress }: { label: string; detail?: 
       style={[
         styles.option,
         { backgroundColor: selected ? c.accentTint : c.card, borderColor: selected ? c.accent : c.borderStrong },
+        style,
       ]}>
       <Text variant="bodyStrong" color={selected ? 'accentInk' : 'ink'} style={{ flex: 1 }}>{label}</Text>
       {detail ? <Text variant="figureSm" color={selected ? 'accentInk' : 'inkMuted'}>{detail}</Text> : null}
@@ -170,7 +171,10 @@ function Option({ label, detail, selected, onPress }: { label: string; detail?: 
 }
 
 const styles = StyleSheet.create({
-  segment: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
+  // No flexWrap: with wrapping, Yoga reserved height for phantom extra lines and
+  // left a blank gap under the channel buttons on Android.
+  segment: { flexDirection: 'row', gap: spacing[2] },
+  segmentOption: { flexBasis: 0 },
   option: {
     flexGrow: 1,
     flexDirection: 'row',
