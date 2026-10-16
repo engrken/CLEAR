@@ -15,7 +15,7 @@ export default function manifest(): MetadataRoute.Manifest {
     orientation: 'portrait',
     dir: 'ltr',
     lang: 'en',
-    categories: ['finance', 'productivity', 'business', 'education', 'organization'],
+    categories: ['finance', 'productivity', 'business'],
     icons: [
       {
         src: '/icon-192x192.png',
@@ -30,20 +30,20 @@ export default function manifest(): MetadataRoute.Manifest {
         purpose: 'any maskable',
       },
     ],
-	screenshots: [
-  {
-    src: '/screenshot-wide.png',
-    sizes: '1280x720',
-    type: 'image/png',
-    form_factor: 'wide'
-  },
-  {
-    src: '/screenshot-mobile.png',
-    sizes: '720x1280',
-    type: 'image/png',
-    form_factor: 'narrow'
-  }
-]
+    screenshots: [
+      {
+        src: '/screenshot-wide.png',
+        sizes: '1280x720',
+        type: 'image/png',
+        form_factor: 'wide',
+      },
+      {
+        src: '/screenshot-mobile.png',
+        sizes: '720x1280',
+        type: 'image/png',
+        form_factor: 'narrow',
+      },
+    ],
     shortcuts: [
       {
         name: 'Dashboard',
