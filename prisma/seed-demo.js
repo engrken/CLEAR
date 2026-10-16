@@ -11,7 +11,8 @@
 // Usage:
 //   local:      node --env-file=.env prisma/seed-demo.js [--yes]
 //   production: node --env-file=<production env file> prisma/seed-demo.js
-//               (always asks you to type the database host; --yes is ignored)
+//               (asks you to type the database host; --yes is ignored. Without a
+//               terminal, pass --confirm-host <host> with the exact host instead.)
 //
 // The reviewer email is DEMO_REVIEWER_EMAIL (default reviewer@demo.clear.invalid).
 // Use the same value on the server, with DEMO_REVIEWER_CODE, to switch sign-in on.
@@ -86,8 +87,14 @@ async function confirm(host) {
   console.log(`Demo officer: ${REVIEWER_EMAIL}\n`);
 
   if (local && process.argv.includes('--yes')) return;
+  const i = process.argv.indexOf('--confirm-host');
+  if (i !== -1) {
+    if (process.argv[i + 1] === host) return;
+    console.error('--confirm-host does not match the database host. Nothing was changed.');
+    process.exit(1);
+  }
   if (!process.stdin.isTTY) {
-    console.error('Refusing to run without a terminal to confirm in (--yes only works for a local database).');
+    console.error('Refusing to run without a terminal to confirm in (--yes only works for a local database; or pass --confirm-host <host>).');
     process.exit(1);
   }
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
