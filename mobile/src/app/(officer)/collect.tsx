@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { api, type FeeItem, type Student } from '@/api';
+import { api, type ApiError, type FeeItem, type Student } from '@/api';
 import { Banner, Button, Screen, Text, TextField } from '@/components/ui';
 import { formatPeso, fromCentavos } from '@/lib/money';
 import { useOfficerSession } from '@/lib/session';
@@ -51,7 +51,9 @@ export default function Collect() {
       setRecorded(`${entry.reference} · ${formatPeso(pesos)} from ${entry.title}`);
       setStudentId(undefined); setFeeId(undefined); setAmount(''); setOrNumber(''); setSearch('');
     } catch (err) {
-      setErrors({ or: (err as Error).message });
+      const e = err as ApiError;
+      // Only a reused OR number is the OR field's problem; anything else (already paid, bad item) is the form's.
+      setErrors(e.code === 'duplicate_or' ? { or: e.message } : { form: e.message });
     } finally {
       setBusy(false);
     }
@@ -62,6 +64,7 @@ export default function Collect() {
       edges={[]}
       footer={<Button block icon="receipt" onPress={submit} loading={busy} loadingLabel="Recording…">Record payment</Button>}>
       {recorded ? <Banner tone="success" title="Payment recorded">{recorded}. The receipt was emailed to the student.</Banner> : null}
+      {errors.form ? <Banner tone="danger" title="Payment not recorded">{errors.form}</Banner> : null}
 
       <View style={{ gap: spacing[2] }}>
         {student ? (

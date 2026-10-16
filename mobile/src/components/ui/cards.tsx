@@ -69,7 +69,7 @@ type LedgerRowProps = {
 /** One collection, remittance, penalty or advance in a list. */
 export function LedgerRow({ title, reference, subtitle, amount, status, onPress, first }: LedgerRowProps) {
   const { c } = useTheme();
-  const voided = !!status && /void|invalid/i.test(status);
+  const voided = !!status && /void|invalid|reject/i.test(status);
   return (
     <Pressable
       onPress={onPress}
