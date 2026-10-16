@@ -6,6 +6,15 @@ import { prisma } from '@/lib/prisma';
 import { requireTabAccess } from '@/lib/permissions';
 import { logSystemAction } from '@/lib/logger';
 import { revalidatePath } from 'next/cache';
+import { headers } from 'next/headers';
+
+// =========================================================================
+// SECURITY CONFIGURATIONS FOR PUBLIC SUBMISSION
+// =========================================================================
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB limit
+const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
+const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000; // 10 minutes window
+const MAX_SUBMISSIONS_IN_WINDOW = 5; // Max 5 submissions per IP in 10 mins
 
 // =========================================================================
 // HELPER FUNCTIONS (Internal to this module)
@@ -81,7 +90,6 @@ export async function verifyOnlineRemittance(
     const amount = Math.max(0, Number(remittance.amountPaid) || 0);
     if (amount <= 0) throw new Error("The remittance contains an invalid amount.");
 
-    // 🚀 FIX: Resolve student UUID properly to avoid foreign-key constraint violations
     const studentDbId = await resolveStudentDbId(orgId, remittance.studentId);
 
     await tx.onlineRemittance.update({
@@ -167,7 +175,7 @@ export async function invalidateOnlineRemittance(department: string, remittanceI
 }
 
 // =========================================================================
-// PUBLIC SUBMISSION ENDPOINTS (NO AUTH REQUIRED)
+// PUBLIC SUBMISSION ENDPOINTS (HARDENED WITH RATE LIMITING & VALIDATION)
 // =========================================================================
 
 export async function submitOnlineRemittance(
@@ -186,8 +194,56 @@ export async function submitOnlineRemittance(
   }
 ) {
   const cleanDepartment = decodeURIComponent(department).trim().toLowerCase();
-  let data;
 
+  const organization = await prisma.organization.findUnique({
+    where: { subdomain: cleanDepartment }
+  });
+  if (!organization) throw new Error(`Organization "${cleanDepartment}" not found.`);
+  const orgId = organization.id;
+
+  // =========================================================
+  // 1. IP-BASED RATE LIMITING (Using AuthThrottle Table)
+  // =========================================================
+  const headersList = await headers();
+  const clientIp = headersList.get('x-forwarded-for') || 'unknown';
+  const throttleKey = `public_remit_${orgId}_${clientIp}`;
+
+  const now = new Date();
+  const windowStartThreshold = new Date(now.getTime() - RATE_LIMIT_WINDOW_MS);
+
+  let throttle = await prisma.authThrottle.findUnique({
+    where: { identifier: throttleKey },
+  });
+
+  if (throttle) {
+    if (throttle.windowStart > windowStartThreshold) {
+      if (throttle.attempts >= MAX_SUBMISSIONS_IN_WINDOW) {
+        throw new Error('Too many payment proof submissions from your network. Please wait 10 minutes before trying again.');
+      }
+      await prisma.authThrottle.update({
+        where: { identifier: throttleKey },
+        data: { attempts: throttle.attempts + 1 },
+      });
+    } else {
+      await prisma.authThrottle.update({
+        where: { identifier: throttleKey },
+        data: { attempts: 1, windowStart: now },
+      });
+    }
+  } else {
+    await prisma.authThrottle.create({
+      data: {
+        identifier: throttleKey,
+        attempts: 1,
+        windowStart: now,
+      },
+    });
+  }
+
+  // =========================================================
+  // 2. PARSE PAYLOAD & VALIDATE FILES (IF FORMDATA)
+  // =========================================================
+  let data;
   if (typeof (payload as FormData).get === 'function') {
     const formData = payload as FormData;
     data = {
@@ -205,6 +261,13 @@ export async function submitOnlineRemittance(
 
     const receiptFile = formData.get('receipt') as File | null;
     if (receiptFile) {
+      if (receiptFile.size > MAX_FILE_SIZE) {
+        throw new Error('File size exceeds the 5MB maximum limit. Please upload a smaller image.');
+      }
+      if (!ALLOWED_MIME_TYPES.includes(receiptFile.type.toLowerCase())) {
+        throw new Error('Invalid file format. Only JPEG, PNG, and WebP receipt images are permitted.');
+      }
+
       const arrayBuffer = await receiptFile.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
       data.proofBase64 = `data:${receiptFile.type};base64,${buffer.toString('base64')}`;
@@ -213,17 +276,31 @@ export async function submitOnlineRemittance(
     data = payload as any;
   }
 
-  const organization = await prisma.organization.findUnique({
-    where: { subdomain: cleanDepartment }
-  });
-  if (!organization) throw new Error(`Organization "${cleanDepartment}" not found.`);
-  const orgId = organization.id;
-
+  // =========================================================
+  // 3. FIELD VALIDATIONS & SANITIZATION
+  // =========================================================
   const cleanEmail = String(data.email || "").trim().toLowerCase();
   if (!cleanEmail || !cleanEmail.includes("@")) throw new Error("Please provide a valid email address.");
 
   const amount = money(data.amount, "Online remittance amount");
   if (amount <= 0) throw new Error("Amount must be greater than zero.");
+
+  const targetStudentId = String(data.studentId || "").trim();
+  if (!targetStudentId) throw new Error("Student ID is required.");
+
+  // =========================================================
+  // 4. STUDENT EXISTENCE CHECK IN ORGANIZATION ROSTER
+  // =========================================================
+  const studentExists = await prisma.student.findFirst({
+    where: {
+      organizationId: orgId,
+      studentId: { equals: targetStudentId, mode: 'insensitive' },
+    },
+  });
+
+  if (!studentExists) {
+    throw new Error(`Student ID "${targetStudentId}" is not registered under this department. Please verify your student ID.`);
+  }
 
   const submissionId = generateReference("SUB");
 
@@ -233,8 +310,8 @@ export async function submitOnlineRemittance(
       submissionId,
       academicYear: data.ay,
       term: data.term,
-      studentId: String(data.studentId || "").trim() || null,
-      studentName: String(data.studentName || "").trim(),
+      studentId: targetStudentId,
+      studentName: String(data.studentName || studentExists.fullName).trim(),
       studentEmail: cleanEmail,
       paymentChannel: String(data.paymentChannel || "").trim(),
       referenceNumber: String(data.referenceNo || "").trim(),
@@ -256,6 +333,8 @@ export async function submitOnlineRemittance(
 
   revalidatePath(`/department/${cleanDepartment}/remittances`);
   revalidatePath(`/department/${cleanDepartment}/clearance`);
+
+  return { success: true, message: "Payment proof submitted successfully." };
 }
 
 export async function submitOnlineRemittanceDirect(
