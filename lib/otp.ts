@@ -3,12 +3,15 @@
 // Department officer sign-in codes: the one implementation used by the web login
 // (auth-actions.requestOtp + auth.ts authorize) and the mobile API. Codes are
 // 6 digits, single use, valid 5 minutes, stored only as SHA-256 hashes, and
-// throttled per identity (lib/auth-throttle.ts).
+// throttled per identity (lib/auth-throttle.ts). The Play reviewer's demo
+// officer gets a fixed code instead of an email (lib/demo-reviewer.ts); it is
+// checked by the same verifyDepartmentOtp as every other code.
 
 import crypto from 'node:crypto';
 import type { Organization, TenantUser } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { sendEmail } from '@/lib/mailer';
+import { demoReviewerCode } from '@/lib/demo-reviewer';
 import {
   ThrottleError,
   assertCanSendOtp,
@@ -87,11 +90,18 @@ export async function sendDepartmentOtp(
   const throttleKey = otpThrottleKey(org.subdomain, email);
   await assertCanSendOtp(throttleKey).catch(rethrowThrottle);
 
-  const otp = crypto.randomInt(100000, 1000000).toString();
+  const demoCode = demoReviewerCode(org.subdomain, email);
+  const otp = demoCode ?? crypto.randomInt(100000, 1000000).toString();
   await prisma.tenantUser.update({
     where: { id: user.id },
     data: { otpCode: hashOtp(otp), otpExpires: new Date(Date.now() + OTP_TTL_MS) },
   });
+
+  // The demo officer's address has no inbox; the reviewer has the code already.
+  if (demoCode) {
+    await recordOtpSent(throttleKey);
+    return { user };
+  }
 
   try {
     await sendEmail({

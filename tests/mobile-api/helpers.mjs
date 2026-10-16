@@ -45,6 +45,13 @@ export const ROLE_TABS = {
 };
 
 export const emailOf = (org, role) => `${role}@${org}.local`;
+
+// Play reviewer demo org (prisma/seed-demo.js); sign-in needs both variables in
+// .env, which the dev server and this suite both read.
+export const DEMO_ORG = 'demo';
+export const DEMO_EMAIL = String(process.env.DEMO_REVIEWER_EMAIL || '').trim().toLowerCase();
+export const DEMO_CODE = String(process.env.DEMO_REVIEWER_CODE || '').trim();
+export const DEMO_ON = Boolean(DEMO_EMAIL && /^\d{6}$/.test(DEMO_CODE));
 export const schoolId = (org, n) => `${org === 'devdept' ? 'DEV' : 'OTH'}-2026-${String(n).padStart(4, '0')}`;
 
 function hostOf(url) {
@@ -202,6 +209,23 @@ export async function resetData() {
   const run = spawnSync(process.execPath, ['prisma/seed-dev.js'], { cwd: REPO_ROOT, env: process.env, encoding: 'utf8' });
   if (run.status !== 0) throw new Error(`seed-dev failed:\n${run.stdout}\n${run.stderr}`);
   await clearThrottle();
+}
+
+/** Runs a repo script with the suite's env (scripts carry their own localhost guards). */
+export function runScript(script, args = []) {
+  assertLocalOnly();
+  const run = spawnSync(process.execPath, [script, ...args], { cwd: REPO_ROOT, env: process.env, encoding: 'utf8' });
+  return { status: run.status, out: `${run.stdout}
+${run.stderr}` };
+}
+
+/** Re-creates the demo org (prisma/seed-demo.js --yes, local only) and clears its throttling. */
+export async function resetDemo() {
+  assertLocalOnly();
+  await assertServerUp();
+  const run = runScript('prisma/seed-demo.js', ['--yes']);
+  if (run.status !== 0) throw new Error(`seed-demo failed:
+${run.out}`);
 }
 
 export async function orgRow(org) {

@@ -5,6 +5,7 @@
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { requireSuperAdmin } from '@/lib/permissions';
+import { DEMO_ORG_SLUG } from '@/lib/demo-reviewer';
 
 export async function createDepartment(formData: FormData) {
   // SECURITY FIX (F1): Enforce strict Super Admin authorization before creating tenants
@@ -24,6 +25,11 @@ export async function createDepartment(formData: FormData) {
   
   if (!/^[a-z0-9-]+$/.test(subdomain)) {
     throw new Error('Acronym / Subdomain may contain only lowercase letters, numbers, and hyphens.');
+  }
+
+  // Reserved for the Play review org (prisma/seed-demo.js), which has a fixed sign-in code
+  if (subdomain === DEMO_ORG_SLUG) {
+    throw new Error(`The acronym '${DEMO_ORG_SLUG}' is reserved.`);
   }
 
   // Check if organization subdomain already exists
