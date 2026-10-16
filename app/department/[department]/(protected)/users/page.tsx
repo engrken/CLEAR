@@ -39,9 +39,6 @@ export default async function UserManagementPage({ params }: PageProps) {
   const department = resolvedParams?.department || 'engineering';
   const cleanSubdomain = decodeURIComponent(department).trim().toLowerCase();
 
-  // =========================================================
-  // AUTHORIZATION GUARD (F70 Fix)
-  // =========================================================
   try {
     await requireTabAccess('tab-users', cleanSubdomain);
   } catch {
@@ -50,7 +47,6 @@ export default async function UserManagementPage({ params }: PageProps) {
 
   let users: any[] = []; 
   try {
-    // 1. Ensure Organization exists (Auto-tenant provisioning)
     let organization = await prisma.organization.findUnique({
       where: { subdomain: cleanSubdomain },
     });
@@ -64,7 +60,6 @@ export default async function UserManagementPage({ params }: PageProps) {
       });
     }
 
-    // 2. Ensure Master Admin is ALWAYS seeded for this tenant (F2 Fix)
     const masterEmail = process.env.SUPER_ADMIN_EMAIL || 'kent.bsece@gmail.com';
     const existingMaster = await prisma.tenantUser.findFirst({
       where: { 
@@ -73,7 +68,6 @@ export default async function UserManagementPage({ params }: PageProps) {
       }
     });
 
-    // If master doesn't exist, create it. If it does, do NOT overwrite its custom allowedTabs.
     if (!existingMaster) {
       await prisma.tenantUser.create({
         data: {
@@ -89,7 +83,6 @@ export default async function UserManagementPage({ params }: PageProps) {
       }).catch(() => {});
     }
 
-    // 3. Seed other default officers if needed
     let dbUsers = await prisma.tenantUser.findMany({
       where: { organizationId: organization.id },
       orderBy: { fullName: 'asc' },
@@ -132,6 +125,7 @@ export default async function UserManagementPage({ params }: PageProps) {
       username: u.username,
       role: u.role,
       status: u.status,
+      otpAttempts: u.otpAttempts || 0, // 🚀 Passed down to UI client
       allowedTabs: u.allowedTabs ? JSON.parse(u.allowedTabs) : []
     }));
   } catch (err) {

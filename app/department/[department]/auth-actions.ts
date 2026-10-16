@@ -6,6 +6,9 @@ import crypto from 'node:crypto';
 import { cookies } from 'next/headers';
 import { sendEmail } from '@/lib/mailer';
 import { isSuperAdminEmail } from '@/lib/permissions';
+import { auth } from '@/auth';
+
+const MAX_OTP_ATTEMPTS = 5;
 
 export async function requestOtp(
   department: string,
@@ -88,17 +91,27 @@ export async function requestOtp(
   }
 
   // =========================================================
-  // FIND DEPARTMENT USER
+  // FIND DEPARTMENT USER & CHECK ACCOUNT STATUS
   // =========================================================
   const user = await prisma.tenantUser.findFirst({
     where: {
       organizationId: organization.id,
       email: { equals: cleanEmail, mode: 'insensitive' },
-      status: 'Active',
     },
   });
+
   if (!user) {
-    throw new Error('This account is not registered or is currently inactive.');
+    throw new Error('This account is not registered under this department.');
+  }
+
+  if (user.status === 'Blocked') {
+    throw new Error(
+      'ACCOUNT BLOCKED: Maximum failed login attempts (5) exceeded. Only an Admin or Super Admin can unblock your account.'
+    );
+  }
+
+  if (user.status !== 'Active') {
+    throw new Error('This account is currently inactive. Please contact your administrator.');
   }
 
   // =========================================================
@@ -109,6 +122,7 @@ export async function requestOtp(
     data: {
       otpCode: hashedOtp,
       otpExpires,
+      // Keep existing otpAttempts so requesting a new code doesn't bypass the 5-strike limit
     },
   });
 
@@ -151,7 +165,7 @@ export async function requestOtp(
 }
 
 // =========================================================
-// VERIFY OTP
+// VERIFY OTP (With 5-Attempt Lockout Enforcement)
 // =========================================================
 export async function verifyOtp(
   department: string,
@@ -211,7 +225,7 @@ export async function verifyOtp(
     };
   }
 
-  // Handle Department Tenant User Verification (Case-Insensitive Organization Lookup)
+  // Handle Department Tenant User Verification
   const organization = await prisma.organization.findFirst({
     where: { subdomain: { equals: cleanDepartment, mode: 'insensitive' } },
   });
@@ -223,25 +237,67 @@ export async function verifyOtp(
     where: {
       organizationId: organization.id,
       email: { equals: cleanEmail, mode: 'insensitive' },
-      status: 'Active',
     },
   });
 
-  if (!user || !user.otpCode || !user.otpExpires || user.otpExpires < new Date()) {
+  if (!user) {
+    throw new Error('This account is not registered under this department.');
+  }
+
+  if (user.status === 'Blocked') {
+    throw new Error(
+      'ACCOUNT BLOCKED: Maximum failed login attempts (5) exceeded. Only an Admin or Super Admin can unblock your account.'
+    );
+  }
+
+  if (user.status !== 'Active') {
+    throw new Error('This account is currently inactive. Please contact your administrator.');
+  }
+
+  if (!user.otpCode || !user.otpExpires || user.otpExpires < new Date()) {
     throw new Error('Verification code has expired or is invalid. Please request a new one.');
   }
 
   const storedHashBuf = Buffer.from(user.otpCode, 'utf8');
   const submittedHashBuf = Buffer.from(submittedHash, 'utf8');
 
+  // Check OTP Match & Track Failed Attempts
   if (storedHashBuf.length !== submittedHashBuf.length || !crypto.timingSafeEqual(storedHashBuf, submittedHashBuf)) {
-    throw new Error('Invalid verification code.');
+    const newAttempts = (user.otpAttempts || 0) + 1;
+
+    if (newAttempts >= MAX_OTP_ATTEMPTS) {
+      await prisma.tenantUser.update({
+        where: { id: user.id },
+        data: {
+          status: 'Blocked',
+          otpAttempts: newAttempts,
+          otpCode: null,
+          otpExpires: null,
+        },
+      });
+      throw new Error(
+        'Maximum failed attempts (5/5) reached. Your account is now BLOCKED. Only an Admin or Super Admin can unblock your account.'
+      );
+    } else {
+      const remaining = MAX_OTP_ATTEMPTS - newAttempts;
+      await prisma.tenantUser.update({
+        where: { id: user.id },
+        data: { otpAttempts: newAttempts },
+      });
+      throw new Error(
+        `Invalid verification code. You have ${remaining} attempt${remaining === 1 ? '' : 's'} remaining before your account is blocked.`
+      );
+    }
   }
 
-  // Clear OTP code after successful verification
+  // Clear OTP code and reset attempt counter after successful verification
   await prisma.tenantUser.update({
     where: { id: user.id },
-    data: { otpCode: null, otpExpires: null },
+    data: {
+      otpCode: null,
+      otpExpires: null,
+      otpAttempts: 0,
+    },
   });
 
   cookieStore.set('fcu_session', user.id, {
@@ -268,5 +324,49 @@ export async function verifyOtp(
       role: user.role,
       allowedTabs: parsedTabs,
     },
+  };
+}
+
+// =========================================================
+// ADMIN / SUPER ADMIN: UPDATE ACCOUNT STATUS & UNBLOCK
+// =========================================================
+export async function updateUserAccountStatus(
+  targetUserId: string,
+  newStatus: 'Active' | 'Inactive' | 'Blocked'
+) {
+  const session = await auth();
+  const callerUser = session?.user as any;
+
+  if (!callerUser || (callerUser.role !== 'Admin' && callerUser.role !== 'SuperAdmin')) {
+    throw new Error('Unauthorized: Only an Admin or Super Admin can change account status or unblock users.');
+  }
+
+  const targetUser = await prisma.tenantUser.findUnique({
+    where: { id: targetUserId },
+  });
+
+  if (!targetUser) {
+    throw new Error('User not found.');
+  }
+
+  // Ensure Department Admins can only manage users within their own organization
+  if (callerUser.role !== 'SuperAdmin' && targetUser.organizationId !== callerUser.organizationId) {
+    throw new Error('Unauthorized: You can only manage users within your own department.');
+  }
+
+  await prisma.tenantUser.update({
+    where: { id: targetUserId },
+    data: {
+      status: newStatus,
+      // When unblocking/activating, reset failed attempts and clear stale OTPs
+      ...(newStatus === 'Active'
+        ? { otpAttempts: 0, otpCode: null, otpExpires: null }
+        : {}),
+    },
+  });
+
+  return {
+    success: true,
+    message: `Account status for ${targetUser.fullName} updated to ${newStatus}.`,
   };
 }

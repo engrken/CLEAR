@@ -6,6 +6,8 @@ import crypto from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { isSuperAdminEmail, parseAllowedTabs } from "@/lib/permissions";
 
+const MAX_OTP_ATTEMPTS = 5;
+
 class CustomAuthError extends CredentialsSignin {
   constructor(message: string) {
     super(message);
@@ -145,7 +147,6 @@ export const {
           );
         }
 
-        // 🚀 Synchronized: Case-insensitive organization lookup
         const organization =
           await prisma.organization.findFirst({
             where: {
@@ -159,19 +160,31 @@ export const {
           );
         }
 
-        // 🚀 Synchronized: Case-insensitive email lookup for tenant users
+        // Query user without restricting to "Active" so we can catch Blocked/Inactive statuses
         const user =
           await prisma.tenantUser.findFirst({
             where: {
               organizationId: organization.id,
               email: { equals: email, mode: 'insensitive' },
-              status: "Active",
             },
           });
 
         if (!user) {
           throw new CustomAuthError(
             "This account is not authorized for this department."
+          );
+        }
+
+        // Explicit Status & Lockout Checks
+        if (user.status === 'Blocked') {
+          throw new CustomAuthError(
+            "ACCOUNT BLOCKED: Maximum failed login attempts (5) exceeded. Only an Admin or Super Admin can unblock your account."
+          );
+        }
+
+        if (user.status !== 'Active') {
+          throw new CustomAuthError(
+            "This account is currently inactive. Please contact your administrator."
           );
         }
 
@@ -196,20 +209,47 @@ export const {
         const storedUserBuf = Buffer.from(storedUserHash, 'utf8');
         const submittedUserBuf = Buffer.from(submittedUserHash, 'utf8');
 
+        // =====================================================
+        // HANDLE FAILED ATTEMPT & 5-STRIKE AUTO-BLOCK
+        // =====================================================
         if (
           storedUserBuf.length !== submittedUserBuf.length ||
           !crypto.timingSafeEqual(storedUserBuf, submittedUserBuf)
         ) {
           console.log("AUTH OTP MISMATCH");
-          throw new CustomAuthError(
-            "Invalid verification code."
-          );
+          const newAttempts = (user.otpAttempts || 0) + 1;
+
+          if (newAttempts >= MAX_OTP_ATTEMPTS) {
+            await prisma.tenantUser.update({
+              where: { id: user.id },
+              data: {
+                status: 'Blocked',
+                otpAttempts: newAttempts,
+                otpCode: null,
+                otpExpires: null,
+              },
+            });
+
+            throw new CustomAuthError(
+              "Maximum failed attempts (5/5) reached. Your account is now BLOCKED. Only an Admin or Super Admin can unblock your account."
+            );
+          } else {
+            const remaining = MAX_OTP_ATTEMPTS - newAttempts;
+            await prisma.tenantUser.update({
+              where: { id: user.id },
+              data: { otpAttempts: newAttempts },
+            });
+
+            throw new CustomAuthError(
+              `Invalid verification code. You have ${remaining} attempt${remaining === 1 ? '' : 's'} remaining before your account is blocked.`
+            );
+          }
         }
 
         console.log("AUTH OTP VALID.");
 
         // =====================================================
-        // CONSUME OTP
+        // CONSUME OTP & RESET FAILED ATTEMPTS COUNTER
         // =====================================================
 
         await prisma.tenantUser.update({
@@ -219,6 +259,7 @@ export const {
           data: {
             otpCode: null,
             otpExpires: null,
+            otpAttempts: 0, // Reset counter back to 0 on success
           },
         });
 

@@ -1,82 +1,77 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-generator client {
-  provider = "prisma-client-js"
-}
-
 model Organization {
-  id                String   @id @default(uuid())
-  subdomain         String   @unique
-  name              String
-  createdAt         DateTime @default(now())
-  
-  // NEW: System-wide active term settings
-  activeAy          String   @default("A.Y. 2026 - 2027")
-  activeTerm        String   @default("1st Sem")
-  type              String   @default("Department")
-  logo 				String?
-  students          Student[]
-  enrollments       Enrollment[]
-  funds             Fund[]
-  collections       Collection[]
-  penalties         Penalty[]
-  cashAdvances      CashAdvance[]
-  audits            Audit[]
-  expenseItems      ExpenseItem[]
-  collectibles      Collectible[]
-  onlineRemittances OnlineRemittance[]
+  id                 String              @id @default(uuid())
+  subdomain          String              @unique
+  name               String
+  createdAt          DateTime            @default(now())
+  activeAy           String              @default("A.Y. 2026 - 2027")
+  activeTerm         String              @default("1st Sem")
+  type               String              @default("Department")
+  logo               String?
+  audits             Audit[]
+  cashAdvances       CashAdvance[]
   cashierRemittances CashierRemittance[]
-  fundTransfers     FundTransfer[]
-  systemLogs        SystemLog[]
-  tenantUsers       TenantUser[]
-  voidTransactions  VoidTransaction[]
-  realignments      FundRealignment[]
-  collectionSetups  CollectionSetup[]
-  signatories   Signatory[]
+  collectibles       Collectible[]
+  collections        Collection[]
+  collectionSetups   CollectionSetup[]
+  enrollments        Enrollment[]
+  expenseItems       ExpenseItem[]
+  funds              Fund[]
+  realignments       FundRealignment[]
+  fundTransfers      FundTransfer[]
+  MobileSession      MobileSession[]
+  onlineRemittances  OnlineRemittance[]
+  penalties          Penalty[]
+  signatories        Signatory[]
+  students           Student[]
+  systemLogs         SystemLog[]
+  tenantUsers        TenantUser[]
+  voidTransactions   VoidTransaction[]
 }
 
 model Signatory {
   id             String       @id @default(cuid())
   organizationId String
-  label          String       // e.g., "Prepared by:", "Attested by:", "Approved:"
-  name           String       // e.g., "Juan Dela Cruz"
-  position       String       // e.g., "Auditor", "Dean", "Adviser"
-  order          Int          // Controls the left-to-right display order (1, 2, 3...)
-  
+  label          String
+  name           String
+  position       String
+  order          Int
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])
 }
 
 model Student {
-  id               String   @id @default(uuid())
-  organizationId   String
-  studentId        String
-  fullName         String
-  yearLevel        String
-  email            String?
+  id             String       @id @default(uuid())
+  organizationId String
+  studentId      String
+  fullName       String
+  yearLevel      String
+  email          String?
+  collections    Collection[]
+  enrollments    Enrollment[]
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  enrollments      Enrollment[]
-  collections      Collection[]
-
-  // ADD THIS LINE:
   @@unique([organizationId, studentId])
 }
 
 model Enrollment {
-  id               String   @id @default(uuid())
+  id               String       @id @default(uuid())
   organizationId   String
   studentId        String
-  academicYear     String   @default("A.Y. 2026 - 2027")
-  term             String   @default("1st Sem")
-  enrollmentStatus String   @default("Enrolled")
-  lastUpdated      DateTime @default(now())
+  academicYear     String       @default("A.Y. 2026 - 2027")
+  term             String       @default("1st Sem")
+  enrollmentStatus String       @default("Enrolled")
+  lastUpdated      DateTime     @default(now())
   updatedBy        String?
-
   organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   student          Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
@@ -84,155 +79,148 @@ model Enrollment {
 }
 
 model Fund {
-  id                 String   @id @default(uuid())
-  organizationId     String
-  academicYear       String   @default("A.Y. 2026 - 2027")
-  term               String   @default("1st Sem")
-  fundName           String
-  initialAllocation  Float    @default(0)
-  currentBalance     Float    @default(0)
-
-  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  id                String       @id @default(uuid())
+  organizationId    String
+  academicYear      String       @default("A.Y. 2026 - 2027")
+  term              String       @default("1st Sem")
+  fundName          String
+  initialAllocation Float        @default(0)
+  currentBalance    Float        @default(0)
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, academicYear, term, fundName])
 }
 
 model Collection {
-  id              String   @id @default(uuid())
+  id              String       @id @default(uuid())
   organizationId  String
-  timestamp       DateTime @default(now())
-  academicYear    String   @default("A.Y. 2026 - 2027")
-  term            String   @default("1st Sem")
-  date            DateTime @default(now())
+  timestamp       DateTime     @default(now())
+  academicYear    String       @default("A.Y. 2026 - 2027")
+  term            String       @default("1st Sem")
+  date            DateTime     @default(now())
   studentId       String?
   studentName     String
   orNumber        String
   category        String
   itemDescription String
   paymentType     String
-  standardRate    Float    @default(0)
-  amountPaid      Float    @default(0)
-  balanceDue      Float    @default(0)
+  standardRate    Float        @default(0)
+  amountPaid      Float        @default(0)
+  balanceDue      Float        @default(0)
   fundAllocation  String
-  status          String   @default("Valid")
+  status          String       @default("Valid")
   encodedBy       String?
-
   organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   student         Student?     @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, orNumber, itemDescription])
-  @@index([organizationId, academicYear, term]) 
+  @@index([organizationId, academicYear, term])
 }
 
 model CollectionSetup {
   id             String       @id @default(cuid())
   organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   category       String
   name           String
   amount         Float
   targetFund     String
   academicYear   String
   term           String
-  isPackage      Boolean      @default(true) 
   createdAt      DateTime     @default(now())
+  isPackage      Boolean      @default(true)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId, academicYear, term])
 }
 
 model Penalty {
-  id             String   @id @default(uuid())
+  id             String       @id @default(uuid())
   organizationId String
-  penaltyId      String   @unique
-  academicYear   String   @default("A.Y. 2026 - 2027")
-  term           String   @default("1st Sem")
-  date           DateTime @default(now())
+  penaltyId      String       @unique
+  academicYear   String       @default("A.Y. 2026 - 2027")
+  term           String       @default("1st Sem")
+  date           DateTime     @default(now())
   studentId      String?
   studentName    String
   activity       String
-  hoursLate      Float    @default(0)
-  ratePerHour    Float    @default(50)
-  fineAmount     Float    @default(0)
-  status         String   @default("Unsettled")
+  hoursLate      Float        @default(0)
+  ratePerHour    Float        @default(50)
+  fineAmount     Float        @default(0)
+  status         String       @default("Unsettled")
   encodedBy      String?
-
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
 
 model CashAdvance {
-  id                   String   @id @default(uuid())
-  organizationId       String
-  advanceId            String   @unique
-  academicYear         String   @default("A.Y. 2026 - 2027")
-  term                 String   @default("1st Sem")
-  dateIssued           DateTime @default(now())
-  requestor            String
-  fundSource           String
-  amountApproved       Float    @default(0)
-  expectedReturnDate   DateTime?
-  purpose              String?
-  status               String   @default("Active (Unliquidated)")
-  encodedBy            String?
-
-  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  id                 String       @id @default(uuid())
+  organizationId     String
+  advanceId          String       @unique
+  academicYear       String       @default("A.Y. 2026 - 2027")
+  term               String       @default("1st Sem")
+  dateIssued         DateTime     @default(now())
+  requestor          String
+  fundSource         String
+  amountApproved     Float        @default(0)
+  expectedReturnDate DateTime?
+  purpose            String?
+  status             String       @default("Active (Unliquidated)")
+  encodedBy          String?
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
 
 model Audit {
-  id                 String   @id @default(uuid())
-  organizationId     String
-  auditId            String   @unique
-  academicYear       String   @default("A.Y. 2026 - 2027")
-  term               String   @default("1st Sem")
-  date               DateTime @default(now())
-  referenceCaId      String
-  requestor          String
-  fundSource         String
-  budgetRequested    Float    @default(0)
-  totalExpense       Float    @default(0)
-  varianceReturn     Float    @default(0)
-  reimbursementDue   Float    @default(0)
-  status             String   @default("Audited & Verified")
-  encodedBy          String?
-
-  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  expenseItems       ExpenseItem[]
+  id               String        @id @default(uuid())
+  organizationId   String
+  auditId          String        @unique
+  academicYear     String        @default("A.Y. 2026 - 2027")
+  term             String        @default("1st Sem")
+  date             DateTime      @default(now())
+  referenceCaId    String
+  requestor        String
+  fundSource       String
+  budgetRequested  Float         @default(0)
+  totalExpense     Float         @default(0)
+  varianceReturn   Float         @default(0)
+  reimbursementDue Float         @default(0)
+  status           String        @default("Audited & Verified")
+  encodedBy        String?
+  organization     Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  expenseItems     ExpenseItem[]
 }
 
 model ExpenseItem {
-  id              String   @id @default(uuid())
+  id              String       @id @default(uuid())
   organizationId  String
   auditId         String
   orSiNumber      String?
-  qty             Int      @default(1)
+  qty             Int          @default(1)
   description     String
-  subTotal        Float    @default(0)
+  subTotal        Float        @default(0)
   receiptProofUrl String?
-
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   audit           Audit        @relation(fields: [auditId], references: [auditId], onDelete: Cascade)
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
 
 model Collectible {
-  id             String   @id @default(uuid())
+  id             String       @id @default(uuid())
   organizationId String
   category       String
-  academicYear   String   @default("A.Y. 2026 - 2027")
-  term           String   @default("1st Sem")
-  headcount      Int      @default(1)
-  balanceDue     Float    @default(0)
-  status         String   @default("Outstanding")
+  academicYear   String       @default("A.Y. 2026 - 2027")
+  term           String       @default("1st Sem")
+  headcount      Int          @default(1)
+  balanceDue     Float        @default(0)
+  status         String       @default("Outstanding")
   encodedBy      String?
-
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
 
 model OnlineRemittance {
-  id              String   @id @default(uuid())
+  id              String       @id @default(uuid())
   organizationId  String
-  submissionId    String   @unique
-  timestamp       DateTime @default(now())
-  academicYear    String   @default("A.Y. 2026 - 2027")
-  term            String   @default("1st Sem")
+  submissionId    String       @unique
+  timestamp       DateTime     @default(now())
+  academicYear    String       @default("A.Y. 2026 - 2027")
+  term            String       @default("1st Sem")
   studentId       String?
   studentName     String
   studentEmail    String?
@@ -241,60 +229,57 @@ model OnlineRemittance {
   category        String
   itemDescription String
   paymentMode     String
-  amountPaid      Float    @default(0)
+  amountPaid      Float        @default(0)
   proofUrl        String?
-  status          String   @default("Pending Verification")
+  status          String       @default("Pending Verification")
   reviewNotes     String?
   reviewedBy      String?
   orNumber        String?
-
   organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
 
 model FundTransfer {
-  id               String   @id @default(uuid())
-  organizationId   String
-  timestamp        DateTime @default(now())
-  academicYear     String   @default("A.Y. 2026 - 2027")
-  term             String   @default("1st Sem")
-  sourceFund       String
-  destinationFund  String
-  amount           Float    @default(0)
-  reason           String
-  encodedBy        String?
-
-  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  id              String       @id @default(uuid())
+  organizationId  String
+  timestamp       DateTime     @default(now())
+  academicYear    String       @default("A.Y. 2026 - 2027")
+  term            String       @default("1st Sem")
+  sourceFund      String
+  destinationFund String
+  amount          Float        @default(0)
+  reason          String
+  encodedBy       String?
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
 
 model SystemLog {
   id             String       @id @default(cuid())
   organizationId String
   timestamp      DateTime     @default(now())
-  user           String       // The name or email of the officer
-  action         String       // e.g., "USER_LOGOUT", "RECORD_PAYMENT", "UNAUTHORIZED_ATTEMPT"
-  details        String?      @db.Text // Optional extra information
-  
+  user           String
+  action         String
+  details        String?
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId, timestamp])
 }
 
 model TenantUser {
-  id             String       @id @default(uuid())
+  id             String          @id @default(cuid())
   organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  userId         String       
+  userId         String
   fullName       String
-  username       String       
-  email          String       
-  role           String       
-  allowedTabs    String       
-  status         String       
-  
+  username       String
+  email          String
+  role           String
+  allowedTabs    String
+  status         String
   otpCode        String?
   otpExpires     DateTime?
-  
-  updatedAt      DateTime     @updatedAt
+  otpAttempts    Int             @default(0)
+  updatedAt      DateTime        @updatedAt
+  MobileSession  MobileSession[]
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, userId])
   @@unique([organizationId, username])
@@ -308,47 +293,69 @@ model VerificationToken {
 }
 
 model VoidTransaction {
-  id              String   @id @default(uuid())
+  id              String       @id @default(uuid())
   organizationId  String
   transactionType String
   referenceId     String
   amount          Float
   reason          String
   voidedBy        String
-  date            DateTime @default(now())
-
+  date            DateTime     @default(now())
   organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
 
 model FundRealignment {
-  id             String   @id @default(uuid())
+  id             String       @id @default(uuid())
   organizationId String
-  date           DateTime @default(now())
+  date           DateTime     @default(now())
   sourceFund     String
   targetFund     String
   amount         Float
   reason         String
   authorizedBy   String
-
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
 
 model CashierRemittance {
   id               String       @id @default(uuid())
   organizationId   String
-  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  
   remittanceId     String       @unique
   academicYear     String
   term             String
   date             DateTime     @default(now())
   remittedBy       String
   fundSource       String
-  type             String       @default("Deposit") // 🚀 NEW: "Deposit" or "Withdrawal"
   amount           Float        @default(0)
   cashierReceiptNo String?
   remarks          String?
-  status           String       @default("Remitted") 
+  status           String       @default("Remitted")
   encodedBy        String
   createdAt        DateTime     @default(now())
+  type             String       @default("Deposit")
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model AuthThrottle {
+  key         String    @id
+  failedCount Int       @default(0)
+  lockedUntil DateTime?
+  lastSentAt  DateTime?
+  updatedAt   DateTime
+}
+
+model MobileSession {
+  id             String       @id
+  tokenHash      String       @unique
+  tenantUserId   String
+  organizationId String
+  createdAt      DateTime     @default(now())
+  expiresAt      DateTime
+  lastUsedAt     DateTime     @default(now())
+  revokedAt      DateTime?
+  userAgent      String?
+  Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  TenantUser     TenantUser   @relation(fields: [tenantUserId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([tenantUserId])
 }

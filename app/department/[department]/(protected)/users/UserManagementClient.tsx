@@ -3,9 +3,9 @@
 "use client";
 
 import { useState } from "react";
-import { saveTenantUser, deleteTenantUser } from "./actions";
+import { saveTenantUser, deleteTenantUser, updateUserAccountStatus } from "./actions";
 import { ThemedAlert } from '@/lib/alerts';
-import { isSuperAdminEmail } from "@/lib/permissions"; // 🚀 CENTRALIZED GUARD
+import { isSuperAdminEmail } from "@/lib/permissions";
 
 interface TenantUser {
   id: string;
@@ -15,6 +15,7 @@ interface TenantUser {
   username?: string;
   role: string;
   status: string;
+  otpAttempts?: number;
   allowedTabs?: string[];
 }
 
@@ -51,12 +52,12 @@ const PRESET_ROLE_TABS: Record<string, string[]> = {
   ]
 };
 
-export default function UserManagementClient({ 
-  initialUsers, 
-  department = 'engineering' 
-}: { 
-  initialUsers: TenantUser[]; 
-  department: string; 
+export default function UserManagementClient({  
+  initialUsers,  
+  department = 'engineering'  
+}: {  
+  initialUsers: TenantUser[];  
+  department: string;  
 }) {
   const [users, setUsers] = useState<TenantUser[]>(initialUsers);
   const [showModal, setShowModal] = useState(false);
@@ -79,7 +80,7 @@ export default function UserManagementClient({
   };
 
   const handleTabToggle = (tabId: string) => {
-    setSelectedTabs(prev => 
+    setSelectedTabs(prev =>  
       prev.includes(tabId) ? prev.filter(t => t !== tabId) : [...prev, tabId]
     );
   };
@@ -124,6 +125,18 @@ export default function UserManagementClient({
       }
     } catch (err: any) {
       alert(err.message || "Failed to delete user account.");
+    }
+  };
+
+  const handleStatusChangeAction = async (userId: string, newStatus: 'Active' | 'Inactive' | 'Blocked') => {
+    try {
+      const res = await updateUserAccountStatus(userId, newStatus, department);
+      if (res.success) {
+        setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: newStatus, otpAttempts: newStatus === 'Active' ? 0 : u.otpAttempts } : u));
+        alert(res.message);
+      }
+    } catch (err: any) {
+      alert(err.message || "Failed to update account status.");
     }
   };
 
@@ -197,7 +210,7 @@ export default function UserManagementClient({
                   <th>User Details</th>
                   <th>Role</th>
                   <th>Scope</th>
-                  <th className="text-center">Status</th>
+                  <th className="text-center">Status / Lockout</th>
                   <th className="text-end">Actions</th>
                 </tr>
               </thead>
@@ -220,12 +233,44 @@ export default function UserManagementClient({
                         </small>
                       </td>
                       <td className="text-center">
-                        <span className={`badge ${u.status === 'Active' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary'}`}>
-                          {u.status}
-                        </span>
+                        {u.status === 'Active' && (
+                          <span className="badge bg-success-subtle text-success border border-success px-2 py-1">
+                            <i className="bi bi-check-circle-fill me-1"></i> Active
+                          </span>
+                        )}
+                        {u.status === 'Inactive' && (
+                          <span className="badge bg-secondary-subtle text-secondary border border-secondary px-2 py-1">
+                            <i className="bi bi-dash-circle-fill me-1"></i> Inactive
+                          </span>
+                        )}
+                        {u.status === 'Blocked' && (
+                          <span className="badge bg-danger-subtle text-danger border border-danger px-2 py-1">
+                            <i className="bi bi-shield-lock-fill me-1"></i> Blocked ({u.otpAttempts || 5}/5 tries)
+                          </span>
+                        )}
                       </td>
                       <td className="text-end">
-                        <div className="d-flex gap-1 justify-content-end">
+                        <div className="d-flex gap-1 justify-content-end align-items-center">
+                          {u.status === 'Blocked' ? (
+                            <button 
+                              className="btn btn-sm btn-warning fw-bold text-dark px-2"
+                              onClick={() => handleStatusChangeAction(u.id, 'Active')}
+                              title="Unblock account and reset failed OTP attempts"
+                            >
+                              <i className="bi bi-unlock-fill me-1"></i>Unblock
+                            </button>
+                          ) : (
+                            <select
+                              className="form-select form-select-sm bg-card text-color border-secondary"
+                              style={{ width: '110px', fontSize: '0.8rem' }}
+                              value={u.status}
+                              onChange={(e) => handleStatusChangeAction(u.id, e.target.value as any)}
+                            >
+                              <option value="Active">Active</option>
+                              <option value="Inactive">Inactive</option>
+                              <option value="Blocked">Blocked</option>
+                            </select>
+                          )}
                           <button className="btn btn-sm btn-outline-info" onClick={() => openEditModal(u)}>
                             <i className="bi bi-pencil me-1"></i>Edit
                           </button>
@@ -325,6 +370,7 @@ export default function UserManagementClient({
                       >
                         <option value="Active">Active</option>
                         <option value="Inactive">Inactive</option>
+                        <option value="Blocked">Blocked</option>
                       </select>
                     </div>
                   </div>

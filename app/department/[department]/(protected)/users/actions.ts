@@ -132,6 +132,42 @@ export async function saveTenantUser(formData: {
   return { success: true, message: 'User record saved successfully.' };
 }
 
+export async function updateUserAccountStatus(
+  userId: string,
+  newStatus: 'Active' | 'Inactive' | 'Blocked',
+  department: string
+) {
+  await requireTabAccess('tab-users');
+
+  if (!userId) {
+    throw new Error('User ID is required.');
+  }
+
+  const targetUser = await prisma.tenantUser.findUnique({
+    where: { id: userId },
+  });
+
+  if (!targetUser) {
+    throw new Error('User not found.');
+  }
+
+  if (targetUser.email === 'kent.bsece@gmail.com' && newStatus !== 'Active') {
+    throw new Error('Action denied: Cannot modify the primary master administrator account status.');
+  }
+
+  await prisma.tenantUser.update({
+    where: { id: userId },
+    data: {
+      status: newStatus,
+      // If unblocking/activating, reset failed attempt counters and clear stale OTP locks
+      ...(newStatus === 'Active' ? { otpAttempts: 0, otpCode: null, otpExpires: null } : {}),
+    },
+  });
+
+  revalidatePath(`/department/${department}/users`);
+  return { success: true, message: `Account status successfully updated to ${newStatus}.` };
+}
+
 export async function deleteTenantUser(userId: string, department: string) {
   // STRICT GUARD: User must have access to the User Management module
   await requireTabAccess('tab-users');
