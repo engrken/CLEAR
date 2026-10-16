@@ -223,12 +223,12 @@ export async function submitOnlineRemittance(
       }
       await prisma.authThrottle.update({
         where: { key: throttleKey },
-        data: { failedCount: throttle.failedCount + 1 },
+        data: { failedCount: throttle.failedCount + 1, updatedAt: now },
       });
     } else {
       await prisma.authThrottle.update({
         where: { key: throttleKey },
-        data: { failedCount: 1, lastSentAt: now },
+        data: { failedCount: 1, lastSentAt: now, updatedAt: now },
       });
     }
   } else {
@@ -237,6 +237,7 @@ export async function submitOnlineRemittance(
         key: throttleKey,
         failedCount: 1,
         lastSentAt: now,
+        updatedAt: now,
       },
     });
   }
