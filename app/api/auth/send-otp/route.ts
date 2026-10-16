@@ -2,8 +2,8 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { sendEmail } from '@/lib/mailer'; // 🚀 CENTRALIZED MAILER
-import { isSuperAdminEmail } from '@/lib/permissions'; // 🚀 CENTRALIZED GUARD
+import { sendEmail } from '@/lib/mailer'; 
+import { isSuperAdminEmail } from '@/lib/permissions'; 
 import crypto from 'crypto';
 
 export async function POST(request: Request) {
@@ -11,7 +11,7 @@ export async function POST(request: Request) {
     const { email } = await request.json();
     const cleanEmail = String(email || '').trim().toLowerCase();
 
-    // 1. Strict Security Gate (F2 Fix)
+    // 1. Strict Security Gate
     if (!isSuperAdminEmail(cleanEmail)) {
       return NextResponse.json(
         { success: false, message: 'Unauthorized super administrator email.' },
@@ -19,26 +19,30 @@ export async function POST(request: Request) {
       );
     }
 
-    // 2. Generate a 6-digit cryptographic numeric OTP (F14 Fix)
+    // 2. Generate a 6-digit cryptographic numeric OTP
     const otpCode = crypto.randomInt(100000, 1000000).toString();
+
+    // 🚀 FIX: Hash the OTP with SHA-256 before saving to match auth.ts verification expectations
+    const hashedOtp = crypto.createHash('sha256').update(otpCode).digest('hex');
+
     // Set expiration to 5 minutes from now
     const expires = new Date(Date.now() + 5 * 60 * 1000);
 
-    // 3. Save or Update the OTP in the database
+    // 3. Save or Update the HASHED OTP in the database
     await prisma.verificationToken.upsert({
       where: { identifier: cleanEmail },
       update: {
-        token: otpCode,
+        token: hashedOtp,
         expires: expires,
       },
       create: {
         identifier: cleanEmail,
-        token: otpCode,
+        token: hashedOtp,
         expires: expires,
       },
     });
 
-    // 4. Dispatch the email via the centralized mailer library (F46 Fix)[cite: 15]
+    // 4. Dispatch the email containing the PLAINTEXT otpCode to the user
     await sendEmail({
       to: cleanEmail,
       subject: 'CLEAR System: System Admin Verification Code',
