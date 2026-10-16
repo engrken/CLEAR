@@ -127,7 +127,7 @@ describe('POST /remittances/:id/invalidate', () => {
     expectError(await invalidate('00000000-0000-0000-0000-000000000000'), 404, 'not_found');
   });
 
-  it('an invalidated remittance cannot be verified afterwards → 409 conflict', { todo: 'spec only says "already verified" → conflict; lib/remittances.ts currently allows verifying a Rejected remittance' }, async () => {
+  it('an invalidated remittance cannot be verified afterwards → 409 conflict', async () => {
     const before = await prisma.collection.count();
     expectError(await verify(r2.id, { orNumber: uniq('OR') }), 409, 'conflict');
     assert.equal(await prisma.collection.count(), before);

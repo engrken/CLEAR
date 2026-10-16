@@ -53,6 +53,12 @@ export function validateProofDataUrl(dataUrl: string | null | undefined): string
   return dataUrl;
 }
 
+/** Only submissions still in the queue can be verified or invalidated (matches the web queue). */
+function isPending(status: string | null | undefined) {
+  const st = String(status || '').trim();
+  return !st || st.toLowerCase().includes('pending');
+}
+
 export async function resolveStudentDbId(orgId: string, identifier: string | null) {
   if (!identifier) return null;
   const student =
@@ -151,6 +157,9 @@ export async function verifyOnlineRemittanceFor(
       if (String(remittance.status || '').toUpperCase() === 'VERIFIED') {
         throw new DomainError('This remittance has already been verified.', 'conflict');
       }
+      if (!isPending(remittance.status)) {
+        throw new DomainError(`This remittance is ${remittance.status} and can no longer be verified.`, 'conflict');
+      }
 
       const amount = Math.max(0, Number(remittance.amountPaid) || 0);
       if (amount <= 0) throw new DomainError('The remittance contains an invalid amount.', 'invalid');
@@ -212,6 +221,9 @@ export async function invalidateOnlineRemittanceFor(organizationId: string, offi
   if (!remittance) throw new DomainError('Online remittance record not found.', 'not_found');
   if (String(remittance.status || '').toUpperCase() === 'VERIFIED') {
     throw new DomainError('A verified remittance cannot be invalidated from the pending queue.', 'conflict');
+  }
+  if (!isPending(remittance.status)) {
+    throw new DomainError(`This remittance is already ${remittance.status}.`, 'conflict');
   }
 
   await prisma.onlineRemittance.update({
