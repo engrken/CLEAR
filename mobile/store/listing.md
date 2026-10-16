@@ -8,7 +8,7 @@ Paste these into Play Console → **Grow users → Store presence → Main store
 | Short description | 80 | `Track org dues, payment proofs and clearance for FCU student organizations.` (75) |
 | App category | | Business (alternative: Education) |
 | Tags | up to 5 | Finance, Productivity, Education |
-| Contact email | | *needs a decision*: `clearsysadmin@gmail.com` is the address on the privacy page; use an inbox you control (see [NOTES.md](NOTES.md)). |
+| Contact email | | `clearsysadmin@gmail.com` (same as the privacy page; confirmed by the user 2026-10-16) |
 | Website | | `https://clear.rupertbulquerin.com` |
 | Privacy policy | | `https://clear.rupertbulquerin.com/privacy` (gaps listed in [privacy-policy-review.md](privacy-policy-review.md)) |
 | App icon | 512×512 PNG | [graphics/play-icon-512.png](graphics/play-icon-512.png) |
@@ -38,9 +38,11 @@ BUILT FOR ACCOUNTABILITY
 CLEAR works on the same records as the CLEAR web app, so officers, advisers and auditors see one set of books. Every entry keeps who recorded it and when. Connections are encrypted, sign-in codes expire after five minutes, and an officer's access ends as soon as their account is deactivated.
 
 Officer accounts are created by your organization's CLEAR administrator. Students do not need an account.
+
+CLEAR System is an independent tool used by FCU student organizations and is not an official app of Filamer Christian University.
 ```
 
-> Before publishing, confirm with FCU (Office of Student Affairs or the org adviser) that the app may use the university's name. If it is not an official FCU app, add this last line to the description: `CLEAR System is an independent tool used by FCU student organizations and is not an official app of Filamer Christian University.` See [NOTES.md](NOTES.md).
+Decided 2026-10-16: no written permission from FCU yet, so the description ends with the "not an official app" line above. Remove it only if FCU approves the app in writing.
 
 ## Release notes for 1.0.0 (≤ 500 characters)
 
