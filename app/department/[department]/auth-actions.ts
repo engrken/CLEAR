@@ -3,7 +3,6 @@
 
 import { prisma } from '@/lib/prisma';
 import crypto from 'node:crypto';
-import { cookies } from 'next/headers';
 import { sendEmail } from '@/lib/mailer';
 import { isSuperAdminEmail } from '@/lib/permissions';
 import { auth } from '@/auth';
@@ -117,14 +116,13 @@ export async function requestOtp(
   }
 
   // =========================================================
-  // 🚀 24-HOUR RATE LIMIT CHECK (Max 10 Requests)
+  // 24-HOUR RATE LIMIT CHECK (Max 10 Requests)
   // =========================================================
   const now = new Date();
   let requestCount = user.otpRequestCount || 0;
   let windowStart = user.otpLastRequestedAt ? new Date(user.otpLastRequestedAt) : null;
 
   if (!windowStart || now.getTime() - windowStart.getTime() > RATE_LIMIT_WINDOW_MS) {
-    // Reset window if 24 hours have passed since the first request
     requestCount = 0;
     windowStart = now;
   }
@@ -187,7 +185,7 @@ export async function requestOtp(
 }
 
 // =========================================================
-// VERIFY OTP (With 5-Attempt Lockout Enforcement)
+// VERIFY OTP (With 5-Attempt Lockout Enforcement - Securely Stateless)
 // =========================================================
 export async function verifyOtp(
   department: string,
@@ -203,7 +201,6 @@ export async function verifyOtp(
   }
 
   const submittedHash = crypto.createHash('sha256').update(cleanOtp).digest('hex');
-  const cookieStore = await cookies();
 
   // Handle Super Admin Verification
   if (isSuperAdminEmail(cleanEmail)) {
@@ -225,14 +222,6 @@ export async function verifyOtp(
 
     await prisma.verificationToken.deleteMany({
       where: { identifier: cleanEmail },
-    });
-
-    cookieStore.set('fcu_session', `superadmin:${cleanEmail}`, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 86400,
     });
 
     return {
@@ -322,14 +311,6 @@ export async function verifyOtp(
     },
   });
 
-  cookieStore.set('fcu_session', user.id, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    path: '/',
-    maxAge: 86400,
-  });
-
   let parsedTabs: string[] = [];
   try {
     parsedTabs = typeof user.allowedTabs === 'string' ? JSON.parse(user.allowedTabs) : (user.allowedTabs || []);
@@ -371,7 +352,6 @@ export async function updateUserAccountStatus(
     throw new Error('User not found.');
   }
 
-  // Ensure Department Admins can only manage users within their own organization
   if (callerUser.role !== 'SuperAdmin' && targetUser.organizationId !== callerUser.organizationId) {
     throw new Error('Unauthorized: You can only manage users within your own department.');
   }
@@ -380,7 +360,6 @@ export async function updateUserAccountStatus(
     where: { id: targetUserId },
     data: {
       status: newStatus,
-      // When unblocking/activating, reset failed attempts and clear stale OTPs
       ...(newStatus === 'Active'
         ? { otpAttempts: 0, otpCode: null, otpExpires: null }
         : {}),
