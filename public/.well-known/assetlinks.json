@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "app.vercel.clearsys.twa",
+        "sha256_cert_fingerprints": ["A8:3B:34:F3:63:81:93:C6:3E:17:A7:01:38:F5:2D:55:24:BE:A2:13:2E:AC:AD:C2:A7:6F:F7:D3:42:12:68:B2"]
+      }
+    }]
