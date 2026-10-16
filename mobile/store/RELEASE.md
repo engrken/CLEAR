@@ -8,6 +8,7 @@ Everything runs from the `mobile/` folder. EAS CLI is not installed globally; `n
 | iOS bundle ID (later) | `com.rupertbulquerin.clear` |
 | Version | `1.0.0` (`expo.version` in `app.json`; bump it by hand for each user-visible release) |
 | versionCode | Managed on EAS servers (`appVersionSource: "remote"`); starts at `1`, the `production` profile adds 1 on every build |
+| Play Console | Account **RUPERT I.T. SOLUTIONS** (7443810319444220314), app **CLEAR System** (4975672424609848800), created 2026-10-16 with the package name reserved. Main store listing saved as a draft (text, icon, feature graphic); screenshots still to add. |
 | Signing | A **new** upload key generated and stored by EAS; Google Play App Signing holds the app signing key |
 
 > **Never use the keystore in "CLEAR System - Google Play package.zip".** It belongs to the old PWABuilder web wrapper (`app.vercel.clearsys.twa`), and its passwords were stored in plain text in the project folder. Treat it as compromised. This app has a different package name, so it doesn't need that key.
@@ -65,7 +66,7 @@ The first time, EAS asks to initialize the remote versionCode; accept `1`. Each 
 
 ## 4. Create the app in Play Console (once)
 
-1. **Create app**: name `CLEAR System`, default language English (United States), App, Free.
+1. **Create app** (done 2026-10-16): name `CLEAR System`, package `com.rupertbulquerin.clear` (Play now asks for it at creation), English (United States), App, Free.
 2. **App content** (Policy and programs → App content), using the drafts in this folder:
    - Privacy policy: `https://clear.rupertbulquerin.com/privacy` (fix the gaps in [privacy-policy-review.md](privacy-policy-review.md) first).
    - App access: **All or some functionality is restricted**. Give the reviewer a demo officer login that works without your inbox (see "Play reviewer access" in [NOTES.md](NOTES.md)) and the student IDs to try.
