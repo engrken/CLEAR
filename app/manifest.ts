@@ -3,6 +3,7 @@ import { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
+	id: '/',
     name: 'CLEAR System - Financial & Audit Ledger',
     short_name: 'CLEAR System',
     description: 'Centralized Liquidation of Expenses & Audit Records',
@@ -23,5 +24,21 @@ export default function manifest(): MetadataRoute.Manifest {
         type: 'image/png',
       },
     ],
+	
+	screenshots: [
+  {
+    src: '/screenshot-wide.png',
+    sizes: '1280x720',
+    type: 'image/png',
+    form_factor: 'wide'
+  },
+  {
+    src: '/screenshot-mobile.png',
+    sizes: '720x1280',
+    type: 'image/png',
+    form_factor: 'narrow'
+  }
+]
   };
 }
+
