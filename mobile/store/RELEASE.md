@@ -139,3 +139,5 @@ All App content sections are saved (nothing is sent to Google until a release is
 | Government apps / Financial features / Health | No / none / none |
 
 Builds (EAS, @rupert2133s-team/clear-mobile, EAS-managed upload key): preview APK versionCode 1, production AAB versionCode 2.
+
+**Internal testing (2026-10-16):** 1.0.0 (2) "first internal test" published and the track is Active (no Google review on this track). Testers: the account's "License testers (auto-generated)" list (3 Google accounts, incl. the user and his brother). Opt-in link: https://play.google.com/apps/internaltest/4701462363799975691 (testers must accept on the web, then install from Play). Min API 24, target SDK 36, 18.2 MB install. The first upload was manual; later uploads can go through the Play Developer API / `eas submit` with a service-account key.
