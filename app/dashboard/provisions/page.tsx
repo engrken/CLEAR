@@ -6,7 +6,9 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { ProvisionRow } from './ProvisionRow';
 import { MasterProvisionForm } from './MasterProvisionForm';
+import { logoutEntityAdminAction } from '@/app/dashboard/entity/actions';
 import { Metadata } from 'next';
+
 export const metadata: Metadata = {
   title: 'Centralized Liquidation of Expenses & Audit Records',
 };
@@ -30,17 +32,30 @@ export default async function ProvisionsPage() {
 
   return (
     <div className="container-fluid p-4 p-md-5" style={{ maxWidth: '1300px', color: '#f8fafc' }}>
-      {/* Top Navigation */}
-      <div className="d-flex justify-content-between align-items-center mb-3">
-        <Link href="/dashboard" className="text-secondary small text-decoration-none">
-          <i className="bi bi-arrow-left me-1"></i> Back to Main Dashboard
-        </Link>
-        <span className="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25 px-3 py-2">
-          <i className="bi bi-shield-check me-1"></i> Master SuperAdmin: {email}
-        </span>
+      {/* Top Navigation Bar */}
+      <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <div className="d-flex align-items-center gap-3">
+          <Link href="/dashboard" className="text-secondary small text-decoration-none">
+            <i className="bi bi-arrow-left me-1"></i> Back to Main Dashboard
+          </Link>
+          <Link href="/dashboard/entity/portal" className="text-info small text-decoration-none fw-bold">
+            <i className="bi bi-building-fill-gear me-1"></i> Entity Admin Portal
+          </Link>
+        </div>
+
+        <div className="d-flex align-items-center gap-3">
+          <span className="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25 px-3 py-2">
+            <i className="bi bi-shield-check me-1"></i> Master SuperAdmin: {email}
+          </span>
+          <form action={logoutEntityAdminAction}>
+            <button type="submit" className="btn btn-sm btn-outline-secondary">
+              <i className="bi bi-box-arrow-right me-1"></i> Sign Out
+            </button>
+          </form>
+        </div>
       </div>
 
-      {/* Header */}
+      {/* Header Banner */}
       <div
         className="p-4 rounded-4 shadow-lg border border-secondary border-opacity-50 mb-4"
         style={{ backgroundColor: '#1e293b' }}

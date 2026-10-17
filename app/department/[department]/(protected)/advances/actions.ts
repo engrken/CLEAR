@@ -49,7 +49,7 @@ export async function issueCashAdvance(
   }
 ) {
   // 1. Verify Permission via Shared Guard
-  const customUser = await requireTabAccess("tab-advances");
+  const customUser = await requireTabAccess("tab-advances", department);
   const officerName = customUser.fullName || customUser.email || "System Administrator";
 
   // 2. Resolve Organization ID

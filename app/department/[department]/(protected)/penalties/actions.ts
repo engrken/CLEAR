@@ -47,7 +47,7 @@ export async function recordPenalty(
   }
 ) {
   // 1. Verify Permission
-  const customUser = await requireTabAccess("tab-penalties");
+  const customUser = await requireTabAccess("tab-penalties", department);
   const officerName = customUser.fullName || customUser.email || "System Administrator";
 
   // 2. Resolve Organization ID
@@ -120,7 +120,7 @@ export async function settlePenaltyCommunityService(
   }
 ) {
   // 1. Verify Permission
-  const customUser = await requireTabAccess("tab-penalties");
+  const customUser = await requireTabAccess("tab-penalties", department);
   const officerName = customUser.fullName || customUser.email || "System Administrator";
 
   // 2. Resolve Organization ID
@@ -194,7 +194,7 @@ export async function settlePenaltyCash(
     term: string;
   }
 ) {
-  const customUser = await requireTabAccess("tab-payment");
+  const customUser = await requireTabAccess("tab-payment", department);
   const officerName = customUser.fullName || customUser.email || "System Administrator";
 
   const organization = await prisma.organization.findUnique({
@@ -248,7 +248,7 @@ export async function settlePenaltyCash(
 
 export async function deletePenalty(department: string, penaltyId: string) {
   // 1. Verify Permission (Notice this requires tab-void)
-  await requireTabAccess("tab-void");
+  await requireTabAccess("tab-void", department);
 
   // 2. Resolve Organization ID
   const organization = await prisma.organization.findUnique({

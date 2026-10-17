@@ -54,7 +54,7 @@ export async function recordAudit(
   }
 ) {
   // 1. Verify Permission via Shared Guard
-  const customUser = await requireTabAccess("tab-audit");
+  const customUser = await requireTabAccess("tab-audit", department);
   const officerName = customUser.fullName || customUser.email || "System Administrator";
 
   // 2. Resolve Organization ID

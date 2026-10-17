@@ -84,7 +84,7 @@ export function EntityProvisionForm({
 
       <div>
         <label className="form-label small text-info fw-bold text-uppercase">
-          Subdomain of your Department / Organization
+          Subdomain (/department/subdomain)
         </label>
         <input
           type="text"

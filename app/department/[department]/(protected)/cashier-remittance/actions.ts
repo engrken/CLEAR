@@ -38,7 +38,7 @@ export async function recordCashierRemittance(
     term: string;
   }
 ) {
-  const customUser = await requireTabAccess("tab-payment");
+  const customUser = await requireTabAccess("tab-payment", department);
   const officerName = customUser.fullName || customUser.email || "System Administrator";
 
   const organization = await prisma.organization.findUnique({
@@ -92,7 +92,7 @@ export async function recordCashierRemittance(
 }
 
 export async function voidCashierRemittance(department: string, id: string) {
-  const customUser = await requireTabAccess("tab-void");
+  const customUser = await requireTabAccess("tab-void", department);
   const officerName = customUser.fullName || customUser.email || "System Administrator";
 
   const organization = await prisma.organization.findUnique({

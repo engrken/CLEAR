@@ -32,7 +32,7 @@ export async function transferFunds(
   }
 ) {
   // 1. Verify Permission
-  const customUser = await requireTabAccess("tab-transfer");
+  const customUser = await requireTabAccess("tab-transfer", department);
   const officerName = customUser.fullName || customUser.email || "System Administrator";
 
   // 2. Resolve Organization ID
@@ -98,7 +98,7 @@ export async function carryOverTermBalance(
   }
 ) {
   // 1. Verify Permission
-  const customUser = await requireTabAccess("tab-transfer");
+  const customUser = await requireTabAccess("tab-transfer", department);
   const officerName = customUser.fullName || customUser.email || "System Administrator";
 
   // 2. Resolve Organization ID

@@ -32,7 +32,7 @@ export async function saveInitialFunds(
   }[]
 ) {
   // 1. Verify Permission via Shared Guard
-  const customUser = await requireTabAccess("tab-setup");
+  const customUser = await requireTabAccess("tab-setup", department);
   const officerName = customUser.fullName || customUser.email || "System Administrator";
 
   // 2. Resolve Organization ID
