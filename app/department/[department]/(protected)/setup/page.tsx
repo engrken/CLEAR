@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/auth';
 import { requireTabAccess, isSuperAdminEmail } from '@/lib/permissions';
 import SetupClient from './SetupClient';
+import RestoreForm from './RestoreForm';
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
@@ -18,7 +19,6 @@ export default async function SetupPage({
   const { department } = await params;
   const cleanDepartment = decodeURIComponent(department).trim().toLowerCase();
 
-  // 🚀 SECURITY FIX: Enforce tab-level permissions for institutional setup access[cite: 1]
   await requireTabAccess('tab-setup', cleanDepartment);
 
   const organization = await prisma.organization.findUnique({
@@ -34,7 +34,6 @@ export default async function SetupPage({
     );
   }
 
-  // Verify live Admin / SuperAdmin privileges from the database to display the Backup panel
   const session = await auth();
   const sessionEmail = String(session?.user?.email || '').trim().toLowerCase();
   let canManageBackups = false;
@@ -61,14 +60,12 @@ export default async function SetupPage({
     }
   }
 
-  // Fetch distinct fund names previously used by this department[cite: 1]
   const existingFunds = await prisma.fund.findMany({
     where: { organizationId: organization.id },
     distinct: ['fundName'],
     select: { fundName: true }
   });
 
-  // Provide a generic fallback if the department is brand new[cite: 1]
   const initialFunds = existingFunds.length > 0
     ? existingFunds.map(f => f.fundName)
     : ["General Fund", "Current Operations", "Others"];
@@ -82,10 +79,9 @@ export default async function SetupPage({
         currentLogo={organization.logo}
       />
 
-      {/* BACKUP & RESTORE MODULE (Appended cleanly below existing features) */}
       {canManageBackups && (
         <>
-          {/* 1. EXPORT BACKUP CARD */}
+          {/* EXPORT BACKUP CARD */}
           <div className="card p-3 border-info bg-info bg-opacity-10 shadow-sm mt-4 text-body">
             <div className="d-flex justify-content-between align-items-center flex-wrap gap-3">
               <div>
@@ -106,51 +102,8 @@ export default async function SetupPage({
             </div>
           </div>
 
-          {/* 2. RESTORE BACKUP CARD */}
-          <div className="card p-3 border-warning bg-warning bg-opacity-10 shadow-sm mt-3 text-body">
-            <form onSubmit={async (e) => {
-              'use client';
-              e.preventDefault();
-              const form = e.currentTarget;
-              const fileInput = form.elements.namedItem('backupFile') as HTMLInputElement;
-              if (!fileInput.files?.[0]) return alert('Please select a JSON backup file.');
-
-              if (!confirm('WARNING: Restoring a backup will merge and update existing records in the database. Proceed?')) return;
-
-              const formData = new FormData();
-              formData.append('backupFile', fileInput.files[0]);
-              formData.append('orgId', organization.id);
-
-              try {
-                const res = await fetch('/api/restore', {
-                  method: 'POST',
-                  body: formData,
-                });
-                const result = await res.json();
-                if (result.success) {
-                  alert(result.message || 'Backup restored successfully!');
-                  window.location.reload();
-                } else {
-                  alert('Restoration failed: ' + result.message);
-                }
-              } catch (err: any) {
-                alert('An error occurred during restoration: ' + err.message);
-              }
-            }}>
-              <h6 className="fw-bold text-warning mb-1">
-                <i className="bi bi-cloud-arrow-up-fill me-2"></i>Restore Database from Backup
-              </h6>
-              <small className="text-muted d-block mb-3">
-                Upload a previously exported CLEAR System JSON backup file to restore students, collections, and records. (Admin only)
-              </small>
-              <div className="input-group" style={{ maxWidth: '550px' }}>
-                <input type="file" name="backupFile" accept=".json" className="form-control bg-body text-body border-secondary" required />
-                <button type="submit" className="btn btn-warning fw-bold text-dark">
-                  <i className="bi bi-upload me-1"></i> Restore Snapshot
-                </button>
-              </div>
-            </form>
-          </div>
+          {/* RESTORE BACKUP CARD */}
+          <RestoreForm organizationId={organization.id} />
         </>
       )}
     </div>
