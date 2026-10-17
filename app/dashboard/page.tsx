@@ -68,16 +68,27 @@ export default async function DashboardPage() {
             <b>C</b>entralized <b>L</b>iquidation of <b>E</b>xpenses & <b>A</b>udit <b>R</b>ecords. <br className="d-none d-md-block" />
             Select an active entity below to access the financial portal, or log in to manage system provisions.
           </p>
-          <button
-            type="button"
-            className="btn btn-info fw-bold px-4 py-2 shadow"
-            data-bs-toggle="modal"
-            data-bs-target="#otpAuthModal"
-          >
-            <i className="bi bi-gear-fill me-2"></i>
-            System Admin Access
-          </button>
-        </div>
+          <div className="d-flex justify-content-center gap-3 flex-wrap">
+  {/* Master Admin Provisioning (Restricted to you) */}
+  <button
+    type="button"
+    className="btn btn-info fw-bold px-4 py-2 shadow"
+    data-bs-toggle="modal"
+    data-bs-target="#otpAuthModal"
+  >
+    <i className="bi bi-gear-fill me-2"></i>
+    System SuperAdmin Access
+  </button>
+
+  {/* Entity Admin Portal Button */}
+<Link
+  href="/dashboard/entity/login"
+  className="btn btn-outline-light fw-bold px-4 py-2 shadow"
+>
+  <i className="bi bi-building-fill-gear me-2"></i>
+  Entity Admin Portal
+</Link>
+</div>
       </div>
       {/* MAIN ENTITY GRID SECTION */}
       <div className="flex-grow-1 py-5">
