@@ -12,6 +12,7 @@ import type { Organization, TenantUser } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { sendEmail } from '@/lib/mailer';
 import { demoReviewerCode } from '@/lib/demo-reviewer';
+import { isOrganizationActive } from '@/lib/roles';
 import {
   ThrottleError,
   assertCanSendOtp,
@@ -23,9 +24,14 @@ import {
 } from '@/lib/auth-throttle';
 
 export const OTP_TTL_MS = 5 * 60 * 1000;
+/** At most this many emailed codes per officer in a rolling 24 hours. */
+export const OTP_DAILY_LIMIT = 10;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type OtpErrorCode =
   | 'not_officer'
+  | 'inactive_org'
+  | 'daily_limit'
   | 'cooldown'
   | 'locked'
   | 'no_code'
@@ -77,10 +83,26 @@ function escapeHtml(value: string) {
 }
 
 /** Generates, stores and emails a new code for an active officer of `org`. */
+function assertOrgActive(org: Pick<Organization, 'status'>) {
+  if (!isOrganizationActive(org)) {
+    throw new OtpError(
+      `This department is currently ${String(org.status).toLowerCase()} in CLEAR. Contact your administrator.`,
+      'inactive_org'
+    );
+  }
+}
+
+/** Codes this officer may still request in the current 24-hour window (resets 24 h after the window began). */
+function dailyRequestsUsed(user: Pick<TenantUser, 'otpRequestCount' | 'otpLastRequestedAt'>, now: number) {
+  const windowStart = user.otpLastRequestedAt?.getTime() ?? 0;
+  return now - windowStart < DAY_MS ? user.otpRequestCount : 0;
+}
+
 export async function sendDepartmentOtp(
-  org: Pick<Organization, 'id' | 'name' | 'subdomain'>,
+  org: Pick<Organization, 'id' | 'name' | 'subdomain' | 'status'>,
   rawEmail: string
 ): Promise<{ user: TenantUser }> {
+  assertOrgActive(org);
   const email = String(rawEmail || '').trim().toLowerCase();
   const user = await findActiveOfficer(org.id, email);
   if (!user) {
@@ -91,10 +113,26 @@ export async function sendDepartmentOtp(
   await assertCanSendOtp(throttleKey).catch(rethrowThrottle);
 
   const demoCode = demoReviewerCode(org.subdomain, email);
+  const now = Date.now();
+  const used = dailyRequestsUsed(user, now);
+  // The Play reviewer's demo login has a fixed code and no inbox, so it is exempt.
+  if (!demoCode && used >= OTP_DAILY_LIMIT) {
+    throw new OtpError(
+      `You've requested ${OTP_DAILY_LIMIT} codes in the last 24 hours. Try again tomorrow or contact your administrator.`,
+      'daily_limit'
+    );
+  }
+
   const otp = demoCode ?? crypto.randomInt(100000, 1000000).toString();
   await prisma.tenantUser.update({
     where: { id: user.id },
-    data: { otpCode: hashOtp(otp), otpExpires: new Date(Date.now() + OTP_TTL_MS) },
+    data: {
+      otpCode: hashOtp(otp),
+      otpExpires: new Date(now + OTP_TTL_MS),
+      // A new 24-hour window starts with the first request after the old one ended.
+      otpRequestCount: used + 1,
+      ...(used === 0 ? { otpLastRequestedAt: new Date(now) } : {}),
+    },
   });
 
   // The demo officer's address has no inbox; the reviewer has the code already.
@@ -141,13 +179,14 @@ export async function sendDepartmentOtp(
  * returned; wrong codes count toward the lockout, which also voids the code.
  */
 export async function verifyDepartmentOtp(
-  org: Pick<Organization, 'id' | 'subdomain'>,
+  org: Pick<Organization, 'id' | 'subdomain' | 'status'>,
   rawEmail: string,
   rawCode: string
 ): Promise<TenantUser> {
   const email = String(rawEmail || '').trim().toLowerCase();
   const code = String(rawCode || '').trim();
 
+  assertOrgActive(org);
   const user = await findActiveOfficer(org.id, email);
   if (!user) {
     throw new OtpError('This account is not authorized for this department.', 'not_officer');

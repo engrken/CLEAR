@@ -8,7 +8,7 @@
 import crypto from 'node:crypto';
 import type { Organization, TenantUser } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { hasTabAccess, normalizeDepartmentSlug } from '@/lib/permissions';
+import { hasTabAccess, isOrganizationActive, normalizeDepartmentSlug } from '@/lib/permissions';
 import { ApiFailure } from '@/lib/mobile/http';
 
 export const MOBILE_SESSION_DAYS = 7;
@@ -73,6 +73,9 @@ export async function requireMobileOfficer(
   if (officer.status !== 'Active') {
     await prisma.mobileSession.update({ where: { id: session.id }, data: { revokedAt: new Date() } });
     throw new ApiFailure(401, 'unauthorized', 'This officer account is no longer active.');
+  }
+  if (!isOrganizationActive(org)) {
+    throw new ApiFailure(403, 'forbidden', `This department is currently ${String(org.status).toLowerCase()} in CLEAR.`);
   }
   if (org.subdomain !== normalizeDepartmentSlug(orgSlug)) {
     throw new ApiFailure(403, 'forbidden', 'This sign-in is for a different department.');

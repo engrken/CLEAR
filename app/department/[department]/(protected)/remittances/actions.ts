@@ -10,7 +10,11 @@ import {
   invalidateOnlineRemittanceFor,
   proofFileToDataUrl,
   verifyOnlineRemittanceFor,
+  assertProofSubmissionAllowed,
+  recordProofSubmission,
 } from '@/lib/remittances';
+import { headers } from 'next/headers';
+import { clientIp } from '@/lib/request-ip';
 
 // The rules live in lib/remittances.ts (shared with the mobile API); these
 // actions add the web session guard and cache revalidation.
@@ -106,6 +110,8 @@ export async function submitOnlineRemittance(
     where: { subdomain: cleanDepartment }
   });
   if (!organization) throw new Error(`Organization "${cleanDepartment}" not found.`);
+  const ip = clientIp(await headers());
+  await assertProofSubmissionAllowed(organization.id, ip);
 
   // The web form collects an email for the receipt; the mobile app falls back to the roster.
   const cleanEmail = String(data.email || "").trim().toLowerCase();
@@ -123,6 +129,7 @@ export async function submitOnlineRemittance(
     ay: data.ay,
     term: data.term,
   });
+  await recordProofSubmission(organization.id, ip);
 
   revalidatePath(`/department/${cleanDepartment}/remittances`);
   revalidatePath(`/department/${cleanDepartment}/clearance`);

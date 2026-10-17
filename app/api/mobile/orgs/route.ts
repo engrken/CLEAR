@@ -10,7 +10,10 @@ export const dynamic = 'force-dynamic';
 
 export const GET = handler(async () => {
   const orgs = await prisma.organization.findMany({
-    where: isDemoReviewerEnabled() ? {} : { subdomain: { not: DEMO_ORG_SLUG } },
+    where: {
+      status: 'Active',
+      ...(isDemoReviewerEnabled() ? {} : { subdomain: { not: DEMO_ORG_SLUG } }),
+    },
     orderBy: { name: 'asc' },
   });
   return orgs.map(toOrganization);

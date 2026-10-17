@@ -89,3 +89,29 @@ export async function clearOtpFailures(key: string) {
     data: { failedCount: 0, lockedUntil: null },
   });
 }
+
+/**
+ * Fixed-window limit for public, unauthenticated actions (payment-proof
+ * uploads). Reuses an AuthThrottle row: `lastSentAt` marks the window start and
+ * `failedCount` counts completed actions in it. Check with isRateLimited before
+ * the work and call countRateLimitedAction only once it succeeded, so rejected
+ * input doesn't use up anyone's allowance.
+ */
+export async function isRateLimited(key: string, max: number, windowMs: number): Promise<boolean> {
+  const row = await prisma.authThrottle.findUnique({ where: { key } });
+  return Boolean(row?.lastSentAt && Date.now() - row.lastSentAt.getTime() < windowMs && row.failedCount >= max);
+}
+
+export async function countRateLimitedAction(key: string, windowMs: number) {
+  const now = new Date();
+  const row = await prisma.authThrottle.findUnique({ where: { key } });
+  if (row?.lastSentAt && now.getTime() - row.lastSentAt.getTime() < windowMs) {
+    await prisma.authThrottle.update({ where: { key }, data: { failedCount: { increment: 1 } } });
+    return;
+  }
+  await prisma.authThrottle.upsert({
+    where: { key },
+    update: { failedCount: 1, lastSentAt: now, lockedUntil: null },
+    create: { key, failedCount: 1, lastSentAt: now },
+  });
+}

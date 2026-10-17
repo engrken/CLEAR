@@ -14,6 +14,7 @@ export async function createDepartment(formData: FormData) {
   const type = String(formData.get('type') || 'Department').trim();
   const name = String(formData.get('name') || '').trim();
   const subdomain = String(formData.get('acronym') || formData.get('subdomain') || '').trim().toLowerCase();
+  const schoolGroup = String(formData.get('schoolGroup') || 'default-school').trim().toLowerCase();
   
   const adminName = String(formData.get('adminName') || '').trim();
   const adminEmail = String(formData.get('adminEmail') || '').trim().toLowerCase();
@@ -48,7 +49,10 @@ export async function createDepartment(formData: FormData) {
         data: { 
           name, 
           subdomain, 
-          type: type === 'Organization' ? 'Organization' : 'Department' 
+          schoolGroup,
+          type: type === 'Organization' ? 'Organization' : 'Department',
+          tier: 'Freemium',
+          status: 'Active', 
         } 
       });
 

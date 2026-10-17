@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { requireDepartmentAccess, isSuperAdminEmail, PRESET_ROLE_TABS } from '@/lib/permissions';
 import { logSystemAction } from '@/lib/logger';
+import { clearOtpFailures, otpThrottleKey } from '@/lib/auth-throttle';
 
 const VALID_ROLES = new Set(Object.keys(PRESET_ROLE_TABS));
 const VALID_TABS = new Set(PRESET_ROLE_TABS.admin);
@@ -109,6 +110,56 @@ export async function saveTenantUser(formData: {
 
   revalidatePath(`/department/${org.subdomain}/users`);
   return { success: true, message: 'User record saved successfully.' };
+}
+
+const ACCOUNT_STATUSES = ['Active', 'Inactive', 'Blocked'] as const;
+type AccountStatus = (typeof ACCOUNT_STATUSES)[number];
+
+/**
+ * Sets an officer's account status within the caller's own department.
+ * Only Active officers can sign in (web and mobile). Re-activating also clears
+ * any pending code and the officer's sign-in lockout.
+ */
+export async function updateUserAccountStatus(userId: string, newStatus: AccountStatus, department: string) {
+  const { user: actor, org } = await requireDepartmentAccess('tab-users', department);
+
+  if (!userId) throw new Error('User ID is required.');
+  if (!ACCOUNT_STATUSES.includes(newStatus)) throw new Error('Invalid account status.');
+
+  // Tenant-scoped lookup: an id from another department is "not found".
+  const target = await prisma.tenantUser.findFirst({ where: { id: userId, organizationId: org.id } });
+  if (!target) throw new Error('User not found.');
+
+  if (newStatus !== 'Active' && isSuperAdminEmail(target.email)) {
+    throw new Error('Action denied: the Super Admin account cannot be deactivated or blocked.');
+  }
+  if (newStatus !== 'Active' && target.email.toLowerCase() === actor.email.toLowerCase()) {
+    throw new Error('You cannot deactivate or block your own account.');
+  }
+
+  await prisma.tenantUser.update({
+    where: { id: target.id },
+    data: {
+      status: newStatus,
+      otpCode: null,
+      otpExpires: null,
+      ...(newStatus === 'Active' ? { otpRequestCount: 0 } : {}),
+    },
+  });
+  if (newStatus === 'Active') {
+    await clearOtpFailures(otpThrottleKey(org.subdomain, target.email));
+  }
+  // Signing out of the mobile app happens on the next request (requireMobileOfficer checks status).
+
+  await logSystemAction(
+    org.id,
+    actor.fullName || actor.email,
+    'UPDATE_TENANT_USER_STATUS',
+    `Set officer account ${target.username} (${target.email}) to ${newStatus}.`
+  );
+
+  revalidatePath(`/department/${org.subdomain}/users`);
+  return { success: true, message: `Account status updated to ${newStatus}.` };
 }
 
 export async function deleteTenantUser(userId: string, department: string) {

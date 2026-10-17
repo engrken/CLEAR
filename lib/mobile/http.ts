@@ -22,10 +22,13 @@ const DOMAIN_STATUS: Record<string, number> = {
   duplicate_or: 409,
   invalid_student: 422,
   payload_too_large: 413,
+  rate_limited: 429,
 };
 
 const OTP_STATUS: Record<string, number> = {
   not_officer: 403,
+  inactive_org: 403,
+  daily_limit: 429,
   cooldown: 429,
   locked: 429,
   no_code: 400,

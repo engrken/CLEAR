@@ -9,7 +9,8 @@ export type DomainErrorCode =
   | 'conflict'
   | 'duplicate_or'
   | 'invalid_student'
-  | 'payload_too_large';
+  | 'payload_too_large'
+  | 'rate_limited';
 
 export class DomainError extends Error {
   constructor(message: string, public code: DomainErrorCode) {

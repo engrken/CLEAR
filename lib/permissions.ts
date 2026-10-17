@@ -2,9 +2,9 @@
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { PRESET_ROLE_TABS, effectiveTabs, hasTabAccess, isAdminRole, normalizeDepartmentSlug, parseAllowedTabs } from "@/lib/roles";
+import { ORG_STATUSES, PRESET_ROLE_TABS, effectiveTabs, hasTabAccess, isAdminRole, isOrganizationActive, normalizeDepartmentSlug, parseAllowedTabs } from "@/lib/roles";
 
-export { PRESET_ROLE_TABS, effectiveTabs, hasTabAccess, isAdminRole, normalizeDepartmentSlug, parseAllowedTabs };
+export { ORG_STATUSES, PRESET_ROLE_TABS, effectiveTabs, hasTabAccess, isAdminRole, isOrganizationActive, normalizeDepartmentSlug, parseAllowedTabs };
 
 export function isSuperAdminEmail(email?: string | null): boolean {
   const clean = String(email || "").trim().toLowerCase();
@@ -46,6 +46,7 @@ export interface AccessUser {
  *   session email), or the configured Super Admin.
  * - Re-reads role and allowed tabs from the database, so revoked access applies
  *   immediately instead of after the 6-hour JWT expires.
+ * - Refuses organizations whose status is not Active (except for the Super Admin).
  * - Pass `requiredTab: null` to require membership only (any role).
  */
 export async function requireDepartmentAccess(requiredTab: string | null, department: string) {
@@ -64,6 +65,11 @@ export async function requireDepartmentAccess(requiredTab: string | null, depart
 
   const isSuper = isSuperAdminEmail(sessionEmail);
   const user: AccessUser = { ...sessionUser, email: sessionEmail, organizationId: org.id, department: org.subdomain };
+
+  // Inactive or archived tenants are closed to everyone but the Super Admin.
+  if (!isSuper && !isOrganizationActive(org)) {
+    throw new Error(`403 Forbidden: This department is currently ${String(org.status).toLowerCase()} and cannot be accessed.`);
+  }
 
   if (isSuper) {
     user.role = "SuperAdmin";

@@ -6,7 +6,7 @@ import { useEffect } from 'react';
 
 export default function DataPrivacyModal() {
   useEffect(() => {
-    const isAccepted = localStorage.getItem("fcu_clear_privacy_accepted");
+    const isAccepted = localStorage.getItem("clear_privacy_accepted");
     if (!isAccepted) {
       const modalEl = document.getElementById("dataPrivacyModal");
       if (modalEl && (window as any).bootstrap) {
@@ -17,7 +17,7 @@ export default function DataPrivacyModal() {
   }, []);
 
   const acceptDataPrivacy = () => {
-    localStorage.setItem("fcu_clear_privacy_accepted", "true");
+    localStorage.setItem("clear_privacy_accepted", "true");
     const modalEl = document.getElementById("dataPrivacyModal");
     if (modalEl && (window as any).bootstrap) {
       const modal = (window as any).bootstrap.Modal.getInstance(modalEl) || (window as any).bootstrap.Modal.getOrCreateInstance(modalEl);
@@ -36,7 +36,7 @@ export default function DataPrivacyModal() {
           </div>
           <div className="modal-body p-4" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
             <p className="small text-secondary mb-3">
-              In compliance with the <strong>Philippine Data Privacy Act of 2012 (Republic Act No. 10173)</strong>, Filamer Christian University, Inc. is committed to protecting your personal and academic information.
+              In compliance with the <strong>Philippine Data Privacy Act of 2012 (Republic Act No. 10173)</strong>, CLEAR System is committed to protecting your personal and academic information.
             </p>
 
             <h6 className="text-info small fw-bold">1. Information We Process</h6>
@@ -60,7 +60,7 @@ export default function DataPrivacyModal() {
             </p>
           </div>
           <div className="modal-footer border-secondary d-flex justify-content-between">
-            <small className="text-secondary">Filamer Christian University, Inc.</small>
+            <small className="text-secondary">CLEAR System - Centralized Liquidation of Expenses and Audit Reports</small>
             <button type="button" className="btn btn-info btn-sm fw-bold px-4" id="btnAcceptPrivacy" onClick={acceptDataPrivacy}>
               I Understand & Agree
             </button>

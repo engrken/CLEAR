@@ -18,6 +18,14 @@ model Organization {
   activeTerm        String   @default("1st Sem")
   type              String   @default("Department")
   logo 				String?
+
+  // SaaS tenancy: school group, plan tier and lifecycle status. Only "Active"
+  // organizations can be used by anyone but the super admin (lib/permissions.ts).
+  schoolGroup       String   @default("default-school")
+  tier              String   @default("Freemium")
+  status            String   @default("Active")
+  updatedAt         DateTime @default(now()) @updatedAt
+
   students          Student[]
   enrollments       Enrollment[]
   funds             Fund[]
@@ -294,7 +302,14 @@ model TenantUser {
   
   otpCode        String?
   otpExpires     DateTime?
-  
+
+  // Daily cap on emailed sign-in codes (lib/otp.ts).
+  otpRequestCount    Int       @default(0)
+  otpLastRequestedAt DateTime?
+  // Unused: the old permanent 5-strike lockout. Wrong-code lockout now lives in
+  // AuthThrottle (15-minute lock). Kept because production already has the column.
+  otpAttempts        Int       @default(0)
+
   updatedAt      DateTime     @updatedAt
 
   mobileSessions MobileSession[]

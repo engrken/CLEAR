@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {
   AY, FEE_CENTAVOS, PACKAGE_CENTAVOS, TERM,
   api, assertCentavos, assertOrganization, expectAnyError, expectError, expectStatus,
-  orgRow, prisma, proofForm, resetData, schoolId, signIn,
+  clearThrottle, orgRow, prisma, proofForm, resetData, schoolId, signIn,
 } from './helpers.mjs';
 
 before(resetData);
@@ -187,5 +187,26 @@ describe('POST /orgs/:org/proofs', () => {
   it('missing proof file → 400 invalid', async () => {
     const res = await api('POST', '/orgs/devdept/proofs', { form: proofForm({ studentId: schoolId('devdept', 1), file: null }) });
     expectError(res, 400, 'invalid');
+  });
+
+  it('rejected submissions do not count; the 6th accepted proof in 10 minutes → 429 rate_limited', async () => {
+    await clearThrottle();
+    try {
+      for (let i = 0; i < 5; i += 1) {
+        // A rejected submission must not use up the allowance.
+        const bad = await api('POST', '/orgs/devdept/proofs', { form: proofForm({ studentId: 'NOT-ON-ROSTER' }) });
+        expectError(bad, 422, 'invalid_student');
+        const ok = await api('POST', '/orgs/devdept/proofs', {
+          form: proofForm({ studentId: schoolId('devdept', 1), amountCentavos: 15000, referenceNumber: `RL-${Date.now()}-${i}` }),
+        });
+        expectStatus(ok, 201);
+      }
+      const sixth = await api('POST', '/orgs/devdept/proofs', {
+        form: proofForm({ studentId: schoolId('devdept', 1), amountCentavos: 15000, referenceNumber: `RL-${Date.now()}-6` }),
+      });
+      expectError(sixth, 429, 'rate_limited');
+    } finally {
+      await clearThrottle();
+    }
   });
 });

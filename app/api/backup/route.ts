@@ -12,17 +12,19 @@ export async function GET(req: Request) {
       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 
+    // Accepts ?department=<slug> (preferred) or ?orgId=<id>. Either way the
+    // caller's access is re-checked against that organization below.
     const { searchParams } = new URL(req.url);
-    const orgId = searchParams.get('orgId');
+    const department = searchParams.get('department');
+    const orgIdParam = searchParams.get('orgId');
 
-    if (!orgId) {
-      return NextResponse.json({ success: false, message: 'Missing orgId parameter' }, { status: 400 });
+    if (!department && !orgIdParam) {
+      return NextResponse.json({ success: false, message: 'Missing department or orgId parameter' }, { status: 400 });
     }
 
-    const target = await prisma.organization.findUnique({
-      where: { id: orgId },
-      select: { subdomain: true },
-    });
+    const target = department
+      ? { subdomain: department }
+      : await prisma.organization.findUnique({ where: { id: orgIdParam! }, select: { subdomain: true } });
 
     if (!target) {
       return NextResponse.json({ success: false, message: 'Organization not found' }, { status: 404 });
@@ -37,6 +39,8 @@ export async function GET(req: Request) {
       return NextResponse.json({ success: false, message: 'Forbidden: Backup export requires administrator access to this organization' }, { status: 403 });
     }
     const { user, org: organization } = access;
+    // Every query below is scoped to the organization the guard resolved.
+    const orgId = organization.id;
 
     // Comprehensive multi-tenant data dump matching your exact schema models
     const [
@@ -131,8 +135,8 @@ export async function GET(req: Request) {
       },
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Backup Export Error:', error);
-    return NextResponse.json({ success: false, message: error.message || 'Internal server error during backup.' }, { status: 500 });
+    return NextResponse.json({ success: false, message: 'Internal server error during backup.' }, { status: 500 });
   }
 }

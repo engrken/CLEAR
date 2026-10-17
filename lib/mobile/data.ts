@@ -7,13 +7,16 @@
 import type { Organization } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { computeDepartmentFinancials, isVoidedRecord } from '@/lib/financials';
-import { normalizeDepartmentSlug } from '@/lib/permissions';
+import { isOrganizationActive, normalizeDepartmentSlug } from '@/lib/permissions';
 import { ApiFailure } from '@/lib/mobile/http';
 import { toCentavos } from '@/lib/mobile/serialize';
 
+/** Public lookups: inactive and archived departments look unregistered to the app. */
 export async function getOrgOr404(slug: string) {
   const org = await prisma.organization.findUnique({ where: { subdomain: normalizeDepartmentSlug(slug) } });
-  if (!org) throw new ApiFailure(404, 'not_found', 'This department is not registered in CLEAR.');
+  if (!org || !isOrganizationActive(org)) {
+    throw new ApiFailure(404, 'not_found', 'This department is not registered in CLEAR.');
+  }
   return org;
 }
 

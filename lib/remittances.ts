@@ -9,11 +9,30 @@ import crypto from 'node:crypto';
 import { prisma } from '@/lib/prisma';
 import { logSystemAction } from '@/lib/logger';
 import { DomainError, isUniqueViolation } from '@/lib/errors';
+import { countRateLimitedAction, isRateLimited } from '@/lib/auth-throttle';
 
 // Payment-proof uploads: images only, capped in size (validated server-side;
 // a client's accept="image/*" is only a hint).
 export const MAX_PROOF_BYTES = 4 * 1024 * 1024;
 export const PROOF_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
+
+// Public submissions per department and client IP.
+export const PROOF_SUBMISSIONS_PER_WINDOW = 5;
+export const PROOF_SUBMISSION_WINDOW_MS = 10 * 60 * 1000;
+
+const proofKey = (organizationId: string, ip: string) => `proof:${organizationId}:${ip}`;
+
+/** Throws once a client has submitted too many proofs to this department recently. */
+export async function assertProofSubmissionAllowed(organizationId: string, ip: string) {
+  if (await isRateLimited(proofKey(organizationId, ip), PROOF_SUBMISSIONS_PER_WINDOW, PROOF_SUBMISSION_WINDOW_MS)) {
+    throw new DomainError('Too many payment proofs from your network. Please wait 10 minutes and try again.', 'rate_limited');
+  }
+}
+
+/** Counts a successfully queued proof toward the client's limit. */
+export async function recordProofSubmission(organizationId: string, ip: string) {
+  await countRateLimitedAction(proofKey(organizationId, ip), PROOF_SUBMISSION_WINDOW_MS);
+}
 
 function generateReference(prefix: string): string {
   const randomStr = crypto.randomBytes(4).toString('hex').toUpperCase();
@@ -83,7 +102,21 @@ export type OnlineRemittanceInput = {
 /** Records a public payment-proof submission in the verification queue. */
 export async function createOnlineRemittance(organizationId: string, input: OnlineRemittanceInput) {
   const proofUrl = validateProofDataUrl(input.proofDataUrl);
-  const studentName = String(input.studentName || '').trim();
+
+  // The student must be on this department's roster (matched by school ID).
+  const schoolId = String(input.studentId || '').trim();
+  if (!schoolId) throw new DomainError('Student ID is required.', 'invalid');
+  const student = await prisma.student.findFirst({
+    where: { organizationId, studentId: { equals: schoolId, mode: 'insensitive' } },
+  });
+  if (!student) {
+    throw new DomainError(
+      `Student ID "${schoolId}" is not registered under this department. Please check your student ID.`,
+      'invalid_student'
+    );
+  }
+
+  const studentName = String(input.studentName || '').trim() || student.fullName;
   const referenceNumber = String(input.referenceNo || '').trim();
   if (!studentName || !referenceNumber) {
     throw new DomainError('Student name and payment reference number are required.', 'invalid');
@@ -92,7 +125,7 @@ export async function createOnlineRemittance(organizationId: string, input: Onli
   const amount = toMoney(input.amount, 'Online remittance amount');
   if (amount <= 0) throw new DomainError('Amount must be greater than zero.', 'invalid');
 
-  const email = String(input.email || '').trim().toLowerCase() || null;
+  const email = String(input.email || student.email || '').trim().toLowerCase() || null;
   const submissionId = generateReference('SUB');
 
   await prisma.onlineRemittance.create({
@@ -101,7 +134,7 @@ export async function createOnlineRemittance(organizationId: string, input: Onli
       submissionId,
       academicYear: input.ay,
       term: input.term,
-      studentId: String(input.studentId || '').trim() || null,
+      studentId: student.studentId,
       studentName,
       studentEmail: email,
       paymentChannel: String(input.paymentChannel || '').trim(),

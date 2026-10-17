@@ -6,7 +6,8 @@ import { prisma } from '@/lib/prisma';
 import { ApiFailure, handler, json, preflight, requireCentavos, requireString } from '@/lib/mobile/http';
 import { getOrgOr404 } from '@/lib/mobile/data';
 import { toPesos } from '@/lib/mobile/serialize';
-import { createOnlineRemittance, MAX_PROOF_BYTES, proofFileToDataUrl } from '@/lib/remittances';
+import { assertProofSubmissionAllowed, createOnlineRemittance, recordProofSubmission, MAX_PROOF_BYTES, proofFileToDataUrl } from '@/lib/remittances';
+import { clientIp } from '@/lib/request-ip';
 
 type Ctx = { params: Promise<{ org: string }> };
 
@@ -15,6 +16,8 @@ const CHANNELS = new Set(['GCash', 'Maya', 'Bank transfer']);
 export const POST = handler(async (req, { params }: Ctx) => {
   const { org: slug } = await params;
   const org = await getOrgOr404(slug);
+  const ip = clientIp(req.headers);
+  await assertProofSubmissionAllowed(org.id, ip);
 
   const length = Number(req.headers.get('content-length') || 0);
   if (length > MAX_PROOF_BYTES + 64 * 1024) {
@@ -62,6 +65,7 @@ export const POST = handler(async (req, { params }: Ctx) => {
     term: org.activeTerm,
   });
 
+  await recordProofSubmission(org.id, ip);
   return json(req, { submissionId }, 201);
 });
 

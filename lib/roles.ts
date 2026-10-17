@@ -59,3 +59,10 @@ export function effectiveTabs(role: string | null | undefined, allowedTabs: unkn
 export function hasTabAccess(role: string | null | undefined, allowedTabs: unknown, requiredTab: string): boolean {
   return isAdminRole(role) || effectiveTabs(role, allowedTabs).includes(requiredTab);
 }
+
+/** Organization lifecycle (Organization.status). Only Active ones are usable by tenants. */
+export const ORG_STATUSES = ["Active", "Inactive", "Archived"] as const;
+
+export function isOrganizationActive(org: { status?: string | null }): boolean {
+  return !org.status || org.status === "Active";
+}

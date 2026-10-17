@@ -188,13 +188,20 @@ export async function assertServerUp() {
   }
 }
 
-/** Removes sign-in throttling (cooldown, failures, lockout) for the dev orgs. */
+/** Removes sign-in throttling (cooldown, failures, lockout) for the dev orgs, and proof-upload limits. */
 export async function clearThrottle(org, email) {
   assertLocalOnly();
+  // The daily code cap (TenantUser.otpRequestCount) counts too: the suite signs the same officers in often.
+  await prisma.tenantUser.updateMany({
+    where: { organization: { subdomain: { in: email ? [org] : ORGS } }, ...(email ? { email } : {}) },
+    data: { otpRequestCount: 0, otpLastRequestedAt: null },
+  });
   if (email) {
     await prisma.authThrottle.deleteMany({ where: { key: `otp:${org}:${email.toLowerCase()}` } });
   } else {
-    await prisma.authThrottle.deleteMany({ where: { OR: ORGS.map((o) => ({ key: { startsWith: `otp:${o}:` } })) } });
+    await prisma.authThrottle.deleteMany({
+      where: { OR: [...ORGS.map((o) => ({ key: { startsWith: `otp:${o}:` } })), { key: { startsWith: 'proof:' } }] },
+    });
   }
 }
 
