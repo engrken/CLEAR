@@ -55,6 +55,19 @@ export async function requireTabAccess(requiredTab: string, department?: string)
   const customUser = session.user as any;
   const sessionEmail = String(customUser.email || "").trim().toLowerCase();
   const isSuper = isSuperAdminEmail(sessionEmail);
+  const organization = await prisma.organization.findUnique({
+  where: { subdomain: cleanDepartment },
+  select: { id: true, status: true }
+});
+
+if (!organization) {
+  throw new Error("Department not found.");
+}
+
+// 🚀 BLOCK INACTIVE OR ARCHIVED TENANTS
+if (organization.status !== 'Active' && !isSuperAdminEmail(sessionEmail)) {
+  throw new Error(`This department is currently ${organization.status.toLowerCase()} and cannot be accessed.`);
+}
 
   if (department) {
     const cleanDept = decodeURIComponent(department).trim().toLowerCase();
