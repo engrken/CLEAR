@@ -53,13 +53,13 @@ export function EntityProvisionForm({
       {schoolGroup === 'default-school' && (
         <div>
           <label className="form-label small text-warning fw-bold text-uppercase">
-            Set Institutional Group ID (e.g. fcu)
+            Set Institutional Group ID (e.g. fcu, cpu)
           </label>
           <input
             type="text"
             name="schoolGroup"
             required
-            placeholder="fcu"
+            placeholder="school"
             className="form-control bg-dark text-white border-warning"
           />
           <div className="form-text text-secondary" style={{ fontSize: '11px' }}>
@@ -70,28 +70,28 @@ export function EntityProvisionForm({
 
       <div>
         <label className="form-label small text-info fw-bold text-uppercase">
-          Entity / Department Name
+          Your Department / Organization
         </label>
         <input
           type="text"
           name="name"
           required
           disabled={!canAddMore || loading}
-          placeholder="Your College or Organization"
+          placeholder="College of Engineering"
           className="form-control bg-dark text-white border-secondary"
         />
       </div>
 
       <div>
         <label className="form-label small text-info fw-bold text-uppercase">
-          Unique Subdomain Slug
+          Subdomain of your Department / Organization
         </label>
         <input
           type="text"
           name="subdomain"
           required
           disabled={!canAddMore || loading}
-          placeholder="school-department"
+          placeholder="coe"
           className="form-control bg-dark text-white border-secondary font-monospace"
         />
       </div>
@@ -106,8 +106,7 @@ export function EntityProvisionForm({
           className="form-select bg-dark text-white border-secondary"
         >
           <option value="Department">Department / College</option>
-          <option value="Organization">Student Council / Chapter</option>
-          <option value="Administration">Main Administration</option>
+          <option value="Organization">Student Chapter / Organization</option>
         </select>
       </div>
 

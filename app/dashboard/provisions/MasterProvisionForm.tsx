@@ -59,7 +59,7 @@ export function MasterProvisionForm() {
           type="text"
           name="schoolGroup"
           required
-          placeholder="fcu"
+          placeholder="school"
           className="form-control bg-dark text-white border-secondary"
         />
         <div className="form-text text-secondary" style={{ fontSize: '11px' }}>
@@ -75,20 +75,20 @@ export function MasterProvisionForm() {
           type="text"
           name="name"
           required
-          placeholder="College of Engineering"
+          placeholder="College of..."
           className="form-control bg-dark text-white border-secondary"
         />
       </div>
 
       <div>
         <label className="form-label text-uppercase small fw-bold text-info mb-1">
-          Unique Subdomain Slug
+          Unique Subdomain
         </label>
         <input
           type="text"
           name="subdomain"
           required
-          placeholder="fcu-engineering"
+          placeholder="school-dept"
           className="form-control bg-dark text-white border-secondary font-monospace"
         />
       </div>
@@ -120,7 +120,6 @@ export function MasterProvisionForm() {
           >
             <option value="Department">Department</option>
             <option value="Organization">Organization</option>
-            <option value="Administration">Administration</option>
           </select>
         </div>
       </div>
@@ -135,7 +134,7 @@ export function MasterProvisionForm() {
           type="email"
           name="adminEmail"
           required
-          placeholder="kent.bsece@gmail.com"
+          placeholder="your-name@email.com"
           className="form-control bg-dark text-white border-secondary"
         />
         <div className="form-text text-secondary" style={{ fontSize: '11px' }}>
@@ -151,7 +150,7 @@ export function MasterProvisionForm() {
           type="text"
           name="adminName"
           required
-          placeholder="Engr. Kent"
+          placeholder="Admin Name"
           className="form-control bg-dark text-white border-secondary"
         />
       </div>
