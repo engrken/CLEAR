@@ -44,3 +44,20 @@ next-env.d.ts
 
 .vercel
 .env*
+
+# --- Local-only / sensitive artifacts (added Phase 0) ---
+# Android signing material and store packages: never commit
+*.keystore
+*.jks
+signing-key-info.txt
+*.apk
+*.aab
+CLEAR System - Google Play package.zip
+# Real student/financial data
+*.xlsx
+*.xls
+*.csv
+# Stale generated Prisma client (app uses @prisma/client from node_modules)
+/prisma/generated
+# Local Claude settings
+.claude/settings.local.json
