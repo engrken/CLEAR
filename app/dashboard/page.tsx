@@ -9,17 +9,23 @@ export const metadata: Metadata = {
 };
 
 export default async function DashboardPage() {
-  // Fetch entities alphabetically for a clean UI
+  // Fetch only Active entities alphabetically for the public directory
   const departments = await prisma.organization.findMany({
-    orderBy: { name: 'asc' }
+    where: { status: 'Active' },
+    orderBy: { name: 'asc' },
   });
 
   const getDeptUrl = (subdomain: string) => `/department/${encodeURIComponent(subdomain)}`;
 
+  const isOrgType = (type: string | null) =>
+    type === 'Organization' || type === 'Student Organization';
+
   return (
-    <div className="w-100 min-vh-100 bg-canvas d-flex flex-column">    
+    <div className="w-100 min-vh-100 bg-canvas d-flex flex-column">
       {/* INLINE CSS FOR PREMIUM SAAS AESTHETICS */}
-      <style dangerouslySetInnerHTML={{__html: `
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
         .hero-section {
           background: radial-gradient(circle at top, #1e293b, #0f172a);
           border-bottom: 1px solid #334155;
@@ -57,7 +63,9 @@ export default async function DashboardPage() {
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
         }
-      `}} />
+      `,
+        }}
+      />
 
       {/* HERO SECTION */}
       <div className="hero-section text-center position-relative w-100">
@@ -69,10 +77,11 @@ export default async function DashboardPage() {
             Welcome to the <span className="glow-text">CLEAR System</span>
           </h1>
           <p className="lead text-secondary mb-5">
-            <b>C</b>entralized <b>L</b>iquidation of <b>E</b>xpenses & <b>A</b>udit <b>R</b>ecords. <br className="d-none d-md-block" />
+            <b>C</b>entralized <b>L</b>iquidation of <b>E</b>xpenses & <b>A</b>udit <b>R</b>ecords.{' '}
+            <br className="d-none d-md-block" />
             Select an active entity below to access the financial portal, or log in to manage system provisions.
           </p>
-          
+
           <div className="d-flex justify-content-center gap-3 flex-wrap">
             {/* Master Admin Provisioning */}
             <button
@@ -106,7 +115,7 @@ export default async function DashboardPage() {
               Active Institutional Entities
             </h5>
             <span className="badge bg-secondary px-3 py-2 rounded-pill shadow-sm">
-              {departments.length} Provisioned
+              {departments.length} Active
             </span>
           </div>
 
@@ -114,13 +123,14 @@ export default async function DashboardPage() {
             /* EMPTY STATE */
             <div className="card entity-card shadow-lg p-5 text-center border-secondary mt-3">
               <div className="mb-4">
-                <i className="bi bi-building-x text-secondary opacity-50" style={{ fontSize: '4rem' }}></i>
+                <i
+                  className="bi bi-building-x text-secondary opacity-50"
+                  style={{ fontSize: '4rem' }}
+                ></i>
               </div>
-              <h4 className="fw-bold text-white mb-2">
-                No Entities Provisioned Yet
-              </h4>
+              <h4 className="fw-bold text-white mb-2">No Active Entities Provisioned Yet</h4>
               <p className="text-secondary mb-0 mx-auto" style={{ maxWidth: '500px' }}>
-                The system database is empty. Click <strong>System SuperAdmin Access</strong> above to authenticate as the Master Administrator and provision your first Department or Organization.
+                Click <strong>System SuperAdmin Access</strong> above to authenticate as the Master Administrator and provision your first Department or Organization.
               </p>
             </div>
           ) : (
@@ -128,20 +138,24 @@ export default async function DashboardPage() {
             <div className="row g-4">
               {departments.map((dept) => (
                 <div key={dept.id} className="col-12 col-sm-6 col-lg-4">
-                  <Link href={getDeptUrl(dept.subdomain)} className="text-decoration-none">    
+                  <Link href={getDeptUrl(dept.subdomain)} className="text-decoration-none">
                     <div className="card entity-card h-100 text-center p-4 position-relative">
                       {/* DYNAMIC ENTITY BADGE */}
                       <div className="position-absolute top-0 start-50 translate-middle-x">
-                        <span 
+                        <span
                           className={`badge rounded-bottom-3 px-3 py-1 shadow-sm ${
-                            dept.type === 'Organization' ? 'bg-warning text-dark' : 'bg-info text-dark'
+                            isOrgType(dept.type) ? 'bg-warning text-dark' : 'bg-info text-dark'
                           }`}
                         >
-                          <i className={`me-1 ${dept.type === 'Organization' ? 'bi bi-people-fill' : 'bi bi-building'}`}></i>
+                          <i
+                            className={`me-1 ${
+                              isOrgType(dept.type) ? 'bi bi-people-fill' : 'bi bi-building'
+                            }`}
+                          ></i>
                           {dept.type || 'Department'}
                         </span>
                       </div>
-                      
+
                       {/* LOGO WRAPPER */}
                       <div className="logo-wrapper mt-3">
                         {dept.logo ? (
@@ -153,19 +167,23 @@ export default async function DashboardPage() {
                               maxWidth: '100%',
                               maxHeight: '100%',
                               objectFit: 'contain',
-                              filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))'
+                              filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))',
                             }}
                           />
                         ) : (
-                          <i className={`fs-1 text-secondary ${dept.type === 'Organization' ? 'bi bi-people-fill' : 'bi bi-building'}`}></i>
+                          <i
+                            className={`fs-1 text-secondary ${
+                              isOrgType(dept.type) ? 'bi bi-people-fill' : 'bi bi-building'
+                            }`}
+                          ></i>
                         )}
                       </div>
 
                       {/* ENTITY NAME & LINK */}
                       <h5 className="fw-bold text-white mb-2 px-2" style={{ lineHeight: '1.3' }}>
                         {dept.name}
-                      </h5>    
-                      
+                      </h5>
+
                       <div className="mt-auto pt-3">
                         <span className="text-secondary small font-monospace d-flex align-items-center justify-content-center gap-1">
                           /department/{dept.subdomain}

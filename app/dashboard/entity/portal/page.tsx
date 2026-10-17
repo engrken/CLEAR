@@ -3,49 +3,91 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/auth';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
+import { getAuthenticatedEntityAdmin, logoutEntityAdminAction } from '../actions';
+import { EntityProvisionForm } from './EntityProvisionForm';
 
 export default async function EntityPortalPage() {
   const session = await auth();
-  const email = String(session?.user?.email || '').trim().toLowerCase();
+  const cookieEmail = await getAuthenticatedEntityAdmin();
 
-  const tenantUser = await prisma.tenantUser.findFirst({
-    where: { email },
-    include: { organization: true }
-  });
+  const email = String(cookieEmail || session?.user?.email || '')
+    .trim()
+    .toLowerCase();
 
-  if (!tenantUser || tenantUser.role !== 'admin') {
-    redirect('/dashboard');
+  if (!email) {
+    redirect('/dashboard/entity/login');
   }
 
-  const schoolGroup = tenantUser.organization.schoolGroup;
-
-  const entityGroupOrgs = await prisma.organization.findMany({
-    where: { schoolGroup },
-    include: {
-      _count: {
-        select: { students: true, collections: true }
-      }
-    }
+  // Find all organizations where this user is registered as an admin
+  const userAdminRecords = await prisma.tenantUser.findMany({
+    where: { email, role: 'admin' },
+    include: { organization: true },
   });
 
-  const currentTier = tenantUser.organization.tier;
+  if (userAdminRecords.length === 0) {
+    redirect('/dashboard/entity/login');
+  }
+
+  const primaryOrg = userAdminRecords[0].organization;
+  const schoolGroup = primaryOrg.schoolGroup || 'default-school';
+
+  // SECURITY SAFEGUARD: If schoolGroup is still 'default-school', only show entities
+  // explicitly administered by this user's email so unrelated demo tenants aren't leaked.
+  const entityGroupOrgs = await prisma.organization.findMany({
+    where:
+      schoolGroup === 'default-school'
+        ? { id: { in: userAdminRecords.map((r) => r.organizationId) } }
+        : { schoolGroup },
+    orderBy: { name: 'asc' },
+    include: {
+      _count: {
+        select: { students: true, collections: true, tenantUsers: true },
+      },
+    },
+  });
+
+  const currentTier = primaryOrg.tier || 'Freemium';
   const maxAllowed = currentTier === 'Freemium' ? 2 : currentTier === 'Pro' ? 10 : 999;
   const canAddMore = entityGroupOrgs.length < maxAllowed;
 
   return (
-    <div className="container py-5 text-white" style={{ maxWidth: '1000px' }}>
+    <div className="container py-5 text-white" style={{ maxWidth: '1100px' }}>
+      {/* Top Bar Navigation */}
+      <div className="d-flex justify-content-between align-items-center mb-3">
+        <Link href="/dashboard" className="text-secondary small text-decoration-none">
+          <i className="bi bi-arrow-left me-1"></i> Back to Public Entity Directory
+        </Link>
+        <div className="d-flex align-items-center gap-3">
+          <span className="text-secondary small font-monospace">
+            <i className="bi bi-person-check-fill text-info me-1"></i>
+            {email}
+          </span>
+          <form action={logoutEntityAdminAction}>
+            <button type="submit" className="btn btn-sm btn-outline-secondary">
+              <i className="bi bi-box-arrow-right me-1"></i> Sign Out
+            </button>
+          </form>
+        </div>
+      </div>
+
       {/* Header Banner */}
       <div className="card bg-dark border-secondary p-4 mb-4 shadow-sm">
         <div className="d-flex justify-content-between align-items-center flex-wrap gap-3">
           <div>
-            <span className="badge bg-info text-dark mb-2 fw-bold uppercase">Entity Group ID: {schoolGroup}</span>
-            <h2 className="fw-bold mb-1">Entity Management Portal</h2>
-            <p className="text-secondary small mb-0">Manage associated entities and track tier resource allocation.</p>
+            <span className="badge bg-info text-dark mb-2 fw-bold text-uppercase">
+              Institutional Group: {schoolGroup}
+            </span>
+            <h2 className="fw-bold mb-1 text-white">Entity Management Portal</h2>
+            <p className="text-secondary small mb-0">
+              Self-service institutional onboarding and workspace management for your affiliated entities.
+            </p>
           </div>
           <div className="text-end bg-secondary bg-opacity-10 border border-secondary p-3 rounded">
             <div className="small text-secondary text-uppercase fw-bold">Subscription Tier</div>
             <div className="fs-5 fw-bold text-info">{currentTier}</div>
-            <div className="small text-secondary">{entityGroupOrgs.length} / {maxAllowed === 999 ? 'Unlimited' : maxAllowed} Entities Used</div>
+            <div className="small text-secondary">
+              {entityGroupOrgs.length} / {maxAllowed === 999 ? 'Unlimited' : maxAllowed} Entities Active
+            </div>
           </div>
         </div>
       </div>
@@ -53,105 +95,73 @@ export default async function EntityPortalPage() {
       {!canAddMore && (
         <div className="alert alert-warning border-0 shadow-sm mb-4">
           <i className="bi bi-exclamation-triangle-fill me-2"></i>
-          You have reached the maximum entity limit for your <strong>{currentTier}</strong> tier.
+          You have reached the maximum limit of <strong>{maxAllowed}</strong> entities for your{' '}
+          <strong>{currentTier}</strong> subscription tier. Contact the System SuperAdmin to upgrade your institutional group to Pro or Corporate.
         </div>
       )}
 
       <div className="row g-4">
-        {/* Left Column: Provision New Entity Form */}
-        <div className="col-12 col-md-5">
+        {/* Left Column: Self-Service Provision Form */}
+        <div className="col-12 col-lg-4">
           <div className="card bg-dark border-secondary p-4 shadow-sm h-100">
-            <h5 className="fw-bold border-bottom border-secondary pb-3 mb-3">Add New Entity Workspace</h5>
-            
-            <form action={async (formData) => {
-              "use server";
-              const { provisionEntityWithTier } = await import('@/app/dashboard/provisions/actions');
-              const name = formData.get("name") as string;
-              const subdomain = formData.get("subdomain") as string;
-              const type = formData.get("type") as string;
-
-              await provisionEntityWithTier({
-                name,
-                subdomain,
-                schoolGroup,
-                tier: currentTier,
-                type
-              });
-            }} className="vstack gap-3">
-              
-              <div>
-                <label className="form-label small text-secondary fw-bold uppercase">Entity Name</label>
-                <input 
-                  type="text" 
-                  name="name" 
-                  required 
-                  placeholder="College of Engineering"
-                  className="form-control bg-dark text-white border-secondary"
-                />
-              </div>
-
-              <div>
-                <label className="form-label small text-secondary fw-bold uppercase">Subdomain Slug</label>
-                <input 
-                  type="text" 
-                  name="subdomain" 
-                  required 
-                  placeholder="fcu-engineering"
-                  className="form-control bg-dark text-white border-secondary"
-                />
-              </div>
-
-              <div>
-                <label className="form-label small text-secondary fw-bold uppercase">Entity Type</label>
-                <select name="type" className="form-select bg-dark text-white border-secondary">
-                  <option value="Department">Department / College</option>
-                  <option value="Student Organization">Student Council / Chapter</option>
-                  <option value="Administration">Main Administration</option>
-                </select>
-              </div>
-
-              <button 
-                type="submit" 
-                disabled={!canAddMore}
-                className={`btn fw-bold py-2 mt-2 ${canAddMore ? 'btn-info text-dark' : 'btn-secondary disabled'}`}
-              >
-                Provision Entity
-              </button>
-            </form>
+            <h5 className="fw-bold text-white border-bottom border-secondary pb-3 mb-3">
+              Add New Entity Workspace
+            </h5>
+            <EntityProvisionForm
+              schoolGroup={schoolGroup}
+              currentTier={currentTier}
+              canAddMore={canAddMore}
+            />
           </div>
         </div>
 
         {/* Right Column: Entity List Table */}
-        <div className="col-12 col-md-7">
+        <div className="col-12 col-lg-8">
           <div className="card bg-dark border-secondary p-4 shadow-sm h-100">
-            <h5 className="fw-bold border-bottom border-secondary pb-3 mb-3">Associated Group Entities</h5>
-            
+            <h5 className="fw-bold text-white border-bottom border-secondary pb-3 mb-3">
+              Your Managed Entities ({entityGroupOrgs.length})
+            </h5>
+
             <div className="table-responsive">
               <table className="table table-dark table-hover align-middle text-start mb-0">
                 <thead>
                   <tr className="text-secondary small text-uppercase">
-                    <th>Entity</th>
+                    <th>Entity / Subdomain</th>
                     <th>Type</th>
-                    <th>Students</th>
-                    <th className="text-end">Action</th>
+                    <th>Status</th>
+                    <th>Records</th>
+                    <th className="text-end">Workspace</th>
                   </tr>
                 </thead>
                 <tbody>
                   {entityGroupOrgs.map((org) => (
                     <tr key={org.id}>
                       <td>
-                        <div className="fw-bold">{org.name}</div>
-                        <div className="small text-info font-monospace">/{org.subdomain}</div>
+                        <div className="fw-bold text-white">{org.name}</div>
+                        <div className="small text-info font-monospace">/department/{org.subdomain}</div>
                       </td>
                       <td>
-                        <span className="badge bg-secondary text-light">{org.type}</span>
+                        <span className="badge bg-secondary text-light">{org.type || 'Department'}</span>
+                      </td>
+                      <td>
+                        <span
+                          className={`badge ${
+                            org.status === 'Active' ? 'bg-success' : 'bg-danger'
+                          }`}
+                        >
+                          {org.status}
+                        </span>
                       </td>
                       <td className="small text-secondary">
-                        {org._count.students} Enrolled
+                        <div>{org._count.students} Students</div>
+                        <div>{org._count.collections} Collections</div>
                       </td>
                       <td className="text-end">
-                        <Link href={`/department/${org.subdomain}`} className="btn btn-sm btn-outline-info">
-                          Manage <i className="bi bi-box-arrow-in-right ms-1"></i>
+                        <Link
+                          href={`/department/${org.subdomain}`}
+                          className="btn btn-sm btn-outline-info fw-semibold"
+                        >
+                          Open Portal <i className="bi bi-box-arrow-in-right ms-1"></i>
                         </Link>
                       </td>
                     </tr>
@@ -159,10 +169,8 @@ export default async function EntityPortalPage() {
                 </tbody>
               </table>
             </div>
-
           </div>
         </div>
-
       </div>
     </div>
   );

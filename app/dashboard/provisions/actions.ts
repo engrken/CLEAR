@@ -1,124 +1,196 @@
 // /app/dashboard/provisions/actions.ts
-"use server";
+'use server';
 
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/auth';
 import { isSuperAdminEmail } from '@/lib/permissions';
 import { revalidatePath } from 'next/cache';
 
-async function verifySuperAdmin() {
+async function verifyMasterSuperAdmin() {
   const session = await auth();
   const email = String(session?.user?.email || '').trim().toLowerCase();
   if (!email || !isSuperAdminEmail(email)) {
-    throw new Error("Unauthorized: SuperAdmin privileges required.");
+    throw new Error('Unauthorized: Master SuperAdmin privileges required.');
   }
+  return email;
 }
 
-// 🚀 1. PROVISION ENTITY WITH SCHOOL-LEVEL FREEMIUM LIMIT GUARD
-export async function provisionEntityWithTier(data: { 
-  name: string; 
-  subdomain: string; 
-  type: string; 
-  tier?: string;
-  schoolGroup: string; 
+export async function provisionEntityWithTier(data: {
+  name: string;
+  subdomain: string;
+  schoolGroup: string;
+  tier: 'Freemium' | 'Pro' | 'Corporate';
+  type: string;
+  adminEmail?: string;
+  adminName?: string;
 }) {
-  await verifySuperAdmin();
+  await verifyMasterSuperAdmin();
 
-  const cleanSubdomain = data.subdomain.toLowerCase().trim();
-  const cleanSchoolGroup = data.schoolGroup.toLowerCase().trim();
+  const name = String(data.name || '').trim();
+  const subdomain = String(data.subdomain || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '');
+  const schoolGroup = String(data.schoolGroup || 'default-school')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '');
   const tier = data.tier || 'Freemium';
+  const type = data.type || 'Department';
+  const adminEmail = String(data.adminEmail || '').trim().toLowerCase();
+  const adminName = String(data.adminName || 'Entity Administrator').trim();
 
-  // Check if subdomain already exists globally across the platform
-  const existingOrg = await prisma.organization.findUnique({
-    where: { subdomain: cleanSubdomain },
-  });
-
-  if (existingOrg) {
-    throw new Error(`The subdomain "${cleanSubdomain}" is already taken. Please use a unique identifier.`);
+  if (!name || !subdomain || !schoolGroup) {
+    throw new Error('School Group, Entity Name, and Subdomain are required.');
   }
 
-  // Enforce Freemium constraint: Max 2 tenants PER SCHOOL GROUP
-  if (tier === 'Freemium') {
-    const existingFreemiumCount = await prisma.organization.count({
-      where: { 
-        schoolGroup: cleanSchoolGroup,
-        tier: 'Freemium' 
+  if (!/^[a-z0-9-]+$/.test(subdomain)) {
+    throw new Error('Subdomain slug can only contain lowercase letters, numbers, and hyphens.');
+  }
+
+  // Check if subdomain already exists
+  const existingSubdomain = await prisma.organization.findUnique({
+    where: { subdomain },
+  });
+
+  if (existingSubdomain) {
+    throw new Error(`Subdomain '${subdomain}' is already in use by another entity.`);
+  }
+
+  // Enforce tier limits per schoolGroup (excluding default-school if ungrouped)
+  if (schoolGroup !== 'default-school') {
+    const existingGroupOrgs = await prisma.organization.findMany({
+      where: { schoolGroup },
+    });
+
+    const maxAllowed = tier === 'Freemium' ? 2 : tier === 'Pro' ? 10 : 999;
+    if (existingGroupOrgs.length >= maxAllowed) {
+      throw new Error(
+        `School group '${schoolGroup}' has reached the maximum limit of ${maxAllowed} entities for the ${tier} tier.`
+      );
+    }
+  }
+
+  const defaultTabs = [
+    'tab-overview', 'tab-students', 'tab-clearance', 'tab-payment',
+    'tab-remittances', 'tab-penalties', 'tab-advances', 'tab-audit',
+    'tab-collectibles', 'tab-reports', 'tab-void', 'tab-report',
+    'tab-transfer', 'tab-users', 'tab-setup',
+  ];
+
+  await prisma.$transaction(async (tx) => {
+    // 1. Create the Organization
+    const org = await tx.organization.create({
+      data: {
+        name,
+        subdomain,
+        schoolGroup,
+        tier,
+        type,
+        status: 'Active',
       },
     });
 
-    if (existingFreemiumCount >= 2) {
-      throw new Error(`Freemium limit reached for school group "${cleanSchoolGroup}": Maximum of 2 Freemium departments allowed. Please upgrade to Pro or Corporate.`);
+    // 2. Sync tier across all organizations in the same schoolGroup (if not default-school)
+    if (schoolGroup !== 'default-school') {
+      await tx.organization.updateMany({
+        where: { schoolGroup },
+        data: { tier },
+      });
     }
-  }
 
-  // Create the new tenant organization
-  const organization = await prisma.organization.create({
-    data: {
-      name: data.name,
-      subdomain: cleanSubdomain,
-      type: data.type,
-      tier: tier,
-      schoolGroup: cleanSchoolGroup,
-      status: 'Active',
-    },
+    // 3. Provision Initial Entity Admin User so they can log into /dashboard/entity/login
+    if (adminEmail) {
+      const baseUsername = adminEmail.split('@')[0].replace(/[^a-z0-9]/g, '');
+      await tx.tenantUser.create({
+        data: {
+          organizationId: org.id,
+          userId: `USR-${subdomain.toUpperCase()}-001`,
+          fullName: adminName,
+          username: `${baseUsername}_${subdomain}`.slice(0, 30),
+          email: adminEmail,
+          role: 'admin',
+          allowedTabs: JSON.stringify(defaultTabs),
+          status: 'Active',
+        },
+      });
+    }
   });
 
+  revalidatePath('/dashboard');
   revalidatePath('/dashboard/provisions');
-  return { success: true, organization };
+  revalidatePath('/dashboard/entity/portal');
 }
 
-// 🚀 2. DYNAMICALLY UPDATE ORGANIZATION TIER
-export async function updateOrganizationTier(organizationId: string, newTier: 'Freemium' | 'Pro' | 'Corporate') {
-  await verifySuperAdmin();
+export async function updateOrganizationTier(
+  orgId: string,
+  newTier: 'Freemium' | 'Pro' | 'Corporate'
+) {
+  await verifyMasterSuperAdmin();
 
-  const currentOrg = await prisma.organization.findUnique({ where: { id: organizationId } });
-  if (!currentOrg) throw new Error("Organization not found.");
+  const org = await prisma.organization.findUnique({ where: { id: orgId } });
+  if (!org) throw new Error('Organization not found.');
 
-  // If changing to Freemium, verify that the school group won't exceed 2 tenants
-  if (newTier === 'Freemium' && currentOrg.tier !== 'Freemium') {
-    const freemiumCount = await prisma.organization.count({ 
-      where: { 
-        schoolGroup: currentOrg.schoolGroup, 
-        tier: 'Freemium' 
-      } 
+  // If part of a named schoolGroup, sync the tier across the whole schoolGroup
+  if (org.schoolGroup && org.schoolGroup !== 'default-school') {
+    await prisma.organization.updateMany({
+      where: { schoolGroup: org.schoolGroup },
+      data: { tier: newTier },
     });
-    if (freemiumCount >= 2) {
-      throw new Error(`Cannot switch to Freemium: School group "${currentOrg.schoolGroup}" already has 2 Freemium tenants.`);
-    }
+  } else {
+    await prisma.organization.update({
+      where: { id: orgId },
+      data: { tier: newTier },
+    });
   }
 
-  await prisma.organization.update({
-    where: { id: organizationId },
-    data: { tier: newTier },
-  });
-
+  revalidatePath('/dashboard');
   revalidatePath('/dashboard/provisions');
-  return { success: true, message: `Tenant tier successfully updated to ${newTier}.` };
+  revalidatePath('/dashboard/entity/portal');
 }
 
-// 🚀 3. UPDATE ORGANIZATION STATUS
-export async function updateOrganizationStatus(organizationId: string, newStatus: 'Active' | 'Inactive' | 'Archived') {
-  await verifySuperAdmin();
+export async function updateOrganizationStatus(
+  orgId: string,
+  newStatus: 'Active' | 'Inactive' | 'Archived'
+) {
+  await verifyMasterSuperAdmin();
+
   await prisma.organization.update({
-    where: { id: organizationId },
+    where: { id: orgId },
     data: { status: newStatus },
   });
+
+  revalidatePath('/dashboard');
   revalidatePath('/dashboard/provisions');
-  return { success: true, message: `Tenant successfully marked as ${newStatus}.` };
+  revalidatePath('/dashboard/entity/portal');
 }
 
-// 🚀 4. PERMANENTLY DELETE TENANT AND RELATED DATA
-export async function deleteOrganization(organizationId: string) {
-  await verifySuperAdmin();
-  await prisma.$transaction(async (tx) => {
-    await tx.collection.deleteMany({ where: { organizationId } });
-    await tx.enrollment.deleteMany({ where: { organizationId } });
-    await tx.student.deleteMany({ where: { organizationId } });
-    await tx.fund.deleteMany({ where: { organizationId } });
-    await tx.tenantUser.deleteMany({ where: { organizationId } });
-    await tx.systemLog.deleteMany({ where: { organizationId } });
-    await tx.organization.delete({ where: { id: organizationId } });
+export async function updateOrganizationSchoolGroup(orgId: string, newGroup: string) {
+  await verifyMasterSuperAdmin();
+
+  const cleanGroup = String(newGroup || 'default-school')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '');
+
+  await prisma.organization.update({
+    where: { id: orgId },
+    data: { schoolGroup: cleanGroup || 'default-school' },
   });
+
+  revalidatePath('/dashboard');
   revalidatePath('/dashboard/provisions');
-  return { success: true, message: "Tenant organization permanently deleted." };
+  revalidatePath('/dashboard/entity/portal');
+}
+
+export async function deleteOrganization(orgId: string) {
+  await verifyMasterSuperAdmin();
+
+  await prisma.organization.delete({
+    where: { id: orgId },
+  });
+
+  revalidatePath('/dashboard');
+  revalidatePath('/dashboard/provisions');
+  revalidatePath('/dashboard/entity/portal');
 }
