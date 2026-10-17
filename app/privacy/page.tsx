@@ -6,7 +6,7 @@ export default function PrivacyPolicyPage() {
       <p className="text-secondary mb-4">Effective date: October 16, 2026</p>
 
       <p>
-        The <strong>CLEAR System</strong> (Centralized Liquidation, Expense, & Audit Records) operates as a financial management and audit platform for institutional departments and student organizations. This Privacy Policy outlines how we collect, use, and protect your information when you use our web application or mobile APK.
+        The <strong>CLEAR System</strong> (Centralized Liquidation, Expense, & Audit Records) operates as a financial management and audit platform for institutional departments and student organizations. This Privacy Policy outlines how we collect, use, and protect your information when you use our web application or mobile application.
       </p>
 
       <h3 className="fw-bold mt-4 mb-2">1. Information We Collect</h3>

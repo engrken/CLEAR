@@ -59,7 +59,7 @@ function TopHeaderContent({
   const [isPending, startTransition] = useTransition();
 
   const [showModal, setShowModal] = useState(false);
-  const [fcuError, setFcuError] = useState(false);
+  const [clearsysError, setclearsysError] = useState(false);
   const [showForbidden, setShowForbidden] = useState(false);
 
   useEffect(() => {
@@ -92,12 +92,12 @@ function TopHeaderContent({
     setTheme(currentTheme);
   }, []);
 
-  const fcuLogoPath = '/fcu.png';
+  const clearsysLogoPath = '/clearsys.png';
 
   const toggleTheme = () => {
     const newTheme = theme === 'dark' ? 'light' : 'dark';
     setTheme(newTheme);
-    localStorage.setItem('fcu_clear_theme', newTheme);
+    localStorage.setItem('clearsys_clear_theme', newTheme);
     document.documentElement.setAttribute('data-bs-theme', newTheme);
   };
 
@@ -112,7 +112,7 @@ function TopHeaderContent({
     if (isLoggedIn) {
       try {
         await signOut({ redirect: false });
-        const cookiesToClear = ['fcu_session', 'fcu_otp_hash', 'fcu_otp_email', 'fcu_otp_strikes', 'fcu_lockout'];
+        const cookiesToClear = ['clearsys_session', 'clearsys_otp_hash', 'clearsys_otp_email', 'clearsys_otp_strikes', 'clearsys_lockout'];
         cookiesToClear.forEach(cookie => {
           document.cookie = `${cookie}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
         });
@@ -172,18 +172,18 @@ function TopHeaderContent({
             </button>
 
             <div className="d-flex align-items-center gap-3">
-              {!fcuError ? (
+              {!clearsysError ? (
                 <div style={{ width: '96px', flexShrink: 0 }} className="text-center d-none d-md-block">
                   <img 
-                    src={fcuLogoPath} 
-                    alt="FCU Logo" 
-                    onError={() => setFcuError(true)}
+                    src={clearsysLogoPath} 
+                    alt="clearsys Logo" 
+                    onError={() => setclearsysError(true)}
                     style={{ width: '100%', maxHeight: '96px', objectFit: 'contain' }} 
                   />
                 </div>
               ) : (
                 <div className="bg-accent text-dark rounded px-3 py-2 fw-bold d-none d-md-block" style={{ fontSize: '2.55rem' }}>
-                  FCU
+                  clearsys
                 </div>
               )}
 

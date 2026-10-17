@@ -1,6 +1,6 @@
 export default async function DepartmentLoading() {
   // Always use a clean root-relative absolute path for Vercel & production
-  const fcuLogoPath = '/fcu.png';
+  const clearsysLogoPath = '/clearsys.png';
 
   return (
     <div 
@@ -10,7 +10,7 @@ export default async function DepartmentLoading() {
     >
       <div className="text-center p-5">
         <img 
-          src={fcuLogoPath} 
+          src={clearsysLogoPath} 
           alt="Loading System Data..." 
           style={{ width: '90px', height: '90px', objectFit: 'contain', marginBottom: '1.25rem' }} 
         />
