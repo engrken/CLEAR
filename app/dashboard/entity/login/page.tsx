@@ -3,11 +3,6 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Metadata } from 'next';
-
-export const metadata: Metadata = {
-  title: 'Centralized Liquidation of Expenses & Audit Records',
-};
 
 export default function EntityAdminLoginPage() {
   const [email, setEmail] = useState('');
@@ -82,7 +77,7 @@ export default function EntityAdminLoginPage() {
           </div>
           <h3 className="fw-bold mb-1">Entity Admin Portal</h3>
           <p className="text-secondary small mb-0">
-            Secure OTP authentication to manage your institutional entity group and workspaces.
+            Secure Gmail OTP authentication to manage your institutional entity group and workspaces.
           </p>
         </div>
 
