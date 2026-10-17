@@ -5,6 +5,7 @@ import { isSuperAdminEmail } from '@/lib/permissions';
 import { redirect } from 'next/navigation';
 import { provisionEntityWithTier } from './actions';
 import { ProvisionRow } from './ProvisionRow';
+import { Metadata } from 'next';
 export const metadata: Metadata = {
   title: 'Centralized Liquidation of Expenses & Audit Records',
 };
