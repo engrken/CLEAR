@@ -1,230 +1,249 @@
-// app/dashboard/provisions/page.tsx
-import { auth } from '@/auth';
+// /app/dashboard/provisions/page.tsx
 import { prisma } from '@/lib/prisma';
-import Link from 'next/link';
-import LogoutButton from '../components/LogoutButton';
-import ProvisionModal from '../components/ProvisionModal';
-import { redirect } from 'next/navigation';
-import { Metadata } from 'next';
+import { auth } from '@/auth';
 import { isSuperAdminEmail } from '@/lib/permissions';
-import { updateOrganizationStatus, deleteOrganization } from './actions';
+import { redirect } from 'next/navigation';
+import { 
+  provisionEntityWithTier, 
+  updateOrganizationTier, 
+  updateOrganizationStatus, 
+  deleteOrganization 
+} from './actions';
 
-export const metadata: Metadata = {
-  title: 'Centralized Liquidation of Expenses & Audit Records',
-};
-
-export default async function ProvisionPage() {
+export default async function ProvisionsPage() {
   const session = await auth();
-
-  if (!session || !isSuperAdminEmail(session.user?.email)) {
+  const email = String(session?.user?.email || '').trim().toLowerCase();
+  
+  if (!email || !isSuperAdminEmail(email)) {
     redirect('/dashboard');
   }
 
-  const departments = await prisma.organization.findMany({
-    orderBy: { createdAt: 'desc' }
+  // Fetch all organizations grouped/ordered by schoolGroup
+  const organizations = await prisma.organization.findMany({
+    orderBy: [
+      { schoolGroup: 'asc' },
+      { name: 'asc' }
+    ],
+    include: {
+      _count: {
+        select: { students: true, collections: true, tenantUsers: true }
+      }
+    }
   });
 
-  const isProduction = Boolean(
-    process.env.NODE_ENV === 'production' || process.env.VERCEL
-  );
-
-  const getDeptUrl = (subdomain: string) => {
-    if (isProduction) {
-      return `/department/${subdomain}`;
-    }
-    return `http://localhost:3000/department/${subdomain}`;
-  };
-
   return (
-    <div className="container py-5" style={{ maxWidth: '1200px' }}>
-
-      {/* HEADER */}
-      <div className="d-flex justify-content-between align-items-center mb-5 border-bottom border-secondary pb-3">
+    <div className="p-6 max-w-7xl mx-auto space-y-8">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
         <div>
-          <h2 className="fw-bold text-accent m-0">
-            <i className="bi bi-shield-check me-2"></i>
-            CLEAR System Master Admin
-          </h2>
-          <p className="text-secondary small mb-0 mt-1">
-            Entity Provisioning &amp; Tenant Lifecycle Management Dashboard
+          <h1 className="text-2xl font-bold text-gray-900">SaaS Institutional Provisioning & Tiers</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Manage multi-tenant school groups, monitor tier limits (Freemium vs. Pro vs. Corporate), and provision new departments.
           </p>
         </div>
-
-        <div className="d-flex align-items-center gap-3">
-          <span className="text-success fw-bold small d-none d-md-inline">
-            <i className="bi bi-person-circle me-1"></i>
-            {session.user.email}
-          </span>
-          <LogoutButton />
-        </div>
       </div>
 
-      {/* BACK TO DASHBOARD */}
-      <div className="mb-4">
-        <Link href="/dashboard" className="btn btn-outline-secondary">
-          <i className="bi bi-arrow-left me-2"></i>
-          Dashboard
-        </Link>
-      </div>
+      {/* Main Grid: Provisioning Form & Existing Tenants Matrix */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        {/* Left Column: Provision New Tenant Form */}
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 h-fit space-y-4">
+          <h2 className="text-lg font-semibold text-gray-800 border-b pb-3">Provision New Tenant</h2>
+          
+          <form action={async (formData) => {
+            "use server";
+            const name = formData.get("name") as string;
+            const subdomain = formData.get("subdomain") as string;
+            const schoolGroup = formData.get("schoolGroup") as string;
+            const tier = formData.get("tier") as 'Freemium' | 'Pro' | 'Corporate';
+            const type = formData.get("type") as string;
 
-      <div className="row g-5">
+            await provisionEntityWithTier({ name, subdomain, schoolGroup, tier, type });
+          }} className="space-y-4">
+            
+            <div>
+              <label className="block text-xs font-medium text-gray-700 uppercase mb-1">School Group ID (e.g. fcu, cpu)</label>
+              <input 
+                type="text" 
+                name="schoolGroup" 
+                required 
+                placeholder="fcu"
+                className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+              <span className="text-[11px] text-gray-400">Used to group departments and enforce Freemium limits.</span>
+            </div>
 
-        {/* LEFT COLUMN: PROVISION TRIGGER */}
-        <div className="col-12 col-lg-4">
-          <div
-            className="card p-4 border-secondary shadow-lg bg-card sticky-top"
-            style={{ top: '2rem' }}
-          >
-            <h5 className="fw-bold text-accent mb-1">
-              <i className="bi bi-building-gear me-2"></i>
-              Provision Entity
-            </h5>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 uppercase mb-1">Department / Organization Name</label>
+              <input 
+                type="text" 
+                name="name" 
+                required 
+                placeholder="College of Engineering"
+                className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+            </div>
 
-            <p className="text-secondary small mb-4">
-              Create a new Academic Department or Student Organization and assign its initial administrator.
-            </p>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 uppercase mb-1">Unique Subdomain Slug</label>
+              <input 
+                type="text" 
+                name="subdomain" 
+                required 
+                placeholder="fcu-engineering"
+                className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+            </div>
 
-            <div className="d-grid">
-              <button 
-                type="button" 
-                className="btn btn-primary fw-bold shadow-sm" 
-                data-bs-toggle="modal" 
-                data-bs-target="#provisionModal"
+            <div>
+              <label className="block text-xs font-medium text-gray-700 uppercase mb-1">Subscription Tier</label>
+              <select 
+                name="tier" 
+                defaultValue="Freemium"
+                className="w-full px-3 py-2 border rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none"
               >
-                <i className="bi bi-building-add me-2"></i> Provision New Entity
-              </button>
+                <option value="Freemium">Freemium (Max 2 per school)</option>
+                <option value="Pro">Pro (Up to 10 tenants)</option>
+                <option value="Corporate">Corporate (Unlimited)</option>
+              </select>
             </div>
 
-            <div className="border-top border-secondary mt-4 pt-4">
-              <div className="alert alert-warning bg-dark border-warning small mb-0">
-                <div className="fw-bold mb-1">
-                  <i className="bi bi-shield-lock-fill me-2"></i>
-                  Administrative Mode
-                </div>
-                <div className="text-secondary">
-                  You are currently authenticated as Super Administrator.
-                </div>
-              </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 uppercase mb-1">Entity Type</label>
+              <select 
+                name="type" 
+                defaultValue="Department"
+                className="w-full px-3 py-2 border rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+              >
+                <option value="Department">Department / College</option>
+                <option value="Student Organization">Student Council / Chapter</option>
+                <option value="Administration">Main Administration</option>
+              </select>
             </div>
 
+            <button 
+              type="submit" 
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg text-sm transition shadow-sm"
+            >
+              Provision Entity
+            </button>
+          </form>
+        </div>
+
+        {/* Right Column: Existing Tenants Matrix */}
+        <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-gray-100 space-y-4">
+          <h2 className="text-lg font-semibold text-gray-800 border-b pb-3">
+            Registered Tenants ({organizations.length})
+          </h2>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr className="border-b text-gray-500 text-xs uppercase bg-gray-50">
+                  <th className="p-3">School Group / Tenant</th>
+                  <th className="p-3">Tier</th>
+                  <th className="p-3">Status</th>
+                  <th className="p-3">Stats</th>
+                  <th className="p-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {organizations.map((org) => (
+                  <tr key={org.id} className="hover:bg-gray-50/50 transition">
+                    <td className="p-3 align-top">
+                      <div className="font-semibold text-gray-900">{org.name}</div>
+                      <div className="text-xs text-blue-600 font-mono">subdomain: {org.subdomain}</div>
+                      <div className="inline-block mt-1 px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] rounded-full font-mono">
+                        Group: {org.schoolGroup}
+                      </div>
+                    </td>
+
+                    {/* Tier Selector Action */}
+                    <td className="p-3 align-top">
+                      <form action={async (formData) => {
+                        "use server";
+                        const newTier = formData.get("tier") as 'Freemium' | 'Pro' | 'Corporate';
+                        await updateOrganizationTier(org.id, newTier);
+                      }}>
+                        <select 
+                          name="tier" 
+                          defaultValue={org.tier}
+                          onChange={(e) => e.currentTarget.form?.requestSubmit()}
+                          className={`text-xs font-medium px-2 py-1 rounded-md border outline-none cursor-pointer ${
+                            org.tier === 'Corporate' ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                            org.tier === 'Pro' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                            'bg-gray-50 text-gray-700 border-gray-200'
+                          }`}
+                        >
+                          <option value="Freemium">Freemium</option>
+                          <option value="Pro">Pro</option>
+                          <option value="Corporate">Corporate</option>
+                        </select>
+                      </form>
+                    </td>
+
+                    {/* Status Toggle Action */}
+                    <td className="p-3 align-top">
+                      <form action={async (formData) => {
+                        "use server";
+                        const newStatus = formData.get("status") as 'Active' | 'Inactive' | 'Archived';
+                        await updateOrganizationStatus(org.id, newStatus);
+                      }}>
+                        <select 
+                          name="status" 
+                          defaultValue={org.status}
+                          onChange={(e) => e.currentTarget.form?.requestSubmit()}
+                          className={`text-xs px-2 py-1 rounded-md border outline-none cursor-pointer ${
+                            org.status === 'Active' ? 'bg-green-50 text-green-700 border-green-200' :
+                            'bg-red-50 text-red-700 border-red-200'
+                          }`}
+                        >
+                          <option value="Active">Active</option>
+                          <option value="Inactive">Inactive</option>
+                          <option value="Archived">Archived</option>
+                        </select>
+                      </form>
+                    </td>
+
+                    <td className="p-3 align-top text-xs text-gray-500">
+                      <div>Students: {org._count.students}</div>
+                      <div>Collections: {org._count.collections}</div>
+                      <div>Users: {org._count.tenantUsers}</div>
+                    </td>
+
+                    <td className="p-3 align-top text-right">
+                      <form action={async () => {
+                        "use server";
+                        await deleteOrganization(org.id);
+                      }}>
+                        <button 
+                          type="submit" 
+                          className="text-xs text-red-600 hover:text-red-800 font-medium px-2 py-1 rounded hover:bg-red-50 transition"
+                          onClick={(e) => {
+                            if (!confirm(`Are you sure you want to permanently delete "${org.name}" and all its associated data?`)) {
+                              e.preventDefault();
+                            }
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </form>
+                    </td>
+                  </tr>
+                ))}
+                {organizations.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="p-6 text-center text-gray-400 text-sm">
+                      No organizations provisioned yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
 
-        {/* RIGHT COLUMN: ACTIVE ENTITIES MATRIX */}
-        <div className="col-12 col-lg-8">
-          <h5 className="fw-bold text-accent mb-4">
-            <i className="bi bi-grid-fill me-2"></i>
-            Active Entities Matrix
-          </h5>
-
-          {departments.length === 0 ? (
-            <div className="card border-secondary bg-card shadow-sm p-5 text-center">
-              <i className="bi bi-building-x fs-1 text-secondary mb-3"></i>
-              <h5 className="fw-bold text-secondary">
-                No Entities Provisioned
-              </h5>
-              <p className="text-secondary small mb-0">
-                Create the first Department or Organization using the Provision button.
-              </p>
-            </div>
-          ) : (
-            <div className="row g-4">
-              {departments.map((dept) => {
-                const tenantStatus = (dept as any).status || 'Active';
-                
-                return (
-                  <div key={dept.id} className="col-12 col-sm-6">
-                    <div className="card h-100 border-secondary shadow-sm p-3 bg-card d-flex flex-column justify-content-between position-relative">
-                      
-                      {/* Entity Type & Status Badges */}
-                      <div className="d-flex justify-content-between align-items-center mb-2">
-                        <span className={`badge ${dept.type === 'Organization' ? 'bg-warning text-dark' : 'bg-info text-dark'}`}>
-                          {dept.type || 'Department'}
-                        </span>
-                        <span className={`badge ${
-                          tenantStatus === 'Active' ? 'bg-success' : tenantStatus === 'Inactive' ? 'bg-warning text-dark' : 'bg-secondary'
-                        }`}>
-                          {tenantStatus}
-                        </span>
-                      </div>
-
-                      {/* CARD BODY LINK (Clicking navigates to entity) */}
-                      <Link
-                        href={getDeptUrl(dept.subdomain)}
-                        className="text-decoration-none text-center my-2"
-                      >
-                        <div className="d-flex justify-content-center align-items-center" style={{ height: '50px' }}>
-                          {dept.logo ? (
-                            <img 
-                              src={dept.logo} 
-                              alt={`${dept.name} logo`} 
-                              style={{ maxWidth: '50px', maxHeight: '50px', objectFit: 'contain' }} 
-                            />
-                          ) : (
-                            <i className={`fs-2 ${dept.type === 'Organization' ? 'bi bi-people-fill text-warning' : 'bi bi-building-check text-info'}`}></i>
-                          )}
-                        </div>
-
-                        <h6 className="fw-bold text-color mb-1 mt-2">
-                          {dept.name}
-                        </h6>
-
-                        <small className="text-info font-monospace">
-                          {isProduction
-                            ? `/department/${dept.subdomain}`
-                            : `http://localhost:3000/department/${dept.subdomain}`}
-                        </small>
-                      </Link>
-
-                      {/* TENANT MANAGEMENT CONTROLS */}
-                      <div className="border-top border-secondary pt-3 mt-2 d-flex flex-column gap-2">
-                        <div className="d-flex justify-content-between gap-1">
-                          {tenantStatus !== 'Active' && (
-                            <form action={async () => { 'use server'; await updateOrganizationStatus(dept.id, 'Active'); }}>
-                              <button type="submit" className="btn btn-outline-success btn-sm w-100 py-0" style={{ fontSize: '0.75rem' }}>
-                                Active
-                              </button>
-                            </form>
-                          )}
-                          {tenantStatus !== 'Inactive' && (
-                            <form action={async () => { 'use server'; await updateOrganizationStatus(dept.id, 'Inactive'); }}>
-                              <button type="submit" className="btn btn-outline-warning btn-sm w-100 py-0" style={{ fontSize: '0.75rem' }}>
-                                Inactive
-                              </button>
-                            </form>
-                          )}
-                          {tenantStatus !== 'Archived' && (
-                            <form action={async () => { 'use server'; await updateOrganizationStatus(dept.id, 'Archived'); }}>
-                              <button type="submit" className="btn btn-outline-secondary btn-sm w-100 py-0" style={{ fontSize: '0.75rem' }}>
-                                Archive
-                              </button>
-                            </form>
-                          )}
-                        </div>
-
-                        <form action={async () => { 
-                          'use server'; 
-                          if (global.confirm && confirm(`Permanently delete ${dept.name}?`)) {
-                            await deleteOrganization(dept.id);
-                          }
-                        }}>
-                          <button type="submit" className="btn btn-outline-danger btn-sm w-100 py-0" style={{ fontSize: '0.75rem' }}>
-                            <i className="bi bi-trash me-1"></i> Delete Tenant
-                          </button>
-                        </form>
-                      </div>
-
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
       </div>
-
-      <ProvisionModal />
-
     </div>
   );
 }
