@@ -27,12 +27,12 @@ export default async function ProvisionsPage() {
   });
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-8">
+    <div className="p-6 max-w-7xl mx-auto space-y-8 bg-gray-50 min-h-screen">
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-xl shadow-sm border border-gray-200">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">SaaS Institutional Provisioning & Tiers</h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-sm text-gray-600 mt-1">
             Manage multi-tenant school groups, monitor tier limits (Freemium vs. Pro vs. Corporate), and provision new departments.
           </p>
         </div>
@@ -42,8 +42,8 @@ export default async function ProvisionsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
         {/* Left Column: Provision New Tenant Form */}
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 h-fit space-y-4">
-          <h2 className="text-lg font-semibold text-gray-800 border-b pb-3">Provision New Tenant</h2>
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 h-fit space-y-4">
+          <h2 className="text-lg font-semibold text-gray-900 border-b pb-3">Provision New Tenant</h2>
           
           <form action={async (formData) => {
             "use server";
@@ -57,45 +57,45 @@ export default async function ProvisionsPage() {
           }} className="space-y-4">
             
             <div>
-              <label className="block text-xs font-medium text-gray-700 uppercase mb-1">School Group ID (e.g. fcu, cpu)</label>
+              <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">School Group ID (e.g. fcu, cpu)</label>
               <input 
                 type="text" 
                 name="schoolGroup" 
                 required 
                 placeholder="fcu"
-                className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none"
               />
-              <span className="text-[11px] text-gray-400">Used to group departments and enforce Freemium limits.</span>
+              <span className="text-[11px] text-gray-500">Used to group departments and enforce Freemium limits.</span>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-700 uppercase mb-1">Department / Organization Name</label>
+              <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">Department / Organization Name</label>
               <input 
                 type="text" 
                 name="name" 
                 required 
                 placeholder="College of Engineering"
-                className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-700 uppercase mb-1">Unique Subdomain Slug</label>
+              <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">Unique Subdomain Slug</label>
               <input 
                 type="text" 
                 name="subdomain" 
                 required 
                 placeholder="fcu-engineering"
-                className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-700 uppercase mb-1">Subscription Tier</label>
+              <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">Subscription Tier</label>
               <select 
                 name="tier" 
                 defaultValue="Freemium"
-                className="w-full px-3 py-2 border rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 outline-none"
               >
                 <option value="Freemium">Freemium (Max 2 per school)</option>
                 <option value="Pro">Pro (Up to 10 tenants)</option>
@@ -104,11 +104,11 @@ export default async function ProvisionsPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-700 uppercase mb-1">Entity Type</label>
+              <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">Entity Type</label>
               <select 
                 name="type" 
                 defaultValue="Department"
-                className="w-full px-3 py-2 border rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 outline-none"
               >
                 <option value="Department">Department / College</option>
                 <option value="Student Organization">Student Council / Chapter</option>
@@ -126,15 +126,15 @@ export default async function ProvisionsPage() {
         </div>
 
         {/* Right Column: Existing Tenants Matrix */}
-        <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-gray-100 space-y-4">
-          <h2 className="text-lg font-semibold text-gray-800 border-b pb-3">
+        <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-gray-200 space-y-4">
+          <h2 className="text-lg font-semibold text-gray-900 border-b pb-3">
             Registered Tenants ({organizations.length})
           </h2>
 
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-sm">
               <thead>
-                <tr className="border-b text-gray-500 text-xs uppercase bg-gray-50">
+                <tr className="border-b border-gray-200 text-gray-700 text-xs uppercase bg-gray-100">
                   <th className="p-3">School Group / Tenant</th>
                   <th className="p-3">Tier</th>
                   <th className="p-3">Status</th>
@@ -142,13 +142,13 @@ export default async function ProvisionsPage() {
                   <th className="p-3 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-200">
                 {organizations.map((org) => (
                   <ProvisionRow key={org.id} org={org} />
                 ))}
                 {organizations.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="p-6 text-center text-gray-400 text-sm">
+                    <td colSpan={5} className="p-6 text-center text-gray-500 text-sm">
                       No organizations provisioned yet.
                     </td>
                   </tr>
