@@ -7,9 +7,6 @@ import { isSuperAdminEmail } from '@/lib/permissions';
 
 export async function POST(req: Request) {
   try {
-    // =========================================================
-    // 1. AUTHENTICATION & ADMIN PERMISSION CHECK
-    // =========================================================
     const session = await auth();
     if (!session?.user?.email) {
       return NextResponse.json({ success: false, message: 'Unauthorized: No active session.' }, { status: 401 });
@@ -19,7 +16,6 @@ export async function POST(req: Request) {
     const cleanEmail = String(user.email).trim().toLowerCase();
     const isSuper = isSuperAdminEmail(cleanEmail);
 
-    // Parse incoming multipart form data (JSON backup file upload)
     const formData = await req.formData();
     const file = formData.get('backupFile') as File | null;
     const targetOrgId = formData.get('orgId') as string | null;
@@ -28,7 +24,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, message: 'Missing backup JSON file.' }, { status: 400 });
     }
 
-    // Read and parse JSON content
     const fileText = await file.text();
     let backupPayload: any;
     try {
@@ -44,9 +39,6 @@ export async function POST(req: Request) {
     const backupOrgId = backupPayload.organization.id;
     const orgIdToRestore = targetOrgId || backupOrgId;
 
-    // =========================================================
-    // 2. TENANT ISOLATION & LIVE DB ROLE RE-VERIFICATION
-    // =========================================================
     if (!isSuper) {
       if (user.organizationId && user.organizationId !== orgIdToRestore) {
         return NextResponse.json(
@@ -74,7 +66,6 @@ export async function POST(req: Request) {
       }
     }
 
-    // Verify organization exists
     const organization = await prisma.organization.findUnique({
       where: { id: orgIdToRestore },
     });
@@ -85,11 +76,7 @@ export async function POST(req: Request) {
 
     const records = backupPayload.data;
 
-    // =========================================================
-    // 3. TRANSACTIONAL RESTORATION (UPSERT IN DEPENDENCY ORDER)
-    // =========================================================
     await prisma.$transaction(async (tx) => {
-      // A. Independent / Master Entities
       if (records.students && Array.isArray(records.students)) {
         for (const s of records.students) {
           await tx.student.upsert({
@@ -130,7 +117,6 @@ export async function POST(req: Request) {
         }
       }
 
-      // B. Dependent Entities (Collections, Enrollments, Audits, etc.)
       if (records.enrollments && Array.isArray(records.enrollments)) {
         for (const en of records.enrollments) {
           await tx.enrollment.upsert({
@@ -252,7 +238,6 @@ export async function POST(req: Request) {
       }
     });
 
-    // Log the restoration event in system logs
     await prisma.systemLog.create({
       data: {
         organizationId: orgIdToRestore,
