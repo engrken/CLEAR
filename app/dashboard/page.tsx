@@ -3,15 +3,19 @@ import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import AdminOtpModal from './components/AdminOtpModal';
 import { Metadata } from 'next';
+
 export const metadata: Metadata = {
   title: 'Centralized Liquidation of Expenses & Audit Records',
 };
+
 export default async function DashboardPage() {
   // Fetch entities alphabetically for a clean UI
   const departments = await prisma.organization.findMany({
     orderBy: { name: 'asc' }
   });
+
   const getDeptUrl = (subdomain: string) => `/department/${encodeURIComponent(subdomain)}`;
+
   return (
     <div className="w-100 min-vh-100 bg-canvas d-flex flex-column">    
       {/* INLINE CSS FOR PREMIUM SAAS AESTHETICS */}
@@ -68,28 +72,31 @@ export default async function DashboardPage() {
             <b>C</b>entralized <b>L</b>iquidation of <b>E</b>xpenses & <b>A</b>udit <b>R</b>ecords. <br className="d-none d-md-block" />
             Select an active entity below to access the financial portal, or log in to manage system provisions.
           </p>
+          
           <div className="d-flex justify-content-center gap-3 flex-wrap">
-  {/* Master Admin Provisioning (Restricted to you) */}
-  <button
-    type="button"
-    className="btn btn-info fw-bold px-4 py-2 shadow"
-    data-bs-toggle="modal"
-    data-bs-target="#otpAuthModal"
-  >
-    <i className="bi bi-gear-fill me-2"></i>
-    System SuperAdmin Access
-  </button>
+            {/* Master Admin Provisioning */}
+            <button
+              type="button"
+              className="btn btn-info fw-bold px-4 py-2 shadow"
+              data-bs-toggle="modal"
+              data-bs-target="#otpAuthModal"
+            >
+              <i className="bi bi-gear-fill me-2"></i>
+              System SuperAdmin Access
+            </button>
 
-  {/* Entity Admin Portal Button */}
-<Link
-  href="/dashboard/entity/login"
-  className="btn btn-outline-light fw-bold px-4 py-2 shadow"
->
-  <i className="bi bi-building-fill-gear me-2"></i>
-  Entity Admin Portal
-</Link>
-</div>
+            {/* Entity Admin Portal */}
+            <Link
+              href="/dashboard/entity/login"
+              className="btn btn-outline-light fw-bold px-4 py-2 shadow"
+            >
+              <i className="bi bi-building-fill-gear me-2"></i>
+              Entity Admin Portal
+            </Link>
+          </div>
+        </div>
       </div>
+
       {/* MAIN ENTITY GRID SECTION */}
       <div className="flex-grow-1 py-5">
         <div className="container" style={{ maxWidth: '1200px' }}>
@@ -102,6 +109,7 @@ export default async function DashboardPage() {
               {departments.length} Provisioned
             </span>
           </div>
+
           {departments.length === 0 ? (
             /* EMPTY STATE */
             <div className="card entity-card shadow-lg p-5 text-center border-secondary mt-3">
@@ -112,7 +120,7 @@ export default async function DashboardPage() {
                 No Entities Provisioned Yet
               </h4>
               <p className="text-secondary mb-0 mx-auto" style={{ maxWidth: '500px' }}>
-                The system database is empty. Click <strong>System Admin Access</strong> above to authenticate as the Master Administrator and provision your first Department or Organization.
+                The system database is empty. Click <strong>System SuperAdmin Access</strong> above to authenticate as the Master Administrator and provision your first Department or Organization.
               </p>
             </div>
           ) : (
@@ -133,28 +141,31 @@ export default async function DashboardPage() {
                           {dept.type || 'Department'}
                         </span>
                       </div>
+                      
                       {/* LOGO WRAPPER */}
-<div className="logo-wrapper mt-3">
-  {dept.logo ? (
-    <img
-      src={dept.logo}
-      alt={`${dept.name} Logo`}
-      className="img-fluid"
-      style={{
-        maxWidth: '100%',
-        maxHeight: '100%',
-        objectFit: 'contain',
-        filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))'
-      }}
-    />
-  ) : (
-    <i className={`fs-1 text-secondary ${dept.type === 'Organization' ? 'bi bi-people-fill' : 'bi bi-building'}`}></i>
-  )}
-</div>
+                      <div className="logo-wrapper mt-3">
+                        {dept.logo ? (
+                          <img
+                            src={dept.logo}
+                            alt={`${dept.name} Logo`}
+                            className="img-fluid"
+                            style={{
+                              maxWidth: '100%',
+                              maxHeight: '100%',
+                              objectFit: 'contain',
+                              filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))'
+                            }}
+                          />
+                        ) : (
+                          <i className={`fs-1 text-secondary ${dept.type === 'Organization' ? 'bi bi-people-fill' : 'bi bi-building'}`}></i>
+                        )}
+                      </div>
+
                       {/* ENTITY NAME & LINK */}
                       <h5 className="fw-bold text-white mb-2 px-2" style={{ lineHeight: '1.3' }}>
                         {dept.name}
-                      </h5>                
+                      </h5>    
+                      
                       <div className="mt-auto pt-3">
                         <span className="text-secondary small font-monospace d-flex align-items-center justify-content-center gap-1">
                           /department/{dept.subdomain}
@@ -167,13 +178,11 @@ export default async function DashboardPage() {
               ))}
             </div>
           )}
-
         </div>
       </div>
 
       {/* ADMIN OTP LOGIN MODAL */}
       <AdminOtpModal />
-      
     </div>
   );
 }
