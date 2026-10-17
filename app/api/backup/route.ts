@@ -8,28 +8,90 @@ import { isSuperAdminEmail } from '@/lib/permissions';
 export async function GET(req: Request) {
   try {
     const session = await auth();
-    if (!session?.user) {
+    if (!session?.user?.email) {
       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 
     const user = session.user as any;
-    const isSuper = isSuperAdminEmail(user.email) || user.role === 'SuperAdmin';
-    const userOrgId = user.organizationId;
+    const cleanEmail = String(user.email).trim().toLowerCase();
+    const isSuper = isSuperAdminEmail(cleanEmail);
 
     const { searchParams } = new URL(req.url);
-    const orgId = searchParams.get('orgId');
+    let orgId = searchParams.get('orgId');
+    const deptParam = searchParams.get('department');
+
+    // Allow lookup by department subdomain (e.g., /api/backup?department=coe)
+    if (!orgId && deptParam) {
+      const orgBySubdomain = await prisma.organization.findFirst({
+        where: { subdomain: { equals: deptParam.trim().toLowerCase(), mode: 'insensitive' } },
+        select: { id: true },
+      });
+      orgId = orgBySubdomain?.id || null;
+    }
+
+    // Fallback to the logged-in user's organizationId if neither parameter is passed
+    if (!orgId && user.organizationId) {
+      orgId = String(user.organizationId);
+    }
 
     if (!orgId) {
-      return NextResponse.json({ success: false, message: 'Missing orgId parameter' }, { status: 400 });
+      return NextResponse.json(
+        { success: false, message: 'Missing orgId or department parameter' },
+        { status: 400 }
+      );
     }
 
-    // 🚀 SECURITY FIX (F16): Prevent Cross-Tenant IDOR.
-    // Non-SuperAdmin users can only export their own organization's data.
-    if (!isSuper && userOrgId !== orgId) {
-      return NextResponse.json({ success: false, message: 'Forbidden: Cannot export data for another organization' }, { status: 403 });
+    // =========================================================
+    // 1. TENANT ISOLATION & LIVE DB ROLE RE-VERIFICATION
+    // =========================================================
+    if (!isSuper) {
+      if (user.organizationId && user.organizationId !== orgId) {
+        return NextResponse.json(
+          { success: false, message: 'Forbidden: Cannot export data for another organization' },
+          { status: 403 }
+        );
+      }
+
+      const dbUser = await prisma.tenantUser.findFirst({
+        where: {
+          organizationId: orgId,
+          email: { equals: cleanEmail, mode: 'insensitive' },
+        },
+        select: {
+          id: true,
+          role: true,
+          status: true,
+        },
+      });
+
+      if (!dbUser) {
+        return NextResponse.json(
+          { success: false, message: 'Forbidden: Account is not registered under this organization' },
+          { status: 403 }
+        );
+      }
+
+      if (dbUser.status !== 'Active') {
+        return NextResponse.json(
+          { success: false, message: `Forbidden: Your account status is currently ${dbUser.status}` },
+          { status: 403 }
+        );
+      }
+
+      const normalizedRole = String(dbUser.role || '').trim().toLowerCase();
+      const isDepartmentAdmin = ['admin', 'administrator', 'master'].includes(normalizedRole);
+
+      if (!isDepartmentAdmin) {
+        return NextResponse.json(
+          { success: false, message: 'Forbidden: Only active Department Administrators can export system backups' },
+          { status: 403 }
+        );
+      }
     }
 
-    // Verify organization exists
+    // =========================================================
+    // 2. VERIFY ORGANIZATION EXISTS
+    // =========================================================
     const organization = await prisma.organization.findUnique({
       where: { id: orgId },
     });
@@ -38,7 +100,9 @@ export async function GET(req: Request) {
       return NextResponse.json({ success: false, message: 'Organization not found' }, { status: 404 });
     }
 
-    // Comprehensive multi-tenant data dump matching your exact schema models
+    // =========================================================
+    // 3. MULTI-TENANT DATA DUMP
+    // =========================================================
     const [
       students,
       enrollments,
@@ -76,7 +140,17 @@ export async function GET(req: Request) {
       prisma.voidTransaction.findMany({ where: { organizationId: orgId } }),
       prisma.systemLog.findMany({ where: { organizationId: orgId } }),
       prisma.signatory.findMany({ where: { organizationId: orgId } }),
-      prisma.tenantUser.findMany({ where: { organizationId: orgId }, select: { userId: true, fullName: true, username: true, email: true, role: true, status: true } }),
+      prisma.tenantUser.findMany({
+        where: { organizationId: orgId },
+        select: {
+          userId: true,
+          fullName: true,
+          username: true,
+          email: true,
+          role: true,
+          status: true,
+        },
+      }),
     ]);
 
     const backupPayload = {
@@ -110,11 +184,10 @@ export async function GET(req: Request) {
       },
     };
 
-    // Log backup action securely
     await prisma.systemLog.create({
       data: {
         organizationId: orgId,
-        user: user.email || 'System Admin',
+        user: cleanEmail || 'System Admin',
         action: 'EXPORT_DATABASE_BACKUP',
         details: `Exported full database backup for ${organization.name}`,
       }
@@ -133,6 +206,9 @@ export async function GET(req: Request) {
 
   } catch (error: any) {
     console.error('Backup Export Error:', error);
-    return NextResponse.json({ success: false, message: error.message || 'Internal server error during backup.' }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: error.message || 'Internal server error during backup.' },
+      { status: 500 }
+    );
   }
 }
