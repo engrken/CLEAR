@@ -98,7 +98,7 @@ export default function EntityAdminLoginPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="kent.bsece@gmail.com"
+                placeholder="yourname@email.com"
                 className="form-control bg-dark text-white border-secondary"
               />
             </div>
