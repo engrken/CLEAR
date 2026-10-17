@@ -3,12 +3,16 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Centralized Liquidation of Expenses & Audit Records',
+};
 
 export default function EntityAdminLoginPage() {
   const [email, setEmail] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [otpSent, setOtpSent] = useState(false);
-  const [devOtpPreview, setDevOtpPreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [infoMessage, setInfoMessage] = useState('');
@@ -18,7 +22,6 @@ export default function EntityAdminLoginPage() {
     setLoading(true);
     setError('');
     setInfoMessage('');
-    setDevOtpPreview(null);
 
     try {
       const res = await fetch('/api/entity-admin/login', {
@@ -29,17 +32,14 @@ export default function EntityAdminLoginPage() {
 
       const contentType = res.headers.get('content-type') || '';
       if (!contentType.includes('application/json')) {
-        throw new Error('Server returned an unexpected response. Ensure API route is deployed.');
+        throw new Error('Server returned an unexpected response.');
       }
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Failed to request OTP.');
 
       setOtpSent(true);
-      setInfoMessage(data.message || `OTP sent to ${email}`);
-      if (data.devOtp) {
-        setDevOtpPreview(data.devOtp);
-      }
+      setInfoMessage(data.message || `A 6-digit OTP has been sent to ${email}`);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -103,7 +103,7 @@ export default function EntityAdminLoginPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="yourname@yourdomain.com"
+                placeholder="kent.bsece@gmail.com"
                 className="form-control bg-dark text-white border-secondary"
               />
             </div>
@@ -113,18 +113,13 @@ export default function EntityAdminLoginPage() {
               disabled={loading}
               className="btn btn-info fw-bold py-2 text-dark mt-2 shadow-sm"
             >
-              {loading ? 'Sending Verification OTP...' : 'Send Login OTP'}
+              {loading ? 'Sending OTP to Gmail...' : 'Send Login OTP'}
             </button>
           </form>
         ) : (
           <form onSubmit={handleVerifyOtp} className="vstack gap-3">
-            <div className="alert alert-info py-2 small text-center mb-1">
-              {infoMessage}
-              {devOtpPreview && (
-                <div className="mt-2 p-2 bg-dark text-warning rounded border border-warning font-monospace">
-                  OTP Code: <strong>{devOtpPreview}</strong>
-                </div>
-              )}
+            <div className="alert alert-success py-2 small text-center mb-1">
+              <i className="bi bi-envelope-check-fill me-1"></i> {infoMessage}
             </div>
 
             <div>

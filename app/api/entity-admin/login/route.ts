@@ -3,42 +3,56 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { cookies } from 'next/headers';
 import crypto from 'crypto';
+import nodemailer from 'nodemailer';
 import { signEntityToken, verifyEntityToken } from '@/app/dashboard/entity/actions';
 
-async function dispatchOtpEmail(toEmail: string, otpCode: string, orgName: string): Promise<boolean> {
-  // Check if Resend API Key is configured
-  if (process.env.RESEND_API_KEY) {
-    try {
-      const res = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          from: process.env.EMAIL_FROM || 'CLEAR System <onboarding@resend.dev>',
-          to: [toEmail],
-          subject: `[CLEAR System] Your Entity Admin OTP Code: ${otpCode}`,
-          html: `
-            <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px;">
-              <h2 style="color: #0f172a; margin-top: 0;">CLEAR Entity Admin Verification</h2>
-              <p style="color: #475569; font-size: 14px;">You requested access to the Entity Management Portal for <strong>${orgName}</strong>.</p>
-              <div style="background: #f1f5f9; padding: 16px; border-radius: 8px; text-align: center; font-size: 28px; font-weight: bold; letter-spacing: 6px; color: #0284c7; margin: 20px 0;">
-                ${otpCode}
-              </div>
-              <p style="color: #64748b; font-size: 12px;">This code expires in 5 minutes. If you did not request this login, please ignore this email.</p>
-            </div>
-          `,
-        }),
-      });
-      if (res.ok) return true;
-    } catch (e) {
-      console.error('Resend dispatch failed:', e);
-    }
+async function dispatchOtpEmail(toEmail: string, otpCode: string, orgName: string): Promise<void> {
+  const smtpUser =
+    process.env.GMAIL_USER ||
+    process.env.EMAIL_USER ||
+    process.env.SMTP_USER ||
+    process.env.MAIL_USER;
+
+  const smtpPass =
+    process.env.GMAIL_APP_PASSWORD ||
+    process.env.GMAIL_PASS ||
+    process.env.EMAIL_PASS ||
+    process.env.SMTP_PASSWORD ||
+    process.env.MAIL_PASS;
+
+  if (!smtpUser || !smtpPass) {
+    throw new Error(
+      'Gmail SMTP credentials are not configured in environment variables.'
+    );
   }
 
-  console.log(`[CLEAR ENTITY OTP] Email: ${toEmail} | Code: ${otpCode}`);
-  return false;
+  const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: smtpUser,
+      pass: smtpPass,
+    },
+  });
+
+  await transporter.sendMail({
+    from: `"CLEAR System Security" <${smtpUser}>`,
+    to: toEmail,
+    subject: `[CLEAR System] Entity Admin OTP Code: ${otpCode}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px; background-color: #0f172a; color: #f8fafc; border-radius: 12px; border: 1px solid #334155;">
+        <h2 style="color: #38bdf8; margin-top: 0;">Entity Admin Portal Verification</h2>
+        <p style="color: #cbd5e1; font-size: 14px; line-height: 1.5;">
+          You requested administrative access to manage the institutional entity group associated with <strong>${orgName}</strong>.
+        </p>
+        <div style="background-color: #1e293b; border: 1px solid #38bdf8; padding: 16px; border-radius: 8px; text-align: center; font-size: 28px; font-weight: bold; letter-spacing: 6px; color: #38bdf8; margin: 20px 0;">
+          ${otpCode}
+        </div>
+        <p style="color: #94a3b8; font-size: 12px; margin-bottom: 0;">
+          This verification code expires in 5 minutes. If you did not request this code, please ignore this email.
+        </p>
+      </div>
+    `,
+  });
 }
 
 export async function POST(req: Request) {
@@ -55,7 +69,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // Verify user is an active admin of at least one entity
     const tenantUser = await prisma.tenantUser.findFirst({
       where: {
         email: cleanEmail,
@@ -78,9 +91,11 @@ export async function POST(req: Request) {
 
     if (step === 'request_otp') {
       const generatedOtp = String(crypto.randomInt(100000, 999999));
-      const otpHash = crypto.createHash('sha256').update(`${cleanEmail}:${generatedOtp}`).digest('hex');
+      const otpHash = crypto
+        .createHash('sha256')
+        .update(`${cleanEmail}:${generatedOtp}`)
+        .digest('hex');
 
-      // Store stateless signed OTP challenge in an HTTP-only cookie valid for 5 minutes
       const signedChallenge = await signEntityToken({
         email: cleanEmail,
         otpHash,
@@ -95,16 +110,11 @@ export async function POST(req: Request) {
         maxAge: 300, // 5 minutes
       });
 
-      const emailSent = await dispatchOtpEmail(cleanEmail, generatedOtp, tenantUser.organization.name);
+      await dispatchOtpEmail(cleanEmail, generatedOtp, tenantUser.organization.name);
 
       return NextResponse.json({
         success: true,
-        emailDispatched: emailSent,
-        // If no email provider is configured yet, return devOtp so you don't get locked out in production testing
-        devOtp: !emailSent ? generatedOtp : undefined,
-        message: emailSent
-          ? `A 6-digit verification code has been sent to ${cleanEmail}.`
-          : 'OTP generated (Email provider not bound yet — use verification code shown).',
+        message: `A 6-digit verification code has been sent to your Gmail (${cleanEmail}).`,
       });
     }
 
@@ -133,10 +143,8 @@ export async function POST(req: Request) {
         );
       }
 
-      // Clear the OTP challenge cookie
       cookieStore.delete('clear_entity_otp');
 
-      // Issue a cryptographically signed 24-hour session cookie
       const sessionToken = await signEntityToken({
         email: cleanEmail,
         role: 'admin',
@@ -157,11 +165,14 @@ export async function POST(req: Request) {
       });
     }
 
-    return NextResponse.json({ success: false, message: 'Invalid authentication step.' }, { status: 400 });
+    return NextResponse.json(
+      { success: false, message: 'Invalid authentication step.' },
+      { status: 400 }
+    );
   } catch (error: any) {
     console.error('Entity Admin Auth Error:', error);
     return NextResponse.json(
-      { success: false, message: error.message || 'Internal server error during authentication.' },
+      { success: false, message: error.message || 'Failed to send verification email.' },
       { status: 500 }
     );
   }
