@@ -47,7 +47,6 @@ export async function requireSuperAdmin() {
   return user;
 }
 
-// 🚀 UPDATED: Accepts optional department parameter to fix TS2554 and enforce tenant scoping
 export async function requireTabAccess(requiredTab: string, department?: string) {
   const session = await auth();
   if (!session?.user) throw new Error("401 Unauthorized: Session expired or invalid.");
@@ -55,24 +54,22 @@ export async function requireTabAccess(requiredTab: string, department?: string)
   const customUser = session.user as any;
   const sessionEmail = String(customUser.email || "").trim().toLowerCase();
   const isSuper = isSuperAdminEmail(sessionEmail);
-  const organization = await prisma.organization.findUnique({
-  where: { subdomain: cleanDepartment },
-  select: { id: true, status: true }
-});
-
-if (!organization) {
-  throw new Error("Department not found.");
-}
-
-// 🚀 BLOCK INACTIVE OR ARCHIVED TENANTS
-if (organization.status !== 'Active' && !isSuperAdminEmail(sessionEmail)) {
-  throw new Error(`This department is currently ${organization.status.toLowerCase()} and cannot be accessed.`);
-}
 
   if (department) {
     const cleanDept = decodeURIComponent(department).trim().toLowerCase();
-    const org = await prisma.organization.findUnique({ where: { subdomain: cleanDept }, select: { id: true } });
+    
+    // 🚀 Fetch and enforce organization status checks
+    const org = await prisma.organization.findUnique({ 
+      where: { subdomain: cleanDept }, 
+      select: { id: true, status: true, name: true } 
+    });
+    
     if (!org) throw new Error(`Organization "${cleanDept}" not found.`);
+
+    // 🚀 BLOCK INACTIVE OR ARCHIVED TENANTS (SuperAdmin bypasses this block)
+    if (org.status && org.status !== 'Active' && !isSuper) {
+      throw new Error(`This department is currently ${org.status.toLowerCase()} and cannot be accessed.`);
+    }
 
     if (!isSuper) {
       const member = await prisma.tenantUser.findFirst({
