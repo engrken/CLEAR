@@ -69,3 +69,8 @@ For SQL reporting, `timestamptz_column AT TIME ZONE 'Asia/Manila'` provides a Ma
 - Test a reversible migration against a restored database snapshot, then schedule production DDL separately.
 
 GitHub Actions now runs timezone tests, Prisma validation, TypeScript checking, an isolated Next.js production build, and an ephemeral PostgreSQL historical-timestamp conversion rehearsal. No database credentials, actual database values, or secrets are included here.
+
+## Accounting-calendar consistency (additional review)
+The date-only fields used by Collections, Penalties, Cash Advances, Cashier Remittances and Liquidations now share `parseClearAccountingDate()`. It preserves the existing noon-UTC `DateTime` encoding, rejecting invalid leap-day/month values without altering historical rows. Arrears and Collectibles use the same validation. Liquidation report CSV and tables now format accounting labels in Manila time. CI tests also run under Honolulu and Berlin system time zones to catch host-dependent behavior.
+
+The isolated PostgreSQL migration rehearsal deliberately inserts a legacy `Penalty.date` record and confirms its original calendar label and SQL column type remain unchanged after event-time migration. These checks DO NOT establish the source timezone of live production data.

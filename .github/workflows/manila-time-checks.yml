@@ -120,6 +120,8 @@ jobs:
           VALUES ('ci-mnl-org','ci-mnl','Migration Test','2026-10-18 16:15:00','2026-10-18 16:15:00');
           INSERT INTO "SystemLog" ("id","organizationId","timestamp","user","action")
           VALUES ('ci-mnl-log','ci-mnl-org','2026-10-18 16:15:00','CI','MIGRATION_TEST');
+          INSERT INTO "Penalty" ("id", "organizationId", "penaltyId", "studentName", "activity", "date")
+          VALUES ('ci-mnl-penalty', 'ci-mnl-org', 'CI-MNL-PENALTY', 'CI Student', 'CI Assessment', '2026-10-19 12:00:00');
           SQL
       - name: Apply UTC-reviewed migration in the same SQL session
         run: |
@@ -130,4 +132,8 @@ jobs:
         run: |
           actual="$(psql "$PSQL_URL" -At -v ON_ERROR_STOP=1 -c "SELECT to_char(\"timestamp\" AT TIME ZONE 'Asia/Manila','YYYY-MM-DD HH24:MI:SS') FROM \"SystemLog\" WHERE \"id\"='ci-mnl-log'")"
           test "$actual" = '2026-10-19 00:15:00'
+          penalty_date="$(psql "$PSQL_URL" -At -v ON_ERROR_STOP=1 -c "SELECT to_char(\"date\",'YYYY-MM-DD HH24:MI:SS') FROM \"Penalty\" WHERE \"id\"='ci-mnl-penalty'")"
+          test "$penalty_date" = '2026-10-19 12:00:00'
+          penalty_type="$(psql "$PSQL_URL" -At -v ON_ERROR_STOP=1 -c "SELECT data_type FROM information_schema.columns WHERE table_schema='public' AND table_name='Penalty' AND column_name='date'")"
+          test "$penalty_type" = 'timestamp without time zone'
           npx prisma db push --skip-generate
