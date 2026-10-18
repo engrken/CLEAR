@@ -1,3 +1,4 @@
+import { manilaDateInput, formatManilaLongDate } from '@/lib/clear-timezone';
 // /app/department/[department]/(protected)/collections/CollectionsForms.tsx
 
 "use client";
@@ -65,7 +66,7 @@ export default function CollectionsForm({
   penaltyState?: { balance: number; ratePerHour: number; originalHours: number; status: string };
   closed?: boolean;
 }) {
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = manilaDateInput();
 
   const categories: string[] = useMemo(() => {
     return Array.from(new Set(collectionItems.map((item) => String(item.category))));
@@ -325,7 +326,7 @@ export default function CollectionsForm({
             </div>
             <div className="d-flex justify-content-between small mb-4">
               <span className="text-muted">Date:</span>
-              <span className="fw-medium">{new Date(receiptData.date).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+              <span className="fw-medium">{formatManilaLongDate(receiptData.date)}</span>
             </div>
 
             <div className="p-3 rounded mb-4 border border-secondary bg-body-secondary">
