@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   manilaDateInput, formatManilaDateTime24, manilaDayWindow,
   manilaYear, manilaMonth, CLEAR_TIME_ZONE,
+  parseManilaLocalDateTime, toManilaLocalDateTime,
 } from '../lib/clear-timezone.ts';
 
 test('canonical zone', () => {
@@ -27,4 +28,15 @@ test('year rollover follows Philippine calendar', () => {
 test('reject malformed and nonexistent dates', () => {
   assert.throws(() => manilaDayWindow('2026-02-30'));
   assert.throws(() => manilaDayWindow('10/19/2026'));
+});
+
+test('Manila-local datetime input parses independently of browser TZ', () => {
+  const when = parseManilaLocalDateTime('2026-10-19T00:15');
+  assert.equal(when.toISOString(), '2026-10-18T16:15:00.000Z');
+  assert.equal(toManilaLocalDateTime(when), '2026-10-19T00:15');
+});
+test('Manila-local datetime rejects invalid dates and clock values', () => {
+  assert.throws(() => parseManilaLocalDateTime('2026-02-30T01:00'));
+  assert.throws(() => parseManilaLocalDateTime('2026-10-19T24:30'));
+  assert.throws(() => parseManilaLocalDateTime('2026-10-19T13:60'));
 });

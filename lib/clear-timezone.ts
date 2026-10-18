@@ -91,3 +91,35 @@ export function manilaDayWindow(ymd: string): { start: Date; end: Date } {
   }
   return { start, end: new Date(start.getTime() + 24 * 60 * 60 * 1000) };
 }
+
+
+/**
+ * Parse a <input type="datetime-local"> value entered as Philippine wall time
+ * into an absolute UTC instant. Never call new Date(localInput) for this,
+ * because that would interpret the input in the user's browser timezone.
+ */
+export function parseManilaLocalDateTime(value: string): Date {
+  const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(value);
+  if (!match) throw new Error('Invalid Philippine local date/time');
+  const [, day, hh, mm, ss = '00'] = match;
+  const hour = Number(hh), minute = Number(mm), second = Number(ss);
+  if (hour > 23 || minute > 59 || second > 59) {
+    throw new Error('Invalid Philippine local date/time');
+  }
+  const start = manilaDayWindow(day).start;
+  return new Date(start.getTime() + ((hour * 60 + minute) * 60 + second) * 1000);
+}
+
+/** Return a datetime-local value that edits an instant in Philippine time. */
+export function toManilaLocalDateTime(value: DateValue): string {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) throw new Error('Invalid date');
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: CLEAR_TIME_ZONE,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date);
+  const get = (type: string) => parts.find(part => part.type === type)?.value ?? '';
+  return `${manilaDateInput(date)}T${get('hour')}:${get('minute')}`;
+}
