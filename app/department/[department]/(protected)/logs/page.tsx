@@ -6,6 +6,7 @@ import LogsClient from './LogsClient';
 import { redirect } from 'next/navigation';
 import { Metadata } from 'next';
 import { requireTabAccess } from '@/lib/permissions'; // 🚀 CENTRALIZED PERMISSION GUARD
+import { formatManilaDateTime24 } from '@/lib/clear-timezone';
 
 export const metadata: Metadata = {
   title: 'System Audit Logs | CLEAR',
@@ -77,10 +78,7 @@ export default async function SystemLogsPage({
   // Format data safely for Client Component
   const serializedLogs = logs.map(l => ({
     id: l.id,
-    timestamp: new Date(l.timestamp).toLocaleString('en-US', {
-      dateStyle: 'medium',
-      timeStyle: 'medium'
-    }),
+    timestamp: formatManilaDateTime24(l.timestamp),
     user: l.user,
     action: l.action,
     details: l.details || "No additional details recorded.",
