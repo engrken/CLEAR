@@ -1,5 +1,6 @@
 // app/department/[department]/(protected)/penalties/actions.ts
 "use server";
+import { parseClearAccountingDate } from '@/lib/clear-timezone';
 
 import { Prisma } from "@prisma/client";
 import crypto from "node:crypto";
@@ -33,13 +34,8 @@ function exactCents(value: unknown, label: string, allowZero = false): number {
 }
 
 function parseDateOnly(value: string): Date {
-  const input = norm(value);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(input)) throw new Error("Use a valid YYYY-MM-DD penalty date.");
-  const date = new Date(`${input}T12:00:00.000Z`);
-  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== input) {
-    throw new Error("Penalty date is invalid.");
-  }
-  return date;
+  try { return parseClearAccountingDate(norm(value)); }
+  catch { throw new Error("Penalty date is invalid. Use YYYY-MM-DD."); }
 }
 
 function positiveMinutes(hours: unknown, label: string): number {

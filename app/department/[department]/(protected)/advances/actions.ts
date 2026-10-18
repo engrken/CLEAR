@@ -1,4 +1,5 @@
 "use server";
+import { parseClearAccountingDate } from '@/lib/clear-timezone';
 
 import { prisma } from "@/lib/prisma";
 import { requireTabAccess } from "@/lib/permissions";
@@ -21,12 +22,8 @@ function parseMoney(value: unknown): number {
 }
 
 function validateDate(value: string, field: string): Date {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error(`${field} must be YYYY-MM-DD.`);
-  const date = new Date(`${value}T12:00:00.000Z`);
-  if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== value) {
-    throw new Error(`Invalid ${field}.`);
-  }
-  return date;
+  try { return parseClearAccountingDate(value); }
+  catch { throw new Error(`Invalid ${field}. Use YYYY-MM-DD.`); }
 }
 
 export async function issueCashAdvance(
