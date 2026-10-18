@@ -1,0 +1,41 @@
+name: CLEAR Manila time checks
+
+on:
+  push:
+    branches:
+      - 'feature/manila-time-standardization-*'
+  pull_request:
+    paths:
+      - 'lib/clear-timezone.ts'
+      - 'tests/clear-timezone.test.mjs'
+      - 'app/**'
+      - 'prisma/schema.prisma'
+      - 'package.json'
+      - '.github/workflows/manila-time-checks.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  types-and-time:
+    name: Types and Manila timezone tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: postgresql://clear_ci:clear_ci@127.0.0.1:5432/clear_ci?schema=public
+      AUTH_SECRET: clear-ci-only-not-used-in-production
+      SUPER_ADMIN_EMAIL: test-admin@example.invalid
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Validate Prisma schema
+        run: npx prisma validate
+      - name: Run timezone regression tests
+        run: npm run test:time
+      - name: TypeScript check
+        run: npx tsc --noEmit
