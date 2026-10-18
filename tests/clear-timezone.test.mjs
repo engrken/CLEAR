@@ -4,6 +4,7 @@ import {
   manilaDateInput, formatManilaDateTime24, manilaDayWindow,
   manilaYear, manilaMonth, CLEAR_TIME_ZONE,
   parseManilaLocalDateTime, toManilaLocalDateTime,
+  parseClearAccountingDate, isValidClearAccountingDate,
 } from '../lib/clear-timezone.ts';
 
 test('canonical zone', () => {
@@ -39,4 +40,13 @@ test('Manila-local datetime rejects invalid dates and clock values', () => {
   assert.throws(() => parseManilaLocalDateTime('2026-02-30T01:00'));
   assert.throws(() => parseManilaLocalDateTime('2026-10-19T24:30'));
   assert.throws(() => parseManilaLocalDateTime('2026-10-19T13:60'));
+});
+
+test('legacy accounting dates preserve date-only noon-UTC values', () => {
+  assert.equal(parseClearAccountingDate('2026-10-19').toISOString(), '2026-10-19T12:00:00.000Z');
+  assert.equal(manilaDateInput(parseClearAccountingDate('2026-10-19')), '2026-10-19');
+  assert.equal(isValidClearAccountingDate('2024-02-29'), true);
+  assert.equal(isValidClearAccountingDate('2026-02-29'), false);
+  assert.equal(isValidClearAccountingDate('2026-02-30'), false);
+  assert.equal(isValidClearAccountingDate('2026-13-01'), false);
 });

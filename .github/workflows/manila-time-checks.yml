@@ -39,6 +39,10 @@ jobs:
         run: npm run test:time
       - name: TypeScript check
         run: npx tsc --noEmit
+      - name: TZ independence — Honolulu
+        run: TZ=Pacific/Honolulu npm run test:time
+      - name: TZ independence — Berlin
+        run: TZ=Europe/Berlin npm run test:time
 
   integration-build:
     name: Next.js build against isolated PostgreSQL

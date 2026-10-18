@@ -123,3 +123,25 @@ export function toManilaLocalDateTime(value: DateValue): string {
   const get = (type: string) => parts.find(part => part.type === type)?.value ?? '';
   return `${manilaDateInput(date)}T${get('hour')}:${get('minute')}`;
 }
+
+/**
+ * Legacy CLEAR business/accounting date encoding.
+ * Financial calendar days are represented as 12:00 UTC in existing DateTime
+ * columns. This is a calendar label, NOT a timestamp of a financial event.
+ * Preserve the convention until a separately reviewed @db.Date migration.
+ */
+export function parseClearAccountingDate(ymd: string): Date {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) {
+    throw new Error('Accounting date must be yyyy-MM-dd');
+  }
+  const date = new Date(`${ymd}T12:00:00.000Z`);
+  if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== ymd) {
+    throw new Error('Invalid accounting calendar date');
+  }
+  return date;
+}
+
+export function isValidClearAccountingDate(value: string): boolean {
+  try { parseClearAccountingDate(value); return true; }
+  catch { return false; }
+}
