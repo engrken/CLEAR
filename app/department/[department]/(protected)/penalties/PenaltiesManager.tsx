@@ -1,7 +1,7 @@
-import { manilaDateInput, formatManilaDateTime24 } from '@/lib/clear-timezone';
 // /app/department/[department]/(protected)/penalties/PenaltiesManager.tsx
 
 "use client";
+import { manilaDateInput, formatManilaDateTime24 } from '@/lib/clear-timezone';
 import { clearAlert, clearConfirm, clearPrompt } from "@/lib/clear-dialogs";
 
 
