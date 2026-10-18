@@ -44,3 +44,10 @@ next-env.d.ts
 
 .vercel
 .env*
+
+# Android signing material and store builds: never commit
+*.keystore
+*.jks
+*.apk
+*.aab
+.claude/settings.local.json
