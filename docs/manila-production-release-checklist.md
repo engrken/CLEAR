@@ -11,6 +11,12 @@
 - GitHub automated tests cover TypeScript, Prisma validation, timezone edge cases and a production build against isolated PostgreSQL. These are not equivalent to live migrated-staging browser acceptance tests.
 - Live staging application acceptance and independent historical UTC provenance must be evidenced separately before production release. Sample data and schema matching alone cannot prove historical UTC encoding.
 
+## Prisma migration history mismatch (BLOCKING)
+
+Neon production and the migrated staging branch each report **five applied Prisma migrations**, but the GitHub branch retains **only two** migration directories. Missing: `20261016000000_sync_schema_drift`, `20261016104256_add_auth_throttle`, and `20261016122213_add_mobile_sessions`. Reconcile the original migration SQL and recorded checksums before attempting `prisma migrate deploy` or production schema release; see [migration history reconciliation](manila-prisma-migration-history-reconciliation.md). Do not fabricate empty historical migrations or rewrite the Prisma ledger without a reviewed recovery process.
+
+The operator has confirmed successful Manila staging application tests; **retain detailed smoke-test results** (tested modules, timestamps, receipts and outputs) for release evidence. Latest GitHub Actions and Vercel checks were passing as of 2026-10-19.
+
 ## Accepted limitation: no native PostgreSQL dump
 
 On 2026-10-19, the operator elected to **skip the independent `pg_dump` / `pg_restore` backup step**. This is a recovery-safety waiver, **not** proof that a dump was performed or an assurance that a Neon snapshot provides identical recovery flexibility.
