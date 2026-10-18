@@ -1,0 +1,125 @@
+import { useLocalSearchParams } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { View } from 'react-native';
+
+import { api, ApiError, DEMO_OTP, type Organization } from '@/api';
+import { Banner, Button, OtpInput, Screen, Text, TextField } from '@/components/ui';
+import { useSession } from '@/lib/session';
+import { useAsync } from '@/lib/use-async';
+import { spacing } from '@/theme';
+
+const RESEND_AFTER = 60; // the server sends at most one code per 60 s (and 10 a day)
+
+/**
+ * Officer sign-in: email, then the 6-digit code that expires in 5 minutes.
+ * The server answers a code request the same way whether or not the email is
+ * an officer's, so the copy stays neutral.
+ */
+export default function SignIn() {
+  const { dept } = useLocalSearchParams<{ dept: string }>();
+  const { signIn } = useSession();
+  const org = useAsync<Organization>(() => api.getOrganization(dept), dept);
+
+  const [email, setEmail] = useState('');
+  /** The address the code was requested for; verify sends this, not the (possibly masked) `sentTo`. */
+  const [requested, setRequested] = useState<string>();
+  const [sentTo, setSentTo] = useState<string>();
+  const [code, setCode] = useState('');
+  const [error, setError] = useState<string>();
+  const [busy, setBusy] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+
+  useEffect(() => {
+    if (!cooldown) return;
+    const t = setTimeout(() => setCooldown((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [cooldown]);
+
+  const send = async () => {
+    if (!/^\S+@\S+\.\S+$/.test(email.trim())) return setError('Enter the email address your department registered.');
+    setBusy(true);
+    setError(undefined);
+    try {
+      const r = await api.requestCode(dept, email);
+      setRequested(email.trim().toLowerCase());
+      setSentTo(r.sentTo || email.trim().toLowerCase());
+      setCode('');
+      setCooldown(RESEND_AFTER);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const verify = async (value = code) => {
+    if (value.length !== 6) return;
+    setBusy(true);
+    setError(undefined);
+    try {
+      // The root layout's guard redirects to /home once the session is set.
+      await signIn(await api.verifyCode(dept, requested!, value));
+    } catch (e) {
+      // invalid_code: wrong, expired or too many attempts. The server's message says which.
+      if (e instanceof ApiError && e.code === 'invalid_code') setCode('');
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!sentTo || !requested) {
+    return (
+      <Screen
+        edges={['bottom']}
+        footer={<Button block icon="envelope" onPress={send} loading={busy} loadingLabel="Sending code…">Send code</Button>}>
+        <View style={{ gap: spacing[2] }}>
+          <Text variant="title">Sign in with your email</Text>
+          <Text color="inkMuted">We’ll email a 6-digit code to your registered officer address. No password needed.</Text>
+        </View>
+        <TextField
+          label="Email address"
+          value={email}
+          onChangeText={(t) => { setEmail(t); setError(undefined); }}
+          placeholder="officer@school.edu.ph"
+          keyboardType="email-address"
+          inputMode="email"
+          autoCapitalize="none"
+          autoComplete="email"
+          autoCorrect={false}
+          returnKeyType="send"
+          onSubmitEditing={send}
+          error={error}
+        />
+        {api.mode === 'mock' ? (
+          <Banner tone="info" title="Offline demo">
+            Sign in as admin, treasurer, auditor or viewer@{dept}.local.
+          </Banner>
+        ) : null}
+      </Screen>
+    );
+  }
+
+  return (
+    <Screen
+      edges={['bottom']}
+      footer={<Button block onPress={() => verify()} loading={busy} loadingLabel="Verifying…" disabled={code.length !== 6}>Verify and sign in</Button>}>
+      <View style={{ gap: spacing[2] }}>
+        <Text variant="title">Enter the code</Text>
+        <Text color="inkMuted">
+          If <Text variant="bodyStrong">{sentTo}</Text> belongs to an active officer of {org.data?.name ?? 'this department'}, we sent a
+          6-digit code. It expires in 5 minutes.
+        </Text>
+      </View>
+      <OtpInput value={code} onChange={(v) => { setCode(v); setError(undefined); }} onComplete={verify} error={error} helper={api.mode === 'mock' ? `Offline demo: use ${DEMO_OTP}.` : 'Check your inbox and spam folder.'} />
+      <View style={{ flexDirection: 'row', gap: spacing[2], flexWrap: 'wrap' }}>
+        <Button variant="ghost" size="sm" onPress={send} disabled={cooldown > 0 || busy}>
+          {cooldown > 0 ? `Resend code in ${cooldown}s` : 'Resend code'}
+        </Button>
+        <Button variant="ghost" size="sm" onPress={() => { setSentTo(undefined); setRequested(undefined); setCode(''); setError(undefined); }}>
+          Use a different email
+        </Button>
+      </View>
+    </Screen>
+  );
+}

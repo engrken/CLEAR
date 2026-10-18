@@ -1,0 +1,169 @@
+# Android release: step by step
+
+Everything runs from the `mobile/` folder. EAS CLI is not installed globally; `npx eas-cli@latest` downloads it (25.0.0 when this was written). `eas.json` requires `>= 25.0.0`.
+
+| Item | Value |
+| --- | --- |
+| Android application ID | `com.rupertbulquerin.clear` (permanent once uploaded to Play) |
+| iOS bundle ID (later) | `com.rupertbulquerin.clear` |
+| Version | `1.0.1` (`expo.version` in `app.json`; bump it by hand for each user-visible release) |
+| versionCode | Managed on EAS servers (`appVersionSource: "remote"`); starts at `1`, the `production` profile adds 1 on every build. `android.versionCode` in `app.json` is ignored by EAS builds (kept at the expected next value, `3` for 1.0.1, for local builds only) |
+| Play Console | Account **RUPERT I.T. SOLUTIONS** (7443810319444220314), app **CLEAR System** (4975672424609848800), created 2026-10-16 with the package name reserved. Main store listing saved as a draft (text, icon, feature graphic); screenshots still to add. |
+| Signing | A **new** upload key generated and stored by EAS; Google Play App Signing holds the app signing key |
+
+> **Never use the keystore in "CLEAR System - Google Play package.zip".** It belongs to the old PWABuilder web wrapper (`app.vercel.clearsys.twa`), and its passwords were stored in plain text in the project folder. Treat it as compromised. This app has a different package name, so it doesn't need that key.
+
+## Build profiles (`eas.json`)
+
+| Profile | Output | Install | `EXPO_PUBLIC_API_URL` |
+| --- | --- | --- | --- |
+| `development` | Debug APK with the dev client | Emulator or phone, then `npx expo start --dev-client` | `http://10.0.2.2:3000/api/mobile` (the PC's `localhost:3000` as seen from the Android emulator) |
+| `preview` | Release APK, internal distribution | Download link / QR from EAS | `https://clear.rupertbulquerin.com/api/mobile` |
+| `production` | Release AAB for Play | Play Console | `https://clear.rupertbulquerin.com/api/mobile` |
+
+`EXPO_PUBLIC_*` values are inlined into the JavaScript bundle at build time; they are not secrets. The development profile needs `expo-dev-client` installed first (see [NOTES.md](NOTES.md)).
+
+## 0. Accounts (once, by you)
+
+1. An Expo account at https://expo.dev/signup.
+2. A Google Play developer account at https://play.google.com/console (USD 25, identity verification). Decide **personal** or **organization**:
+   - **Personal** accounts must run a **closed test with at least 12 testers opted in for 14 days in a row** before Google allows a production release. Start that early.
+   - **Organization** accounts skip that, but need a D-U-N-S number for the legal entity.
+
+## 1. Link the project to EAS (once)
+
+```bash
+cd mobile
+```
+
+```bash
+npx eas-cli@latest login
+```
+
+```bash
+npx eas-cli@latest init
+```
+
+`init` creates the project on expo.dev and writes `expo.owner` and `expo.extra.eas.projectId` into `app.json`. Commit that change.
+
+## 2. Preview APK (test on a real phone)
+
+```bash
+npx eas-cli@latest build -p android --profile preview
+```
+
+On the first Android build EAS asks **"Generate a new Android Keystore?"** Answer **Yes**. EAS creates the upload key and keeps it on its servers. Install the APK from the link or QR code, then check sign-in, clearance lookup, proof upload (photo picker) and remittance review against production.
+
+Back up the key once: run `npx eas-cli@latest credentials -p android`, choose the build profile, then **Download credentials**. Store the `.jks` and its passwords in a password manager, **not** in the project folder (`*.jks` is git-ignored, but the old keystore shows how that goes).
+
+## 3. Production AAB
+
+```bash
+npx eas-cli@latest build -p android --profile production
+```
+
+The first time, EAS asks to initialize the remote versionCode; accept `1`. Each later production build increments it.
+
+## 4. Create the app in Play Console (once)
+
+1. **Create app** (done 2026-10-16): name `CLEAR System`, package `com.rupertbulquerin.clear` (Play now asks for it at creation), English (United States), App, Free.
+2. **App content** (Policy and programs → App content), using the drafts in this folder:
+   - Privacy policy: `https://clear.rupertbulquerin.com/privacy` (fix the gaps in [privacy-policy-review.md](privacy-policy-review.md) first).
+   - App access: **All or some functionality is restricted**. Give the reviewer a demo officer login that works without your inbox (see "Play reviewer access" in [NOTES.md](NOTES.md)) and the student IDs to try.
+   - Ads: **No**.
+   - Content rating: complete the IARC questionnaire (category "Utility, productivity, communication or other"; no violence, gambling, user-to-user chat or sharing).
+   - Target audience: 18 and over (add 16–17 if first-year students may use it). Not under 13.
+   - Data safety: [data-safety.md](data-safety.md).
+   - Financial features: the app keeps records of payments made elsewhere; it doesn't move money, lend, or hold funds. Pick the closest "none / other" option and describe it that way.
+   - Government apps: No. News: No. Health: No.
+3. **Store listing**: [listing.md](listing.md), graphics in `graphics/`, screenshots per [screenshots.md](screenshots.md).
+
+## 5. First upload: by hand (Google requires it)
+
+Google Play's API can't create the first release of a new app, so `eas submit` only works after one manual upload.
+
+1. Download the `.aab` from the production build page on expo.dev (or `npx eas-cli@latest build:list -p android`).
+2. Play Console → **Test and release → Testing → Internal testing → Create new release**.
+3. Accept **Play App Signing** (the default). Upload the `.aab`, add release notes from [listing.md](listing.md), and roll out to internal testers (add your own Google account to the tester list).
+
+## 6. Later releases with `eas submit`
+
+Once, set up a Google service account so EAS can upload for you:
+
+1. Follow https://docs.expo.dev/submit/android/ ("Uploading a Google Service Account Key"): create a service account in Google Cloud, create a JSON key, and invite the service account in Play Console → **Users and permissions** with release rights for this app.
+2. Upload the key to EAS (keep the JSON file outside the repo, then delete the local copy):
+
+```bash
+npx eas-cli@latest credentials -p android
+```
+
+Choose `production` → **Google Service Account** → upload the JSON key.
+
+Then each release is:
+
+```bash
+npx eas-cli@latest build -p android --profile production
+```
+
+```bash
+npx eas-cli@latest submit -p android --profile production --latest
+```
+
+`eas.json` sends it to the **internal** track as a **draft**; open Play Console to review and roll it out. Promote internal → closed testing (12 testers × 14 days on a personal account) → production from Play Console.
+
+## Checklist per release
+
+- [ ] `expo.version` bumped in `app.json` for user-visible changes (versionCode is automatic).
+- [ ] `npm run typecheck` and `npm run lint` pass; `npx expo-doctor` reports no issues.
+- [ ] Preview APK tested against production.
+- [ ] Data safety still accurate (no new SDKs that collect data).
+- [ ] Release notes written.
+
+## iOS (later)
+
+The bundle ID is already set. You'll need an Apple Developer account (USD 99/year), then `npx eas-cli@latest build -p ios --profile production` and `npx eas-cli@latest submit -p ios`; EAS creates the certificates. iOS uses the root `icon` PNG for now; a `.icon` (Icon Composer) file can replace it later.
+
+## Play Console App content status (2026-10-16)
+
+All App content sections are saved (nothing is sent to Google until a release is sent for review).
+
+| Section | Answers |
+| --- | --- |
+| Privacy policy | `https://clear.rupertbulquerin.com/privacy` |
+| Sign in details | Demo officer (treasurer), `reviewer@demo.clear.invalid`, code = `DEMO_REVIEWER_CODE` (pasted by the user; never commit it), full access ticked; instructions as in [app-access.md](app-access.md), shortened to 490 chars |
+| Ads | No ads |
+| Content rating | IARC completed: All Other App Types; user content sharing Yes (receipt images to org officers), interactions limited to invited members, no public sharing, no block/report/chat; everything else No. Everyone / PEGI 3 / USK 0 / 3+. IARC contact clearsysadmin@gmail.com |
+| Target audience | 18 and over |
+| Data safety | As [data-safety.md](data-safety.md); no in-app account creation (enterprise accounts made outside the app); deletion URL `/account-deletion` |
+| Advertising ID | No (`com.google.android.gms.permission.AD_ID` is also in `blockedPermissions`) |
+| Government apps / Financial features / Health | No / none / none |
+
+Builds (EAS, @rupert2133s-team/clear-mobile, EAS-managed upload key): preview APK versionCode 1, production AAB versionCode 2.
+
+**Internal testing (2026-10-16):** 1.0.0 (2) "first internal test" published and the track is Active (no Google review on this track). Testers: the account's "License testers (auto-generated)" list (3 Google accounts, incl. the user and his brother). Opt-in link: https://play.google.com/apps/internaltest/4701462363799975691 (testers must accept on the web, then install from Play). Min API 24, target SDK 36, 18.2 MB install. The first upload was manual; later uploads can go through the Play Developer API / `eas submit` with a service-account key.
+
+**Production submitted for review (2026-10-16, ~22:50):** 1.0.0 (2) "first public release", full rollout, country: Philippines only. Store listing completed with 5 phone screenshots (`store/screenshots/`, 1080x1920, demo org only; AI asset declaration: "Don't label", since the graphics are code-drawn, not AI-generated). Store settings: category Business, contact clearsysadmin@gmail.com, website https://clear.rupertbulquerin.com. Managed publishing is off, so the app goes live automatically once Google approves (first reviews take up to ~7 days). Keep the demo reviewer sign-in (DEMO_REVIEWER_EMAIL/CODE on the VPS) on until approval, and for every later update.
+
+## 1.0.1 (versionCode 3 expected)
+
+Follows the web app's new rules (Ken's main). Needs the matching `/api/mobile` server changes deployed first; the app still works against the 1.0.0 server. `runtimeVersion` follows the app version, so 1.0.0 builds won't receive 1.0.1 OTA updates.
+
+- Officer sign-in: neutral "if this email belongs to an active officer" copy; the server's message on a wrong, expired or over-tried code; 60 s resend timer (10 codes a day).
+- Every date and time is shown in Philippine time, whatever the phone's time zone.
+- Roster shows dropped students as "Inactive".
+- Term labels can be trimesters or a full year.
+- Clear messages for a closed term, a reused OR number, overpayment, an inactive student and too many attempts.
+- On-hold clearance can list the unpaid items, including arrears from earlier terms.
+
+Before building, check the remote versionCode is 2 (`npx eas-cli@latest build:version:get -p android`), so this build gets 3.
+
+**Play "What's new" (en-US):**
+
+```text
+- Sign-in codes: clearer messages, and a 60-second wait before resending.
+- Dates and times now always show in Philippine time.
+- Students no longer enrolled are shown as "Inactive".
+- Supports trimester and full-year terms.
+- Clearer messages when a term is closed, an OR number is already used, or a payment is more than the balance.
+- On-hold clearances can list what is still unpaid, including balances from earlier terms.
+```
