@@ -7,7 +7,6 @@ import { clearAlert, clearConfirm, clearPrompt } from "@/lib/clear-dialogs";
 
 import { useState, useMemo } from "react";
 import { fmt, formatHoursAndMinutes } from "@/lib/utils";
-import { format } from "date-fns";
 import {
   recordPenalty,
   settlePenaltyCommunityService,

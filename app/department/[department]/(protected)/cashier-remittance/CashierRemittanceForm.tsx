@@ -8,7 +8,6 @@ import { clearAlert, clearConfirm, clearPrompt } from "@/lib/clear-dialogs";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { fmt } from "@/lib/utils";
-import { format } from "date-fns";
 import { recordCashierRemittance, voidCashierRemittance } from "./actions";
 
 interface Fund {
