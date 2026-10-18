@@ -1,3 +1,4 @@
+import { manilaDateInput, formatManilaLongDate } from '@/lib/clear-timezone';
 // /app/department/[department]/(protected)/cashier-remittance/CashierRemittanceForm.tsx
 
 "use client";
@@ -58,7 +59,7 @@ export default function CashierRemittanceForm({
   periodClosed?: boolean;
 }) {
   const router = useRouter();
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = manilaDateInput();
 
   const [transactionType, setTransactionType] = useState("Deposit");
   const [date, setDate] = useState(todayStr);
@@ -220,7 +221,7 @@ export default function CashierRemittanceForm({
               </div>
               <div className="col-6 text-end">
                 <div className="small mb-1 text-uppercase fw-bold" style={{ opacity: 0.6 }}>Date of {printData.type === "Deposit" ? "Turnover" : "Withdrawal"}</div>
-                <div className="fw-bold">{format(new Date(printData.date), "MMMM dd, yyyy")}</div>
+                <div className="fw-bold">{formatManilaLongDate(printData.date)}</div>
               </div>
             </div>
 
@@ -400,7 +401,7 @@ export default function CashierRemittanceForm({
               ) : (
                 remittances.map((r) => (
                   <tr key={r.id} className={r.status === "Voided" ? "opacity-50" : ""}>
-                    <td className="px-3 small text-muted">{format(new Date(r.date), "yyyy-MM-dd")}</td>
+                    <td className="px-3 small text-muted">{manilaDateInput(r.date)}</td>
                     <td>
                       <span className={`badge ${r.type === "Deposit" ? "bg-success bg-opacity-10 text-success border border-success" : "bg-danger bg-opacity-10 text-danger border border-danger"}`}>
                         {r.type === "Withdrawal" ? "Withdrawn" : "Deposited"}
