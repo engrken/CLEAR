@@ -4,7 +4,7 @@
 The Prisma schema marks 33 **event-instant fields** as PostgreSQL `timestamptz(3)`; calendar-only fields retain existing `DateTime` mappings. The matching SQL is intentionally kept in `scripts/sql/manila-event-time-migration.sql`, **outside Prisma's auto-executed migration directory**, to prevent accidental application to data whose historical timezone cannot yet be proven. Do not use `prisma db push` on a production database before the migration is reviewed.
 
 ## Preconditions
-1. Take a verified complete database backup and successfully restore it in a staging environment.
+1. Keep the verified Neon snapshot/recovery branch and take a fresh snapshot immediately before release. The operator has elected to skip the separate native `pg_dump`/`pg_restore` step (2026-10-19), accepting reduced recovery options. An independently restored PostgreSQL dump is still strongly recommended; see `docs/manila-production-release-checklist.md`.
 2. Run `scripts/sql/manila-time-preflight.sql` against the real database and save the nonsecret results.
 3. For each event field, confirm that its legacy `timestamp without time zone` values represent **UTC wall-clock instants**. This must be determined from application history, trusted timestamps, database defaults and representative samples. A displayed value alone cannot prove it.
 4. If any field is Manila-local, mixed, or ambiguous, do **not** execute the script. Split it by affected columns and use correct source timezone or per-row reconciliation.

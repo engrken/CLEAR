@@ -31,9 +31,9 @@ Historical event example (nonidentifying): `SystemLog.timestamp` `2026-10-18 19:
 - The equality tests **prove migration arithmetic preserves the original UTC wall-clock values**, not that every historical event was actually recorded in UTC. Reconcile real historical event times against external trusted clocks before production migration, especially any legacy manually entered timestamps.
 - Staging is a point-in-time copy and does not receive subsequent production transactions.
 - Successful GitHub CI also includes isolated Next.js build, TypeScript checks, timezone utility tests and disposable PostgreSQL migration rehearsal. Application end-to-end smoke tests against the **actual migrated Neon staging branch** are still pending.
-- A Neon snapshot and snapshot restore verification exist; an independent native PostgreSQL `pg_dump` and restore must still be completed before production DDL.
+- A Neon snapshot and snapshot restore verification exist. The operator elected on 2026-10-19 to skip the independent `pg_dump`/restore, a **risk acceptance not an executed backup**. A fresh Neon snapshot immediately before production DDL remains essential; see `docs/manila-production-release-checklist.md`.
 - The prior snapshot restore finalized the production `main` branch identity. This staging migration did not touch branch routing. Do not use Neon snapshot Restore against production while evaluating this change.
 
 ## Production release gate
 
-Do **not** merge/deploy the proposed Prisma schema onto production yet. Require independent timestamp-origin validation, native backup/restore rehearsal, staging UI smoke tests (auth, clearance, collection, penalties, advances, remittances, reports), review of migration and Prisma history tracking, and a coordinated deployment window. Preserve source financial records and perform after-release totals/digest reconciliation.
+Do **not** merge/deploy the proposed Prisma schema onto production yet. Require independent timestamp-origin validation, the documented Neon-only recovery waiver with a fresh snapshot, staging UI smoke tests (auth, clearance, collection, penalties, advances, remittances, reports), review of migration and Prisma history tracking, and a coordinated deployment window. Preserve source financial records and perform after-release totals/digest reconciliation.
