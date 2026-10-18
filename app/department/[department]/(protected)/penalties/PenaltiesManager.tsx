@@ -1,3 +1,4 @@
+import { manilaDateInput, formatManilaDateTime24 } from '@/lib/clear-timezone';
 // /app/department/[department]/(protected)/penalties/PenaltiesManager.tsx
 
 "use client";
@@ -71,7 +72,7 @@ export default function PenaltiesManager({
   periodClosed?: boolean;
 }) {
   const router = useRouter();
-  const todayStr = format(new Date(), "yyyy-MM-dd");
+  const todayStr = manilaDateInput();
 
   // =========================================================
   // FORM STATE
@@ -579,7 +580,7 @@ export default function PenaltiesManager({
                           const isUnsettled = Number(p.fineAmount) > 0 && !/^SETTLED/i.test(p.status || "");
                           return (
                             <tr key={p.id} className="border-bottom border-secondary">
-                              <td className="text-muted py-2">{format(new Date(p.date), "yyyy-MM-dd")}</td>
+                              <td className="text-muted py-2">{manilaDateInput(p.date)}</td>
                               <td className="py-2">
                                 <strong className="d-block text-truncate" style={{ maxWidth: "200px" }} title={p.studentName}>{p.studentName}</strong>
                                 <span className="text-muted font-monospace" style={{ fontSize: "0.75rem" }}>{p.studentId || "N/A"}</span>
@@ -761,7 +762,7 @@ export default function PenaltiesManager({
                       <thead><tr><th>Transaction Date</th><th>Method / Action</th><th>Period</th><th>OR Number</th><th className="text-end">Amount</th><th>Processed By / Note</th></tr></thead>
                       <tbody>
                         {rows.map(row => <tr key={row.id}>
-                          <td>{format(new Date(row.date), "yyyy-MM-dd HH:mm")}</td>
+                          <td>{formatManilaDateTime24(row.date)}</td>
                           <td>
                             <strong>{({ ASSESSMENT: "Assessment", CASH_PAYMENT: "Cash payment", COMMUNITY_SERVICE: "Community service", CASH_REVERSAL: "Payment void / reversal", LEGACY_CASH: "Historical cash receipt", LEGACY_VOID_RECEIPT: "Voided historical receipt", LEGACY_SERVICE: "Historical service credit" } as Record<string, string>)[row.method] || row.method}</strong>
                             {row.minutesRendered > 0 && <div className="small text-muted">{row.minutesRendered} minutes rendered</div>}
