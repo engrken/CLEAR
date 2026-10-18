@@ -1,3 +1,4 @@
+import { formatManilaDateTime24 } from '@/lib/clear-timezone';
 // /app/department/[department]/(protected)/remittances/RemittanceVerificationQueue.tsx
 
 "use client";
@@ -208,7 +209,7 @@ export default function RemittanceVerificationQueue({
             ) : (
               filteredRemittances.map(r => (
                 <tr key={r.id} className="border-bottom border-secondary">
-                  <td className="small text-muted">{format(new Date(r.timestamp), 'yyyy-MM-dd HH:mm')}</td>
+                  <td className="small text-muted">{formatManilaDateTime24(r.timestamp)}</td>
                   <td><strong className="fw-semibold">{r.studentName}</strong> <br /><small className="text-muted">({r.studentId})</small></td>
                   <td><span className="badge bg-body-secondary border border-secondary text-info">{r.paymentChannel}</span></td>
                   <td><strong className="font-monospace">{r.referenceNumber}</strong></td>
