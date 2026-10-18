@@ -28,7 +28,7 @@ export default function DataPrivacyModal() {
   return (
     <div className="modal fade" id="dataPrivacyModal" data-bs-backdrop="static" data-bs-keyboard="false" tabIndex={-1} aria-labelledby="dataPrivacyTitle" aria-hidden="true">
       <div className="modal-dialog modal-dialog-centered modal-lg">
-        <div className="modal-content card border-secondary shadow-lg">
+        <div className="modal-content card border-secondary shadow-lg clear-theme-modal">
           <div className="modal-header border-secondary">
             <h5 className="modal-title text-accent fw-bold" id="dataPrivacyTitle">
               <i className="bi bi-shield-check text-info me-2"></i>Data Privacy Notice & Consent

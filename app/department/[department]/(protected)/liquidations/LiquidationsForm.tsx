@@ -1,9 +1,12 @@
 // /app/department/[department]/(protected)/liquidations/LiquidationsForm.tsx
 
 "use client";
+import { clearAlert, clearConfirm, clearPrompt } from "@/lib/clear-dialogs";
+
 
 import { useState, useMemo, useEffect } from "react";
 import { fmt } from "@/lib/utils";
+import { useRouter } from "next/navigation";
 import { recordAudit } from "./actions";
 
 interface CashAdvance { 
@@ -34,7 +37,8 @@ export default function LiquidationsForm({
   term,
   pendingAdvances,
   funds,
-  prefillCaId
+  prefillCaId,
+  isClosed = false,
 }: {
   department: string;
   ay: string;
@@ -42,8 +46,10 @@ export default function LiquidationsForm({
   pendingAdvances: CashAdvance[];
   funds: Fund[];
   prefillCaId: string;
+  isClosed?: boolean;
 }) {
-  const todayStr = new Date().toISOString().split('T')[0];
+  const router = useRouter();
+  const todayStr = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 
   const [date, setDate] = useState(todayStr);
   const [selectedCaRef, setSelectedCaRef] = useState(prefillCaId || "");
@@ -112,15 +118,20 @@ export default function LiquidationsForm({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 8 * 1024 * 1024) {
-      alert("Attached receipt exceeds 8MB. Please select an image or PDF under 8MB.");
+    if (file.size > 650 * 1024) {
+      void clearAlert("Please attach a compressed image or PDF smaller than 650 KB. The combined attachments must fit within the server request limit.");
       e.target.value = "";
       return;
     }
 
+    if (!["image/png", "image/jpeg", "image/webp", "application/pdf"].includes(file.type)) {
+      void clearAlert("Receipts must be PNG, JPEG, WebP or PDF files.");
+      e.target.value = "";
+      return;
+    }
     const reader = new FileReader();
     reader.onload = (uploadEvent) => {
-      setExpenseRows(expenseRows.map(r => r.id === id ? {
+      setExpenseRows(current => current.map(r => r.id === id ? {
         ...r,
         proofBase64: uploadEvent.target?.result as string,
         proofMime: file.type || "image/jpeg",
@@ -132,7 +143,7 @@ export default function LiquidationsForm({
 
   const handleCommitFare = () => {
     if (!fareOrigin.trim() || !fareDestination.trim() || fareRate <= 0) {
-      return alert("Please provide the origin, destination, and valid fare amount.");
+      return void clearAlert("Please provide the origin, destination, and valid fare amount.");
     }
 
     const desc = `${fareMode} Fare: ${fareOrigin.trim()} → ${fareDestination.trim()}`;
@@ -151,19 +162,14 @@ export default function LiquidationsForm({
   };
 
   const handleAddReimbursement = () => {
-    const reqName = requestor || "Officer";
-    addRow({
-      qty: 1,
-      orsi: "OUT-OF-POCKET",
-      desc: `Reimbursement Out-of-Pocket Expense (${reqName})`,
-      subTotal: 0
-    });
+    void clearAlert("Reimbursement is calculated automatically when actual verified expenses exceed the approved Cash Advance. Do not insert a separate reimbursement item: doing so would double-count the expense. For a Direct Expense, record only actual purchased items and amounts.");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedCaRef) return alert("Select a Cash Advance reference ID or choose 'Direct Expense'.");
-    if (expenseRows.length === 0 || totalExpense <= 0) return alert("Please add at least one valid expense item.");
+    if (isClosed) return void clearAlert("This accounting period has already been carried over. Reverse the rollover before recording expenses.");
+    if (!selectedCaRef) return void clearAlert("Select a Cash Advance reference ID or choose 'Direct Expense'.");
+    if (expenseRows.length === 0 || totalExpense <= 0) return void clearAlert("Please add at least one valid expense item.");
 
     setIsSubmitting(true);
     try {
@@ -179,11 +185,12 @@ export default function LiquidationsForm({
         term
       });
 
-      alert("Liquidation successfully verified and recorded!");
+      void clearAlert("Liquidation successfully verified and recorded!");
       setSelectedCaRef("");
       setExpenseRows([{ id: "1", qty: 1, orsi: "", desc: "", subTotal: 0 }]);
+      router.refresh();
     } catch (err: any) {
-      alert("Error: " + err.message);
+      void clearAlert("Error: " + err.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -191,6 +198,11 @@ export default function LiquidationsForm({
 
   return (
     <>
+      {isClosed && (
+        <div className="alert alert-warning" role="alert">
+          This term is closed by a carry-over. Liquidations cannot be posted until the rollover is reversed.
+        </div>
+      )}
       <form onSubmit={handleSubmit}>
         <div className="row g-2 mb-3 mt-1">
           <div className="col-md-6">
@@ -236,7 +248,10 @@ export default function LiquidationsForm({
           </div>
         </div>
 
-        {totalExpense > 0 && (
+        {selectedCaRef === "DIRECT" && totalExpense > 0 && (
+          <div className="alert alert-info small py-2">Direct Expense: {fmt(totalExpense)} will be deducted from the selected fund. No separate cash-advance reimbursement is calculated.</div>
+        )}
+        {selectedCaRef !== "DIRECT" && totalExpense > 0 && (
           <div className={`alert py-2 small mb-4 ${variance > 0 ? "alert-success" : variance < 0 ? "alert-danger" : "alert-info"}`}>
             {variance > 0 && <strong>SURPLUS / RETURN: {fmt(variance)} (To be returned to fund)</strong>}
             {variance < 0 && <strong>DEFICIT / REIMBURSEMENT: {fmt(Math.abs(variance))} (Owed to requestor)</strong>}
@@ -284,11 +299,11 @@ export default function LiquidationsForm({
             <i className="bi bi-bicycle me-1"></i>Add Fare
           </button>
           <button type="button" className="btn btn-outline-info btn-sm fw-semibold" onClick={handleAddReimbursement}>
-            <i className="bi bi-wallet2 me-1"></i>Reimbursement
+            <i className="bi bi-info-circle me-1"></i>Reimbursement Info
           </button>
         </div>
 
-        <button type="submit" className="btn btn-info fw-bold w-100 py-2" disabled={isSubmitting}>
+        <button type="submit" className="btn btn-info fw-bold w-100 py-2" disabled={isSubmitting || isClosed}>
           {isSubmitting ? "Verifying..." : "Verify & Settle Liquidation"}
         </button>
       </form>
@@ -297,7 +312,7 @@ export default function LiquidationsForm({
       {showFareModal && (
         <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
           <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content card border-secondary bg-body text-body shadow-lg">
+            <div className="modal-content card border-secondary bg-body text-body shadow-lg clear-theme-modal">
               <div className="modal-header border-secondary">
                 <h5 className="modal-title text-warning"><i className="bi bi-signpost-2 me-2"></i>Non-Receipted Fare Particulars</h5>
                 <button type="button" className="btn-close" onClick={() => setShowFareModal(false)}></button>

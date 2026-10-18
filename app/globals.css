@@ -458,3 +458,112 @@ body {
 .hover-text-white:hover { color: #ffffff !important; }
 .border-dashed { border-style: dashed !important; }
 .tracking-tight { letter-spacing: -0.05em; }
+/* ======================================================================
+   CLEAR GLOBAL DIALOG DESIGN — follows the existing data-bs-theme switch.
+   Does not change access control, actions, or financial calculations.
+   ====================================================================== */
+:root,
+[data-bs-theme="dark"] {
+  --clear-dialog-bg: #20252b;
+  --clear-dialog-ink: #f1f5f9;
+  --clear-dialog-copy: #e2e8f0;
+  --clear-dialog-border: #677482;
+  --clear-dialog-input-bg: #151b22;
+  --clear-dialog-accent-bg: #12c5e6;
+  --clear-dialog-accent-text: #07151c;
+  --clear-dialog-neutral-bg: #737d87;
+  --clear-dialog-neutral-text: #ffffff;
+}
+[data-bs-theme="light"] {
+  --clear-dialog-bg: #ffffff;
+  --clear-dialog-ink: #152334;
+  --clear-dialog-copy: #334155;
+  --clear-dialog-border: #cbd5e1;
+  --clear-dialog-input-bg: #f8fafc;
+  --clear-dialog-accent-bg: #0369a1;
+  --clear-dialog-accent-text: #ffffff;
+  --clear-dialog-neutral-bg: #e2e8f0;
+  --clear-dialog-neutral-text: #1e293b;
+}
+.swal2-container { z-index: 20000 !important; }
+.swal2-container .swal2-popup.clear-dialog {
+  width: min(92vw, 35rem);
+  padding: 1.8rem 1.7rem 1.5rem;
+  border: 1px solid var(--clear-dialog-border);
+  border-radius: 0.55rem;
+  background: var(--clear-dialog-bg) !important;
+  color: var(--clear-dialog-ink) !important;
+  box-shadow: 0 18px 54px rgba(0, 0, 0, .3);
+}
+.swal2-container .clear-dialog .swal2-title,
+.swal2-container .clear-dialog .clear-dialog-title {
+  color: var(--clear-dialog-ink) !important;
+  font-weight: 700;
+  font-size: clamp(1.35rem, 2.5vw, 2rem);
+  line-height: 1.25;
+}
+.swal2-container .clear-dialog .swal2-html-container,
+.swal2-container .clear-dialog .clear-dialog-copy {
+  color: var(--clear-dialog-copy) !important;
+  font-size: 1rem;
+  line-height: 1.5;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.swal2-container .clear-dialog .swal2-actions { gap: .75rem; margin-top: 1.35rem; }
+.swal2-container .clear-dialog .clear-dialog-confirm,
+.swal2-container .clear-dialog .clear-dialog-cancel {
+  border: 0;
+  border-radius: .4rem;
+  padding: .7rem 1.05rem;
+  font-size: .975rem;
+  font-weight: 650;
+  min-height: 2.7rem;
+  cursor: pointer;
+  transition: filter .12s ease, transform .12s ease;
+}
+.swal2-container .clear-dialog .clear-dialog-confirm {
+  background: var(--clear-dialog-accent-bg) !important;
+  color: var(--clear-dialog-accent-text) !important;
+}
+.swal2-container .clear-dialog .clear-dialog-cancel {
+  background: var(--clear-dialog-neutral-bg) !important;
+  color: var(--clear-dialog-neutral-text) !important;
+}
+.swal2-container .clear-dialog button:focus-visible,
+.swal2-container .clear-dialog input:focus-visible,
+.swal2-container .clear-dialog textarea:focus-visible {
+  outline: 3px solid var(--clear-dialog-accent-bg) !important;
+  outline-offset: 3px;
+}
+.swal2-container .clear-dialog button:hover { filter: brightness(.94); }
+.swal2-container .clear-dialog button:active { transform: scale(.985); }
+.swal2-container .clear-dialog .swal2-input,
+.swal2-container .clear-dialog .swal2-textarea,
+.swal2-container .clear-dialog .swal2-select {
+  background: var(--clear-dialog-input-bg) !important;
+  color: var(--clear-dialog-ink) !important;
+  border: 1px solid var(--clear-dialog-border) !important;
+  border-radius: .4rem;
+  box-shadow: none !important;
+  max-width: calc(100% - 2rem);
+  margin: 1rem auto 0;
+}
+.swal2-container .clear-dialog .swal2-validation-message {
+  background: var(--clear-dialog-input-bg);
+  color: var(--clear-dialog-ink);
+}
+/* Existing Bootstrap form modals also follow the user's light/dark switch. */
+.modal-content.clear-theme-modal {
+  --bs-modal-bg: var(--bg-card);
+  --bs-modal-color: var(--text-color);
+  --bs-modal-border-color: var(--border-color);
+  background-color: var(--bg-card) !important;
+  color: var(--text-color) !important;
+  border-color: var(--border-color) !important;
+}
+[data-bs-theme="dark"] .clear-theme-modal .btn-close { filter: invert(1) grayscale(1); }
+[data-bs-theme="light"] .clear-theme-modal .btn-close { filter: none; }
+@media (prefers-reduced-motion: reduce) {
+  .swal2-container .clear-dialog button { transition: none; }
+}

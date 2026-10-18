@@ -140,10 +140,7 @@ export default function LoginModal({
           redirect: false,
         }
       );
-      console.log(
-        "NextAuth signIn result:",
-        result
-      );
+      // Authentication result intentionally not logged.
       if (!result) {
         setError(
           "No response was received from the authentication server."
@@ -213,7 +210,7 @@ export default function LoginModal({
       }}
     >
       <div className="modal-dialog modal-dialog-centered">
-        <div className="modal-content bg-card border-secondary text-color shadow-lg">
+        <div className="modal-content bg-card border-secondary text-color shadow-lg clear-theme-modal">
 
           {/* =================================================
               HEADER
@@ -292,7 +289,7 @@ export default function LoginModal({
                       setError("");
                     }}
                     className="form-control bg-card text-color border-secondary py-2"
-                    placeholder="officer@filamer.edu.ph"
+                    placeholder="officer@example.edu"
                     required
                     autoComplete="email"
                     disabled={loading}

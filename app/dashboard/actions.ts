@@ -1,84 +1,63 @@
-// app/dashboard/actions.ts
+// /app/dashboard/actions.ts
 'use server';
 
-import { prisma } from '@/lib/prisma';
-import { revalidatePath } from 'next/cache';
-import { requireSuperAdmin } from '@/lib/permissions';
+import { provisionEntityWithTier } from './provisions/actions';
+import { isCalendarMode, academicYearStart, type CalendarMode } from '@/lib/academic-periods';
+import { updateEntityLogo } from '@/app/department/[department]/(protected)/setup/actions';
 
+/** Legacy dashboard modal entry point. Uses the same authorization, group limits,
+ * tenant creation and audit logging as the Master Provisions page. */
 export async function createDepartment(formData: FormData) {
-  await requireSuperAdmin();
-
-  const type = String(formData.get('type') || 'Department').trim();
-  const name = String(formData.get('name') || '').trim();
-  const subdomain = String(formData.get('acronym') || formData.get('subdomain') || '')
-    .trim()
-    .toLowerCase();
-  const schoolGroup = String(formData.get('schoolGroup') || 'default-school')
-    .trim()
-    .toLowerCase();
-
-  const adminName = String(formData.get('adminName') || '').trim();
-  const adminEmail = String(formData.get('adminEmail') || '').trim().toLowerCase();
-  const adminUsername = String(formData.get('adminUsername') || '').trim().toLowerCase();
-
-  if (!name || !subdomain || !adminEmail || !adminUsername || !adminName) {
-    throw new Error('All entity details and initial administrator fields are required.');
-  }
-
-  if (!/^[a-z0-9-]+$/.test(subdomain)) {
-    throw new Error('Acronym / Subdomain may contain only lowercase letters, numbers, and hyphens.');
-  }
-
-  const existingOrg = await prisma.organization.findUnique({
-    where: { subdomain },
-  });
-
-  if (existingOrg) {
-    throw new Error(`An organization with acronym '${subdomain}' already exists.`);
-  }
-
   try {
-    await prisma.$transaction(async (tx) => {
-      const org = await tx.organization.create({
-        data: {
-          name,
-          subdomain,
-          schoolGroup,
-          type: type === 'Organization' ? 'Organization' : 'Department',
-          tier: 'Freemium',
-          status: 'Active',
-        },
-      });
+    const logo = formData.get('logo');
+    if (logo instanceof File && logo.size > 0) {
+      if (logo.size > 2 * 1024 * 1024) {
+        return { success: false, message: 'Logo must be 2 MB or smaller.' };
+      }
+      if (!['image/png', 'image/jpeg', 'image/webp'].includes(logo.type)) {
+        return { success: false, message: 'Logo must be PNG, JPEG or WebP.' };
+      }
+    }
 
-      const defaultTabs = [
-        'tab-overview', 'tab-students', 'tab-clearance', 'tab-payment',
-        'tab-remittances', 'tab-penalties', 'tab-advances', 'tab-audit',
-        'tab-collectibles', 'tab-reports', 'tab-void', 'tab-report',
-        'tab-transfer', 'tab-users', 'tab-setup',
-      ];
+    const initialAcademicYear = String(formData.get('initialAcademicYear') || '').trim();
+    const selectedMode = String(formData.get('calendarMode') || '').trim();
+    academicYearStart(initialAcademicYear);
+    if (!isCalendarMode(selectedMode)) {
+      return { success: false, message: 'Choose Full School Year, Semester or Trimester.' };
+    }
+    const calendarMode: CalendarMode = selectedMode;
+    const includeSummer = calendarMode === 'Semester' &&
+      ['on', 'true', '1'].includes(String(formData.get('includeSummer')).toLowerCase());
 
-      await tx.tenantUser.create({
-        data: {
-          organizationId: org.id,
-          userId: `USR-${subdomain.toUpperCase()}-001`,
-          fullName: adminName,
-          username: adminUsername,
-          email: adminEmail,
-          role: 'admin',
-          allowedTabs: JSON.stringify(defaultTabs),
-          status: 'Active',
-        },
-      });
+    const result = await provisionEntityWithTier({
+      name: String(formData.get('name') ?? ''),
+      subdomain: String(formData.get('acronym') || formData.get('subdomain') || ''),
+      schoolGroup: String(formData.get('schoolGroup') || 'default-school'),
+      tier: 'Freemium',
+      type: String(formData.get('type') || 'Department'),
+      adminName: String(formData.get('adminName') ?? ''),
+      adminEmail: String(formData.get('adminEmail') ?? ''),
+      adminUsername: String(formData.get('adminUsername') ?? ''),
+      initialAcademicYear,
+      calendarMode,
+      includeSummer,
     });
 
-    revalidatePath('/');
-    revalidatePath('/dashboard');
-    revalidatePath('/dashboard/provisions');
-    revalidatePath('/dashboard/entity/portal');
-
-    return { success: true, message: `Entity '${name}' successfully provisioned!` };
-  } catch (error: any) {
-    console.error('Provisioning error:', error);
-    return { success: false, message: error.message || 'Failed to provision department.' };
+    if (logo instanceof File && logo.size > 0 && result.organizationId) {
+      const imageForm = new FormData();
+      imageForm.set('organizationId', result.organizationId);
+      imageForm.set('logo', logo);
+      try {
+        const uploaded = await updateEntityLogo(imageForm);
+        if (!uploaded.success) {
+          return { success: true, message: `${result.message} Logo not uploaded: ${uploaded.message}` };
+        }
+      } catch {
+        return { success: true, message: `${result.message} Logo upload did not complete. Upload the logo later in Organization Setup.` };
+      }
+    }
+    return { success: true, message: result.message };
+  } catch (error) {
+    return { success: false, message: error instanceof Error ? error.message : 'Unable to provision the entity.' };
   }
 }

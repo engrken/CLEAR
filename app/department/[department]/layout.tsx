@@ -1,12 +1,15 @@
-// /app/department/[department]/layout.tsx
-import type { ReactNode } from "react";
-import { auth } from "@/auth";
-import { prisma } from "@/lib/prisma";
 
-import DepartmentSidebar from "@/app/department/[department]/Sidebar";
-import TopHeader from "@/app/department/[department]/TopHeader";
-import Footer from "@/app/department/[department]/components/Footer";
-import DataPrivacyModal from "@/app/department/[department]/components/DataPrivacyModal";
+// /app/department/[department]/layout.tsx
+
+import type { ReactNode } from 'react';
+import { auth } from '@/auth';
+import { prisma } from '@/lib/prisma';
+import { isSuperAdminEmail } from '@/lib/super-admin';
+
+import DepartmentSidebar from '@/app/department/[department]/Sidebar';
+import TopHeader from '@/app/department/[department]/TopHeader';
+import Footer from '@/app/department/[department]/components/Footer';
+import DataPrivacyModal from '@/app/department/[department]/components/DataPrivacyModal';
 
 interface ProtectedDepartmentLayoutProps {
   children: ReactNode;
@@ -19,8 +22,8 @@ interface ExtendedUser {
   email?: string | null;
   username?: string | null;
   role?: string;
-  organizationId?: string;
-  department?: string;
+  organizationId?: string | null;
+  department?: string | null;
   allowedTabs?: string[];
 }
 
@@ -30,40 +33,65 @@ export default async function ProtectedDepartmentLayout({
 }: ProtectedDepartmentLayoutProps) {
   const { department } = await params;
 
-  const cleanDepartment = decodeURIComponent(department)
-    .trim()
-    .toLowerCase();
+  let cleanDepartment: string;
 
-  if (!cleanDepartment) {
+  try {
+    cleanDepartment = decodeURIComponent(String(department || ''))
+      .trim()
+      .toLowerCase();
+  } catch {
     return (
       <div className="d-flex min-vh-100 align-items-center justify-content-center">
-         <h2>Invalid Department</h2>
+        <h2>Invalid Department</h2>
+      </div>
+    );
+  }
+
+  if (
+    !cleanDepartment ||
+    !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(cleanDepartment)
+  ) {
+    return (
+      <div className="d-flex min-vh-100 align-items-center justify-content-center">
+        <h2>Invalid Department</h2>
       </div>
     );
   }
 
   const session = await auth();
 
+  // Preserve public department pages that do not require a login.
+  // Protected pages must enforce their own server-side authorization.
   if (!session?.user) {
     return <>{children}</>;
   }
 
   const authUser = session.user as ExtendedUser;
-  const userRole = authUser.role?.trim().toLowerCase() || "officer";
+  const email = String(authUser.email || '').trim().toLowerCase();
+  const userRole = String(authUser.role || 'officer')
+    .trim()
+    .toLowerCase();
+
+  // Determine global access only through the trusted server-side helper.
+  // A role string alone must not grant cross-tenant access.
+  const isSuperAdmin = isSuperAdminEmail(email);
 
   const allowedTabs = Array.isArray(authUser.allowedTabs)
-    ? authUser.allowedTabs
+    ? authUser.allowedTabs.filter(
+        (tab): tab is string => typeof tab === 'string'
+      )
     : [];
 
   const currentUser = {
-    id: authUser.id || "",
-    fullName: authUser.name || "Department Officer",
-    username: authUser.username || "N/A", // 🚀 Fixed F40: Added username property
-    role: authUser.role || "OFFICER",
-    email: authUser.email || "",
-    organizationId: authUser.organizationId || "",
+    id: authUser.id || '',
+    fullName: authUser.name || 'Department Officer',
+    username: authUser.username || 'N/A',
+    role: authUser.role || 'OFFICER',
+    email,
+    organizationId: authUser.organizationId || '',
     department: authUser.department || cleanDepartment,
     allowedTabs,
+    isSuperAdmin,
   };
 
   const organization = await prisma.organization.findUnique({
@@ -75,19 +103,18 @@ export default async function ProtectedDepartmentLayout({
       name: true,
       logo: true,
       activeAy: true,
-      activeTerm: true
-    }
+      activeTerm: true,
+      status: true,
+    },
   });
 
   if (!organization) {
     return (
       <div className="container-fluid p-4">
         <div className="alert alert-danger shadow-sm border-secondary">
-          <h4 className="fw-bold mb-2">
-            Department Not Found
-          </h4>
+          <h4 className="fw-bold mb-2">Department Not Found</h4>
           <p className="small mb-0">
-            The department "{cleanDepartment}" does not exist
+            The department &quot;{cleanDepartment}&quot; does not exist
             in the database.
           </p>
         </div>
@@ -95,40 +122,58 @@ export default async function ProtectedDepartmentLayout({
     );
   }
 
-  // 🚀 Fixed F34: Included treasurer, auditor, and viewer explicitly in allowedRoles
+  const academicCalendars = await prisma.academicPeriodConfig.findMany({
+    where: { organizationId: organization.id },
+    select: { academicYear: true, mode: true, includeSummer: true },
+  });
+  const calendarConfigs = Object.fromEntries(academicCalendars.map(c => [c.academicYear, {
+    mode: c.mode as "Semester" | "Trimester" | "FullYear", includeSummer: c.includeSummer,
+  }]));
+
   const allowedRoles = new Set([
-    "admin",
-    "administrator",
-    "master",
-    "auditor",
-    "audit",
-    "treasurer",
-    "viewer",
-    "superadmin",
-    "officer"
+    'admin',
+    'administrator',
+    'master',
+    'auditor',
+    'audit',
+    'treasurer',
+    'viewer',
+    'superadmin',
+    'officer',
   ]);
 
-  const isGlobalAdmin = userRole === "superadmin" || userRole === "master";
   let isForbidden = false;
-  let forbiddenReason = "";
+  let forbiddenReason = '';
 
-  if (!allowedRoles.has(userRole)) {
+  if (!email) {
     isForbidden = true;
-    forbiddenReason = "Your role lacks permission to access the CLEAR system.";
-  }
-
-  if (!isGlobalAdmin && !isForbidden) {
-    if (!authUser.organizationId || authUser.organizationId !== organization.id) {
-      isForbidden = true;
-      forbiddenReason = "You are not authorized to view records for this department.";
-    }
+    forbiddenReason = 'Your session does not contain a valid email address.';
+  } else if (!allowedRoles.has(userRole)) {
+    isForbidden = true;
+    forbiddenReason = 'Your role is not permitted to access the CLEAR System.';
+  } else if (
+    organization.status !== 'Active' &&
+    !isSuperAdmin
+  ) {
+    isForbidden = true;
+    forbiddenReason = 'This department is inactive or unavailable.';
+  } else if (
+    !isSuperAdmin &&
+    (
+      !authUser.organizationId ||
+      authUser.organizationId !== organization.id
+    )
+  ) {
+    isForbidden = true;
+    forbiddenReason =
+      'You are not authorized to view records for this department.';
   }
 
   return (
     <div
       className="d-flex min-vh-100"
       style={{
-        width: "100%",
+        width: '100%',
         minWidth: 0,
       }}
     >
@@ -145,7 +190,7 @@ export default async function ProtectedDepartmentLayout({
         className="flex-grow-1 d-flex flex-column"
         style={{
           minWidth: 0,
-          width: "100%",
+          width: '100%',
         }}
       >
         <TopHeader
@@ -153,6 +198,7 @@ export default async function ProtectedDepartmentLayout({
           currentUser={currentUser}
           defaultAy={organization.activeAy || undefined}
           defaultTerm={organization.activeTerm || undefined}
+          calendarConfigs={calendarConfigs}
         />
 
         <main
@@ -164,7 +210,8 @@ export default async function ProtectedDepartmentLayout({
           {isForbidden ? (
             <div className="alert alert-danger shadow-sm border-secondary">
               <h4 className="fw-bold mb-2">
-                <i className="bi bi-shield-lock-fill me-2"></i> Access Denied
+                <i className="bi bi-shield-lock-fill me-2" />
+                Access Denied
               </h4>
               <p className="small mb-0">{forbiddenReason}</p>
             </div>

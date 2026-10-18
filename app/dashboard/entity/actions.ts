@@ -1,154 +1,305 @@
-// app/dashboard/entity/actions.ts
+// /app/dashboard/entity/actions.ts
+
 'use server';
 
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { cookies } from 'next/headers';
+import { signOut } from '@/auth';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import crypto from 'crypto';
+import { getAuthenticatedEntityAdmin } from '@/lib/entity-session';
+import { PRESET_ROLE_TABS } from '@/lib/role-permissions';
 
-const SECRET_KEY = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || 'clear-saas-institutional-secret-key-2026';
+const DEFAULT_GROUP = 'default-school';
+const RESERVED = new Set(['api', 'dashboard', 'department', 'admin', 'www', 'localhost', 'login', 'auth']);
 
-export async function signEntityToken(payload: object): Promise<string> {
-  const data = Buffer.from(JSON.stringify(payload)).toString('base64url');
-  const signature = crypto
-    .createHmac('sha256', SECRET_KEY)
-    .update(data)
-    .digest('base64url');
-  return `${data}.${signature}`;
-}
+function normalizeSlug(value: unknown, field: string): string {
+  const slug = String(value ?? '').trim().toLowerCase();
 
-export async function verifyEntityToken<T = any>(token: string | undefined): Promise<T | null> {
-  if (!token || !token.includes('.')) return null;
-  const [data, signature] = token.split('.');
-  const expectedSig = crypto
-    .createHmac('sha256', SECRET_KEY)
-    .update(data)
-    .digest('base64url');
-
-  if (signature !== expectedSig) return null;
-
-  try {
-    const parsed = JSON.parse(Buffer.from(data, 'base64url').toString('utf-8'));
-    if (parsed.exp && Date.now() > parsed.exp) return null;
-    return parsed as T;
-  } catch {
-    return null;
-  }
-}
-
-export async function getAuthenticatedEntityAdmin(): Promise<string | null> {
-  const cookieStore = await cookies();
-  const sessionToken = cookieStore.get('clear_entity_session')?.value;
-  const verified = await verifyEntityToken<{ email: string }>(sessionToken);
-  return verified?.email || null;
-}
-
-export async function provisionSubEntityAction(formData: FormData) {
-  const email = await getAuthenticatedEntityAdmin();
-  if (!email) {
-    throw new Error('Unauthorized: Your Entity Admin session has expired. Please log in again.');
-  }
-
-  const primaryAdminRecord = await prisma.tenantUser.findFirst({
-    where: { email, role: 'admin' },
-    include: { organization: true },
-  });
-
-  if (!primaryAdminRecord) {
-    throw new Error('Unauthorized: Admin record not found.');
-  }
-
-  const name = String(formData.get('name') || '').trim();
-  const subdomain = String(formData.get('subdomain') || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9-]/g, '');
-  const type = String(formData.get('type') || 'Department').trim();
-  const customGroup = String(formData.get('schoolGroup') || '').trim().toLowerCase();
-
-  if (!name || !subdomain) {
-    throw new Error('Entity Name and Subdomain Slug are required.');
-  }
-
-  if (!/^[a-z0-9-]+$/.test(subdomain)) {
-    throw new Error('Subdomain slug may only contain lowercase letters, numbers, and hyphens.');
-  }
-
-  const existingSlug = await prisma.organization.findUnique({
-    where: { subdomain },
-  });
-
-  if (existingSlug) {
-    throw new Error(`The subdomain '/department/${subdomain}' is already taken.`);
-  }
-
-  let targetSchoolGroup = primaryAdminRecord.organization.schoolGroup;
-  if (targetSchoolGroup === 'default-school' && customGroup && customGroup !== 'default-school') {
-    targetSchoolGroup = customGroup;
-    await prisma.organization.update({
-      where: { id: primaryAdminRecord.organizationId },
-      data: { schoolGroup: targetSchoolGroup },
-    });
-  }
-
-  const currentTier = primaryAdminRecord.organization.tier || 'Freemium';
-  const maxAllowed = currentTier === 'Freemium' ? 2 : currentTier === 'Pro' ? 10 : 999;
-
-  const existingGroupCount =
-    targetSchoolGroup === 'default-school'
-      ? 1
-      : await prisma.organization.count({
-          where: { schoolGroup: targetSchoolGroup },
-        });
-
-  if (existingGroupCount >= maxAllowed) {
+  if (
+    !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(slug)
+  ) {
     throw new Error(
-      `Tier limit reached: Your ${currentTier} plan allows up to ${maxAllowed} entities for group '${targetSchoolGroup}'.`
+      `${field} must contain lowercase letters, numbers, and internal hyphens only.`
     );
   }
 
-  const defaultTabs = [
-    'tab-overview', 'tab-students', 'tab-clearance', 'tab-payment',
-    'tab-remittances', 'tab-penalties', 'tab-advances', 'tab-audit',
-    'tab-collectibles', 'tab-reports', 'tab-void', 'tab-report',
-    'tab-transfer', 'tab-users', 'tab-setup',
-  ];
+  return slug;
+}
 
-  await prisma.$transaction(async (tx) => {
-    const newOrg = await tx.organization.create({
-      data: {
-        name,
-        subdomain,
-        schoolGroup: targetSchoolGroup,
-        tier: currentTier,
-        type,
-        status: 'Active',
+function getMaxEntities(tier: string): number {
+  switch (tier) {
+    case 'Freemium':
+      return 2;
+    case 'Pro':
+      return 10;
+    case 'Corporate':
+      return Number.MAX_SAFE_INTEGER;
+    default:
+      throw new Error('The current subscription tier is invalid.');
+  }
+}
+
+/**
+ * Provisions a child organization and creates its owner account.
+ *
+ * The owner is the only tenant user automatically created in the
+ * new organization. Additional officer accounts are created explicitly
+ * through User Management.
+ */
+export async function provisionSubEntityAction(formData: FormData) {
+  const session = await getAuthenticatedEntityAdmin();
+
+  if (!session) {
+    throw new Error(
+      'Unauthorized: Your Entity Admin session is invalid or expired. Sign in again.'
+    );
+  }
+
+  if (
+    session.isSuperAdmin ||
+    !session.tenantUserId ||
+    !session.organizationId
+  ) {
+    throw new Error(
+      'Use the Master Provisions Panel to create organizations as Super Admin.'
+    );
+  }
+
+  const name = String(formData.get('name') ?? '').trim();
+  const subdomain = normalizeSlug(
+    formData.get('subdomain'),
+    'Subdomain'
+  );
+  if (RESERVED.has(subdomain)) throw new Error('Reserved subdomain. Choose another.');
+
+  const rawType = String(
+    formData.get('type') ?? 'Department'
+  ).trim();
+
+  if (!name || name.length > 150) {
+    throw new Error('Entity name is required and cannot exceed 150 characters.');
+  }
+
+  if (!['Department', 'Organization'].includes(rawType)) {
+    throw new Error('Invalid entity type.');
+  }
+
+  const suppliedGroup = String(
+    formData.get('schoolGroup') ?? ''
+  ).trim().toLowerCase();
+
+  try {
+    const result = await prisma.$transaction(
+      async (tx) => {
+        // Revalidate the exact account and organization from the signed session.
+        const owner = await tx.tenantUser.findFirst({
+          where: {
+            id: session.tenantUserId!,
+            organizationId: session.organizationId!,
+            email: {
+              equals: session.email,
+              mode: 'insensitive',
+            },
+            status: 'Active',
+          },
+          include: {
+            organization: true,
+          },
+        });
+
+        if (
+          !owner ||
+          !['admin', 'administrator'].includes(
+            String(owner.role).trim().toLowerCase()
+          )
+        ) {
+          throw new Error(
+            'Your active organization administrator account could not be verified.'
+          );
+        }
+
+        if (owner.organization.status !== 'Active') {
+          throw new Error(
+            'Your organization is inactive and cannot provision entities.'
+          );
+        }
+
+        const currentGroup =
+          String(owner.organization.schoolGroup || DEFAULT_GROUP)
+            .trim()
+            .toLowerCase();
+
+        const currentTier = owner.organization.tier || 'Freemium';
+        const maxAllowed = getMaxEntities(currentTier);
+
+        const existingSlug = await tx.organization.findUnique({
+          where: { subdomain },
+          select: { id: true },
+        });
+
+        if (existingSlug) {
+          throw new Error(
+            `The subdomain '/department/${subdomain}' is already in use.`
+          );
+        }
+
+        let targetGroup = currentGroup;
+
+        // An ungrouped tenant must establish a new, unused institutional
+        // group instead of joining an arbitrary existing group's records.
+        if (currentGroup === DEFAULT_GROUP) {
+          if (!suppliedGroup) {
+            throw new Error(
+              'Provide an institutional group ID before creating a child entity.'
+            );
+          }
+
+          const requestedGroup = normalizeSlug(
+            suppliedGroup,
+            'Institutional group ID'
+          );
+
+          if (requestedGroup === DEFAULT_GROUP) {
+            throw new Error(
+              'Choose a new institutional group ID instead of default-school.'
+            );
+          }
+
+          const groupAlreadyExists = await tx.organization.count({
+            where: {
+              schoolGroup: requestedGroup,
+            },
+          });
+
+          if (groupAlreadyExists > 0) {
+            throw new Error(
+              'That institutional group ID is already in use. You cannot join an existing group by entering its ID.'
+            );
+          }
+
+          targetGroup = requestedGroup;
+
+          // This update is in the same transaction as child creation.
+          // If provisioning fails, the group assignment rolls back too.
+          await tx.organization.update({
+            where: {
+              id: owner.organizationId,
+            },
+            data: {
+              schoolGroup: targetGroup,
+            },
+          });
+        } else if (
+          suppliedGroup &&
+          suppliedGroup !== currentGroup
+        ) {
+          throw new Error(
+            'You cannot change an existing organizations group through child provisioning.'
+          );
+        }
+
+        if (currentGroup !== DEFAULT_GROUP) {
+          const groupMembers = await tx.organization.findMany({
+            where: { schoolGroup: targetGroup }, select: { tier: true },
+          });
+          if (groupMembers.some(member => member.tier !== currentTier)) {
+            throw new Error('This institutional group has conflicting subscription tiers. Contact the Super Admin.');
+          }
+        }
+
+        // Count after any initial group assignment. The current tenant
+        // is included in this count.
+        const groupCount = await tx.organization.count({
+          where: {
+            schoolGroup: targetGroup,
+          },
+        });
+
+        if (groupCount >= maxAllowed) {
+          throw new Error(
+            `Tier limit reached: ${currentTier} allows up to ${maxAllowed} entities in this group.`
+          );
+        }
+
+        const newOrganization = await tx.organization.create({
+          data: {
+            name,
+            subdomain,
+            schoolGroup: targetGroup,
+            tier: currentTier,
+            type: rawType,
+            status: 'Active',
+          },
+        });
+
+        const ownerUsername = (
+          `${owner.username}_${subdomain}`
+            .toLowerCase()
+            .replace(/[^a-z0-9_-]/g, '')
+        ).slice(0, 30);
+
+        // Exactly one account is created: the owner of this new tenant.
+        await tx.tenantUser.create({
+          data: {
+            organizationId: newOrganization.id,
+            userId: `USR-${subdomain.toUpperCase()}-001`,
+            fullName: owner.fullName,
+            username: ownerUsername || `admin_${subdomain}`.slice(0, 30),
+            email: owner.email.toLowerCase(),
+            role: 'admin',
+            allowedTabs: JSON.stringify(PRESET_ROLE_TABS.admin),
+            status: 'Active',
+          },
+        });
+
+        await tx.systemLog.create({
+          data: {
+            organizationId: newOrganization.id,
+            user: owner.fullName,
+            action: 'PROVISION_SUB_ENTITY',
+            details: `Created '${newOrganization.name}' (${newOrganization.subdomain}) in group '${targetGroup}', tier '${currentTier}'.`,
+          },
+        });
+        return { organization: newOrganization, ownerName: owner.fullName };
       },
-    });
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        maxWait: 5000,
+        timeout: 10000,
+      }
+    );
 
-    await tx.tenantUser.create({
-      data: {
-        organizationId: newOrg.id,
-        userId: `USR-${subdomain.toUpperCase()}-001`,
-        fullName: primaryAdminRecord.fullName,
-        username: `${primaryAdminRecord.username}_${subdomain}`.slice(0, 30),
-        email: primaryAdminRecord.email,
-        role: 'admin',
-        allowedTabs: JSON.stringify(defaultTabs),
-        status: 'Active',
-      },
-    });
-  });
+    revalidatePath('/dashboard');
+    revalidatePath('/dashboard/provisions');
+    revalidatePath('/dashboard/entity/portal');
 
-  revalidatePath('/dashboard');
-  revalidatePath('/dashboard/provisions');
-  revalidatePath('/dashboard/entity/portal');
+    return {
+      success: true,
+      message: 'New entity workspace provisioned. The owner account has been created.',
+      organizationId: result.organization.id,
+    };
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2034'
+    ) {
+      throw new Error(
+        'Another provisioning operation changed the group at the same time. Refresh and try again.'
+      );
+    }
+
+    throw error;
+  }
 }
 
 export async function logoutEntityAdminAction() {
   const cookieStore = await cookies();
+
   cookieStore.delete('clear_entity_session');
   cookieStore.delete('clear_entity_otp');
+  // The Entity Admin cookie and NextAuth JWT are separate sessions. End both.
+  await signOut({ redirect: false });
   redirect('/dashboard/entity/login');
 }

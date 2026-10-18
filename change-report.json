@@ -1,0 +1,234 @@
+[
+  {
+    "file": "app/dashboard/components/AdminOtpModal.tsx",
+    "alerts": 5,
+    "confirmations": 0,
+    "prompts": 0,
+    "themed": 0,
+    "modals": 1
+  },
+  {
+    "file": "app/dashboard/components/ProvisionModal.tsx",
+    "alerts": 0,
+    "confirmations": 0,
+    "prompts": 0,
+    "themed": 0,
+    "modals": 1
+  },
+  {
+    "file": "app/dashboard/provisions/ProvisionRow.tsx",
+    "alerts": 0,
+    "confirmations": 3,
+    "prompts": 1,
+    "themed": 0,
+    "modals": 0
+  },
+  {
+    "file": "app/department/[department]/(protected)/advances/AdvancesForm.tsx",
+    "alerts": 6,
+    "confirmations": 0,
+    "prompts": 0,
+    "themed": 1,
+    "modals": 0
+  },
+  {
+    "file": "app/department/[department]/(protected)/cashier-remittance/CashierRemittanceForm.tsx",
+    "alerts": 9,
+    "confirmations": 2,
+    "prompts": 0,
+    "themed": 0,
+    "modals": 0
+  },
+  {
+    "file": "app/department/[department]/(protected)/collectibles/CollectiblesManager.tsx",
+    "alerts": 0,
+    "confirmations": 0,
+    "prompts": 0,
+    "themed": 1,
+    "modals": 0
+  },
+  {
+    "file": "app/department/[department]/(protected)/collections/CollectionsForm.tsx",
+    "alerts": 2,
+    "confirmations": 0,
+    "prompts": 0,
+    "themed": 1,
+    "modals": 0
+  },
+  {
+    "file": "app/department/[department]/(protected)/liquidations/LiquidationHistory.tsx",
+    "alerts": 2,
+    "confirmations": 0,
+    "prompts": 0,
+    "themed": 0,
+    "modals": 1
+  },
+  {
+    "file": "app/department/[department]/(protected)/liquidations/LiquidationsClient.tsx",
+    "alerts": 3,
+    "confirmations": 0,
+    "prompts": 0,
+    "themed": 0,
+    "modals": 1
+  },
+  {
+    "file": "app/department/[department]/(protected)/liquidations/LiquidationsForm.tsx",
+    "alerts": 9,
+    "confirmations": 0,
+    "prompts": 0,
+    "themed": 0,
+    "modals": 1
+  },
+  {
+    "file": "app/department/[department]/(protected)/logs/LogsClient.tsx",
+    "alerts": 1,
+    "confirmations": 0,
+    "prompts": 0,
+    "themed": 0,
+    "modals": 0
+  },
+  {
+    "file": "app/department/[department]/(protected)/penalties/PenaltiesManager.tsx",
+    "alerts": 15,
+    "confirmations": 3,
+    "prompts": 3,
+    "themed": 0,
+    "modals": 1
+  },
+  {
+    "file": "app/department/[department]/(protected)/realign/RealignManager.tsx",
+    "alerts": 0,
+    "confirmations": 0,
+    "prompts": 0,
+    "themed": 0,
+    "modals": 1
+  },
+  {
+    "file": "app/department/[department]/(protected)/remittances/RemittanceVerificationQueue.tsx",
+    "alerts": 1,
+    "confirmations": 0,
+    "prompts": 0,
+    "themed": 1,
+    "modals": 1
+  },
+  {
+    "file": "app/department/[department]/(protected)/reports/ReportsClient.tsx",
+    "alerts": 4,
+    "confirmations": 0,
+    "prompts": 0,
+    "themed": 0,
+    "modals": 1
+  },
+  {
+    "file": "app/department/[department]/(protected)/setup/RestoreForm.tsx",
+    "alerts": 0,
+    "confirmations": 1,
+    "prompts": 0,
+    "themed": 0,
+    "modals": 0
+  },
+  {
+    "file": "app/department/[department]/(protected)/setup/SetupClient.tsx",
+    "alerts": 7,
+    "confirmations": 3,
+    "prompts": 1,
+    "themed": 0,
+    "modals": 0
+  },
+  {
+    "file": "app/department/[department]/(protected)/students/StudentsClient.tsx",
+    "alerts": 0,
+    "confirmations": 0,
+    "prompts": 0,
+    "themed": 1,
+    "modals": 1
+  },
+  {
+    "file": "app/department/[department]/(protected)/summary/SummaryClient.tsx",
+    "alerts": 7,
+    "confirmations": 0,
+    "prompts": 0,
+    "themed": 0,
+    "modals": 1
+  },
+  {
+    "file": "app/department/[department]/(protected)/users/UserManagementClient.tsx",
+    "alerts": 8,
+    "confirmations": 1,
+    "prompts": 0,
+    "themed": 1,
+    "modals": 1
+  },
+  {
+    "file": "app/department/[department]/(protected)/void/VoidClient.tsx",
+    "alerts": 0,
+    "confirmations": 0,
+    "prompts": 0,
+    "themed": 1,
+    "modals": 1
+  },
+  {
+    "file": "app/department/[department]/LoginModal.tsx",
+    "alerts": 0,
+    "confirmations": 0,
+    "prompts": 0,
+    "themed": 0,
+    "modals": 1
+  },
+  {
+    "file": "app/department/[department]/TopHeader.tsx",
+    "alerts": 0,
+    "confirmations": 0,
+    "prompts": 0,
+    "themed": 1,
+    "modals": 1
+  },
+  {
+    "file": "app/department/[department]/clearance/ClearanceClientView.tsx",
+    "alerts": 6,
+    "confirmations": 0,
+    "prompts": 0,
+    "themed": 0,
+    "modals": 1
+  },
+  {
+    "file": "app/department/[department]/clearance/ClearanceManager.tsx",
+    "alerts": 7,
+    "confirmations": 0,
+    "prompts": 0,
+    "themed": 0,
+    "modals": 1
+  },
+  {
+    "file": "app/department/[department]/clearance/page.tsx",
+    "alerts": 0,
+    "confirmations": 0,
+    "prompts": 0,
+    "themed": 0,
+    "modals": 1
+  },
+  {
+    "file": "app/department/[department]/components/DataPrivacyModal.tsx",
+    "alerts": 0,
+    "confirmations": 0,
+    "prompts": 0,
+    "themed": 0,
+    "modals": 1
+  },
+  {
+    "file": "app/department/[department]/components/OtpModal.tsx",
+    "alerts": 5,
+    "confirmations": 0,
+    "prompts": 0,
+    "themed": 0,
+    "modals": 1
+  },
+  {
+    "file": "app/layout.tsx",
+    "themeInit": true
+  },
+  {
+    "file": "app/globals.css",
+    "css": true
+  }
+]

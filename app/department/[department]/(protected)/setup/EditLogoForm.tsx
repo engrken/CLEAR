@@ -3,6 +3,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { updateEntityLogo } from "./actions";
 
 export default function EditLogoForm({ 
@@ -12,6 +13,7 @@ export default function EditLogoForm({
   organizationId: string, 
   currentLogo?: string | null 
 }) {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
@@ -24,10 +26,10 @@ export default function EditLogoForm({
     // Securely attach the organization ID to the form data
     formData.append("organizationId", organizationId); 
     
-    // 1. VERCEL PAYLOAD LIMIT GUARD (Max 2MB)
+    // Keep payload below Next.js Server Actions default 1 MB body limit.
     const logoFile = formData.get('logo') as File | null;
-    if (logoFile && logoFile.size > 2 * 1024 * 1024) {
-      setMessage({ text: "Logo file is too large. Please upload an image smaller than 2MB.", type: "error" });
+    if (logoFile && logoFile.size > 850 * 1024) {
+      setMessage({ text: "Logo file is too large. Please upload an image smaller than 850 KB.", type: "error" });
       setLoading(false);
       return;
     }
@@ -39,6 +41,7 @@ export default function EditLogoForm({
       // If successful, reset the file input
       if (res.success) {
         (e.target as HTMLFormElement).reset();
+        router.refresh();
       }
     } catch (err: any) {
       setMessage({ text: "An error occurred while uploading.", type: "error" });
@@ -49,7 +52,7 @@ export default function EditLogoForm({
 
   return (
     // 2. ADDED encType="multipart/form-data"
-    <form onSubmit={handleSubmit} encType="multipart/form-data" className="p-3 border border-secondary rounded text-white shadow-sm">
+    <form onSubmit={handleSubmit} encType="multipart/form-data" className="p-3 border border-secondary rounded text-body shadow-sm">
       <h6 className="mb-3 text-info fw-bold">
         <i className="bi bi-cloud-upload me-2"></i>Upload New Logo
       </h6>
@@ -83,7 +86,7 @@ export default function EditLogoForm({
           required
         />
         <div className="form-text text-secondary small mt-1">
-          Max file size: 2MB. Recommended format: PNG.
+          Max file size: 850 KB (Server Action). Recommended format: PNG.
         </div>
       </div>
 

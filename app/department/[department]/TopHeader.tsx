@@ -5,9 +5,10 @@
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { useState, useEffect, Suspense, useTransition } from 'react';
 import { signOut } from "next-auth/react";
+import { configurationForYear, periodsFor, type CalendarByYear } from "@/lib/academic-periods";
 import LoginModal from './LoginModal'; 
 import { updateMyEmail } from './actions';
-import { ThemedAlert } from '@/lib/alerts'; // 🚀 Fixed F11: Theme-adaptive SweetAlerts
+import { ThemedAlert } from '@/lib/clear-dialogs'; // 🚀 Fixed F11: Theme-adaptive SweetAlerts
 
 const MODULE_LABELS: Record<string, string> = {
   'tab-overview': 'Overview',
@@ -31,21 +32,41 @@ function TopHeaderContent({
   department, 
   currentUser, 
   defaultAy = 'A.Y. 2026 - 2027', 
-  defaultTerm = '1st Sem' 
+  defaultTerm = '1st Sem',
+  calendarConfigs = {},
 }: { 
   department: string; 
   currentUser?: any; 
   defaultAy?: string; 
-  defaultTerm?: string; 
+  defaultTerm?: string;
+  calendarConfigs?: CalendarByYear;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
 
   const ay = searchParams.get('ay') || defaultAy;
-  const term = searchParams.get('term') || defaultTerm;
+  const selectedAy = searchParams.get('ay') || defaultAy;
+  const terms = periodsFor(configurationForYear(selectedAy, calendarConfigs));
+  const requestedTerm = searchParams.get('term') || (selectedAy === defaultAy ? defaultTerm : '');
+  const term = terms.includes(requestedTerm) ? requestedTerm : terms[0];
+  // Old bookmarked URLs may contain a term from a different calendar; normalize it.
+  useEffect(() => {
+    const incoming = searchParams.get('term');
+    if (incoming && !terms.includes(incoming)) {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('term', term);
+      router.replace(`${pathname}?${params.toString()}`);
+    }
+  }, [searchParams, pathname, router, terms.join('|'), term]);
 
   const [theme, setTheme] = useState('dark');
+  const yearChoices = Array.from(new Set([
+    defaultAy, ay, ...Array.from({ length: 9 }, (_, offset) => {
+      const start = 2024 + offset;
+      return `A.Y. ${start} - ${start + 1}`;
+    }),
+  ])).filter(Boolean);
   
   const isLoggedIn = !!currentUser;
   const userName = currentUser?.name || currentUser?.fullName || 'System Officer';
@@ -56,6 +77,7 @@ function TopHeaderContent({
   
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [editableEmail, setEditableEmail] = useState(initialEmail);
+  useEffect(() => setEditableEmail(initialEmail), [initialEmail]);
   const [isPending, startTransition] = useTransition();
 
   const [showModal, setShowModal] = useState(false);
@@ -109,27 +131,11 @@ function TopHeaderContent({
   };
 
   const handleAuthAction = async () => {
-    if (isLoggedIn) {
-      try {
-        await signOut({ redirect: false });
-        const cookiesToClear = ['clearsys_session', 'clearsys_otp_hash', 'clearsys_otp_email', 'clearsys_otp_strikes', 'clearsys_lockout'];
-        cookiesToClear.forEach(cookie => {
-          document.cookie = `${cookie}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
-        });
-      } catch (e) {
-        console.error("Logout failed", e);
-      }
-      
-      await ThemedAlert.fire({
-        icon: 'success',
-        title: 'Signed Out',
-        text: 'Signed out successfully.',
-        timer: 1500,
-        showConfirmButton: false,
-      });
-      window.location.reload();
-    } else {
-      setShowModal(true);
+    if (!isLoggedIn) { setShowModal(true); return; }
+    try {
+      await signOut({ callbackUrl: `/department/${encodeURIComponent(department)}?login=true` });
+    } catch (error) {
+      await ThemedAlert.fire({ icon: 'error', title: 'Sign Out Failed', text: error instanceof Error ? error.message : 'Please try again.' });
     }
   };
 
@@ -145,7 +151,8 @@ function TopHeaderContent({
             text: res.message || 'Email updated successfully.',
           });
           setShowProfileModal(false);
-          window.location.reload();
+          // The old NextAuth session contains the previous email. Re-authenticate via OTP.
+          await signOut({ callbackUrl: `/department/${encodeURIComponent(department)}?login=true` });
         }
       } catch (err: any) {
         ThemedAlert.fire({
@@ -205,13 +212,10 @@ function TopHeaderContent({
             <select 
               className="form-select form-select-sm bg-card text-color border-secondary"
               value={ay}
-              onChange={(e) => handleFilterChange(e.target.value, term)}
+              onChange={(e) => { const nextAy = e.target.value; const allowed = periodsFor(configurationForYear(nextAy, calendarConfigs)); handleFilterChange(nextAy, allowed.includes(term) ? term : allowed[0]); }}
               style={{ width: '160px', fontSize: '0.82rem' }}
             >
-              <option value="A.Y. 2026 - 2027">A.Y. 2026 - 2027</option>
-              <option value="A.Y. 2027 - 2028">A.Y. 2027 - 2028</option>
-              <option value="A.Y. 2028 - 2029">A.Y. 2028 - 2029</option>
-              <option value="A.Y. 2029 - 2030">A.Y. 2029 - 2030</option>
+              {yearChoices.map((year) => <option key={year} value={year}>{year}</option>)}
             </select>
 
             <select 
@@ -220,9 +224,7 @@ function TopHeaderContent({
               onChange={(e) => handleFilterChange(ay, e.target.value)}
               style={{ width: '110px', fontSize: '0.82rem' }}
             >
-              <option value="1st Sem">1st Sem</option>
-              <option value="2nd Sem">2nd Sem</option>
-              <option value="Summer">Summer</option>
+              {terms.map(item => <option key={item} value={item}>{item}</option>)}
             </select>
           </div>
 
@@ -269,13 +271,14 @@ function TopHeaderContent({
       {showProfileModal && (
         <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
           <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content card border-secondary shadow bg-card text-color">
+            <div className="modal-content card border-secondary shadow bg-card text-color clear-theme-modal">
               <div className="modal-header border-secondary">
                 <h5 className="modal-title text-accent fw-bold">
                   <i className="bi bi-person-badge me-2"></i>Officer Profile Settings
                 </h5>
                 <button type="button" className="btn-close btn-close-white" onClick={() => setShowProfileModal(false)}></button>
               </div>
+              <div className="px-4 pt-3"><a className="btn btn-outline-info btn-sm" href={`/department/${encodeURIComponent(department)}/email-preferences`}><i className="bi bi-envelope-check me-2"/>Transaction Email Preferences</a></div>
               <form onSubmit={handleSaveEmail}>
                 <div className="modal-body p-4">
                   <div className="mb-3">
@@ -362,7 +365,8 @@ export default function TopHeader(props: {
 department: string;
 currentUser?: any;
 defaultAy?: string;
-defaultTerm?: string
+defaultTerm?: string;
+calendarConfigs?: CalendarByYear;
 }) {
   return (
     <Suspense fallback={<div className="p-3 bg-card border-bottom border-secondary">Loading header...</div>}>

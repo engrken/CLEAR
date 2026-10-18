@@ -1,14 +1,22 @@
 // app/dashboard/components/ProvisionModal.tsx
 "use client";
 import { useRef, useState } from "react";
+import { useRouter } from 'next/navigation';
+import { periodsFor, type CalendarMode } from "@/lib/academic-periods";
 import { createDepartment } from "@/app/dashboard/actions";
 export default function ProvisionModal() {
+  const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null); // Added ref for auto-closing
   const [loading, setLoading] = useState(false);
+  const [calendarMode, setCalendarMode] = useState<CalendarMode>('Semester');
+  const current = new Date();
+  const startYear = current.getMonth() >= 5 ? current.getFullYear() : current.getFullYear() - 1;
+  const initialAY = `A.Y. ${startYear} - ${startYear + 1}`;
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (loading) return;
     setLoading(true);
     setMessage(null);
     const formData = new FormData(e.currentTarget);
@@ -24,6 +32,7 @@ export default function ProvisionModal() {
       const res = await createDepartment(formData);
       if (res.success) {
         formRef.current?.reset();
+        router.refresh();
         setMessage({ text: res.message, type: "success" });
         setTimeout(() => {
           closeBtnRef.current?.click();
@@ -42,7 +51,7 @@ export default function ProvisionModal() {
   return (
     <div className="modal fade" id="provisionModal" tabIndex={-1} aria-labelledby="provisionModalLabel" aria-hidden="true">
       <div className="modal-dialog modal-dialog-centered modal-lg">
-        <div className="modal-content bg-dark border-secondary text-white shadow-lg">
+        <div className="modal-content bg-body border-secondary text-body shadow-lg clear-theme-modal">
           <div className="modal-header border-secondary">
             <h5 className="modal-title text-info fw-bold" id="provisionModalLabel">
               <i className="bi bi-hdd-network me-2"></i> Register Department / Organization
@@ -145,6 +154,32 @@ export default function ProvisionModal() {
                       required 
                     />
                   </div>
+                </div>
+              </div>
+              <div className="mt-4 pt-3 border-top border-secondary">
+                <h6 className="text-info fw-bold mb-3">3. Initial Academic Calendar</h6>
+                <p className="small text-muted">Choose before creating the tenant. Once finances are posted, calendar changes require a controlled period transition.</p>
+                <div className="row g-3">
+                  <div className="col-md-6">
+                    <label className="form-label" htmlFor="legacy-initial-ay">Starting Academic Year</label>
+                    <input id="legacy-initial-ay" name="initialAcademicYear" className="form-control" required
+                      defaultValue={initialAY} pattern="(?:A\.Y\.\s*)?\d{4}\s*-\s*\d{4}" />
+                  </div>
+                  <div className="col-md-6">
+                    <label className="form-label" htmlFor="legacy-calendar-mode">Calendar</label>
+                    <select id="legacy-calendar-mode" name="calendarMode" className="form-select" required
+                      value={calendarMode} onChange={e => setCalendarMode(e.target.value as CalendarMode)}>
+                      <option value="FullYear">Full School Year</option>
+                      <option value="Semester">Semester</option>
+                      <option value="Trimester">Trimester</option>
+                    </select>
+                  </div>
+                  {calendarMode === "Semester" && <div className="col-12">
+                    <label className="form-check-label">
+                      <input className="form-check-input me-2" type="checkbox" name="includeSummer" defaultChecked />Include Summer accounting period
+                    </label>
+                  </div>}
+                  <div className="col-12 small text-muted">First accounting period: {periodsFor({mode: calendarMode, includeSummer: true})[0]}</div>
                 </div>
               </div>
               <div className="mt-4 pt-3 border-top border-secondary text-end">

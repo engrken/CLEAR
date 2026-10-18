@@ -1,10 +1,6 @@
-// lib/super-admin-otp.ts  (NEW)
-// Super Admin OTP issue + verify. Uses ONLY tables you already have:
-//   VerificationToken  -> the hashed code (identifier is the primary key)
-//   AuthThrottle       -> attempt budget, lock, and send throttle (no migration needed)
-//
-// Every limit is enforced by a CONDITIONAL updateMany (count === 1 means "admitted"), so parallel
-// requests cannot slip past a read-then-write race.
+// lib/super-admin-otp.ts 
+
+import 'server-only';
 import crypto from 'node:crypto';
 import { prisma } from '@/lib/prisma';
 import { sendEmail } from '@/lib/mailer';
@@ -23,7 +19,11 @@ export const SENT_MESSAGE =
 const FAIL = 'Invalid or expired verification code.';
 
 const norm = (v: unknown) => String(v ?? '').trim().toLowerCase();
-const hash = (code: string) => crypto.createHash('sha256').update(code).digest('hex');
+const hash = (code: string) => {
+  const secret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
+  if (!secret || secret.length < 32) throw new Error('OTP signing secret must be configured with at least 32 characters.');
+  return crypto.createHmac('sha256', secret).update('super-admin-otp:' + code).digest('hex');
+};
 const guessKey = (e: string) => `super-admin-otp:guess:${e}`;
 const sendKey = (e: string) => `super-admin-otp:send:${e}`;
 
@@ -95,7 +95,7 @@ export async function issueSuperAdminOtp(email: string) {
     });
   } catch (err) {
     console.error('Super Admin OTP email failed:', err);
-    await prisma.verificationToken.deleteMany({ where: { identifier: e } });
+    await prisma.verificationToken.deleteMany({ where: { identifier: e, token: hash(code) } });
   }
   return generic;
 }
@@ -113,7 +113,7 @@ export async function verifySuperAdminOtp(
 
   // A guess only counts when a live code exists (that is the only time a guess can succeed).
   const tok = await prisma.verificationToken.findUnique({ where: { identifier: e } });
-  if (!tok || tok.expires < now) return { ok: false, message: FAIL };
+  if (!tok || tok.expires < now || !/^\d{6}$/.test(code)) return { ok: false, message: FAIL };
 
   // New cycle once a lock has expired.
   await prisma.authThrottle.updateMany({

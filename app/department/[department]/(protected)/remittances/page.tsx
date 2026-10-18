@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/prisma';
 import RemittanceVerificationQueue from './RemittanceVerificationQueue';
+import { getPeriodLedger } from '../realign/ledger';
 import { Metadata } from 'next';
 import { requireTabAccess } from '@/lib/permissions';
 
@@ -46,8 +47,11 @@ export default async function RemittancesPage({
   const ay = resolvedSearch.ay || organization.activeAy || 'A.Y. 2026 - 2027';
   const term = resolvedSearch.term || organization.activeTerm || '1st Sem';
 
+  let canVoid = false;
+  try { await requireTabAccess('tab-void', cleanDepartment); canVoid = true; } catch { /* no void permission */ }
   const serialize = (data: any[]) => JSON.parse(JSON.stringify(data || []));
 
+  const ledger = await getPeriodLedger(prisma, organization.id, ay, term);
   const funds = await prisma.fund.findMany({
     where: { organizationId: organization.id, academicYear: ay, term }
   });
@@ -62,28 +66,23 @@ export default async function RemittancesPage({
     studentId: r.studentId ?? '',
   }));
 
-  const lastCollection = await prisma.collection.findFirst({
+  const receipts = await prisma.collection.findMany({
     where: { organizationId: organization.id, academicYear: ay },
-    orderBy: { timestamp: 'desc' },
     select: { orNumber: true }
   });
 
   const yearPrefix = ay.match(/\d{4}/)?.[0]?.slice(-2) || '26';
   let nextOr = `${yearPrefix}-001`;
 
-  if (lastCollection && lastCollection.orNumber) {
-    const lastOr = lastCollection.orNumber.toUpperCase();
-    if (!lastOr.includes('VOID') && !lastOr.includes('DUE-')) {
-      const parts = lastOr.split('-');
-      if (parts.length > 1) {
-        const numPart = parseInt(parts[1].replace(/[^0-9]/g, ''), 10);
-        if (!isNaN(numPart)) {
-          const nextNum = numPart + 1;
-          nextOr = `${parts[0]}-${nextNum < 1000 ? String(nextNum).padStart(3, '0') : nextNum}`;
-        }
-      }
-    }
-  }
+  const used = receipts.map(c => String(c.orNumber || ""));
+  const maxNum = used.reduce((max, value) => {
+    const match = value.match(new RegExp(`^${yearPrefix}-(\\d+)(?:-P\\d+)?$`, 'i'));
+    return match ? Math.max(max, Number(match[1])) : max;
+  }, 0);
+  nextOr = `${yearPrefix}-${String(maxNum + 1).padStart(3, '0')}`;
+  const fundOptions = ledger.funds.filter(f => f.balance >= 0).map(f => ({
+    id: f.name, fundName: f.name
+  }));
 
   return (
     <div className="module card p-3 p-md-4 border-secondary shadow-sm bg-body text-body">
@@ -98,7 +97,9 @@ export default async function RemittancesPage({
         term={term}
         remittances={serialize(remittances)}
         nextOr={nextOr}
-        funds={funds} 
+        funds={fundOptions.length > 0 ? fundOptions : funds}
+        closed={Boolean(ledger.activeRollover)}
+        canVoid={canVoid} 
       />
     </div>
   );

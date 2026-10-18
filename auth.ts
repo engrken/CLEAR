@@ -61,7 +61,7 @@ export const {
 
           return {
             id: "SuperAdmin",
-            name: "Kenneth Mark Bulquerin",
+            name: "Super Admin",
             email,
             role: "SuperAdmin",
             organizationId: null,
@@ -108,10 +108,10 @@ export const {
     async jwt({ token, user }) {
       if (user) {
         const authenticatedUser = user as any;
-        if (authenticatedUser.role) token.role = authenticatedUser.role;
-        if (authenticatedUser.organizationId) token.organizationId = authenticatedUser.organizationId;
-        if (authenticatedUser.department) token.department = authenticatedUser.department;
-        if (authenticatedUser.username) token.username = authenticatedUser.username;
+        token.role = authenticatedUser.role || null;
+        token.organizationId = authenticatedUser.organizationId || null;
+        token.department = authenticatedUser.department || null;
+        token.username = authenticatedUser.username || null;
         token.allowedTabs = authenticatedUser.allowedTabs || [];
       }
       return token;
@@ -120,10 +120,10 @@ export const {
     async session({ session, token }) {
       if (session.user) {
         const sessionUser = session.user as any;
-        if (token.role) sessionUser.role = token.role;
-        if (token.organizationId) sessionUser.organizationId = token.organizationId;
-        if (token.department) sessionUser.department = token.department;
-        if (token.username) sessionUser.username = token.username;
+        sessionUser.role = token.role || null;
+        sessionUser.organizationId = token.organizationId || null;
+        sessionUser.department = token.department || null;
+        sessionUser.username = token.username || null;
         sessionUser.allowedTabs = token.allowedTabs || [];
       }
       return session;

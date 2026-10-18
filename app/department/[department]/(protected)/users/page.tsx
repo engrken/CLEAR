@@ -1,136 +1,110 @@
 // /app/department/[department]/(protected)/users/page.tsx
 
 import { prisma } from '@/lib/prisma';
+import { auth } from '@/auth';
 import UserManagementClient from './UserManagementClient';
-import { Metadata } from 'next';
+import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
-import { isSuperAdminEmail, requireTabAccess } from '@/lib/permissions'; // 🚀 CENTRALIZED PERMISSION & GUARD
+import {
+  isSuperAdminEmail,
+  requireOrgAdmin,
+} from '@/lib/permissions';
+import { parseAllowedTabs } from '@/lib/role-permissions';
 
 export const metadata: Metadata = {
   title: 'Centralized Liquidation of Expenses & Audit Records',
-};
-
-const ROLE_PERMISSIONS_MAP: Record<string, string[]> = {
-  admin: [
-    'tab-overview', 'tab-students', 'tab-clearance', 'tab-reports',
-    'tab-payment', 'tab-remittances', 'tab-penalties', 'tab-advances',
-    'tab-audit', 'tab-collectibles', 'tab-void', 'tab-report', 'tab-transfer',
-    'tab-users', 'tab-setup'
-  ],
-  treasurer: [
-    'tab-overview', 'tab-clearance', 'tab-reports',
-    'tab-payment', 'tab-remittances', 'tab-penalties', 'tab-advances',
-    'tab-collectibles', 'tab-report', 'tab-transfer'
-  ],
-  auditor: [
-    'tab-overview', 'tab-clearance', 'tab-reports', 'tab-audit', 'tab-report'
-  ],
-  viewer: [
-    'tab-overview', 'tab-clearance', 'tab-reports', 'tab-report'
-  ]
 };
 
 interface PageProps {
   params: Promise<{ department: string }>;
 }
 
-export default async function UserManagementPage({ params }: PageProps) {
+export default async function UserManagementPage({
+  params,
+}: PageProps) {
   const resolvedParams = await params;
-  const department = resolvedParams?.department || 'engineering';
-  const cleanSubdomain = decodeURIComponent(department).trim().toLowerCase();
+
+  let cleanSubdomain = String(
+    resolvedParams?.department ?? ''
+  ).trim();
 
   try {
-    await requireTabAccess('tab-users', cleanSubdomain);
+    cleanSubdomain = decodeURIComponent(cleanSubdomain)
+      .trim()
+      .toLowerCase();
   } catch {
-    redirect(`/department/${encodeURIComponent(cleanSubdomain)}?forbidden=true`);
+    redirect('/dashboard');
   }
 
-  let users: any[] = []; 
+  // Never silently default to another tenant.
+  if (
+    !cleanSubdomain ||
+    !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(
+      cleanSubdomain
+    )
+  ) {
+    redirect('/dashboard');
+  }
+
+  // Verify authentication, tenant membership, organization status,
+  // and permission to access User Management.
+  let access: Awaited<ReturnType<typeof requireOrgAdmin>>;
+
   try {
-    let organization = await prisma.organization.findUnique({
-      where: { subdomain: cleanSubdomain },
-    });
-
-    if (!organization) {
-      organization = await prisma.organization.create({
-        data: {
-          subdomain: cleanSubdomain,
-          name: `College of ${cleanSubdomain.charAt(0).toUpperCase() + cleanSubdomain.slice(1)}`,
-        },
-      });
-    }
-
-    const masterEmail = process.env.SUPER_ADMIN_EMAIL || 'kent.bsece@gmail.com';
-    const existingMaster = await prisma.tenantUser.findFirst({
-      where: { 
-        organizationId: organization.id,
-        email: masterEmail 
-      }
-    });
-
-    if (!existingMaster) {
-      await prisma.tenantUser.create({
-        data: {
-          organizationId: organization.id,
-          userId: `USR-${cleanSubdomain.toUpperCase()}-MASTER`,
-          fullName: 'Engr. Kenneth Mark D.C. Bulquerin',
-          username: `master_${cleanSubdomain}`,
-          email: masterEmail,
-          role: 'admin',
-          allowedTabs: JSON.stringify(ROLE_PERMISSIONS_MAP.admin),
-          status: 'Active',
-        },
-      }).catch(() => {});
-    }
-
-    let dbUsers = await prisma.tenantUser.findMany({
-      where: { organizationId: organization.id },
-      orderBy: { fullName: 'asc' },
-    });
-
-    if (dbUsers.length <= 1) {
-      const prefix = cleanSubdomain.toUpperCase();
-      const defaultAccounts = [
-        { userId: `USR-${prefix}-02`, fullName: 'System Administrator', username: `${cleanSubdomain}_admin`, email: `${cleanSubdomain}.admin@filamer.edu.ph`, role: 'admin', allowedTabs: JSON.stringify(ROLE_PERMISSIONS_MAP.admin), status: 'Active' },
-        { userId: `USR-${prefix}-03`, fullName: 'Department Treasurer', username: `${cleanSubdomain}_treasurer`, email: `${cleanSubdomain}.treasurer@filamer.edu.ph`, role: 'treasurer', allowedTabs: JSON.stringify(ROLE_PERMISSIONS_MAP.treasurer), status: 'Active' },
-        { userId: `USR-${prefix}-04`, fullName: 'Department Auditor', username: `${cleanSubdomain}_auditor`, email: `${cleanSubdomain}.auditor@filamer.edu.ph`, role: 'auditor', allowedTabs: JSON.stringify(ROLE_PERMISSIONS_MAP.auditor), status: 'Active' },
-      ];
-
-      for (const acc of defaultAccounts) {
-        await prisma.tenantUser.create({
-          data: {
-            organizationId: organization.id,
-            userId: acc.userId,
-            fullName: acc.fullName,
-            username: acc.username,
-            email: acc.email,
-            role: acc.role,
-            allowedTabs: acc.allowedTabs,
-            status: acc.status,
-          },
-        }).catch(() => {});
-      }
-
-      dbUsers = await prisma.tenantUser.findMany({
-        where: { organizationId: organization.id },
-        orderBy: { fullName: 'asc' },
-      });
-    }
-
-    users = dbUsers.map(u => ({
-      id: u.id,
-      userId: u.userId,
-      name: u.fullName,
-      email: u.email,
-      username: u.username,
-      role: u.role,
-      status: u.status,
-      otpAttempts: u.otpAttempts || 0, // 🚀 Passed down to UI client
-      allowedTabs: u.allowedTabs ? JSON.parse(u.allowedTabs) : []
-    }));
-  } catch (err) {
-    console.warn("Database synchronization warning:", err);
+    access = await requireOrgAdmin(cleanSubdomain);
+  } catch {
+    redirect(
+      `/department/${encodeURIComponent(
+        cleanSubdomain
+      )}?forbidden=true`
+    );
   }
 
-  return <UserManagementClient initialUsers={users} department={department} />;
+  /*
+   * IMPORTANT:
+   * This page is READ-ONLY with respect to provisioning.
+   *
+   * It must never:
+   * - create an Organization;
+   * - create a Super Admin tenant-user duplicate;
+   * - create default administrator, treasurer, or auditor accounts;
+   * - create accounts because the tenant has zero or one user.
+   *
+   * Tenant creation and initial owner creation belong in the
+   * authorized tenant-provisioning action.
+   */
+
+  const dbUsers = await prisma.tenantUser.findMany({
+    where: {
+      organizationId: access.organizationId,
+    },
+    orderBy: {
+      fullName: 'asc',
+    },
+  });
+
+  // Pass only the fields required by the Client Component.
+  // The global Super Admin flag is calculated on the server.
+  const users = dbUsers.map((user) => ({
+    id: user.id,
+    userId: user.userId,
+    name: user.fullName,
+    email: user.email,
+    username: user.username,
+    role: user.role,
+    status: user.status,
+    otpAttempts: user.otpAttempts,
+    allowedTabs: parseAllowedTabs(user.allowedTabs),
+    isSuperAdmin: isSuperAdminEmail(user.email),
+  }));
+
+  const session = await auth();
+  return (
+    <UserManagementClient
+      initialUsers={users}
+      department={cleanSubdomain}
+      currentUserId={String(session?.user?.id ?? '')}
+      currentUserEmail={String(session?.user?.email ?? '')}
+    />
+  );
 }

@@ -1,11 +1,14 @@
 // /app/department/[department]/(protected)/collections/CollectionsForms.tsx
 
 "use client";
+import { clearAlert, clearConfirm, clearPrompt } from "@/lib/clear-dialogs";
+
 
 import { useState, useMemo, useEffect } from "react";
-import { fmt } from "@/lib/utils";
+import { fmt, formatHoursAndMinutes } from "@/lib/utils";
 import { recordPayment } from "./actions";
-import { ThemedAlert } from "@/lib/alerts";
+import { ThemedAlert } from "@/lib/clear-dialogs";
+import { PENALTY_FUND_NAME } from "@/lib/penalty-fund";
 
 interface Student {
   studentId: string;
@@ -42,6 +45,9 @@ export default function CollectionsForm({
   prefillCategory,
   prefillDesc,
   prefillAmount,
+  prefillFund,
+  penaltyState,
+  closed = false,
 }: {
   department: string;
   ay: string;
@@ -55,6 +61,9 @@ export default function CollectionsForm({
   prefillCategory?: string;
   prefillDesc?: string;
   prefillAmount?: string;
+  prefillFund?: string;
+  penaltyState?: { balance: number; ratePerHour: number; originalHours: number; status: string };
+  closed?: boolean;
 }) {
   const todayStr = new Date().toISOString().split("T")[0];
 
@@ -85,7 +94,7 @@ export default function CollectionsForm({
   }, [category, collectionItems]);
 
   const packageItems = useMemo(() => {
-    return currentCategoryItems.filter((item) => item.isPackage !== false);
+    return currentCategoryItems.filter((item) => item.isPackage === true);
   }, [currentCategoryItems]);
 
   const packageTotal = useMemo(() => {
@@ -110,9 +119,34 @@ export default function CollectionsForm({
     if (prefillAmount) setAmountPaid(prefillAmount);
   }, [prefillCategory, prefillDesc, prefillAmount]);
 
+  // Read the same destination fund shown in Setup Collection Fees.
+  // For collectible payments the fee's fund is not an editable field.
+  // Penalties are separate: they do not have a CollectionSetup fee entry.
+  const prefilledSetupFee = useMemo(() => {
+    if (!prefillDesc || penaltyId) return undefined;
+    return collectionItems.find((item) =>
+      item.isPackage === false &&
+      item.category.trim().toLowerCase() === category.trim().toLowerCase() &&
+      item.name.trim().toLowerCase() === prefillDesc.trim().toLowerCase()
+    );
+  }, [collectionItems, category, prefillDesc, penaltyId]);
+
+  const invalidPrefilledFund = Boolean(
+    prefillDesc && !penaltyId &&
+    (!prefilledSetupFee ||
+      !funds.some((fund) => fund.fundName === prefilledSetupFee.targetFund) ||
+      (prefillFund && prefilledSetupFee.targetFund !== prefillFund))
+  );
+
   useEffect(() => {
+    if (penaltyId) {
+      setFundAllocation(PENALTY_FUND_NAME);
+      return;
+    }
     if (prefillDesc) {
-      setFundAllocation("Others");
+      // For a collectible, never silently fall back to "Others".
+      // The configured fee is authoritative; the server validates it again.
+      setFundAllocation(invalidPrefilledFund ? "" : (prefilledSetupFee?.targetFund || ""));
       return;
     }
 
@@ -130,7 +164,7 @@ export default function CollectionsForm({
 
     setItemDescription(currentCategoryItems[0].name);
     setFundAllocation(currentCategoryItems[0].targetFund);
-  }, [category, currentCategoryItems, packageItems, prefillDesc]);
+  }, [category, currentCategoryItems, packageItems, prefillDesc, funds, penaltyId, prefilledSetupFee, invalidPrefilledFund]);
 
   const standardRate = useMemo(() => {
     if (prefillAmount) return parseFloat(prefillAmount) || 0;
@@ -145,11 +179,20 @@ export default function CollectionsForm({
     }
   }, [standardRate, paymentType, prefillAmount]);
 
-  const remainingBalance = Math.max(0, standardRate - (parseFloat(amountPaid) || 0));
+  const remainingBalance = Math.max(0, Math.round((standardRate - (parseFloat(amountPaid) || 0)) * 100) / 100);
+  const isPenalty = Boolean(penaltyId);
+  const cannotPayPenalty = isPenalty && (!penaltyState ||
+    /^SETTLED/i.test(penaltyState.status) || /VOID|CANCEL/i.test(penaltyState.status) || penaltyState.balance <= 0);
+  const actualPaymentType = remainingBalance === 0 ? "Full Payment" : "Partial Payment";
+  const remainingTime = penaltyState?.ratePerHour && penaltyState.ratePerHour > 0
+    ? remainingBalance / penaltyState.ratePerHour : 0;
 
   const handleStudentSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setSearchQuery(val);
+    setStudentId("");
+    setStudentName("");
+    setStudentEmail("");
     const match = students.find((s) => 
         `${s.fullName} (${s.studentId})`.toLowerCase().includes(val.toLowerCase()) ||
         s.studentId.toLowerCase() === val.toLowerCase() ||
@@ -174,7 +217,17 @@ export default function CollectionsForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const paid = parseFloat(amountPaid) || 0;
+    if (closed) return void clearAlert("This period has been closed by carry-over.");
+    if (invalidPrefilledFund) {
+      await ThemedAlert.fire({ icon: "error", title: "Fee Setup Mismatch", text: "The selected fee or its destination fund is not configured for this academic term. Return to Fee Setup and correct the allocation before accepting payment." });
+      return;
+    }
+    if (!fundAllocation) {
+      await ThemedAlert.fire({ icon: "error", title: "Destination Fund Required", text: "There is no valid destination fund for this receipt." });
+      return;
+    }
+    if (cannotPayPenalty) return void clearAlert("This penalty cannot accept cash yet. A settled legacy record without a receipt must first be reconciled by an administrator in Penalty Logs.");
+    const paid = Number(amountPaid);
 
     if (!studentId) {
       await ThemedAlert.fire({ icon: 'warning', title: 'Student Required', text: 'Please select a valid student.' });
@@ -184,14 +237,14 @@ export default function CollectionsForm({
       await ThemedAlert.fire({ icon: 'warning', title: 'Invalid Amount', text: 'Please enter an amount greater than ₱0.00.' });
       return;
     }
-    if (!prefillAmount && paid > standardRate) {
+    if (paid > standardRate) {
       await ThemedAlert.fire({ icon: 'warning', title: 'Exceeds Rate', text: `Amount paid cannot exceed the standard rate of ${fmt(standardRate)}.` });
       return;
     }
 
     setIsSubmitting(true);
     try {
-      await recordPayment(department, {
+      const result = await recordPayment(department, {
         orNumber,
         date,
         studentId,
@@ -213,8 +266,10 @@ export default function CollectionsForm({
         date,
         studentId,
         studentName,
-        itemDescription,
+        itemDescription: result.itemDescription,
         amountPaid: paid,
+        balanceDue: result.balanceDue,
+        paymentType: result.paymentType,
       });
 
       setAmountPaid("");
@@ -253,7 +308,7 @@ export default function CollectionsForm({
       <div className="d-flex flex-column align-items-center animation-fade-in text-body">
         <div className="alert alert-success w-100 shadow-sm border-success mb-4 text-center">
           <i className="bi bi-check-circle-fill fs-4 d-block mb-2 text-success"></i>
-          <strong>Payment successfully recorded!</strong> Receipt dispatched and balances updated.
+          <strong>Payment successfully recorded!</strong> Receipt saved and balances updated. Receipt email is sent if delivery is available.
         </div>
 
         <div id="printable-receipt" className="card border-secondary shadow w-100 bg-body text-body" style={{ maxWidth: '450px' }}>
@@ -294,6 +349,11 @@ export default function CollectionsForm({
               </tbody>
             </table>
 
+            {typeof receiptData.balanceDue === "number" && (
+              <div className="d-flex justify-content-between fw-bold border-top pt-2 mt-2">
+                <span>Remaining Due</span><span>{fmt(receiptData.balanceDue)}</span>
+              </div>
+            )}
             <div className="text-center mt-5 pt-4">
               <div className="border-top border-secondary d-inline-block px-5 pt-2 fw-bold text-uppercase text-muted small">
                 Authorized Collecting Officer
@@ -317,6 +377,7 @@ export default function CollectionsForm({
 
   return (
     <form onSubmit={handleSubmit} className="text-body">
+      {closed && <div className="alert alert-warning">This period has been carried forward. Payments are disabled until its rollover is reversed.</div>}
       <div className="row g-2 mb-2">
         <div className="col-md-6">
           <label className="form-label text-muted small fw-semibold">Date</label>
@@ -360,7 +421,7 @@ export default function CollectionsForm({
         ) : (
           <select className="form-select bg-body text-body border-secondary" value={category} onChange={(e) => setCategory(e.target.value)} required>
             {categories.map((cat) => {
-              const hasPackageItems = collectionItems.some(i => i.category === cat && i.isPackage !== false);
+              const hasPackageItems = collectionItems.some(i => i.category === cat && i.isPackage === true);
               return (
                 <option key={cat} value={cat}>
                   {cat} {hasPackageItems ? " — (Contains Mandatory Items)" : " — (Optional / Standalone)"}
@@ -414,7 +475,7 @@ export default function CollectionsForm({
       <div className="row g-2 mb-2">
         <div className="col-md-4">
           <label className="form-label text-muted small fw-semibold">Payment Mode</label>
-          <select className="form-select bg-body text-body border-secondary" value={paymentType} onChange={(e) => setPaymentType(e.target.value)} required>
+          <select className="form-select bg-body text-body border-secondary" value={isPenalty ? actualPaymentType : paymentType} onChange={(e) => setPaymentType(e.target.value)} disabled={isPenalty} required>
             <option value="Full Payment">Full Payment</option>
             <option value="Partial Payment">Partial Payment / Installment</option>
             <option value="Balance">Balance</option>
@@ -430,12 +491,21 @@ export default function CollectionsForm({
         </div>
       </div>
 
-      {paymentType !== "Full Payment" && parseFloat(amountPaid) > 0 && standardRate > 0 && !prefillAmount && (
+      {parseFloat(amountPaid) > 0 && standardRate > 0 && (isPenalty || (paymentType !== "Full Payment" && !prefillAmount)) && (
         <div className="alert alert-danger py-2 small fw-bold mb-2 border-danger">
           REMAINING BALANCE DUE: {fmt(remainingBalance)}
+          {isPenalty && penaltyState && penaltyState.ratePerHour > 0 && (
+            <span className="d-block fw-normal">Equivalent remaining service time: {formatHoursAndMinutes(remainingTime)} at {fmt(penaltyState.ratePerHour)}/hr</span>
+          )}
         </div>
       )}
 
+      {invalidPrefilledFund && (
+        <div className="alert alert-danger py-2 small" role="alert">
+          Fee Setup mismatch: this item does not have a valid destination fund for the selected term.
+          No payment can be posted until the configured fee is corrected.
+        </div>
+      )}
       <div className="mb-3">
         <label className="form-label text-muted small fw-semibold">Target Fund Allocation</label>
         {prefillDesc ? (
@@ -448,13 +518,12 @@ export default function CollectionsForm({
             {funds.map((fund) => (
               <option key={fund.id} value={fund.fundName}>{fund.fundName}</option>
             ))}
-            <option value="Others">Others</option>
           </select>
         )}
       </div>
 
-      <button type="submit" className="btn btn-info fw-bold w-100 text-dark" disabled={isSubmitting}>
-        {isSubmitting ? "Recording Payment..." : "Post Payment & Settle Penalty"}
+      <button type="submit" className="btn btn-info fw-bold w-100 text-dark" disabled={isSubmitting || closed || cannotPayPenalty || invalidPrefilledFund || !fundAllocation}>
+        {isSubmitting ? "Recording Payment..." : "Post Payment"}
       </button>
     </form>
   );

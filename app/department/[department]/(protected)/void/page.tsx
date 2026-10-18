@@ -1,152 +1,208 @@
-// /app/department/[department]/(protected)/void/page.tsx
-
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireTabAccess } from '@/lib/permissions';
+import { decodeStudentDue } from '../collectibles/due-link';
 import VoidClient from './VoidClient';
-import { Metadata } from 'next';
+import type { Metadata } from 'next';
 
-export const metadata: Metadata = {
-  title: 'Centralized Liquidation of Expenses & Audit Records',
+export const dynamic = 'force-dynamic';
+export const metadata: Metadata = { title: 'Void Center | CLEAR System' };
+
+type VoidCategory = 'collections' | 'penalties' | 'advances' | 'collectibles';
+type Search = { category?: string; page?: string; pageSize?: string; q?: string; ay?: string; term?: string };
+
+type RecordEntry = {
+  id: string;
+  date: string;
+  refId: string;
+  name: string;
+  particulars: string;
+  amount: number;
+  extra: string;
 };
 
-interface PageProps {
-  params: Promise<{ department: string }>;
-  searchParams: Promise<{ category?: string; page?: string; ay?: string; term?: string }>;
+function positiveInt(value: unknown, fallback: number): number {
+  const text = String(value ?? '');
+  if (!/^[1-9]\d{0,6}$/.test(text)) return fallback;
+  const number = Number(text);
+  return Number.isSafeInteger(number) ? number : fallback;
 }
 
-export default async function VoidTransactionsPage({ params, searchParams }: PageProps) {
-  const resolvedParams = await params;
-  const resolvedSearch = await searchParams;
-  
-  const department = resolvedParams?.department || 'engineering';
-  const cleanDepartment = decodeURIComponent(department).toLowerCase().trim();
+function dateLabel(value: Date | null | undefined): string {
+  if (!value) return '—';
+  return value.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+}
 
-  // 🚀 SECURITY FIX: Enforce tab-level permissions for transaction voiding access
-  await requireTabAccess('tab-void', cleanDepartment);
-  
-  // 🚀 FIX: Whitelist allowed categories
-  const rawCategory = resolvedSearch?.category || 'collections';
-  const allowedCategories = ['collections', 'penalties', 'advances', 'collectibles'];
-  const category = allowedCategories.includes(rawCategory) ? rawCategory : 'collections';
+export default async function VoidTransactionsPage({ params, searchParams }: {
+  params: Promise<{ department: string }>;
+  searchParams?: Promise<Search>;
+}) {
+  const { department } = await params;
+  const request = searchParams ? await searchParams : {};
+  const slug = decodeURIComponent(department).trim().toLowerCase();
+  await requireTabAccess('tab-void', slug);
 
-  const page = parseInt(resolvedSearch?.page || '1', 10);
-  const pageSize = 10;
-  const skip = (page - 1) * pageSize;
+  const allowed: VoidCategory[] = ['collections', 'penalties', 'advances', 'collectibles'];
+  const category: VoidCategory = allowed.includes(request.category as VoidCategory)
+    ? request.category as VoidCategory : 'collections';
+  const q = String(request.q ?? '').trim().slice(0, 100);
+  const pageSizeCandidate = positiveInt(request.pageSize, 10);
+  const pageSize = [10, 25, 50, 100].includes(pageSizeCandidate) ? pageSizeCandidate : 10;
 
   const organization = await prisma.organization.findUnique({
-    where: { subdomain: cleanDepartment },
-    select: { id: true, activeAy: true, activeTerm: true }
+    where: { subdomain: slug }, select: { id: true, activeAy: true, activeTerm: true },
   });
-
   if (!organization) {
-    return (
-      <div className="alert alert-danger p-4 shadow-sm border-secondary m-4">
-        <h4 className="fw-bold mb-2">Department Not Found</h4>
-        <p className="small mb-0">The department '{cleanDepartment}' does not exist in the database.</p>
-      </div>
-    );
+    return <div className="alert alert-danger p-4">Department not found.</div>;
   }
+  const ay = request.ay || organization.activeAy || 'A.Y. 2026 - 2027';
+  const term = request.term || organization.activeTerm || '1st Sem';
 
-  // 🚀 Dynamically link academic year and term to organization database defaults
-  const ay = resolvedSearch?.ay || organization.activeAy || 'A.Y. 2026 - 2027';
-  const term = resolvedSearch?.term || organization.activeTerm || '1st Sem';
+  // Search all matching database records BEFORE applying pagination. Never filter
+  // just the currently visible page or merge records across organizations.
+  let matchingStudents: Array<{ id: string; studentId: string; fullName: string }> = [];
+  if (q) {
+    matchingStudents = await prisma.student.findMany({
+      where: {
+        organizationId: organization.id,
+        OR: [
+          { fullName: { contains: q, mode: 'insensitive' } },
+          { studentId: { contains: q, mode: 'insensitive' } },
+        ],
+      },
+      select: { id: true, studentId: true, fullName: true },
+    });
+  }
+  const matchedDbIds = matchingStudents.map(s => s.id);
+  const matchedRosterIds = matchingStudents.map(s => s.studentId);
 
-  let records: any[] = [];
   let totalCount = 0;
+  let page = positiveInt(request.page, 1);
+  let totalPages = 1;
+  let records: RecordEntry[] = [];
+  const paging = async <T,>(countFn: () => Promise<number>, listFn: (skip: number) => Promise<T[]>): Promise<T[]> => {
+    totalCount = await countFn();
+    totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+    page = Math.min(page, totalPages);
+    return listFn((page - 1) * pageSize);
+  };
 
-  // 🚀 FIX: Filter Prisma queries by active academicYear and term
   if (category === 'collections') {
-    const where = { 
-      organizationId: organization.id,
-      academicYear: ay,
-      term,
+    const where: Prisma.CollectionWhereInput = {
+      organizationId: organization.id, academicYear: ay, term,
       NOT: [
-        { status: { contains: 'VOID' } },
-        { status: { contains: 'Void' } },
-        { paymentType: { contains: 'VOID' } },
-        { paymentType: { contains: 'Void' } }
-      ]
+        { status: { contains: 'void', mode: 'insensitive' } },
+        { paymentType: { contains: 'void', mode: 'insensitive' } },
+      ],
+      ...(q ? { OR: [
+        { studentName: { contains: q, mode: 'insensitive' as const } },
+        { orNumber: { contains: q, mode: 'insensitive' as const } },
+        { itemDescription: { contains: q, mode: 'insensitive' as const } },
+        { category: { contains: q, mode: 'insensitive' as const } },
+        ...(matchedDbIds.length ? [{ studentId: { in: matchedDbIds } }] : []),
+      ] } : {}),
     };
-    totalCount = await prisma.collection.count({ where });
-    records = await prisma.collection.findMany({
-      where,
-      orderBy: { date: 'desc' },
-      include: { student: true },
-      skip,
-      take: pageSize,
-    });
+    const rows = await paging(
+      () => prisma.collection.count({ where }),
+      (skip) => prisma.collection.findMany({ where, include: { student: true },
+        orderBy: [{ date: 'desc' }, { id: 'desc' }], skip, take: pageSize }),
+    );
+    records = rows.map(row => ({
+      id: row.id, date: dateLabel(row.date), refId: row.orNumber,
+      name: row.student?.fullName || row.studentName || '—',
+      particulars: row.itemDescription || row.category || '—',
+      amount: Number(row.amountPaid || 0), extra: row.fundAllocation || row.paymentType || '—',
+    }));
   } else if (category === 'penalties') {
-    const where = { 
-      organizationId: organization.id,
-      academicYear: ay,
-      term,
-      NOT: [
-        { status: { contains: 'VOID' } },
-        { status: { contains: 'Void' } }
-      ]
+    const where: Prisma.PenaltyWhereInput = {
+      organizationId: organization.id, academicYear: ay, term,
+      NOT: { status: { contains: 'void', mode: 'insensitive' } },
+      ...(q ? { OR: [
+        { studentName: { contains: q, mode: 'insensitive' as const } },
+        { studentId: { contains: q, mode: 'insensitive' as const } },
+        { penaltyId: { contains: q, mode: 'insensitive' as const } },
+        { activity: { contains: q, mode: 'insensitive' as const } },
+        ...(matchedRosterIds.length ? [{ studentId: { in: matchedRosterIds } }] : []),
+      ] } : {}),
     };
-    totalCount = await prisma.penalty.count({ where });
-    records = await prisma.penalty.findMany({
-      where,
-      orderBy: { date: 'desc' },
-      skip,
-      take: pageSize,
-    });
+    const rows = await paging(
+      () => prisma.penalty.count({ where }),
+      (skip) => prisma.penalty.findMany({ where,
+        orderBy: [{ date: 'desc' }, { id: 'desc' }], skip, take: pageSize }),
+    );
+    records = rows.map(row => ({
+      id: row.id, date: dateLabel(row.date), refId: row.penaltyId,
+      name: row.studentName || '—', particulars: row.activity || '—',
+      amount: Number(row.fineAmount || 0), extra: row.status || '—',
+    }));
   } else if (category === 'advances') {
-    const where = { 
-      organizationId: organization.id,
-      academicYear: ay,
-      term,
-      NOT: [
-        { status: { contains: 'CANCEL' } },
-        { status: { contains: 'Cancel' } }
-      ]
+    const where: Prisma.CashAdvanceWhereInput = {
+      organizationId: organization.id, academicYear: ay, term,
+      NOT: { status: { contains: 'cancel', mode: 'insensitive' } },
+      ...(q ? { OR: [
+        { requestor: { contains: q, mode: 'insensitive' as const } },
+        { advanceId: { contains: q, mode: 'insensitive' as const } },
+        { purpose: { contains: q, mode: 'insensitive' as const } },
+        ...matchedRosterIds.map(id => ({ requestor: { contains: id, mode: 'insensitive' as const } })),
+      ] } : {}),
     };
-    totalCount = await prisma.cashAdvance.count({ where });
-    records = await prisma.cashAdvance.findMany({
-      where,
-      orderBy: { dateIssued: 'desc' },
-      skip,
-      take: pageSize,
-    });
-  } else if (category === 'collectibles') {
-    const where = { 
-      organizationId: organization.id,
-      academicYear: ay,
-      term,
-      NOT: [
-        { status: { contains: 'VOID' } },
-        { status: { contains: 'Void' } }
-      ]
+    const rows = await paging(
+      () => prisma.cashAdvance.count({ where }),
+      (skip) => prisma.cashAdvance.findMany({ where,
+        orderBy: [{ dateIssued: 'desc' }, { id: 'desc' }], skip, take: pageSize }),
+    );
+    records = rows.map(row => ({
+      id: row.id, date: dateLabel(row.dateIssued), refId: row.advanceId,
+      name: row.requestor || '—', particulars: row.purpose || '—',
+      amount: Number(row.amountApproved || 0), extra: row.fundSource || '—',
+    }));
+  } else {
+    // Collectible student associations are encoded in the legacy status field.
+    // Search that marker in the database instead of loading an entire ledger.
+    const where: Prisma.CollectibleWhereInput = {
+      organizationId: organization.id, academicYear: ay, term,
+      NOT: { status: { contains: 'void', mode: 'insensitive' } },
+      ...(q ? { OR: [
+        { id: { contains: q, mode: 'insensitive' as const } },
+        { category: { contains: q, mode: 'insensitive' as const } },
+        { status: { contains: q, mode: 'insensitive' as const } },
+        ...matchedRosterIds.map(id => ({ status: {
+          contains: `|SID:${encodeURIComponent(id)}|`, mode: 'insensitive' as const,
+        } })),
+      ] } : {}),
     };
-    totalCount = await prisma.collectible.count({ where });
-    records = await prisma.collectible.findMany({
-      where,
-      orderBy: { academicYear: 'desc' },
-      skip,
-      take: pageSize,
+    const rows = await paging(
+      () => prisma.collectible.count({ where }),
+      (skip) => prisma.collectible.findMany({ where,
+        orderBy: [{ id: 'desc' }], skip, take: pageSize }),
+    );
+    const rosterIds = Array.from(new Set(rows.map(row => decodeStudentDue(row.status)?.studentId).filter((s): s is string => !!s)));
+    const roster = rosterIds.length ? await prisma.student.findMany({
+      where: { organizationId: organization.id, studentId: { in: rosterIds } },
+      select: { studentId: true, fullName: true },
+    }) : [];
+    const names = new Map(roster.map(s => [s.studentId.toLowerCase(), s.fullName]));
+    records = rows.map(row => {
+      const marker = decodeStudentDue(row.status);
+      return {
+        id: row.id, date: '—', refId: row.id,
+        name: marker ? `${names.get(marker.studentId.toLowerCase()) || marker.studentId} (${marker.studentId})` : 'Summary assessment',
+        particulars: marker?.itemDescription || row.category || '—',
+        amount: Number(row.balanceDue || 0), extra: row.status || '—',
+      };
     });
   }
 
-  const totalPages = Math.ceil(totalCount / pageSize) || 1;
-
-  const serializedRecords = records.map(r => ({
-    id: r.id,
-    date: new Date(r.date || r.dateIssued || Date.now()).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }),
-    refId: r.orNumber || r.penaltyId || r.advanceId || r.id.slice(0, 8).toUpperCase(),
-    name: r.student?.fullName || r.studentName || r.requestor || 'N/A',
-    particulars: r.itemDescription || r.activity || r.purpose || r.category || '-',
-    amount: r.amountPaid || r.fineAmount || r.amountApproved || r.balanceDue || 0,
-    extra: r.fundSource || r.paymentType || r.status || '-'
-  }));
-
-  return (
-    <VoidClient 
-      initialRecords={serializedRecords} 
-      department={cleanDepartment} 
-      category={category} 
-      currentPage={page}
-      totalPages={totalPages}
-    />
-  );
+  return <VoidClient
+    initialRecords={records}
+    department={slug}
+    category={category}
+    currentPage={page}
+    totalPages={totalPages}
+    totalCount={totalCount}
+    pageSize={pageSize}
+    query={q}
+    ay={ay}
+    term={term}
+  />;
 }

@@ -4,6 +4,9 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
 import { isSuperAdminEmail } from '@/lib/permissions';
+import { encryptClearBackup, MissingBackupKeyError } from '@/lib/backup-security';
+
+export const runtime = 'nodejs';
 
 export async function GET(req: Request) {
   try {
@@ -184,6 +187,9 @@ export async function GET(req: Request) {
       },
     };
 
+    // Never offer a plaintext financial snapshot as a downloadable backup.
+    // AES-256-GCM provides confidentiality AND authenticated integrity.
+    const encrypted = encryptClearBackup(backupPayload, orgId);
     await prisma.systemLog.create({
       data: {
         organizationId: orgId,
@@ -194,21 +200,23 @@ export async function GET(req: Request) {
     }).catch(() => {});
 
     const dateStr = new Date().toISOString().split('T')[0];
-    const filename = `CLEAR_Backup_${organization.subdomain}_${dateStr}.json`;
+    const filename = `CLEAR_Backup_${organization.subdomain}_${dateStr}.encrypted.json`;
 
-    return new NextResponse(JSON.stringify(backupPayload, null, 2), {
+    return new NextResponse(JSON.stringify(encrypted), {
       status: 200,
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/octet-stream',
+        'Cache-Control': 'private, no-store, max-age=0',
+        'X-Content-Type-Options': 'nosniff',
         'Content-Disposition': `attachment; filename="${filename}"`,
       },
     });
 
   } catch (error: any) {
-    console.error('Backup Export Error:', error);
+    console.error('Backup Export Error:', error instanceof MissingBackupKeyError ? 'Missing backup encryption key' : error);
     return NextResponse.json(
-      { success: false, message: error.message || 'Internal server error during backup.' },
-      { status: 500 }
+      { success: false, message: error instanceof MissingBackupKeyError ? 'Backup encryption key is not configured.' : 'Backup export failed.' },
+      { status: error instanceof MissingBackupKeyError ? 503 : 500 }
     );
   }
 }

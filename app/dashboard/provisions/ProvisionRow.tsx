@@ -1,148 +1,149 @@
 // /app/dashboard/provisions/ProvisionRow.tsx
 'use client';
+import { clearAlert, clearConfirm, clearPrompt } from "@/lib/clear-dialogs";
 
-import { useState } from 'react';
+
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   updateOrganizationTier,
   updateOrganizationStatus,
   updateOrganizationSchoolGroup,
   deleteOrganization,
+  type OrganizationStatus,
+  type SubscriptionTier,
 } from './actions';
 
-export function ProvisionRow({ org }: { org: any }) {
+type OrganizationRow = {
+  id: string;
+  name: string;
+  subdomain: string;
+  schoolGroup?: string | null;
+  tier: string;
+  status: string;
+  _count: { students: number; collections: number; tenantUsers: number };
+};
+
+export function ProvisionRow({ org }: { org: OrganizationRow }) {
+  const router = useRouter();
   const [editingGroup, setEditingGroup] = useState(false);
-  const [groupVal, setGroupVal] = useState(org.schoolGroup || 'default-school');
+  const [groupValue, setGroupValue] = useState(org.schoolGroup || 'default-school');
+  const [tier, setTier] = useState(org.tier);
+  const [status, setStatus] = useState(org.status);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    setGroupValue(org.schoolGroup || 'default-school');
+    setTier(org.tier);
+    setStatus(org.status);
+  }, [org.schoolGroup, org.status, org.tier]);
+
+  async function execute(action: () => Promise<unknown>, onSuccess?: () => void) {
+    if (busy) return false;
+    setBusy(true);
+    setError('');
+    try {
+      await action();
+      onSuccess?.();
+      router.refresh();
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save this change.');
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function changeTier(proposed: SubscriptionTier) {
+    const previous = tier;
+    if (proposed === previous) return;
+    if (org.schoolGroup && org.schoolGroup !== 'default-school') {
+      if (!await clearConfirm(`Set ${org.schoolGroup} and ALL its entities to the ${proposed} tier? Tier limits will be checked.`)) return;
+    }
+    setTier(proposed);
+    if (!await execute(() => updateOrganizationTier(org.id, proposed))) setTier(previous);
+  }
+
+  async function changeStatus(proposed: OrganizationStatus) {
+    const previous = status;
+    if (proposed === previous) return;
+    if (proposed !== 'Active' && !await clearConfirm(`Change ${org.name} to ${proposed}? Its users may lose access.`)) return;
+    setStatus(proposed);
+    if (!await execute(() => updateOrganizationStatus(org.id, proposed))) setStatus(previous);
+  }
+
+  async function confirmDelete() {
+    const answer = await clearPrompt(
+      `WARNING: Permanently deleting ${org.name} removes its owner account. Financial or student data blocks deletion.\nType ${org.subdomain} to confirm.`,
+    );
+    if (answer === null) return;
+    if (answer !== org.subdomain) {
+      setError('Deletion cancelled: typed subdomain did not match.');
+      return;
+    }
+    await execute(() => deleteOrganization(org.id));
+  }
 
   return (
     <tr className="border-bottom border-secondary border-opacity-25">
       <td className="py-3 align-top">
-        <div className="fw-bold text-white">{org.name}</div>
+        <div className="fw-bold text-body">{org.name}</div>
         <div className="small text-info font-monospace">/department/{org.subdomain}</div>
-
-        {/* Editable School Group Pill */}
         {!editingGroup ? (
-          <div className="mt-1 d-flex align-items-center gap-2">
-            <span className="badge bg-secondary bg-opacity-25 text-light border border-secondary font-monospace">
-              Group: {org.schoolGroup}
-            </span>
-            <button
-              type="button"
-              onClick={() => setEditingGroup(true)}
-              className="btn btn-link btn-sm p-0 text-secondary text-decoration-none"
-              style={{ fontSize: '11px' }}
-            >
-              <i className="bi bi-pencil-square"></i> Edit
-            </button>
+          <div className="d-flex gap-2 align-items-center mt-1">
+            <span className="badge bg-secondary text-light">Group: {org.schoolGroup || 'default-school'}</span>
+            <button type="button" className="btn btn-link btn-sm p-0" disabled={busy}
+              onClick={() => setEditingGroup(true)}>Edit</button>
           </div>
         ) : (
-          <form
-            onSubmit={async (e) => {
-              e.preventDefault();
-              await updateOrganizationSchoolGroup(org.id, groupVal);
-              setEditingGroup(false);
-            }}
-            className="d-flex align-items-center gap-1 mt-1"
-          >
-            <input
-              type="text"
-              value={groupVal}
-              onChange={(e) => setGroupVal(e.target.value)}
-              className="form-control form-control-sm bg-dark text-white border-info font-monospace"
-              style={{ width: '130px', fontSize: '11px' }}
-            />
-            <button type="submit" className="btn btn-sm btn-info text-dark py-0 px-2">
-              Save
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setGroupVal(org.schoolGroup);
-                setEditingGroup(false);
-              }}
-              className="btn btn-sm btn-outline-secondary py-0 px-1"
-            >
-              ✕
-            </button>
+          <form className="d-flex gap-1 align-items-center mt-1" onSubmit={async (event) => {
+            event.preventDefault();
+            const proposed = groupValue.trim().toLowerCase();
+            if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(proposed)) {
+              setError('Enter a valid group: lowercase letters, numbers, internal hyphens (1–63 characters).');
+              return;
+            }
+            if (proposed !== (org.schoolGroup || 'default-school') &&
+                !await clearConfirm('Move this tenant to the selected school group? It will adopt the target group’s existing tier.')) return;
+            void execute(() => updateOrganizationSchoolGroup(org.id, proposed), () => setEditingGroup(false));
+          }}>
+            <input className="form-control form-control-sm" value={groupValue}
+              onChange={(event) => setGroupValue(event.target.value)} maxLength={63} disabled={busy} />
+            <button type="submit" className="btn btn-sm btn-info" disabled={busy}>Save</button>
+            <button type="button" className="btn btn-sm btn-outline-secondary" disabled={busy}
+              onClick={() => { setGroupValue(org.schoolGroup || 'default-school'); setEditingGroup(false); }}>Cancel</button>
           </form>
         )}
+        {error && <div role="alert" className="text-danger small mt-2">{error}</div>}
       </td>
-
-      {/* Tier Selector Action */}
       <td className="py-3 align-top">
-        <form
-          action={async (formData) => {
-            const newTier = formData.get('tier') as 'Freemium' | 'Pro' | 'Corporate';
-            await updateOrganizationTier(org.id, newTier);
-          }}
-        >
-          <select
-            name="tier"
-            defaultValue={org.tier}
-            onChange={(e) => e.currentTarget.form?.requestSubmit()}
-            className="form-select form-select-sm bg-dark text-white border-secondary fw-semibold"
-            style={{ width: '130px' }}
-          >
-            <option value="Freemium">Freemium</option>
-            <option value="Pro">Pro</option>
-            <option value="Corporate">Corporate</option>
-          </select>
-        </form>
+        <label className="visually-hidden" htmlFor={`tier-${org.id}`}>Subscription tier</label>
+        <select id={`tier-${org.id}`} className="form-select form-select-sm" style={{ minWidth: 125 }}
+          value={tier} disabled={busy} onChange={(event) => void changeTier(event.target.value as SubscriptionTier)}>
+          <option value="Freemium">Freemium</option>
+          <option value="Pro">Pro</option>
+          <option value="Corporate">Corporate</option>
+        </select>
       </td>
-
-      {/* Status Toggle Action */}
       <td className="py-3 align-top">
-        <form
-          action={async (formData) => {
-            const newStatus = formData.get('status') as 'Active' | 'Inactive' | 'Archived';
-            await updateOrganizationStatus(org.id, newStatus);
-          }}
-        >
-          <select
-            name="status"
-            defaultValue={org.status}
-            onChange={(e) => e.currentTarget.form?.requestSubmit()}
-            className={`form-select form-select-sm bg-dark fw-semibold ${
-              org.status === 'Active'
-                ? 'text-success border-success'
-                : 'text-danger border-danger'
-            }`}
-            style={{ width: '115px' }}
-          >
-            <option value="Active">Active</option>
-            <option value="Inactive">Inactive</option>
-            <option value="Archived">Archived</option>
-          </select>
-        </form>
+        <label className="visually-hidden" htmlFor={`status-${org.id}`}>Organization status</label>
+        <select id={`status-${org.id}`} className="form-select form-select-sm" style={{ minWidth: 120 }}
+          value={status} disabled={busy} onChange={(event) => void changeStatus(event.target.value as OrganizationStatus)}>
+          <option value="Active">Active</option>
+          <option value="Inactive">Inactive</option>
+          <option value="Archived">Archived</option>
+        </select>
       </td>
-
       <td className="py-3 align-top small text-secondary">
-        <div>Students: <strong className="text-light">{org._count.students}</strong></div>
-        <div>Collections: <strong className="text-light">{org._count.collections}</strong></div>
-        <div>Users: <strong className="text-light">{org._count.tenantUsers}</strong></div>
+        <div>Students: <strong>{org._count.students}</strong></div>
+        <div>Collections: <strong>{org._count.collections}</strong></div>
+        <div>Users: <strong>{org._count.tenantUsers}</strong></div>
       </td>
-
       <td className="py-3 align-top text-end">
-        <form
-          action={async () => {
-            await deleteOrganization(org.id);
-          }}
-        >
-          <button
-            type="submit"
-            className="btn btn-sm btn-outline-danger"
-            onClick={(e) => {
-              if (
-                !confirm(
-                  `Are you sure you want to permanently delete "${org.name}" and all its associated data?`
-                )
-              ) {
-                e.preventDefault();
-              }
-            }}
-          >
-            <i className="bi bi-trash3 me-1"></i> Delete
-          </button>
-        </form>
+        <button type="button" className="btn btn-sm btn-outline-danger" disabled={busy}
+          onClick={() => void confirmDelete()}>{busy ? 'Processing...' : 'Delete'}</button>
       </td>
     </tr>
   );

@@ -1,296 +1,242 @@
-// /app/department/[department]/(protected)/students/actions.ts
-
 'use server';
 
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireTabAccess } from '@/lib/permissions';
-import { logSystemAction } from '@/lib/logger';
 import { revalidatePath } from 'next/cache';
 
-export async function toggleStudentStatus(department: string, studentId: string, currentStatus: string, ay: string, term: string) {
-  const cleanDept = decodeURIComponent(department).trim().toLowerCase();
-  const user = await requireTabAccess('tab-students', cleanDept);
-  const officerName = user.name || user.fullName || user.email || "System Administrator";
+const str = (v: unknown) => String(v ?? '').trim();
+const validTerm = (v: string, name: string) => {
+  const value = str(v);
+  if (!value || value.length > 80) throw new Error(`${name} is required.`);
+  return value;
+};
+const actorName = (u: any) => str(u?.name || u?.fullName || u?.email) || 'Authorized Officer';
 
-  const newStatus = currentStatus === 'Enrolled' ? 'Inactive' : 'Enrolled';
-  const student = await prisma.student.findUnique({ where: { id: studentId } });
-  if (!student) return { success: false, message: "Student not found" };
+async function scope(department: string) {
+  let dept = '';
+  try { dept = decodeURIComponent(str(department)).toLowerCase(); }
+  catch { throw new Error('Invalid department identifier.'); }
+  if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(dept)) throw new Error('Invalid department identifier.');
+  const actor = await requireTabAccess('tab-students', dept);
+  const org = await prisma.organization.findUnique({ where: { subdomain: dept }, select: { id: true } });
+  if (!org) throw new Error('Organization not found.');
+  if ((actor as any).organizationId && (actor as any).organizationId !== org.id && !(actor as any).isSuper) {
+    throw new Error('Not authorized for this organization.');
+  }
+  return { dept, orgId: org.id, officer: actorName(actor) };
+}
 
-  const existingEnrollment = await prisma.enrollment.findFirst({
-    where: { studentId: student.id, academicYear: ay, term },
+function refresh(dept: string) {
+  for (const suffix of ['/students', '/clearance', '/reports', '/summary', '']) revalidatePath(`/department/${dept}${suffix}`);
+}
+
+async function enrollmentStatus(tx: Prisma.TransactionClient, studentId: string, orgId: string, ay: string, term: string, status: string, officer: string) {
+  if (!['Enrolled', 'Inactive'].includes(status)) throw new Error('Invalid enrollment status.');
+  await tx.enrollment.upsert({
+    where: { organizationId_academicYear_term_studentId: { organizationId: orgId, academicYear: ay, term, studentId } },
+    create: { organizationId: orgId, studentId, academicYear: ay, term, enrollmentStatus: status, updatedBy: officer },
+    update: { enrollmentStatus: status, lastUpdated: new Date(), updatedBy: officer },
   });
-
-  if (existingEnrollment) {
-    await prisma.enrollment.update({
-      where: { id: existingEnrollment.id },
-      data: { enrollmentStatus: newStatus },
-    });
-  } else {
-    await prisma.enrollment.create({
-      data: {
-        studentId: student.id,
-        organizationId: student.organizationId,
-        academicYear: ay,
-        term,
-        enrollmentStatus: newStatus,
-      },
-    });
-  }
-
-  await logSystemAction(
-    student.organizationId,
-    officerName,
-    "TOGGLE_STUDENT_STATUS",
-    `Changed enrollment status for student ${student.fullName} to ${newStatus} for ${ay} (${term}).`
-  );
-
-  revalidatePath(`/department/${cleanDept}/students`);
-  return { success: true };
 }
 
-export async function confirmAllEnrolled(department: string, organizationId: string, ay: string, term: string) {
-  const cleanDept = decodeURIComponent(department).trim().toLowerCase();
-  const user = await requireTabAccess('tab-students', cleanDept);
-  const officerName = user.name || user.fullName || user.email || "System Administrator";
-
-  const allStudents = await prisma.student.findMany({ where: { organizationId } });
-  for (const student of allStudents) {
-    const existing = await prisma.enrollment.findFirst({
-      where: { studentId: student.id, academicYear: ay, term },
+export async function toggleStudentStatus(department: string, studentId: string, _currentStatus: string, ay: string, term: string) {
+  const { dept, orgId, officer } = await scope(department);
+  const academicYear = validTerm(ay, 'Academic year');
+  const academicTerm = validTerm(term, 'Term');
+  const result = await prisma.$transaction(async tx => {
+    const student = await tx.student.findFirst({ where: { id: str(studentId), organizationId: orgId } });
+    if (!student) throw new Error('Student not found in this organization.');
+    const enrolled = await tx.enrollment.findUnique({
+      where: { organizationId_academicYear_term_studentId: { organizationId: orgId, studentId: student.id, academicYear, term: academicTerm } },
     });
-    if (existing) {
-      await prisma.enrollment.update({ where: { id: existing.id }, data: { enrollmentStatus: 'Enrolled' } });
-    } else {
-      await prisma.enrollment.create({
-        data: { studentId: student.id, organizationId, academicYear: ay, term, enrollmentStatus: 'Enrolled' },
-      });
+    const nextStatus = enrolled?.enrollmentStatus === 'Enrolled' ? 'Inactive' : 'Enrolled';
+    await enrollmentStatus(tx, student.id, orgId, academicYear, academicTerm, nextStatus, officer);
+    await tx.systemLog.create({ data: { organizationId: orgId, user: officer, action: 'TOGGLE_STUDENT_STATUS', details: `${student.studentId}: ${nextStatus} in ${academicYear} ${academicTerm}` } });
+    return nextStatus;
+  });
+  refresh(dept);
+  return { success: true, status: result };
+}
+
+export async function confirmAllEnrolled(department: string, _clientOrgId: string, ay: string, term: string) {
+  const { dept, orgId, officer } = await scope(department);
+  const academicYear = validTerm(ay, 'Academic year');
+  const academicTerm = validTerm(term, 'Term');
+  const count = await prisma.$transaction(async tx => {
+    const students = await tx.student.findMany({ where: { organizationId: orgId }, select: { id: true } });
+    for (const student of students) await enrollmentStatus(tx, student.id, orgId, academicYear, academicTerm, 'Enrolled', officer);
+    await tx.systemLog.create({ data: { organizationId: orgId, user: officer, action: 'CONFIRM_ALL_ENROLLED', details: `${students.length} students confirmed enrolled in ${academicYear} ${academicTerm}` } });
+    return students.length;
+  }, { timeout: 60000 });
+  refresh(dept);
+  return { success: true, count };
+}
+
+/**
+ * Promote an explicitly selected set of students. No "promote all" fallback.
+ * The caller's supplied organization ID is deliberately ignored.
+ */
+export async function promoteSelectedYearLevels(
+  department: string,
+  _clientOrgId: string,
+  studentInternalIds: string[],
+) {
+  const { dept, orgId, officer } = await scope(department);
+  if (!Array.isArray(studentInternalIds) || studentInternalIds.length === 0) {
+    throw new Error('Select at least one student for year-level promotion.');
+  }
+  if (studentInternalIds.length > 200) {
+    throw new Error('Promote at most 200 students in a single batch.');
+  }
+  const ids = studentInternalIds.map(str);
+  if (ids.some(id => !id || id.length > 100) || new Set(ids).size !== ids.length) {
+    throw new Error('Invalid or duplicate student selection.');
+  }
+  const advancement: Record<string, string> = {
+    '1st Year': '2nd Year',
+    '2nd Year': '3rd Year',
+    '3rd Year': '4th Year',
+    '4th Year': 'Graduated / Alumni',
+  };
+
+  const result = await prisma.$transaction(async tx => {
+    const students = await tx.student.findMany({
+      where: { organizationId: orgId, id: { in: ids } },
+      select: { id: true, studentId: true, yearLevel: true },
+    });
+    if (students.length !== ids.length) {
+      throw new Error('Selection contains a student outside this organization or a deleted record. Refresh the roster.');
     }
-  }
-
-  await logSystemAction(
-    organizationId,
-    officerName,
-    "CONFIRM_ALL_ENROLLED",
-    `Confirmed all ${allStudents.length} students as Enrolled for ${ay} (${term}).`
-  );
-
-  revalidatePath(`/department/${cleanDept}/students`);
-  return { success: true, count: allStudents.length };
-}
-
-export async function promoteYearLevels(department: string, organizationId: string) {
-  const cleanDept = decodeURIComponent(department).trim().toLowerCase();
-  const user = await requireTabAccess('tab-students', cleanDept);
-  const officerName = user.name || user.fullName || user.email || "System Administrator";
-
-  const students = await prisma.student.findMany({ where: { organizationId } });
-  let promoted = 0;
-  for (const s of students) {
-    let nextYear = s.yearLevel;
-    if (s.yearLevel === '1st Year') nextYear = '2nd Year';
-    else if (s.yearLevel === '2nd Year') nextYear = '3rd Year';
-    else if (s.yearLevel === '3rd Year') nextYear = '4th Year';
-    else if (s.yearLevel === '4th Year') nextYear = 'Graduated / Alumni';
-
-    if (nextYear !== s.yearLevel) {
-      await prisma.student.update({ where: { id: s.id }, data: { yearLevel: nextYear } });
-      promoted++;
+    const unsupported = students.filter(student => !advancement[student.yearLevel]);
+    if (unsupported.length > 0) {
+      throw new Error(`Cannot promote ${unsupported.length} selected student(s) with unassigned or graduated year levels. Refresh your selection.`);
     }
-  }
-
-  await logSystemAction(
-    organizationId,
-    officerName,
-    "PROMOTE_YEAR_LEVELS",
-    `Promoted year levels for ${promoted} student(s).`
-  );
-
-  revalidatePath(`/department/${cleanDept}/students`);
-  return { success: true, promoted };
-}
-
-export async function saveStudent(department: string, organizationId: string, ay: string, term: string, formData: {
-  id?: string;
-  studentId: string;
-  fullName: string;
-  yearLevel: string;
-  email?: string;
-  enrollmentStatus?: string;
-  isEdit: boolean;
-  originalId?: string;
-}) {
-  const cleanDept = decodeURIComponent(department).trim().toLowerCase();
-  const user = await requireTabAccess('tab-students', cleanDept);
-  const officerName = user.name || user.fullName || user.email || "System Administrator";
-
-  if (!formData.studentId || !formData.fullName) {
-    throw new Error("Student ID and Full Name are required.");
-  }
-
-  let studentRecordId: string;
-
-  if (formData.isEdit && formData.id) {
-    const updated = await prisma.student.update({
-      where: { id: formData.id },
-      data: {
-        studentId: formData.studentId,
-        fullName: formData.fullName,
-        yearLevel: formData.yearLevel,
-        email: formData.email || null,
-      },
-    });
-    studentRecordId = updated.id;
-
-    if (formData.enrollmentStatus) {
-      const existingEnrollment = await prisma.enrollment.findFirst({
-        where: { studentId: studentRecordId, academicYear: ay, term },
+    const changes: string[] = [];
+    for (const student of students) {
+      const nextLevel = advancement[student.yearLevel];
+      const updated = await tx.student.updateMany({
+        where: { id: student.id, organizationId: orgId, yearLevel: student.yearLevel },
+        data: { yearLevel: nextLevel },
       });
-      if (existingEnrollment) {
-        await prisma.enrollment.update({
-          where: { id: existingEnrollment.id },
-          data: { enrollmentStatus: formData.enrollmentStatus },
-        });
-      } else {
-        await prisma.enrollment.create({
-          data: { studentId: studentRecordId, organizationId, academicYear: ay, term, enrollmentStatus: formData.enrollmentStatus },
-        });
+      if (updated.count !== 1) {
+        throw new Error('A selected student year level changed during promotion. No records were promoted; refresh and retry.');
       }
+      changes.push(`${student.studentId}: ${student.yearLevel} -> ${nextLevel}`);
     }
-  } else {
-    const newStudent = await prisma.student.create({
-      data: {
-        studentId: formData.studentId,
-        fullName: formData.fullName,
-        yearLevel: formData.yearLevel,
-        email: formData.email || null,
-        organizationId,
-      },
-    });
-    studentRecordId = newStudent.id;
+    await tx.systemLog.create({ data: {
+      organizationId: orgId,
+      user: officer,
+      action: 'PROMOTE_SELECTED_YEAR_LEVELS',
+      details: `Selected year-level promotion (${students.length}): ${changes.join('; ')}`,
+    } });
+    return students.length;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 60000 });
+  refresh(dept);
+  return { success: true, promoted: result };
+}
 
-    await prisma.enrollment.create({
-      data: {
-        studentId: newStudent.id,
-        organizationId,
-        academicYear: ay,
-        term,
-        enrollmentStatus: formData.enrollmentStatus || 'Enrolled',
-      },
-    });
-  }
-
-  await logSystemAction(
-    organizationId,
-    officerName,
-    formData.isEdit ? "UPDATE_STUDENT" : "CREATE_STUDENT",
-    `${formData.isEdit ? "Updated" : "Created"} student record for ${formData.fullName} (${formData.studentId}).`
-  );
-
-  revalidatePath(`/department/${cleanDept}/students`);
+export async function saveStudent(department: string, _clientOrgId: string, ay: string, term: string, formData: {
+  id?: string; studentId: string; fullName: string; yearLevel: string; email?: string;
+  enrollmentStatus?: string; isEdit: boolean; originalId?: string;
+}) {
+  const { dept, orgId, officer } = await scope(department);
+  const academicYear = validTerm(ay, 'Academic year');
+  const academicTerm = validTerm(term, 'Term');
+  const studentId = str(formData?.studentId);
+  const fullName = str(formData?.fullName);
+  const yearLevel = str(formData?.yearLevel) || 'Unassigned';
+  const email = str(formData?.email).toLowerCase() || null;
+  if (!studentId || studentId.length > 100 || !fullName || fullName.length > 200) throw new Error('Valid student ID and name are required.');
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('Invalid email address.');
+  const enrolled = formData.enrollmentStatus || 'Enrolled';
+  if (!['Enrolled', 'Inactive'].includes(enrolled)) throw new Error('Invalid enrollment status.');
+  await prisma.$transaction(async tx => {
+    const duplicate = await tx.student.findFirst({ where: { organizationId: orgId, studentId: { equals: studentId, mode: 'insensitive' } } });
+    let internalId: string;
+    if (formData.isEdit) {
+      const old = await tx.student.findFirst({ where: { id: str(formData.id), organizationId: orgId } });
+      if (!old) throw new Error('Student does not belong to this organization.');
+      if (duplicate && duplicate.id !== old.id) throw new Error('Student ID is already registered.');
+      if (studentId !== old.studentId) {
+        const [payments, penalties, remittances] = await Promise.all([
+          tx.collection.count({ where: { organizationId: orgId, studentId: old.id } }),
+          tx.penalty.count({ where: { organizationId: orgId, studentId: old.studentId } }),
+          tx.onlineRemittance.count({ where: { organizationId: orgId, studentId: old.studentId } }),
+        ]);
+        const due = await tx.collectible.findFirst({ where: { organizationId: orgId, status: { contains: `SID:${encodeURIComponent(old.studentId)}` } }, select: { id: true } });
+        if (payments + penalties + remittances > 0 || due) throw new Error('Student ID cannot be changed when payment, penalty, remittance, or collectible history exists.');
+      }
+      await tx.student.update({ where: { id: old.id }, data: { studentId, fullName, yearLevel, email } });
+      internalId = old.id;
+    } else {
+      if (duplicate) throw new Error('Student ID is already registered.');
+      const student = await tx.student.create({ data: { organizationId: orgId, studentId, fullName, yearLevel, email } });
+      internalId = student.id;
+    }
+    await enrollmentStatus(tx, internalId, orgId, academicYear, academicTerm, enrolled, officer);
+    await tx.systemLog.create({ data: { organizationId: orgId, user: officer, action: formData.isEdit ? 'UPDATE_STUDENT' : 'CREATE_STUDENT', details: `${studentId} — ${fullName}` } });
+  });
+  refresh(dept);
   return { success: true };
 }
 
 export async function deleteStudent(department: string, studentInternalId: string) {
-  const cleanDept = decodeURIComponent(department).trim().toLowerCase();
-  const user = await requireTabAccess('tab-students', cleanDept);
-  const officerName = user.name || user.fullName || user.email || "System Administrator";
-
-  const org = await prisma.organization.findUnique({
-    where: { subdomain: cleanDept },
-    select: { id: true },
+  const { dept, orgId, officer } = await scope(department);
+  await prisma.$transaction(async tx => {
+    const student = await tx.student.findFirst({ where: { id: str(studentInternalId), organizationId: orgId } });
+    if (!student) throw new Error('Student not found in this organization.');
+    const [collections, penalties, remittances, enrollments] = await Promise.all([
+      tx.collection.count({ where: { organizationId: orgId, studentId: student.id } }),
+      tx.penalty.count({ where: { organizationId: orgId, studentId: student.studentId } }),
+      tx.onlineRemittance.count({ where: { organizationId: orgId, studentId: student.studentId } }),
+      tx.enrollment.count({ where: { organizationId: orgId, studentId: student.id } }),
+    ]);
+    const due = await tx.collectible.findFirst({ where: { organizationId: orgId, status: { contains: `SID:${encodeURIComponent(student.studentId)}` } }, select: { id: true } });
+    if (collections + penalties + remittances > 0 || due) {
+      throw new Error('Cannot delete a student with financial records. Set the student enrollment to Inactive instead.');
+    }
+    await tx.enrollment.deleteMany({ where: { organizationId: orgId, studentId: student.id } });
+    const removed = await tx.student.deleteMany({ where: { id: student.id, organizationId: orgId } });
+    if (removed.count !== 1) throw new Error('Student deletion failed.');
+    await tx.systemLog.create({ data: { organizationId: orgId, user: officer, action: 'DELETE_STUDENT', details: `${student.studentId}: ${student.fullName}, ${enrollments} enrollments removed` } });
   });
-
-  if (!org) throw new Error('Department not found.');
-
-  const student = await prisma.student.findFirst({
-    where: { id: studentInternalId, organizationId: org.id },
-  });
-
-  if (!student) throw new Error('Student record not found.');
-
-  // Perform atomic transaction cleanup maintaining relational integrity
-  await prisma.$transaction(async (tx) => {
-    await tx.enrollment.deleteMany({ where: { studentId: studentInternalId, organizationId: org.id } });
-    // Disconnect or set null on collections if necessary, or delete
-    await tx.collection.updateMany({
-      where: { studentId: studentInternalId },
-      data: { studentId: null }
-    });
-    await tx.student.delete({ where: { id: studentInternalId } });
-  });
-
-  await logSystemAction(
-    org.id,
-    officerName,
-    "DELETE_STUDENT",
-    `Deleted student record for ${student.fullName} (${student.studentId}).`
-  );
-
-  revalidatePath(`/department/${cleanDept}/students`);
+  refresh(dept);
   return { success: true };
 }
 
-export async function bulkImportStudents(department: string, organizationId: string, ay: string, term: string, records: Array<{ studentId: string; fullName: string; yearLevel: string; email?: string }>) {
-  const cleanDept = decodeURIComponent(department).trim().toLowerCase();
-  const user = await requireTabAccess('tab-students', cleanDept);
-  const officerName = user.name || user.fullName || user.email || "System Administrator";
-
-  let added = 0;
-  let updated = 0;
-
-  for (const r of records) {
-    if (!r.studentId || !r.fullName) continue;
-
-    const existing = await prisma.student.findFirst({
-      where: { organizationId, studentId: { equals: r.studentId, mode: 'insensitive' } },
-    });
-
-    let studentRecordId: string;
-
-    if (existing) {
-      await prisma.student.update({
-        where: { id: existing.id },
-        data: { fullName: r.fullName, yearLevel: r.yearLevel || existing.yearLevel, email: r.email || existing.email },
-      });
-      studentRecordId = existing.id;
-      updated++;
-    } else {
-      const created = await prisma.student.create({
-        data: {
-          studentId: r.studentId,
-          fullName: r.fullName,
-          yearLevel: r.yearLevel || '1st Year',
-          email: r.email || null,
-          organizationId,
-        },
-      });
-      studentRecordId = created.id;
-      added++;
+export async function bulkImportStudents(department: string, _clientOrgId: string, ay: string, term: string, records: Array<{ studentId: string; fullName: string; yearLevel: string; email?: string }>) {
+  const { dept, orgId, officer } = await scope(department);
+  const academicYear = validTerm(ay, 'Academic year');
+  const academicTerm = validTerm(term, 'Term');
+  if (!Array.isArray(records) || records.length === 0 || records.length > 500) throw new Error('Import must contain 1–500 student records. Split larger files into batches.');
+  const unique = new Set<string>();
+  const cleanRecords = records.map(row => {
+    const studentId = str(row?.studentId), fullName = str(row?.fullName);
+    const email = str(row?.email).toLowerCase() || null;
+    if (!studentId || !fullName || studentId.length > 100 || fullName.length > 200) throw new Error('All imported rows need a student ID and full name.');
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error(`Invalid email: ${email}`);
+    if (unique.has(studentId.toLowerCase())) throw new Error(`Student ID appears more than once in import: ${studentId}`);
+    unique.add(studentId.toLowerCase());
+    return { studentId, fullName, yearLevel: str(row.yearLevel) || '1st Year', email };
+  });
+  const { added, updated } = await prisma.$transaction(async tx => {
+    let added = 0, updated = 0;
+    for (const row of cleanRecords) {
+      const existing = await tx.student.findFirst({ where: { organizationId: orgId, studentId: { equals: row.studentId, mode: 'insensitive' } } });
+      let id: string;
+      if (existing) {
+        await tx.student.update({ where: { id: existing.id }, data: { fullName: row.fullName, yearLevel: row.yearLevel, email: row.email } });
+        id = existing.id; updated++;
+      } else {
+        const created = await tx.student.create({ data: { organizationId: orgId, ...row } });
+        id = created.id; added++;
+      }
+      await enrollmentStatus(tx, id, orgId, academicYear, academicTerm, 'Enrolled', officer);
     }
-
-    const enrollExists = await prisma.enrollment.findFirst({
-      where: { studentId: studentRecordId, academicYear: ay, term },
-    });
-
-    if (enrollExists) {
-      await prisma.enrollment.update({
-        where: { id: enrollExists.id },
-        data: { enrollmentStatus: 'Enrolled' },
-      });
-    } else {
-      await prisma.enrollment.create({
-        data: { studentId: studentRecordId, organizationId, academicYear: ay, term, enrollmentStatus: 'Enrolled' },
-      });
-    }
-  }
-
-  await logSystemAction(
-    organizationId,
-    officerName,
-    "BULK_IMPORT_STUDENTS",
-    `Imported student roster: ${added} added, ${updated} updated for ${ay} (${term}).`
-  );
-
-  revalidatePath(`/department/${cleanDept}/students`);
-  return { success: true, message: `Successfully imported: ${added} added, ${updated} updated.` };
+    await tx.systemLog.create({ data: { organizationId: orgId, user: officer, action: 'BULK_IMPORT_STUDENTS', details: `${added} added, ${updated} updated (${academicYear} ${academicTerm})` } });
+    return { added, updated };
+  }, { timeout: 60000 });
+  refresh(dept);
+  return { success: true, message: `Successfully imported: ${added} added, ${updated} updated.`, added, updated };
 }

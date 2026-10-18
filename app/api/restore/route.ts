@@ -1,262 +1,143 @@
-// /app/api/restore/route.ts
-
+// Authenticated, tenant-scoped MERGE restore. Never imports tenant credentials or rewrites SystemLogs.
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
 import { isSuperAdminEmail } from '@/lib/permissions';
+import { decryptClearBackup, InvalidBackupError, MissingBackupKeyError } from '@/lib/backup-security';
+
+export const runtime = 'nodejs';
+const MAX_BYTES = 12 * 1024 * 1024;
+const MAX_ROWS = 10000;
+
+type BackupRow = Record<string, unknown>;
+const tableSpecs = [
+  ['students','student','id studentId fullName yearLevel email'],
+  ['enrollments','enrollment','id studentId academicYear term enrollmentStatus lastUpdated updatedBy'],
+  ['funds','fund','id academicYear term fundName initialAllocation currentBalance'],
+  ['collectionSetups','collectionSetup','id category name amount targetFund academicYear term createdAt isPackage'],
+  ['signatories','signatory','id label name position order'],
+  ['collections','collection','id timestamp academicYear term date studentId studentName orNumber category itemDescription paymentType standardRate amountPaid balanceDue fundAllocation status encodedBy'],
+  ['collectibles','collectible','id category academicYear term headcount balanceDue status encodedBy'],
+  ['penalties','penalty','id penaltyId academicYear term date studentId studentName activity hoursLate ratePerHour fineAmount status encodedBy'],
+  ['cashAdvances','cashAdvance','id advanceId academicYear term dateIssued requestor fundSource amountApproved expectedReturnDate purpose status encodedBy'],
+  ['audits','audit','id auditId academicYear term date referenceCaId requestor fundSource budgetRequested totalExpense varianceReturn reimbursementDue status encodedBy'],
+  ['expenseItems','expenseItem','id auditId orSiNumber qty description subTotal receiptProofUrl'],
+  ['onlineRemittances','onlineRemittance','id submissionId timestamp academicYear term studentId studentName studentEmail paymentChannel referenceNumber category itemDescription paymentMode amountPaid proofUrl status reviewNotes reviewedBy orNumber'],
+  ['cashierRemittances','cashierRemittance','id remittanceId academicYear term date remittedBy fundSource amount cashierReceiptNo remarks status encodedBy createdAt type'],
+  ['fundTransfers','fundTransfer','id timestamp academicYear term sourceFund destinationFund amount reason encodedBy'],
+  ['realignments','fundRealignment','id date sourceFund targetFund amount reason authorizedBy'],
+  ['voidTransactions','voidTransaction','id transactionType referenceId amount reason voidedBy date'],
+] as const;
+
+function response(message: string, status: number) {
+  return NextResponse.json({ success: false, message }, { status, headers: { 'Cache-Control': 'no-store' } });
+}
+
+function normalizeRows(data: Record<string, unknown>) {
+  const tables: { key: string; model: string; rows: BackupRow[]; fields: Set<string> }[] = [];
+  let count = 0;
+  for (const [key, model, whitelist] of tableSpecs) {
+    const value = data[key];
+    if (value != null && !Array.isArray(value)) throw new Error(`Invalid ${key} array.`);
+    const rows = (value ?? []) as unknown[];
+    for (const row of rows) {
+      if (!row || typeof row !== 'object' || Array.isArray(row)) throw new Error(`Invalid ${key} record.`);
+    }
+    count += rows.length;
+    tables.push({ key, model, rows: rows as BackupRow[], fields: new Set(whitelist.split(' ')) });
+  }
+  if (count === 0) throw new Error('Backup has no restorable records.');
+  if (count > MAX_ROWS) throw new Error(`This interactive restore is limited to ${MAX_ROWS} records. Use a controlled database restore for larger snapshots.`);
+  return { tables, count };
+}
 
 export async function POST(req: Request) {
   try {
+    // Reject obvious cross-site browser calls. SameSite cookies are not a substitute for checking Origin.
+    const origin = req.headers.get('origin');
+    if (origin && origin !== new URL(req.url).origin) return response('Invalid request origin.', 403);
     const session = await auth();
-    if (!session?.user?.email) {
-      return NextResponse.json({ success: false, message: 'Unauthorized: No active session.' }, { status: 401 });
+    if (!session?.user?.email) return response('Unauthorized.', 401);
+    const caller = session.user as typeof session.user & { organizationId?: string | null };
+    const email = String(caller.email).trim().toLowerCase();
+
+    const form = await req.formData();
+    const file = form.get('backupFile');
+    const orgId = String(form.get('orgId') || '').trim();
+    if (!(file instanceof File) || file.size === 0 || file.size > MAX_BYTES || !orgId) {
+      return response('Choose an encrypted CLEAR backup no larger than 12 MB and a valid target organization.', 400);
     }
+    const organization = await prisma.organization.findUnique({ where: { id: orgId }, select: { id: true, name: true } });
+    if (!organization) return response('Target organization not found.', 404);
 
-    const user = session.user as any;
-    const cleanEmail = String(user.email).trim().toLowerCase();
-    const isSuper = isSuperAdminEmail(cleanEmail);
-
-    const formData = await req.formData();
-    const file = formData.get('backupFile') as File | null;
-    const targetOrgId = formData.get('orgId') as string | null;
-
-    if (!file) {
-      return NextResponse.json({ success: false, message: 'Missing backup JSON file.' }, { status: 400 });
-    }
-
-    const fileText = await file.text();
-    let backupPayload: any;
-    try {
-      backupPayload = JSON.parse(fileText);
-    } catch {
-      return NextResponse.json({ success: false, message: 'Invalid JSON format in backup file.' }, { status: 400 });
-    }
-
-    if (!backupPayload?.data || !backupPayload?.organization) {
-      return NextResponse.json({ success: false, message: 'Invalid backup schema structure.' }, { status: 400 });
-    }
-
-    const backupOrgId = backupPayload.organization.id;
-    const orgIdToRestore = targetOrgId || backupOrgId;
-
+    const isSuper = isSuperAdminEmail(email);
     if (!isSuper) {
-      if (user.organizationId && user.organizationId !== orgIdToRestore) {
-        return NextResponse.json(
-          { success: false, message: 'Forbidden: Cannot restore data for another organization.' },
-          { status: 403 }
-        );
-      }
-
+      if (caller.organizationId && caller.organizationId !== orgId) return response('Forbidden.', 403);
       const dbUser = await prisma.tenantUser.findFirst({
-        where: {
-          organizationId: orgIdToRestore,
-          email: { equals: cleanEmail, mode: 'insensitive' },
-        },
-        select: { role: true, status: true },
+        where: { organizationId: orgId, email: { equals: email, mode: 'insensitive' }, status: 'Active' },
+        select: { role: true },
       });
-
-      const normalizedRole = String(dbUser?.role || '').trim().toLowerCase();
-      const isDepartmentAdmin = ['admin', 'administrator', 'master'].includes(normalizedRole);
-
-      if (!dbUser || dbUser.status !== 'Active' || !isDepartmentAdmin) {
-        return NextResponse.json(
-          { success: false, message: 'Forbidden: Only active Department Administrators can restore database backups.' },
-          { status: 403 }
-        );
-      }
+      if (!dbUser || !['admin', 'administrator', 'master'].includes(dbUser.role.trim().toLowerCase())) return response('Active department administrator access required.', 403);
     }
 
-    const organization = await prisma.organization.findUnique({
-      where: { id: orgIdToRestore },
-    });
-
-    if (!organization) {
-      return NextResponse.json({ success: false, message: 'Target organization not found in database.' }, { status: 404 });
+    // Verify authenticated encryption BEFORE preparing any database writes.
+    // Modifying even a single bit of ciphertext/tag causes decryptClearBackup to reject the file.
+    // Legacy plaintext JSON backups are not accepted by this public-facing restore endpoint.
+    let backup: { organization?: { id?: string }; data?: Record<string, unknown>; version?: string };
+    try {
+      backup = decryptClearBackup(await file.text(), orgId);
+    } catch (error) {
+      if (error instanceof MissingBackupKeyError) return response('Server backup encryption key is not configured.', 503);
+      return response('Backup rejected: encrypted file is invalid, modified, or belongs to another tenant.', 400);
     }
+    if (!backup.organization || backup.organization.id !== orgId || !backup.data) {
+      return response('Backup organization ID mismatch.', 400);
+    }
+    const { tables, count } = normalizeRows(backup.data);
 
-    const records = backupPayload.data;
-
-    await prisma.$transaction(async (tx) => {
-      if (records.students && Array.isArray(records.students)) {
-        for (const s of records.students) {
-          await tx.student.upsert({
-            where: { id: s.id },
-            update: { ...s, organizationId: orgIdToRestore },
-            create: { ...s, organizationId: orgIdToRestore },
-          });
+    await prisma.$transaction(async tx => {
+      // Each table is restored in dependency order. Records cannot migrate from another organization.
+      for (const table of tables) {
+        const delegate = (tx as any)[table.model];
+        for (const row of table.rows) {
+          const id = row.id;
+          if (typeof id !== 'string' || !id || row.organizationId !== orgId) {
+            throw new Error(`Invalid tenant ownership or record ID in ${table.key}.`);
+          }
+          const existing = await delegate.findUnique({ where: { id }, select: { organizationId: true } });
+          if (existing && existing.organizationId !== orgId) {
+            throw new Error(`Cross-tenant record collision in ${table.key}; restore aborted.`);
+          }
+          const data: Record<string, unknown> = { organizationId: orgId };
+          for (const field of table.fields) {
+            if (Object.prototype.hasOwnProperty.call(row, field)) data[field] = row[field];
+          }
+          // Reject references to student and audit rows from another tenant.
+          if (['enrollments', 'collections'].includes(table.key) && data.studentId) {
+            const owner = await tx.student.findFirst({ where: { id: String(data.studentId), organizationId: orgId }, select: { id: true } });
+            if (!owner) throw new Error(`Student foreign key is invalid for ${table.key} record ${id}.`);
+          }
+          if (table.key === 'expenseItems') {
+            const auditOwner = await tx.audit.findFirst({ where: { auditId: String(data.auditId), organizationId: orgId }, select: { id: true } });
+            if (!auditOwner) throw new Error(`Audit foreign key is invalid for expense item ${id}.`);
+          }
+          await delegate.upsert({ where: { id }, create: data, update: data });
         }
       }
-
-      if (records.funds && Array.isArray(records.funds)) {
-        for (const f of records.funds) {
-          await tx.fund.upsert({
-            where: { id: f.id },
-            update: { ...f, organizationId: orgIdToRestore },
-            create: { ...f, organizationId: orgIdToRestore },
-          });
-        }
-      }
-
-      if (records.collectionSetups && Array.isArray(records.collectionSetups)) {
-        for (const cs of records.collectionSetups) {
-          await tx.collectionSetup.upsert({
-            where: { id: cs.id },
-            update: { ...cs, organizationId: orgIdToRestore },
-            create: { ...cs, organizationId: orgIdToRestore },
-          });
-        }
-      }
-
-      if (records.signatories && Array.isArray(records.signatories)) {
-        for (const sig of records.signatories) {
-          await tx.signatory.upsert({
-            where: { id: sig.id },
-            update: { ...sig, organizationId: orgIdToRestore },
-            create: { ...sig, organizationId: orgIdToRestore },
-          });
-        }
-      }
-
-      if (records.enrollments && Array.isArray(records.enrollments)) {
-        for (const en of records.enrollments) {
-          await tx.enrollment.upsert({
-            where: { id: en.id },
-            update: { ...en, organizationId: orgIdToRestore },
-            create: { ...en, organizationId: orgIdToRestore },
-          });
-        }
-      }
-
-      if (records.collections && Array.isArray(records.collections)) {
-        for (const col of records.collections) {
-          await tx.collection.upsert({
-            where: { id: col.id },
-            update: { ...col, organizationId: orgIdToRestore },
-            create: { ...col, organizationId: orgIdToRestore },
-          });
-        }
-      }
-
-      if (records.collectibles && Array.isArray(records.collectibles)) {
-        for (const cob of records.collectibles) {
-          await tx.collectible.upsert({
-            where: { id: cob.id },
-            update: { ...cob, organizationId: orgIdToRestore },
-            create: { ...cob, organizationId: orgIdToRestore },
-          });
-        }
-      }
-
-      if (records.penalties && Array.isArray(records.penalties)) {
-        for (const pen of records.penalties) {
-          await tx.penalty.upsert({
-            where: { id: pen.id },
-            update: { ...pen, organizationId: orgIdToRestore },
-            create: { ...pen, organizationId: orgIdToRestore },
-          });
-        }
-      }
-
-      if (records.cashAdvances && Array.isArray(records.cashAdvances)) {
-        for (const ca of records.cashAdvances) {
-          await tx.cashAdvance.upsert({
-            where: { id: ca.id },
-            update: { ...ca, organizationId: orgIdToRestore },
-            create: { ...ca, organizationId: orgIdToRestore },
-          });
-        }
-      }
-
-      if (records.audits && Array.isArray(records.audits)) {
-        for (const aud of records.audits) {
-          await tx.audit.upsert({
-            where: { id: aud.id },
-            update: { ...aud, organizationId: orgIdToRestore },
-            create: { ...aud, organizationId: orgIdToRestore },
-          });
-        }
-      }
-
-      if (records.expenseItems && Array.isArray(records.expenseItems)) {
-        for (const ei of records.expenseItems) {
-          await tx.expenseItem.upsert({
-            where: { id: ei.id },
-            update: { ...ei, organizationId: orgIdToRestore },
-            create: { ...ei, organizationId: orgIdToRestore },
-          });
-        }
-      }
-
-      if (records.onlineRemittances && Array.isArray(records.onlineRemittances)) {
-        for (const orm of records.onlineRemittances) {
-          await tx.onlineRemittance.upsert({
-            where: { id: orm.id },
-            update: { ...orm, organizationId: orgIdToRestore },
-            create: { ...orm, organizationId: orgIdToRestore },
-          });
-        }
-      }
-
-      if (records.cashierRemittances && Array.isArray(records.cashierRemittances)) {
-        for (const crm of records.cashierRemittances) {
-          await tx.cashierRemittance.upsert({
-            where: { id: crm.id },
-            update: { ...crm, organizationId: orgIdToRestore },
-            create: { ...crm, organizationId: orgIdToRestore },
-          });
-        }
-      }
-
-      if (records.voidTransactions && Array.isArray(records.voidTransactions)) {
-        for (const vt of records.voidTransactions) {
-          await tx.voidTransaction.upsert({
-            where: { id: vt.id },
-            update: { ...vt, organizationId: orgIdToRestore },
-            create: { ...vt, organizationId: orgIdToRestore },
-          });
-        }
-      }
-
-      if (records.fundTransfers && Array.isArray(records.fundTransfers)) {
-        for (const ft of records.fundTransfers) {
-          await tx.fundTransfer.upsert({
-            where: { id: ft.id },
-            update: { ...ft, organizationId: orgIdToRestore },
-            create: { ...ft, organizationId: orgIdToRestore },
-          });
-        }
-      }
-
-      if (records.realignments && Array.isArray(records.realignments)) {
-        for (const realign of records.realignments) {
-          await tx.fundRealignment.upsert({
-            where: { id: realign.id },
-            update: { ...realign, organizationId: orgIdToRestore },
-            create: { ...realign, organizationId: orgIdToRestore },
-          });
-        }
-      }
-    });
-
-    await prisma.systemLog.create({
-      data: {
-        organizationId: orgIdToRestore,
-        user: cleanEmail || 'System Admin',
+      // Do not accept backup-authored security logs. Add an immutable record of this import.
+      await tx.systemLog.create({ data: {
+        organizationId: orgId,
+        user: email,
         action: 'RESTORE_DATABASE_BACKUP',
-        details: `Successfully restored database snapshot for ${organization.name}`,
-      },
-    }).catch(() => {});
+        details: `Merged ${count} records from authenticated encrypted snapshot ${backup.version || 'unknown version'}. Credentials and audit history were not imported.`,
+      } });
+    }, { timeout: 90000 });
 
-    return NextResponse.json({
-      success: true,
-      message: `Database backup for ${organization.name} restored successfully.`,
-    });
-
-  } catch (error: any) {
-    console.error('Backup Restoration Error:', error);
-    return NextResponse.json(
-      { success: false, message: error.message || 'Internal server error during database restoration.' },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: true, message: `${count} records merged into ${organization.name}. User accounts and existing system audit logs were not overwritten.` }, { headers: { 'Cache-Control': 'no-store' } });
+  } catch (error) {
+    console.error('Backup restore rejected or failed:', error);
+    const msg = error instanceof Error ? error.message : 'Backup restore failed.';
+    const allowed = /Invalid|Cross-tenant|foreign key|tenant ownership|interactive restore|restorable|backup has/i.test(msg);
+    return response(allowed ? msg : 'Restore failed. Check server logs and database integrity.', allowed ? 400 : 500);
   }
 }

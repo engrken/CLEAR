@@ -2,18 +2,18 @@
 
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { 
   toggleStudentStatus, 
   confirmAllEnrolled, 
-  promoteYearLevels, 
+  promoteSelectedYearLevels, 
   saveStudent, 
   deleteStudent, 
   bulkImportStudents 
 } from "./actions";
 
-import { ThemedAlert } from '@/lib/alerts';
+import { ThemedAlert } from '@/lib/clear-dialogs';
 
 interface StudentRecord {
   id: string;
@@ -62,6 +62,54 @@ export default function StudentsClient({
   const [statusFilter, setStatusFilter] = useState(currentStatus);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Only selected internal IDs are stored (not student names or session cookies).
+  // Session-scoped selection survives roster pagination/filter navigation.
+  const selectionKey = `clear-promotion-selection:${department}`;
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectionLoaded, setSelectionLoaded] = useState(false);
+  useEffect(() => {
+    setSelectionLoaded(false);
+    try {
+      const stored = JSON.parse(sessionStorage.getItem(selectionKey) || '[]');
+      setSelectedIds(Array.isArray(stored)
+        ? Array.from(new Set(stored.filter((id: unknown): id is string => typeof id === 'string' && id.length <= 100))).slice(0, 200)
+        : []);
+    } catch {
+      setSelectedIds([]);
+    }
+    setSelectionLoaded(true);
+  }, [selectionKey]);
+  useEffect(() => {
+    if (!selectionLoaded) return;
+    try { sessionStorage.setItem(selectionKey, JSON.stringify(selectedIds)); } catch { /* storage unavailable */ }
+  }, [selectionKey, selectedIds, selectionLoaded]);
+
+  const canPromote = (level: string | null) => ['1st Year', '2nd Year', '3rd Year', '4th Year'].includes(level ?? '');
+  const eligibleVisibleIds = initialStudents.filter(s => canPromote(s.yearLevel)).map(s => s.id);
+  const visibleSelected = eligibleVisibleIds.length > 0 && eligibleVisibleIds.every(id => selectedIds.includes(id));
+  const setStudentSelected = (id: string, checked: boolean) => {
+    setSelectedIds(previous => {
+      if (!checked) return previous.filter(x => x !== id);
+      if (previous.includes(id)) return previous;
+      if (previous.length >= 200) {
+        void ThemedAlert.fire({ icon: 'warning', title: 'Selection Limit', text: 'Promote at most 200 students per batch.' });
+        return previous;
+      }
+      return [...previous, id];
+    });
+  };
+  const selectVisible = (checked: boolean) => {
+    setSelectedIds(previous => {
+      if (!checked) return previous.filter(id => !eligibleVisibleIds.includes(id));
+      const next = Array.from(new Set([...previous, ...eligibleVisibleIds]));
+      if (next.length > 200) {
+        void ThemedAlert.fire({ icon: 'warning', title: 'Selection Limit', text: 'Promote at most 200 students per batch. Clear some selections first.' });
+        return previous;
+      }
+      return next;
+    });
+  };
+
   const [showAddModal, setShowAddModal] = useState(false);
   const [editStudent, setEditStudent] = useState<StudentRecord | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -77,6 +125,12 @@ export default function StudentsClient({
     router.push(`${pathname}?${params.toString()}`);
   };
 
+  const clearRosterSearchAfterSuccess = () => {
+    setSearch("");
+    updateQuery({ search: "", page: "1" });
+    router.refresh();
+  };
+
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     updateQuery({ search, page: '1' });
@@ -89,6 +143,7 @@ export default function StudentsClient({
   const handleToggle = async (studentId: string, currentStatus: string) => {
     try {
       await toggleStudentStatus(department, studentId, currentStatus, ay, term);
+      clearRosterSearchAfterSuccess();
     } catch (err: any) {
       await ThemedAlert.fire({ icon: 'error', title: 'Action Failed', text: "Error updating status: " + err.message });
     }
@@ -107,6 +162,7 @@ export default function StudentsClient({
     setIsSubmitting(true);
     try {
       await confirmAllEnrolled(department, organizationId, ay, term);
+      clearRosterSearchAfterSuccess();
       await ThemedAlert.fire({ icon: 'success', title: 'Success', text: "All students successfully confirmed as enrolled." });
     } catch (err: any) {
       await ThemedAlert.fire({ icon: 'error', title: 'Error', text: err.message });
@@ -116,21 +172,26 @@ export default function StudentsClient({
   };
 
   const handlePromote = async () => {
+    if (!selectedIds.length || isSubmitting) return;
     const res = await ThemedAlert.fire({
       icon: 'warning',
-      title: 'Promote Year Levels?',
-      text: "Are you sure you want to promote all student year levels across the directory?",
+      title: 'Promote Selected Students?',
+      text: `Advance exactly ${selectedIds.length} selected student(s) by one year level? Only the selected records will be changed. Graduating 4th Year students become Graduated / Alumni.`,
       showCancelButton: true,
-      confirmButtonText: 'Yes, Promote',
+      confirmButtonText: `Promote ${selectedIds.length} Selected`,
+      cancelButtonText: 'Cancel',
     });
     if (!res.isConfirmed) return;
 
     setIsSubmitting(true);
     try {
-      const promotionRes = await promoteYearLevels(department, organizationId);
-      await ThemedAlert.fire({ icon: 'success', title: 'Promotion Complete', text: `Successfully advanced ${promotionRes.promoted} student(s).` });
+      const promotionRes = await promoteSelectedYearLevels(department, organizationId, selectedIds);
+      setSelectedIds([]);
+      try { sessionStorage.removeItem(selectionKey); } catch { /* storage unavailable */ }
+      clearRosterSearchAfterSuccess();
+      await ThemedAlert.fire({ icon: 'success', title: 'Promotion Complete', text: `Successfully advanced ${promotionRes.promoted} selected student(s).` });
     } catch (err: any) {
-      await ThemedAlert.fire({ icon: 'error', title: 'Error', text: err.message });
+      await ThemedAlert.fire({ icon: 'error', title: 'Promotion Failed', text: err?.message || 'Unable to promote selected students.' });
     } finally {
       setIsSubmitting(false);
     }
@@ -149,6 +210,7 @@ export default function StudentsClient({
 
     try {
       await deleteStudent(department, studentInternalId);
+      clearRosterSearchAfterSuccess();
       await ThemedAlert.fire({ icon: 'success', title: 'Deleted', text: 'Student record successfully deleted.' });
     } catch (err: any) {
       await ThemedAlert.fire({ icon: 'error', title: 'Error', text: "Error deleting student: " + err.message });
@@ -173,6 +235,7 @@ export default function StudentsClient({
     setIsSubmitting(true);
     try {
       await saveStudent(department, organizationId, ay, term, payload);
+      clearRosterSearchAfterSuccess();
       setShowAddModal(false);
       setEditStudent(null);
       await ThemedAlert.fire({ icon: 'success', title: 'Saved', text: 'Student record successfully saved.' });
@@ -194,7 +257,7 @@ export default function StudentsClient({
       const line = lines[i].trim();
       if (!line) continue;
       // 🚀 FIX: Corrected CSV regex cleaning
-      const cols = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(c => c.replace(/^["']\vert{}["']$/g, '').trim());
+      const cols = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(c => c.trim().replace(/^"|"$/g, "").replace(/""/g, "\"").replace(/^'|'$/g, ""));
       if (cols.length >= 2) {
         records.push({ studentId: cols[0], fullName: cols[1], yearLevel: cols[2] || "1st Year", email: cols[3] || "" });
       }
@@ -216,6 +279,7 @@ export default function StudentsClient({
     setIsSubmitting(true);
     try {
       const importRes = await bulkImportStudents(department, organizationId, ay, term, parsedRecords);
+      clearRosterSearchAfterSuccess();
       await ThemedAlert.fire({ icon: 'success', title: 'Import Successful', text: importRes.message });
       setShowImportModal(false);
       setParsedRecords([]);
@@ -246,8 +310,8 @@ export default function StudentsClient({
           <button className="btn btn-outline-warning btn-sm px-3 shadow-sm" onClick={() => setShowImportModal(true)}>
             <i className="bi bi-file-earmark-spreadsheet me-1"></i>Bulk Import CSV
           </button>
-          <button className="btn btn-outline-secondary btn-sm px-3 shadow-sm" onClick={handlePromote} disabled={isSubmitting}>
-            <i className="bi bi-gear me-1"></i>Year-Level Promotion
+          <button type="button" className="btn btn-outline-secondary btn-sm px-3 shadow-sm" onClick={handlePromote} disabled={isSubmitting || !selectionLoaded || selectedIds.length === 0} title="Only checked students will be promoted">
+            <i className="bi bi-arrow-up-circle me-1"></i>Promote Selected ({selectedIds.length})
           </button>
           <button type="button" className="btn btn-info btn-sm fw-bold px-3 shadow-sm" onClick={() => { setEditStudent(null); setShowAddModal(true); }}>
             <i className="bi bi-person-plus-fill me-1"></i>Add Student
@@ -330,10 +394,21 @@ export default function StudentsClient({
       </div>
 
       <div className="card border-secondary shadow-sm p-3 mb-3">
+        <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+          <span className="small text-info fw-semibold" role="status">
+            <i className="bi bi-check2-square me-1"></i>{selectedIds.length} student(s) selected for promotion across roster pages
+          </span>
+          <button type="button" className="btn btn-sm btn-outline-secondary" disabled={isSubmitting || selectedIds.length === 0} onClick={() => setSelectedIds([])}>
+            Clear Selection
+          </button>
+        </div>
         <div className="table-responsive">
           <table className="table table-hover align-middle small mb-0">
             <thead>
               <tr className="text-muted border-bottom border-secondary">
+                <th className="py-2" style={{ width: '40px' }}>
+                  <input type="checkbox" className="form-check-input" aria-label="Select all eligible students on this page" title="Select eligible students on this page only" checked={visibleSelected} disabled={isSubmitting || eligibleVisibleIds.length === 0} onChange={e => selectVisible(e.target.checked)} />
+                </th>
                 <th className="py-2">Student ID</th>
                 <th className="py-2">Full Name</th>
                 <th className="py-2">Year Level</th>
@@ -344,12 +419,15 @@ export default function StudentsClient({
             </thead>
             <tbody>
               {initialStudents.length === 0 ? (
-                <tr><td colSpan={6} className="text-center text-muted py-4">No student records found matching search criteria.</td></tr>
+                <tr><td colSpan={7} className="text-center text-muted py-4">No student records found matching search criteria.</td></tr>
               ) : (
                 initialStudents.map((student) => {
                   const isEnrolled = student.status === 'Enrolled';
                   return (
                     <tr key={student.id} className="border-bottom border-secondary border-opacity-25">
+                      <td>
+                        <input type="checkbox" className="form-check-input" aria-label={`Select ${student.fullName} for promotion`} checked={selectedIds.includes(student.id)} disabled={isSubmitting || !selectionLoaded || !canPromote(student.yearLevel)} onChange={e => setStudentSelected(student.id, e.target.checked)} />
+                      </td>
                       <td className="fw-semibold font-monospace text-info">{student.studentId}</td>
                       <td className="fw-bold">{student.fullName}</td>
                       <td className="text-muted">{student.yearLevel || '—'}</td>
@@ -431,7 +509,7 @@ export default function StudentsClient({
       {showAddModal && (
         <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
           <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content card border-secondary shadow-lg p-3">
+            <div className="modal-content card border-secondary shadow-lg p-3 clear-theme-modal">
               <div className="modal-header border-secondary">
                 <h5 className="modal-title fw-bold">
                   <i className="bi bi-person-plus-fill me-2"></i>{editStudent ? "Modify Student Details" : "Add New Student Roster Record"}
@@ -488,7 +566,7 @@ export default function StudentsClient({
       {showImportModal && (
         <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
           <div className="modal-dialog modal-dialog-centered modal-lg">
-            <div className="modal-content card border-secondary shadow-lg p-3">
+            <div className="modal-content card border-secondary shadow-lg p-3 clear-theme-modal">
               <div className="modal-header border-secondary">
                 <h5 className="modal-title fw-bold"><i className="bi bi-file-earmark-spreadsheet me-2"></i>Bulk Import Student Directory (CSV)</h5>
                 <button type="button" className="btn-close" onClick={() => setShowImportModal(false)}></button>

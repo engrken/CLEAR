@@ -1,300 +1,275 @@
-// /app/department/[department]/(protected)/collections/actions.ts
-
 "use server";
 
-import { prisma } from '@/lib/prisma';
-import { requireTabAccess } from '@/lib/permissions';
-import { sendEmail } from '@/lib/mailer';
-import { logSystemAction } from '@/lib/logger';
-import { revalidatePath } from 'next/cache';
+import { prisma } from "@/lib/prisma";
+import { requireTabAccess } from "@/lib/permissions";
+import { enqueuePaymentReceipt, scheduleDigitalReceiptDispatch } from "@/lib/digital-receipts";
+import { revalidatePath } from "next/cache";
+import { Prisma } from "@prisma/client";
+import { getPeriodLedger, toCents } from "../realign/ledger";
+import { applyPaymentToStudentCollectibles } from "../collectibles/due-link";
+import { PENALTY_FUND_NAME } from "@/lib/penalty-fund";
+import { ensurePenaltyFund } from "@/lib/penalty-fund.server";
+import { assertAcademicPeriod } from "@/lib/academic-period-guard";
 
-// =========================================================================
-// HELPER FUNCTIONS (Internal to this module)
-// =========================================================================
+const PACKAGE_NAME = "Departmental Fee Package (All Items)";
 
-function money(val: any, fieldName: string): number {
-  const parsed = parseFloat(val);
-  if (isNaN(parsed)) throw new Error(`Invalid monetary value for ${fieldName}`);
-  return Math.round(parsed * 100) / 100;
+function money(value: unknown, label: string): number {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0 || n > Number.MAX_SAFE_INTEGER / 100 ||
+      Math.abs(n * 100 - Math.round(n * 100)) > .000001) {
+    throw new Error(`${label} must be a positive amount with at most two decimal places.`);
+  }
+  return Math.round(n * 100) / 100;
 }
 
-function parseDate(val: any, fieldName: string): Date {
-  const date = new Date(val);
-  if (isNaN(date.getTime())) throw new Error(`Invalid date format for ${fieldName}`);
-  return date;
+function dateOnly(value: string): Date {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error("Invalid payment date.");
+  const parsed = new Date(`${value}T12:00:00.000Z`);
+  if (parsed.toISOString().slice(0, 10) !== value) throw new Error("Invalid payment date.");
+  return parsed;
 }
 
-async function resolveStudentDbId(orgId: string, identifier: string | null) {
-  if (!identifier) return null;
-
-  let student = await prisma.student.findFirst({
-    where: { id: identifier, organizationId: orgId }
-  });
-
-  if (!student) {
-    student = await prisma.student.findFirst({
-      where: { studentId: identifier, organizationId: orgId }
-    });
-  }
-
-  if (!student) {
-    throw new Error(`Student identifier "${identifier}" is not registered in your roster.`);
-  }
-
-  return student.id;
+function escapeHtml(value: unknown): string {
+  return String(value ?? "").replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c] || c));
 }
 
-async function sendEmailReceipt(
-  orgName: string, 
-  studentEmail: string, 
-  data: {
-    orNumber: string;
-    date: Date;
-    studentName: string;
-    itemDescription: string;
-    amountPaid: number;
-    balanceDue: number;
-    paymentType: string;
-  }
-) {
-  if (!studentEmail) return;
-
-  try {
-    const formattedAmount = `₱${data.amountPaid.toFixed(2)}`;
-    const formattedBalance = `₱${data.balanceDue.toFixed(2)}`;
-    const formattedDate = data.date.toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' });
-
-    const htmlContent = `
-      <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
-        <div style="background-color: #0f172a; padding: 20px; text-align: center; color: white;">
-          <h2 style="margin: 0; font-size: 18px; text-transform: uppercase;">${orgName}</h2>
-          <p style="margin: 5px 0 0 0; color: #94a3b8; font-size: 14px;">Filamer Christian University</p>
-        </div>
-        
-        <div style="padding: 30px 20px; background-color: #ffffff; color: #334155;">
-          <div style="text-align: center; margin-bottom: 25px;">
-            <h3 style="margin: 0; color: #0284c7; letter-spacing: 1px;">OFFICIAL RECEIPT</h3>
-            <p style="margin: 5px 0 0 0; font-size: 13px; color: #64748b;">OR No. <strong>${data.orNumber}</strong></p>
-          </div>
-
-          <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px;">
-            <tr>
-              <td style="padding: 8px 0; color: #64748b;">Date:</td>
-              <td style="padding: 8px 0; text-align: right; font-weight: bold;">${formattedDate}</td>
-            </tr>
-            <tr style="border-bottom: 1px solid #e2e8f0;">
-              <td style="padding: 8px 0; color: #64748b;">Received from:</td>
-              <td style="padding: 8px 0; text-align: right; font-weight: bold;">${data.studentName}</td>
-            </tr>
-            <tr>
-              <td style="padding: 15px 0 8px 0; color: #64748b;">Payment For:</td>
-              <td style="padding: 15px 0 8px 0; text-align: right; font-weight: bold;">${data.itemDescription}</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px 0; color: #64748b;">Payment Type:</td>
-              <td style="padding: 8px 0; text-align: right;">${data.paymentType}</td>
-            </tr>
-            <tr style="border-top: 2px dashed #cbd5e1; border-bottom: 2px dashed #cbd5e1;">
-              <td style="padding: 12px 0; font-weight: bold; color: #0f172a;">Amount Paid:</td>
-              <td style="padding: 12px 0; text-align: right; font-weight: bold; color: #16a34a; font-size: 16px;">${formattedAmount}</td>
-            </tr>
-            <tr>
-              <td style="padding: 12px 0 8px 0; color: #64748b;">Remaining Balance:</td>
-              <td style="padding: 12px 0 8px 0; text-align: right; font-weight: bold; color: ${data.balanceDue > 0 ? '#dc2626' : '#16a34a'};">${formattedBalance}</td>
-            </tr>
-          </table>
-
-          <p style="text-align: center; font-size: 12px; color: #94a3b8; margin-top: 30px;">
-            This is a system-generated digital receipt from the CLEAR System. No signature is required.
-          </p>
-        </div>
-      </div>
-    `;
-
-    // 🚀 FIX: Use centralized sendEmail from @/lib/mailer
-    await sendEmail({
-      to: studentEmail,
-      subject: `Official Receipt [${data.orNumber}] - ${orgName}`,
-      html: htmlContent,
-    });
-    
-    console.log(`Receipt successfully sent to ${studentEmail}`);
-  } catch (error) {
-    console.error("Failed to send digital receipt:", error);
-  }
-}
-
-async function getPreviouslyPaid(
-  orgId: string, 
-  studentDbId: string, 
-  ay: string, 
-  term: string, 
-  itemDescription: string
-): Promise<number> {
-  const previousPayments = await prisma.collection.findMany({
-    where: {
-      organizationId: orgId,
-      academicYear: ay,
-      term: term,
-      studentId: studentDbId,
-      itemDescription: itemDescription,
-      paymentType: { not: { contains: "Void" } },
-      status: { not: { contains: "Void" } }
-    },
-    select: { amountPaid: true }
-  });
-  
-  return previousPayments.reduce((sum, p) => sum + Number(p.amountPaid || 0), 0);
-}
-
-// =========================================================================
-// PAYMENT ACTIONS
-// =========================================================================
-
-export async function recordPayment(
-  department: string,
-  data: {
-    orNumber: string;
-    date: string;
-    studentId: string;
-    studentName: string;
-    studentEmail?: string;
-    category: string;
-    itemDescription: string;
-    paymentType: string;
-    standardRate: number;
-    amountPaid: number;
-    fundAllocation: string;
-    ay: string;
-    term: string;
-    penaltyId?: string;
-  }
-) {
+export async function recordPayment(department: string, data: {
+  orNumber: string; date: string; studentId: string; studentName: string;
+  studentEmail?: string; category: string; itemDescription: string;
+  paymentType: string; standardRate: number; amountPaid: number;
+  fundAllocation: string; ay: string; term: string; penaltyId?: string;
+}) {
   const cleanDepartment = decodeURIComponent(department).trim().toLowerCase();
+  const officer = await requireTabAccess("tab-payment", cleanDepartment);
+  const officerName = String(officer.name || officer.fullName || officer.email || "System Administrator");
+  const org = await prisma.organization.findUnique({ where: { subdomain: cleanDepartment },
+    select: { id: true, name: true, reportSchoolName: true } });
+  if (!org) throw new Error("Department not found.");
 
-  // 1. Verify Permission via Shared Guard
-  const customUser = await requireTabAccess("tab-payment", cleanDepartment);
-  const officerName = customUser.name || customUser.fullName || customUser.email || "System Administrator";
-
-  // 2. Resolve Organization ID
-  const organization = await prisma.organization.findUnique({
-    where: { subdomain: cleanDepartment }
-  });
-
-  if (!organization) {
-    throw new Error(`Organization subdomain "${cleanDepartment}" not found.`);
-  }
-  const orgId = organization.id;
-
-  // 3. Validate Inputs & Fetch the Correct UUID
-  const rawStudentInput = String(data.studentId || "").trim() || null;
-  const studentDbId = await resolveStudentDbId(orgId, rawStudentInput);
-
-  if (!studentDbId) throw new Error("A valid student record is required for payment.");
-
-  const paid = money(data.amountPaid, "Payment amount");
-  const rate = money(data.standardRate, "Standard rate");
-
-  if (paid <= 0) throw new Error("Payment amount must be greater than zero.");
-  if (rate <= 0) throw new Error("The payment has no valid standard rate.");
-
-  const date = parseDate(data.date, "payment date");
+  const ay = String(data.ay || "").trim();
+  const term = String(data.term || "").trim();
   const category = String(data.category || "").trim();
   const itemDescription = String(data.itemDescription || "").trim();
-  const studentName = String(data.studentName || "").trim();
-
-  if (!itemDescription) throw new Error("Item description is required.");
-
-  // 4. Calculate Installments and Balances
-  const alreadyPaid = await getPreviouslyPaid(
-    orgId,
-    studentDbId,
-    data.ay,
-    data.term,
-    itemDescription
-  );
-
-  const remainingBeforePayment = Math.max(0, Math.round((rate - alreadyPaid) * 100) / 100);
-
-  if (remainingBeforePayment <= 0 && !data.penaltyId) {
-    throw new Error(`This assessment has already been fully paid at ₱${rate.toFixed(2)}.`);
+  const orNumber = String(data.orNumber || "").trim().toUpperCase();
+  const fundAllocation = String(data.fundAllocation || "").trim();
+  const paid = money(data.amountPaid, "Payment");
+  const date = dateOnly(data.date);
+  if (!ay || !term || !category || !itemDescription || !orNumber || !data.studentId) {
+    throw new Error("Student, receipt number, category, item, academic year and term are required.");
   }
+  if (!/^[A-Z0-9][A-Z0-9-]{2,50}$/.test(orNumber)) throw new Error("Invalid official receipt number.");
 
-  const newTotalPaid = alreadyPaid + paid;
-  const balanceDue = Math.max(0, Math.round((rate - newTotalPaid) * 100) / 100);
+  let actualPaymentType = "Partial Payment";
+  let balanceDue = 0;
+  let studentName = "";
+  let studentEmail = "";
+  let paymentEntries = 0;
+  let postedDescription = itemDescription;
 
-  const actualPaymentType = balanceDue === 0
-    ? "Full Payment"
-    : String(data.paymentType || "").trim() || "Partial Payment";
+  const postOnce = async () => prisma.$transaction(async (tx) => {
+    await assertAcademicPeriod(tx, org.id, ay, term);
+    const ledger = await getPeriodLedger(tx, org.id, ay, term);
+    if (ledger.activeRollover) throw new Error("This academic term is closed by a carry-over. Reverse the rollover before recording payments.");
 
-  // 5. Create Database Record & Execute Penalty Settlement Transaction if Applicable
-  await prisma.$transaction(async (tx) => {
-    await tx.collection.create({
-      data: {
-        organizationId: orgId,
-        academicYear: data.ay,
-        term: data.term,
-        date,
-        studentId: studentDbId,
-        studentName,
-        orNumber: String(data.orNumber || "").trim(),
-        category,
-        itemDescription,
-        paymentType: actualPaymentType,
-        standardRate: rate,
-        amountPaid: paid,
-        balanceDue,
-        fundAllocation: String(data.fundAllocation || "").trim(),
-        status: "Valid",
-        encodedBy: officerName,
-      },
+    const student = await tx.student.findFirst({
+      where: { organizationId: org.id, OR: [
+        { studentId: { equals: String(data.studentId).trim(), mode: "insensitive" } },
+        { id: String(data.studentId).trim() },
+      ] },
     });
+    if (!student) throw new Error("Student is not registered in this department.");
+    studentName = student.fullName;
+    studentEmail = String(student.email || "").trim();
 
-    if (data.penaltyId) {
-      const targetPen = await tx.penalty.findFirst({
-        where: { penaltyId: data.penaltyId, organizationId: orgId },
-      });
+    const conflict = await tx.collection.findFirst({ where: { organizationId: org.id,
+      OR: [{ orNumber }, { orNumber: { startsWith: `${orNumber}-P` } }] }, select: { id: true } });
+    if (conflict) throw new Error(`Official receipt ${orNumber} is already used. Refresh and select an unused OR.`);
 
-      if (targetPen) {
-        const existingFine = Math.max(0, Number(targetPen.fineAmount) || 0);
-        const remainingFine = Math.max(0, Math.round((existingFine - paid) * 100) / 100);
+    const existing = await tx.collection.findMany({ where: {
+      organizationId: org.id, academicYear: ay, term, studentId: student.id,
+    }, select: { itemDescription: true, amountPaid: true, status: true, paymentType: true } });
+    const valid = existing.filter((row) => !String(row.status || "").toUpperCase().includes("VOID") &&
+      !String(row.status || "").toUpperCase().includes("CANCEL") &&
+      !String(row.paymentType || "").toUpperCase().includes("VOID"));
+    const prevFor = (description: string) => valid.filter((c) =>
+      String(c.itemDescription).trim().toLowerCase() === description.toLowerCase()
+    ).reduce((total, c) => total + toCents(c.amountPaid), 0);
 
-        const newStatus = remainingFine === 0
-          ? `Settled (Cash Payment - ₱${paid.toFixed(2)})`
-          : `Partially Paid (₱${paid.toFixed(2)} paid, ₱${remainingFine.toFixed(2)} remaining)`;
+    const packageItems = await tx.collectionSetup.findMany({ where: {
+      organizationId: org.id, academicYear: ay, term, category, isPackage: true,
+    }, orderBy: { name: "asc" } });
 
-        await tx.penalty.update({
-          where: { id: targetPen.id },
-          data: { fineAmount: remainingFine, status: newStatus },
-        });
+    type PaymentEntry = { name: string; fund: string; rateCents: number; paidCents: number; balanceCents: number };
+    const entries: PaymentEntry[] = [];
+    const paidCents = toCents(paid);
+    const penaltyId = String(data.penaltyId || "").trim();
+
+    if (penaltyId) {
+      // The penalty and receipt are changed as ONE atomic transaction. A failed
+      // receipt write never reduces the fine; a failed penalty update rolls back
+      // the receipt. Neither a status sent by the browser nor the URL is trusted.
+      const pen = await tx.penalty.findFirst({ where: {
+        organizationId: org.id, penaltyId, academicYear: ay, term,
+      } });
+      if (!pen) throw new Error("The penalty does not belong to this department or academic term.");
+      const status = String(pen.status || "").trim();
+      if (/VOID|CANCEL/i.test(status)) throw new Error("This penalty has been voided and cannot receive a payment.");
+      if (/^SETTLED/i.test(status)) {
+        throw new Error("This penalty is marked settled. If no cash receipt exists, an administrator must reconcile the legacy settlement in Penalty Logs before accepting payment.");
       }
+      const due = toCents(pen.fineAmount);
+      if (due <= 0) throw new Error("This penalty has no outstanding amount. Administrator reconciliation is required if this is incorrect.");
+      if (paidCents > due) {
+        throw new Error(`Payment exceeds the outstanding fine of ₱${(due / 100).toFixed(2)}.`);
+      }
+      if (!pen.studentId || pen.studentId.trim().toLowerCase() !== student.studentId.trim().toLowerCase()) {
+        throw new Error("The selected student does not own this penalty. No receipt was posted.");
+      }
+      if (pen.penaltyType !== "LATE_FEE" && toCents(pen.ratePerHour) <= 0) {
+        throw new Error("This service-eligible penalty's hourly rate is invalid.");
+      }
+      const remaining = due - paidCents;
+      // ENFORCED SYSTEM-WIDE: the browser cannot choose a penalty destination.
+      // A missing pool (legacy tenant/term) is created without moving prior funds.
+      await ensurePenaltyFund(tx, org.id, ay, term);
+      const selectedFund = PENALTY_FUND_NAME;
+      // Reference the exact penalty in both the receipt and the audit log;
+      // schema.prisma currently has no Collection.penaltyId foreign key.
+      const penaltyDescription = `Penalty Fine [${pen.penaltyId}]: ${pen.activity}`;
+      entries.push({ name: penaltyDescription, fund: selectedFund, rateCents: due,
+        paidCents, balanceCents: remaining });
+      balanceDue = remaining / 100;
+      // The write order below is Collection first, Penalty second, SystemLog
+      // third. Prisma commits all of them together, or none of them.
+      // A conditional update prevents a simultaneous payment overwriting a
+      // changed balance even if transaction retries are required.
+    } else if (itemDescription === PACKAGE_NAME) {
+      if (packageItems.length === 0) throw new Error("No mandatory package items are configured for this category.");
+      // Legacy single-row package receipts count toward the overall assessment.
+      let legacyCredits = prevFor(PACKAGE_NAME);
+      const itemState = packageItems.map((setup) => {
+        const rateCents = toCents(setup.amount);
+        const existingPaid = prevFor(String(setup.name));
+        const available = Math.max(0, rateCents - existingPaid);
+        const appliedLegacy = Math.min(legacyCredits, available);
+        legacyCredits -= appliedLegacy;
+        return { setup, rateCents, available: available - appliedLegacy, already: existingPaid + appliedLegacy };
+      });
+      const capacity = itemState.reduce((n, item) => n + item.available, 0);
+      if (paidCents > capacity) throw new Error(`Payment exceeds the remaining package balance of ₱${(capacity / 100).toFixed(2)}.`);
+      let left = paidCents;
+      for (const item of itemState) {
+        const piece = Math.min(item.available, left);
+        if (piece <= 0) continue;
+        if (!String(item.setup.targetFund || "").trim()) throw new Error(`Package item ${item.setup.name} has no assigned fund.`);
+        entries.push({ name: String(item.setup.name), fund: String(item.setup.targetFund),
+          rateCents: item.rateCents, paidCents: piece, balanceCents: item.available - piece });
+        left -= piece;
+      }
+      if (left !== 0 || entries.length === 0) throw new Error("Unable to allocate this package payment.");
+      balanceDue = (capacity - paidCents) / 100;
+    } else {
+      // Do not allow penalty-looking receipts through the generic fee route;
+      // they would post income but leave the penalty balance unchanged.
+      if (/^Penalty Fine\s*(?:\[|:)/i.test(itemDescription) || /^penalt(?:y|ies)$/i.test(category)) {
+        throw new Error("Penalty payments must start from Penalty Logs → Pay in Cash and include the penalty reference.");
+      }
+      // Trust the configured rate/fund instead of editable client input when there is a matching setup.
+      const setup = await tx.collectionSetup.findFirst({ where: {
+        organizationId: org.id, academicYear: ay, term, category,
+        name: itemDescription,
+      } });
+      const rateCents = setup ? toCents(setup.amount) : toCents(money(data.standardRate, "Standard rate"));
+      const previous = prevFor(itemDescription);
+      const remaining = Math.max(0, rateCents - previous);
+      if (paidCents > remaining) throw new Error(`Payment exceeds the remaining due of ₱${(remaining / 100).toFixed(2)}.`);
+      const fund = String(setup?.targetFund || fundAllocation).trim();
+      if (!fund || fund === "Multiple Funds (Package Split)") throw new Error("Choose a valid destination fund.");
+      entries.push({ name: itemDescription, fund, rateCents, paidCents,
+        balanceCents: remaining - paidCents });
+      balanceDue = (remaining - paidCents) / 100;
     }
-  });
 
-  // 6. Audit Log
-  await logSystemAction(
-    orgId,
-    officerName,
-    "RECORD_PAYMENT",
-    `Recorded payment of ₱${paid.toFixed(2)} from ${studentName} [OR: ${data.orNumber}] for ${itemDescription}.${data.penaltyId ? ` Settled penalty [${data.penaltyId}].` : ''}`
-  );
+    actualPaymentType = balanceDue === 0 ? "Full Payment" : "Partial Payment";
+    if (penaltyId) postedDescription = entries[0]?.name || itemDescription;
+    paymentEntries = entries.length;
+    let firstReceiptId: string | null = null;
+    for (const [index, entry] of entries.entries()) {
+      const createdReceipt = await tx.collection.create({ data: {
+        organizationId: org.id, academicYear: ay, term, date,
+        studentId: student.id, studentName,
+        orNumber: index === 0 ? orNumber : `${orNumber}-P${String(index + 1).padStart(2, "0")}`,
+        category, itemDescription: entry.name,
+        paymentType: entry.balanceCents === 0 ? "Full Payment" : "Partial Payment",
+        standardRate: entry.rateCents / 100,
+        amountPaid: entry.paidCents / 100,
+        balanceDue: entry.balanceCents / 100,
+        fundAllocation: entry.fund, status: "Valid", encodedBy: officerName,
+      } });
+      if (index === 0) firstReceiptId = createdReceipt.id;
+    }
+    if (penaltyId) {
+      // A receipt has been created above; only now change the penalty balance.
+      const penalty = await tx.penalty.findFirst({ where: {
+        organizationId: org.id, penaltyId, academicYear: ay, term,
+      } });
+      if (!penalty) throw new Error("Penalty changed while recording the payment.");
+      const before = toCents(penalty.fineAmount);
+      const after = before - paidCents;
+      if (after < 0 || /^SETTLED/i.test(penalty.status || "") || /VOID|CANCEL/i.test(penalty.status || "")) {
+        throw new Error("The penalty balance or status changed. No receipt has been saved; refresh the page.");
+      }
+      const newStatus = after === 0 ? "Settled (Cash Payment)" : "Partially Paid (Cash Payment)";
+      const result = await tx.penalty.updateMany({
+        where: {
+          id: penalty.id, organizationId: org.id, academicYear: ay, term,
+          fineAmount: penalty.fineAmount, status: penalty.status,
+        },
+        data: { fineAmount: after / 100, status: newStatus },
+      });
+      if (result.count !== 1) throw new Error("Concurrent penalty update detected; the payment was not recorded.");
+      balanceDue = after / 100;
+      if (!firstReceiptId) throw new Error("Penalty receipt reference was not created.");
+      await tx.penaltySettlementEvent.create({ data: {
+        organizationId: org.id, penaltyRecordId: penalty.id,
+        receiptId: firstReceiptId, method: "CASH_PAYMENT", amount: paidCents / 100,
+        accountingAY: ay, accountingTerm: term,
+        balanceBefore: before / 100, balanceAfter: after / 100,
+        recordedBy: officerName, note: `Official Receipt ${orNumber}`,
+      } });
+      await tx.systemLog.create({ data: {
+        organizationId: org.id, user: officerName, action: "RECORD_PENALTY_PAYMENT",
+        details: `Penalty ${penalty.penaltyId}; OR ${orNumber}; student ${student.studentId}; collected ₱${paid.toFixed(2)}; before ₱${(before / 100).toFixed(2)}; after ₱${(after / 100).toFixed(2)}; ${newStatus}; ${ay} ${term}.`,
+      } });
+    }
+    if (!penaltyId && itemDescription !== PACKAGE_NAME) {
+      await applyPaymentToStudentCollectibles(tx, {
+        organizationId: org.id, academicYear: ay, term,
+        studentId: student.studentId, category: category, itemDescription, amountCents: paidCents,
+      });
+    }
+    await tx.systemLog.create({ data: {
+      organizationId: org.id, user: officerName, action: "RECORD_PAYMENT",
+      details: `OR ${orNumber}: ₱${paid.toFixed(2)} from ${studentName} for ${penaltyId ? `penalty ${penaltyId}` : itemDescription}, across ${entries.length} fund line(s).`,
+    } });
+    await enqueuePaymentReceipt(tx, { organizationId: org.id, orNumber, officerName, officerEmail: String(officer.email || ""), source: "COLLECTION" });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 20000 });
 
-  // 7. Dispatch Email Receipt asynchronously
-  if (data.studentEmail) {
-    sendEmailReceipt(organization.name, data.studentEmail, {
-      orNumber: String(data.orNumber || "").trim(),
-      date,
-      studentName,
-      itemDescription,
-      amountPaid: paid,
-      balanceDue,
-      paymentType: actualPaymentType,
-    }).catch(err => console.error("Async email receipt error:", err));
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try { await postOnce(); break; }
+    catch (error: unknown) {
+      if ((error as { code?: string })?.code === "P2034" && attempt < 2) continue;
+      throw error;
+    }
   }
 
-  // 8. Revalidate Cache
-  revalidatePath(`/department/${cleanDepartment}/collections`);
-  revalidatePath(`/department/${cleanDepartment}/penalties`);
-  revalidatePath(`/department/${cleanDepartment}/clearance`);
+  // Digital receipts are delivered from the transactional outbox after commit.
+  scheduleDigitalReceiptDispatch(org.id, `payment:${orNumber}`);
+  for (const part of ["collections", "penalties", "clearance", "realign", "summary", "reports", "cashier-remittance", "collectibles"]) {
+    revalidatePath(`/department/${cleanDepartment}/${part}`);
+  }
   revalidatePath(`/department/${cleanDepartment}`);
+  return { success: true, orNumber, balanceDue, paymentEntries, paymentType: actualPaymentType, itemDescription: postedDescription };
 }

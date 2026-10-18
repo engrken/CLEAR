@@ -7,12 +7,18 @@ import { requireTabAccess } from '@/lib/permissions';
 import { logSystemAction } from '@/lib/logger';
 import { revalidatePath } from 'next/cache';
 import { headers } from 'next/headers';
+import { Prisma } from '@prisma/client';
+import { randomUUID, createHash } from 'node:crypto';
+import { getPeriodLedger, toCents } from '../realign/ledger';
+import { assertAcademicPeriod } from '@/lib/academic-period-guard';
+import { applyPaymentToStudentCollectibles } from '../collectibles/due-link';
+import { enqueuePaymentReceipt, enqueueAccountingNotice, scheduleDigitalReceiptDispatch } from '@/lib/digital-receipts';
 
 // =========================================================================
 // SECURITY CONFIGURATIONS FOR PUBLIC SUBMISSION
 // =========================================================================
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB limit
-const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
+const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000; // 10 minutes window
 const MAX_SUBMISSIONS_IN_WINDOW = 5; // Max 5 submissions per IP in 10 mins
 
@@ -21,15 +27,13 @@ const MAX_SUBMISSIONS_IN_WINDOW = 5; // Max 5 submissions per IP in 10 mins
 // =========================================================================
 
 function money(val: any, fieldName: string): number {
-  const parsed = parseFloat(val);
-  if (isNaN(parsed)) throw new Error(`Invalid monetary value for ${fieldName}`);
+  const parsed = Number(val);
+  if (!Number.isFinite(parsed) || parsed <= 0 || Math.abs(parsed * 100 - Math.round(parsed * 100)) > 0.000001) throw new Error(`${fieldName} must be a positive amount with two decimal places or fewer.`);
   return Math.round(parsed * 100) / 100;
 }
 
 function generateReference(prefix: string): string {
-  const randomStr = Math.random().toString(36).substring(2, 8).toUpperCase();
-  const timestamp = Date.now().toString().slice(-4);
-  return `${prefix}-${randomStr}-${timestamp}`;
+  return `${prefix}-${randomUUID().slice(0, 12).toUpperCase()}`;
 }
 
 async function resolveStudentDbId(orgId: string, identifier: string | null) {
@@ -55,123 +59,185 @@ async function resolveStudentDbId(orgId: string, identifier: string | null) {
 export async function verifyOnlineRemittance(
   department: string,
   data: {
-    remittanceId: string;
-    orNumber: string;
-    studentId: string;
-    studentName: string;
-    particulars: string;
-    amount: number;
-    ay: string;
-    term: string;
-    fundAllocation: string;
+    remittanceId: string; orNumber: string; studentId: string;
+    studentName: string; particulars: string; amount: number;
+    ay: string; term: string; fundAllocation: string;
   }
 ) {
   const cleanDepartment = decodeURIComponent(department).trim().toLowerCase();
-  const customUser = await requireTabAccess("tab-remittances", cleanDepartment);
-  const officerName = customUser.name || customUser.fullName || customUser.email || "System Administrator";
-
-  const organization = await prisma.organization.findUnique({
-    where: { subdomain: cleanDepartment }
-  });
-  if (!organization) throw new Error(`Organization subdomain "${cleanDepartment}" not found.`);
-  const orgId = organization.id;
-
-  const orNumber = String(data.orNumber || "").trim();
-  if (!orNumber) throw new Error("OR number is required.");
+  const officer = await requireTabAccess("tab-remittances", cleanDepartment);
+  const officerName = String(officer.name || officer.fullName || officer.email || "System Administrator");
+  const org = await prisma.organization.findUnique({ where: { subdomain: cleanDepartment }, select: { id: true } });
+  if (!org) throw new Error("Department not found.");
+  const orNumber = String(data.orNumber || "").trim().toUpperCase();
+  const fundAllocation = String(data.fundAllocation || "").trim();
+  if (!/^[A-Z0-9][A-Z0-9-]{2,50}$/.test(orNumber)) throw new Error("A valid OR number is required.");
+  if (!fundAllocation || fundAllocation === "Multiple Funds (Package Split)") throw new Error("A valid fund is required.");
 
   await prisma.$transaction(async (tx) => {
-    const remittance = await tx.onlineRemittance.findFirst({
-      where: { id: data.remittanceId, organizationId: orgId },
-    });
+    const remit = await tx.onlineRemittance.findFirst({ where: {
+      id: data.remittanceId, organizationId: org.id,
+    } });
+    if (!remit) throw new Error("Online submission was not found in this organization.");
+    if (!["PENDING", "PENDING VERIFICATION"].includes(String(remit.status || "").toUpperCase())) {
+      throw new Error("This submission was already reviewed. Refresh the queue.");
+    }
+    if (remit.academicYear !== data.ay || remit.term !== data.term) {
+      throw new Error("Submission academic period does not match the page. Refresh before verifying.");
+    }
+    await assertAcademicPeriod(tx, org.id, remit.academicYear, remit.term);
+    const ledger = await getPeriodLedger(tx, org.id, remit.academicYear, remit.term);
+    if (ledger.activeRollover) throw new Error("This term has been carried forward and cannot accept verified payments.");
+    const conflicted = await tx.collection.findFirst({ where: {
+      organizationId: org.id, orNumber,
+    }, select: { id: true } });
+    if (conflicted) throw new Error(`Official receipt ${orNumber} already exists.`);
 
-    if (!remittance) throw new Error("Online remittance record not found.");
-    if (String(remittance.status || "").toUpperCase() === "VERIFIED") throw new Error("This remittance has already been verified.");
+    const student = await tx.student.findFirst({ where: {
+      organizationId: org.id,
+      studentId: { equals: String(remit.studentId || "").trim(), mode: "insensitive" },
+    } });
+    if (!student) throw new Error("This payment cannot be linked to a registered student.");
+    const amount = money(remit.amountPaid, "Submitted amount");
+    const itemDescription = String(remit.itemDescription || "Online Payment").trim();
+    if (/^Penalty Fine\s*(?:\[|:)/i.test(itemDescription) || /^penalt(?:y|ies)$/i.test(String(remit.category || "").trim())) {
+      throw new Error("Penalty remittances need a linked penalty ID and an atomic balance adjustment. Use Penalty Logs → Pay in Cash; do not verify this as a generic fee.");
+    }
+    const isPackage = /departmental\s+fee.*package|departmental.*package/i.test(itemDescription);
+    const packageItems = isPackage ? await tx.collectionSetup.findMany({ where: {
+      organizationId: org.id, academicYear: remit.academicYear, term: remit.term,
+      isPackage: true,
+    }, orderBy: [{ category: "asc" }, { name: "asc" }] }) : [];
+    const setup = !isPackage ? await tx.collectionSetup.findFirst({ where: {
+      organizationId: org.id, academicYear: remit.academicYear,
+      term: remit.term, name: itemDescription,
+    } }) : null;
+    const prior = await tx.collection.findMany({ where: {
+      organizationId: org.id, academicYear: remit.academicYear,
+      term: remit.term, studentId: student.id,
+    } });
+    const goodPrior = prior.filter(c => !String(c.status || "").toUpperCase().includes("VOID") &&
+      !String(c.paymentType || "").toUpperCase().includes("VOID") &&
+      !String(c.status || "").toUpperCase().includes("CANCEL"));
+    const previouslyPaid = (name: string) => goodPrior.filter(c =>
+      String(c.itemDescription || "").trim().toLowerCase() === name.toLowerCase()
+    ).reduce((sum, c) => sum + toCents(c.amountPaid), 0);
+    const amountCents = toCents(amount);
+    const entries: { name: string; fund: string; rate: number; amount: number; balance: number; category: string }[] = [];
 
-    const amount = Math.max(0, Number(remittance.amountPaid) || 0);
-    if (amount <= 0) throw new Error("The remittance contains an invalid amount.");
+    if (isPackage && packageItems.length) {
+      let legacyCredit = previouslyPaid("Departmental Fee (Full Package)") +
+        previouslyPaid("Departmental Fee Package (All Items)");
+      let leftToAllocate = amountCents;
+      for (const item of packageItems) {
+        const rate = toCents(item.amount);
+        const previous = previouslyPaid(String(item.name));
+        const availableBeforeLegacy = Math.max(0, rate - previous);
+        const legacyApplied = Math.min(legacyCredit, availableBeforeLegacy);
+        legacyCredit -= legacyApplied;
+        const available = availableBeforeLegacy - legacyApplied;
+        const piece = Math.min(leftToAllocate, available);
+        if (piece > 0) {
+          const fund = String(item.targetFund || "").trim();
+          if (!fund) throw new Error(`Package fee ${item.name} is missing a target fund.`);
+          entries.push({ name: String(item.name), fund, rate, amount: piece,
+            balance: available - piece, category: String(item.category) });
+          leftToAllocate -= piece;
+        }
+      }
+      if (leftToAllocate !== 0 || entries.length === 0) {
+        throw new Error("The verified remittance exceeds the student's remaining departmental package assessment.");
+      }
+    } else {
+      const previous = previouslyPaid(itemDescription);
+      const rate = setup ? toCents(setup.amount) : previous + amountCents;
+      if (setup && previous + amountCents > rate) {
+        throw new Error(`Payment exceeds the outstanding ${itemDescription} assessment. Review before verifying.`);
+      }
+      entries.push({ name: itemDescription, fund: String(setup?.targetFund || fundAllocation),
+        rate, amount: amountCents, balance: Math.max(0, rate - previous - amountCents),
+        category: String(remit.category || "Online Remittance") });
+    }
 
-    const studentDbId = await resolveStudentDbId(orgId, remittance.studentId);
+    const existingOr = await tx.collection.findFirst({ where: {
+      organizationId: org.id,
+      OR: [{ orNumber }, { orNumber: { startsWith: `${orNumber}-P` } }],
+    }, select: { id: true } });
+    if (existingOr) throw new Error(`Official receipt ${orNumber} or its package lines already exist.`);
+    const updated = await tx.onlineRemittance.updateMany({ where: {
+      id: remit.id, organizationId: org.id, status: remit.status,
+    }, data: { status: "Verified", reviewedBy: officerName, orNumber } });
+    if (updated.count !== 1) throw new Error("Submission was already processed by another officer.");
+    for (const [index, entry] of entries.entries()) {
+      await tx.collection.create({ data: {
+        organizationId: org.id, academicYear: remit.academicYear, term: remit.term,
+        date: new Date(), studentId: student.id, studentName: student.fullName,
+        orNumber: index === 0 ? orNumber : `${orNumber}-P${String(index + 1).padStart(2, '0')}`,
+        category: entry.category, itemDescription: entry.name,
+        paymentType: entry.balance === 0 ? "Full Payment" : "Partial Payment",
+        standardRate: entry.rate / 100, amountPaid: entry.amount / 100,
+        balanceDue: entry.balance / 100,
+        fundAllocation: entry.fund, status: "Valid", encodedBy: officerName,
+      } });
+    }
+    if (!isPackage) {
+      await applyPaymentToStudentCollectibles(tx, {
+        organizationId: org.id, academicYear: remit.academicYear, term: remit.term,
+        studentId: student.studentId, category: String(remit.category || ""), itemDescription, amountCents,
+      });
+    }
+    await tx.systemLog.create({ data: {
+      organizationId: org.id, user: officerName, action: "VERIFY_REMITTANCE",
+      details: `Verified ${remit.submissionId}; OR ${orNumber}; ₱${amount.toFixed(2)}; ${student.studentId}.`,
+    } });
+    await enqueuePaymentReceipt(tx, { organizationId: org.id, orNumber, officerName, officerEmail: String(officer.email || ""), source: "APPROVED_REMITTANCE" });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
-    await tx.onlineRemittance.update({
-      where: { id: remittance.id },
-      data: { status: "Verified", reviewedBy: officerName, orNumber },
-    });
-
-    await tx.collection.create({
-      data: {
-        organizationId: orgId,
-        academicYear: remittance.academicYear,
-        term: remittance.term,
-        date: new Date(),
-        studentId: studentDbId,
-        studentName: remittance.studentName,
-        orNumber,
-        category: remittance.category || "Online Remittance",
-        itemDescription: remittance.itemDescription || "Online Payment",
-        paymentType: "Full Payment",
-        standardRate: amount,
-        amountPaid: amount,
-        balanceDue: 0,
-        fundAllocation: data.fundAllocation,
-        status: "Valid",
-        encodedBy: officerName,
-      },
-    });
-  });
-
-  await logSystemAction(
-    orgId,
-    officerName,
-    "VERIFY_REMITTANCE",
-    `Verified online remittance [${data.remittanceId}] and issued OR: ${orNumber}.`
-  );
-
-  revalidatePath(`/department/${cleanDepartment}/remittances`);
-  revalidatePath(`/department/${cleanDepartment}/collections`);
-  revalidatePath(`/department/${cleanDepartment}/clearance`);
+  for (const route of ["remittances", "collections", "clearance", "reports", "summary", "realign", "collectibles"]) {
+    revalidatePath(`/department/${cleanDepartment}/${route}`);
+  }
   revalidatePath(`/department/${cleanDepartment}`);
+  scheduleDigitalReceiptDispatch(org.id, `payment:${orNumber}`);
+  return { success: true, orNumber };
 }
 
 export async function invalidateOnlineRemittance(department: string, remittanceId: string) {
   const cleanDepartment = decodeURIComponent(department).trim().toLowerCase();
-  const customUser = await requireTabAccess("tab-remittances", cleanDepartment);
-  const officerName = customUser.name || customUser.fullName || customUser.email || "System Administrator";
-
-  const organization = await prisma.organization.findUnique({
-    where: { subdomain: cleanDepartment }
-  });
-  if (!organization) throw new Error(`Organization "${cleanDepartment}" not found.`);
-  const orgId = organization.id;
-
-  const remittance = await prisma.onlineRemittance.findFirst({
-    where: { id: remittanceId, organizationId: orgId },
-  });
-
-  if (!remittance) throw new Error("Online remittance record not found.");
-
-  if (String(remittance.status || "").toUpperCase() === "VERIFIED") {
-    throw new Error("A verified remittance cannot be invalidated from the pending queue.");
-  }
-
-  await prisma.onlineRemittance.update({
-    where: { id: remittance.id },
-    data: {
-      status: "Rejected",
-      reviewedBy: officerName,
-      reviewNotes: "Marked invalid and removed from queue by admin."
+  const officer = await requireTabAccess("tab-remittances", cleanDepartment);
+  const officerName = String(officer.name || officer.fullName || officer.email || "Officer");
+  const org = await prisma.organization.findUnique({ where: { subdomain: cleanDepartment }, select: { id: true } });
+  if (!org) throw new Error("Department not found.");
+  await prisma.$transaction(async (tx) => {
+    const remit = await tx.onlineRemittance.findFirst({ where: { id: remittanceId, organizationId: org.id } });
+    if (!remit || !["PENDING", "PENDING VERIFICATION"].includes(String(remit.status || "").toUpperCase())) {
+      throw new Error("Only pending remittances can be rejected.");
     }
-  });
-
-  await logSystemAction(
-    orgId,
-    officerName,
-    "INVALIDATE_REMITTANCE",
-    `Invalidated remittance [Ref: ${remittance.referenceNumber}] from ${remittance.studentName}.`
-  );
-
+    const update = await tx.onlineRemittance.updateMany({
+      where: { id: remit.id, organizationId: org.id, status: remit.status },
+      data: { status: "Rejected", reviewedBy: officerName,
+        reviewNotes: "Rejected by an authorized verification officer." },
+    });
+    if (update.count !== 1) throw new Error("This submission was already reviewed.");
+    await tx.systemLog.create({ data: {
+      organizationId: org.id, user: officerName, action: "INVALIDATE_REMITTANCE",
+      details: `Rejected submitted payment proof ${remit.submissionId} / ${remit.referenceNumber}.`,
+    } });
+    // Rejection is a decision notice, NOT a payment receipt. No OR is invented.
+    const matched = remit.studentId ? await tx.student.findFirst({ where: { organizationId: org.id,
+      OR: [{ id: remit.studentId }, { studentId: remit.studentId }] }, select: { email: true, fullName: true } }) : null;
+    await enqueueAccountingNotice(tx, {
+      organizationId: org.id, eventKey: `remittance-rejected:${remit.id}`,
+      documentType: "Remittance Rejection Notice", referenceNo: remit.submissionId,
+      academicYear: remit.academicYear, term: remit.term,
+      amount: Number(remit.amountPaid || 0), officerName, officerEmail: String(officer.email || ""),
+      participantName: matched?.fullName || remit.studentName, participantEmail: matched?.email,
+      details: [{label:"Decision",value:"Rejected — no official payment receipt issued"},
+        {label:"Channel reference",value:remit.referenceNumber}],
+    });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   revalidatePath(`/department/${cleanDepartment}/remittances`);
-
-  return { success: true, message: "Remittance submission marked as invalid and moved to Rejected tab." };
+  scheduleDigitalReceiptDispatch(org.id, `remittance-rejected:${remittanceId}`);
+  return { success: true, message: "Remittance rejected." };
 }
 
 // =========================================================================
@@ -189,6 +255,7 @@ export async function submitOnlineRemittance(
     particulars: string;
     amount: number;
     proofBase64: string | null;
+    paymentMode?: string;
     ay: string;
     term: string;
   }
@@ -205,8 +272,9 @@ export async function submitOnlineRemittance(
   // 1. IP-BASED RATE LIMITING (Using AuthThrottle Model)
   // =========================================================
   const headersList = await headers();
-  const clientIp = headersList.get('x-forwarded-for') || 'unknown';
-  const throttleKey = `public_remit_${orgId}_${clientIp}`;
+  const forwardedIp = String(headersList.get('x-real-ip') || headersList.get('x-forwarded-for') || 'unknown').split(',')[0].trim().slice(0, 64);
+  const ipHash = createHash('sha256').update(`${orgId}|${forwardedIp}`).digest('hex').slice(0, 32);
+  const throttleKey = `public_remit_${orgId}_${ipHash}`;
 
   const now = new Date();
   const windowStartThreshold = new Date(now.getTime() - RATE_LIMIT_WINDOW_MS);
@@ -259,6 +327,7 @@ export async function submitOnlineRemittance(
       ay: formData.get('ay') as string,
       term: formData.get('term') as string,
       proofBase64: null as string | null,
+      paymentMode: String(formData.get('paymentMode') || 'Online'),
     };
 
     const receiptFile = formData.get('receipt') as File | null;
@@ -282,12 +351,25 @@ export async function submitOnlineRemittance(
   // 3. FIELD VALIDATIONS & SANITIZATION
   // =========================================================
   const cleanEmail = String(data.email || "").trim().toLowerCase();
-  if (!cleanEmail || !cleanEmail.includes("@")) throw new Error("Please provide a valid email address.");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) throw new Error("Please provide a valid notification email address.");
 
   const amount = money(data.amount, "Online remittance amount");
   if (amount <= 0) throw new Error("Amount must be greater than zero.");
 
   const targetStudentId = String(data.studentId || "").trim();
+  const paymentChannel = String(data.paymentChannel || "").trim();
+  const referenceNumber = String(data.referenceNo || "").trim();
+  if (!paymentChannel || !referenceNumber || referenceNumber.length > 100) throw new Error("Payment channel and reference number are required.");
+  if (!data.ay || !data.term) throw new Error("Academic year and term are required.");
+  if (!data.proofBase64 || typeof data.proofBase64 !== "string" || !/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/i.test(data.proofBase64)) {
+    throw new Error("A valid payment proof image is required.");
+  }
+  const imageBytes = Buffer.from(data.proofBase64.slice(data.proofBase64.indexOf(',') + 1), 'base64');
+  if (imageBytes.length === 0 || imageBytes.length > MAX_FILE_SIZE) throw new Error("Receipt image must not exceed 5MB.");
+  const isPng = imageBytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]));
+  const isJpeg = imageBytes[0] === 0xff && imageBytes[1] === 0xd8 && imageBytes[2] === 0xff;
+  const isWebp = imageBytes.subarray(0,4).toString() === 'RIFF' && imageBytes.subarray(8,12).toString() === 'WEBP';
+  if (!isPng && !isJpeg && !isWebp) throw new Error("File is not a valid PNG, JPEG, or WebP image.");
   if (!targetStudentId) throw new Error("Student ID is required.");
 
   // =========================================================
@@ -304,6 +386,13 @@ export async function submitOnlineRemittance(
     throw new Error(`Student ID "${targetStudentId}" is not registered under this department. Please verify your student ID.`);
   }
 
+  const ledger = await getPeriodLedger(prisma, orgId, data.ay, data.term);
+  if (ledger.activeRollover) throw new Error("The selected term has been closed; new proof submissions are unavailable.");
+  const duplicate = await prisma.onlineRemittance.findFirst({ where: {
+    organizationId: orgId, paymentChannel, referenceNumber,
+    status: { in: ["Pending", "Pending Verification", "Verified"] },
+  }, select: { id: true } });
+  if (duplicate) throw new Error("This payment reference has already been submitted for verification.");
   const submissionId = generateReference("SUB");
 
   await prisma.onlineRemittance.create({
@@ -313,15 +402,15 @@ export async function submitOnlineRemittance(
       academicYear: data.ay,
       term: data.term,
       studentId: targetStudentId,
-      studentName: String(data.studentName || studentExists.fullName).trim(),
+      studentName: studentExists.fullName,
       studentEmail: cleanEmail,
-      paymentChannel: String(data.paymentChannel || "").trim(),
-      referenceNumber: String(data.referenceNo || "").trim(),
+      paymentChannel,
+      referenceNumber,
       category: "Online Remittance",
-      itemDescription: String(data.particulars || "").trim(),
-      paymentMode: "Online",
+      itemDescription: String(data.particulars || "").trim().slice(0, 200),
+      paymentMode: String(data.paymentMode || "Online").slice(0, 30),
       amountPaid: amount,
-      proofUrl: data.proofBase64 || null,
+      proofUrl: data.proofBase64,
       status: "Pending Verification",
     },
   });
@@ -330,7 +419,7 @@ export async function submitOnlineRemittance(
     orgId,
     "Public Submission",
     "SUBMIT_REMITTANCE",
-    `Received ₱${amount.toFixed(2)} online payment proof from ${data.studentName} via ${data.paymentChannel}.`
+    `Received ₱${amount.toFixed(2)} online payment proof from registered student ${studentExists.studentId} via ${paymentChannel}.`
   );
 
   revalidatePath(`/department/${cleanDepartment}/remittances`);
@@ -364,6 +453,7 @@ export async function submitOnlineRemittanceDirect(
     particulars: payload.collectionType,
     amount: payload.amount,
     proofBase64: payload.proofBase64,
+    paymentMode: payload.paymentMode,
     ay: payload.ay,
     term: payload.term,
   });

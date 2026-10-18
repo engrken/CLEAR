@@ -1,10 +1,12 @@
 // /app/department/[department]/(protected)/reports/ReportsClient.tsx
 
 "use client";
+import { clearAlert, clearConfirm, clearPrompt } from "@/lib/clear-dialogs";
+
 
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { saveSignatories } from "../../actions";
+import { saveSignatories, saveReportSettings } from "../../actions";
 import { fmt } from "@/lib/utils";
 import {
   Chart as ChartJS,
@@ -58,6 +60,57 @@ function formatHoursAndMinutes(decimalHours: number) {
   return `${mins} min${mins > 1 ? "s" : ""}`;
 }
 
+// Normalize missing or legacy year-level values so they can always be grouped.
+function normalizeYearLevel(value: unknown): string {
+  const raw = String(value ?? "").trim();
+  const normalized = raw.toLowerCase().replace(/\s+/g, " ");
+
+  const aliases: Record<string, string> = {
+    "": "Unassigned",
+    "n/a": "Unassigned",
+    "na": "Unassigned",
+    "not applicable": "Unassigned",
+    "not assigned": "Unassigned",
+    "unassigned": "Unassigned",
+    "unknown": "Unassigned",
+    "none": "Unassigned",
+    "null": "Unassigned",
+    "undefined": "Unassigned",
+    "1": "1st Year",
+    "1st": "1st Year",
+    "1st year": "1st Year",
+    "first year": "1st Year",
+    "year 1": "1st Year",
+    "2": "2nd Year",
+    "2nd": "2nd Year",
+    "2nd year": "2nd Year",
+    "second year": "2nd Year",
+    "year 2": "2nd Year",
+    "3": "3rd Year",
+    "3rd": "3rd Year",
+    "3rd year": "3rd Year",
+    "third year": "3rd Year",
+    "year 3": "3rd Year",
+    "4": "4th Year",
+    "4th": "4th Year",
+    "4th year": "4th Year",
+    "fourth year": "4th Year",
+    "year 4": "4th Year",
+    "5": "5th Year",
+    "5th": "5th Year",
+    "5th year": "5th Year",
+    "fifth year": "5th Year",
+    "year 5": "5th Year",
+    "6": "6th Year",
+    "6th": "6th Year",
+    "6th year": "6th Year",
+    "sixth year": "6th Year",
+    "year 6": "6th Year",
+  };
+
+  return aliases[normalized] || raw || "Unassigned";
+}
+
 export default function ReportsClient({
   department,
   orgName,
@@ -72,7 +125,16 @@ export default function ReportsClient({
   setupCategories = [],
   logoUrl,
   initialSignatories,
-  termPkgItems = []
+  schoolName: suppliedSchoolName = "",
+  schoolAddress: suppliedSchoolAddress = "",
+  reportSchoolName = "",
+  reportSchoolAddress = "",
+  reportHeaderLeftLogo = "",
+  reportHeaderRightLogo = "",
+  termPkgItems = [],
+  remainingBalance = 0,
+  carriedIn = 0,
+  carriedOut = 0,
 }: any) {
   const router = useRouter();
 
@@ -82,7 +144,11 @@ export default function ReportsClient({
   const [showSettings, setShowSettings] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [signatories, setSignatories] = useState(initialSignatories || []);
-  
+  const [schoolName, setSchoolName] = useState(String(reportSchoolName || suppliedSchoolName || ""));
+  const [schoolAddress, setSchoolAddress] = useState(String(reportSchoolAddress || suppliedSchoolAddress || ""));
+  const [leftLogoFile, setLeftLogoFile] = useState<File | null>(null);
+  const [rightLogoFile, setRightLogoFile] = useState<File | null>(null);
+
   const labelOptions = ["Prepared by:", "Attested by:", "Noted by:", "Endorsed by:", "Verified by:", "Approved by:"];
 
   const handleAddSignatory = () => {
@@ -99,14 +165,25 @@ export default function ReportsClient({
     setSignatories(signatories.filter((_: any, i: number) => i !== index));
   };
 
-  const handleSaveSignatories = async () => {
+  const handleSaveReportSettings = async () => {
     setIsSaving(true);
     try {
+      const formData = new FormData();
+      formData.append("schoolName", schoolName.trim());
+      formData.append("schoolAddress", schoolAddress.trim());
+      if (leftLogoFile) formData.append("leftLogo", leftLogoFile);
+      if (rightLogoFile) formData.append("rightLogo", rightLogoFile);
+
+      // These settings are saved on the Organization and reused by all report printouts.
+      await saveReportSettings(department, formData);
       await saveSignatories(orgId, department, signatories);
+      setLeftLogoFile(null);
+      setRightLogoFile(null);
       setShowSettings(false);
       router.refresh();
     } catch (error) {
-      alert("Failed to save signatories.");
+      const message = error instanceof Error ? error.message : "Unknown error";
+      void clearAlert(`Failed to save report settings: ${message}`);
     } finally {
       setIsSaving(false);
     }
@@ -124,8 +201,35 @@ export default function ReportsClient({
     return `/${filename}`;
   };
 
-  const validCollections = collections.filter((c: any) => !String(c.paymentType || "").toUpperCase().includes("VOID"));
-  const validLiquidations = liquidations.filter((l: any) => !String(l.status || "").includes("Voided"));
+  const validCollections = collections.filter((c: any) =>
+    !String(c.paymentType || "").toUpperCase().includes("VOID") &&
+    !String(c.status || "").toUpperCase().includes("VOID") &&
+    !String(c.status || "").toUpperCase().includes("CANCEL")
+  );
+  const validLiquidations = liquidations.filter(
+    (l: any) => !String(l.status || "").toUpperCase().includes("VOID")
+  );
+
+  // Explicit generics prevent TypeScript from inferring Set/Array values as unknown.
+  const availableYearLevels: string[] = Array.from(
+    new Set<string>(
+      (students as any[]).map((student: any): string =>
+        normalizeYearLevel(student?.yearLevel)
+      )
+    )
+  ).sort((a: string, b: string) => {
+    if (a === "Unassigned") return b === "Unassigned" ? 0 : 1;
+    if (b === "Unassigned") return -1;
+
+    const order = ["1st Year", "2nd Year", "3rd Year", "4th Year", "5th Year", "6th Year"];
+    const aIndex = order.indexOf(a);
+    const bIndex = order.indexOf(b);
+
+    if (aIndex >= 0 && bIndex >= 0) return aIndex - bIndex;
+    if (aIndex >= 0) return -1;
+    if (bIndex >= 0) return 1;
+    return a.localeCompare(b);
+  });
 
   // =========================================================
   // DYNAMIC CATEGORY RESOLUTION
@@ -133,13 +237,10 @@ export default function ReportsClient({
   const hasPackageData = termPkgItems.length > 0 || packageRate > 0 || validCollections.some((c: any) => String(c.itemDescription || '').toLowerCase().includes('package') || String(c.itemDescription || '').toLowerCase() === 'departmental fee');
   const hasUnpaidDues = validCollections.some((c: any) => String(c.paymentType || "").includes("Unpaid") || String(c.orNumber || "").toUpperCase().startsWith("DUE-") || Number(c.balanceDue) > 0);
 
-  const dynamicCategories = Array.from(
-    new Set([
-      ...(setupCategories || []),
-      ...(termPkgItems || []).map((i: any) => i.name),
-      ...validCollections.map((c: any) => String(c.itemDescription || c.category || '')).filter(Boolean)
-    ])
-  ).filter((cat: string) => cat !== "Penalty / Fines" && !cat.toLowerCase().includes("penalty"));
+  // Strictly use configured fee *categories*, not item names or receipt descriptions.
+  const dynamicCategories = Array.from(new Set<string>(
+    (setupCategories || []).map((name: string) => String(name).trim()).filter(Boolean)
+  )).sort((a, b) => a.localeCompare(b));
 
   const defaultCategory = hasUnpaidDues ? "Activity & Item Dues (Unpaid)" : (dynamicCategories[0] || "Liquidation / Audited Expenses");
 
@@ -147,6 +248,22 @@ export default function ReportsClient({
   const [statusFilter, setStatusFilter] = useState("All Students (Master Roster)");
   const [yearFilter, setYearFilter] = useState("All Year Levels");
   const [viewMode, setViewMode] = useState<"Table" | "Analytics">("Table");
+  const [pageSize, setPageSize] = useState(10);
+  const [page, setPage] = useState(1);
+  useEffect(() => { setPage(1); }, [reportCategory, statusFilter, yearFilter, pageSize, viewMode]);
+  // Account-period or Fee Setup changes may remove a previously selected
+  // category. Return to a valid report instead of showing an empty selector.
+  const categoryKey = dynamicCategories.join("\u001f");
+  useEffect(() => {
+    const options = [
+      ...dynamicCategories,
+      "Penalty Fee",
+      "Liquidation / Audited Expenses",
+      ...(hasPackageData ? ["Departmental Fee (Package)"] : []),
+      ...(hasUnpaidDues ? ["Activity & Item Dues (Unpaid)"] : []),
+    ];
+    if (!options.includes(reportCategory)) setReportCategory(defaultCategory);
+  }, [ay, term, categoryKey, reportCategory, defaultCategory, hasPackageData, hasUnpaidDues]);
 
   const computedRoster = useMemo(() => {
     if (reportCategory === "Liquidation / Audited Expenses") return [];
@@ -176,7 +293,7 @@ export default function ReportsClient({
         id: s?.id || uniqueKey,
         studentId: s?.studentId || sId || "N/A",
         fullName: s?.fullName || sName || "Unknown",
-        yearLevel: s?.yearLevel || "Unassigned"
+        yearLevel: normalizeYearLevel(s?.yearLevel)
       };
     };
 
@@ -204,7 +321,7 @@ export default function ReportsClient({
         else if (amountPaid > 0 && amountPaid < uniformRate) status = "Partially Paid";
 
         return {
-          id: student.id, studentId: student.studentId, fullName: student.fullName, yearLevel: student.yearLevel || "Unassigned",
+          id: student.id, studentId: student.studentId, fullName: student.fullName, yearLevel: normalizeYearLevel(student.yearLevel),
           assessedAmount: uniformRate, amountPaid, balanceDue, status, particulars: orNumbers.length > 0 ? orNumbers.join(", ") : "—", duration: ""
         };
       });
@@ -236,46 +353,54 @@ export default function ReportsClient({
       const penMap = new Map();
       penalties.forEach((p: any) => {
         const status = String(p.status || "");
-        if (status.includes("Voided")) return;
+        if (/VOID|CANCEL/i.test(status)) return;
         
         const sInfo = getStudentData(p.studentId, p.studentName);
         if (!penMap.has(sInfo.key)) {
-          penMap.set(sInfo.key, { ...sInfo, totalFine: 0, amountPaid: 0, serviceFine: 0, totalHours: 0, activities: [] });
+          penMap.set(sInfo.key, { ...sInfo, originalAssessed: 0, outstanding: 0, amountPaid: 0, totalHours: 0, settledByService: false, activities: [] });
         }
         
         const pt = penMap.get(sInfo.key);
         const fine = Number(p.fineAmount || p.fine || 0);
         const hrs = Number(p.hoursLate || p.hours || 0);
-        pt.totalFine += fine;
-        pt.totalHours += hrs; 
-        
+        // Current penalty.fineAmount is the outstanding balance after payments;
+        // original assessed amount is reconstructed from duration * hourly rate.
+        pt.originalAssessed += Math.round(hrs * Number(p.ratePerHour || 0) * 100) / 100;
+        pt.outstanding += fine;
+        pt.totalHours += hrs;
+        if (/SETTLED.*COMMUNITY SERVICE/i.test(status)) pt.settledByService = true;
+
         let actLabel = `${p.activity} [${formatHoursAndMinutes(hrs)}]`;
-        if (status.includes("Community Service")) { pt.serviceFine += fine; actLabel += " (Service)"; }
+        if (/COMMUNITY SERVICE|PARTIALLY SERVED/i.test(status)) actLabel += " (Service)";
         pt.activities.push(actLabel);
       });
       
       validCollections.forEach((c: any) => {
-        if (c.itemDescription === "Penalty / Fines" || String(c.category).includes("Penalty")) {
+        if (/^Penalty Fine(?:\s*\[|:)/i.test(String(c.itemDescription || "")) || /^Penalty(?: \/ Fines)?$/i.test(String(c.category || ""))) {
           const sInfo = getStudentData(c.studentId, c.studentName);
           if (penMap.has(sInfo.key)) penMap.get(sInfo.key).amountPaid += (Number(c.amountPaid) || 0);
         }
       });
 
       results = Array.from(penMap.values()).map((p: any) => {
-        const totalResolved = p.amountPaid + p.serviceFine;
-        const isFullyPaid = totalResolved >= p.totalFine;
-        let status = "Partially Paid";
-        if (isFullyPaid) status = (p.serviceFine > 0 && p.amountPaid === 0) ? "Settled (Service)" : "Fully Paid";
+        // Cash receipts have already reduced Penalty.fineAmount. Never subtract
+        // the same cash payments a second time in the detailed report.
+        const balanceDue = Math.max(0, Math.round(p.outstanding * 100) / 100);
+        const assessedAmount = Math.max(p.originalAssessed, balanceDue + p.amountPaid);
+        const status = balanceDue <= 0
+          ? (p.settledByService && p.amountPaid === 0 ? "Settled (Service)" : "Fully Paid")
+          : p.amountPaid > 0 ? "Partially Paid" : "Unpaid";
         return {
-          ...p, assessedAmount: p.totalFine, balanceDue: isFullyPaid ? 0 : Math.max(0, p.totalFine - totalResolved),
-          duration: formatHoursAndMinutes(p.totalHours), status, particulars: p.activities.join(" ; ")
+          ...p, assessedAmount, balanceDue,
+          duration: formatHoursAndMinutes(p.totalHours), status,
+          particulars: p.activities.join(" ; ")
         };
       });
 
     } else {
       const itemPayers = new Map();
       validCollections.forEach((c: any) => {
-        if (c.itemDescription === reportCategory || c.category === reportCategory) {
+        if (String(c.category || "").trim().toLowerCase() === reportCategory.trim().toLowerCase()) {
           const sInfo = getStudentData(c.studentId, c.studentName);
           if (!itemPayers.has(sInfo.key)) {
             itemPayers.set(sInfo.key, { ...sInfo, rate: Number(c.standardRate)||0, amountPaid: 0, balanceDue: 0, orNumbers: [] });
@@ -313,7 +438,48 @@ export default function ReportsClient({
     return acc;
   }, {} as Record<string, ReportRow[]>);
 
-  const sortedYearLevels = ["1st Year", "2nd Year", "3rd Year", "4th Year", "Unassigned"].filter((y: string) => groupedRoster[y]);
+  // Render every year-level group that actually exists in the filtered data.
+  // Previously, this hardcoded list silently hid values such as "N/A" or "5th Year",
+  // even when the status banner counted those students.
+  const preferredYearOrder = [
+    "1st Year",
+    "2nd Year",
+    "3rd Year",
+    "4th Year",
+    "5th Year",
+    "6th Year",
+  ];
+
+  const sortedYearLevels = Object.keys(groupedRoster).sort((a: string, b: string) => {
+    if (a === "Unassigned") return b === "Unassigned" ? 0 : 1;
+    if (b === "Unassigned") return -1;
+
+    const aIndex = preferredYearOrder.indexOf(a);
+    const bIndex = preferredYearOrder.indexOf(b);
+
+    if (aIndex >= 0 && bIndex >= 0) return aIndex - bIndex;
+    if (aIndex >= 0) return -1;
+    if (bIndex >= 0) return 1;
+
+    return a.localeCompare(b);
+  });
+
+  // Pagination is display-only. Analytics and CSV continue to use *all* filtered
+  // records, not just the visible page.
+  const liquidationRows = validLiquidations.slice().sort((a: any, b: any) =>
+    String(b.date || "").localeCompare(String(a.date || "")));
+  const isLiquidationCategory = reportCategory === "Liquidation / Audited Expenses";
+  const totalRecords = isLiquidationCategory ? liquidationRows.length : filteredRoster.length;
+  const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
+  const safePage = Math.max(1, Math.min(page, totalPages));
+  const pagedRoster = filteredRoster.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const pagedLiquidations = liquidationRows.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const pagedGroups = pagedRoster.reduce((acc: Record<string, ReportRow[]>, row: ReportRow) => {
+    const key = row.yearLevel || "Unassigned";
+    (acc[key] ||= []).push(row);
+    return acc;
+  }, {});
+  const pagedYears = sortedYearLevels.filter(yr => Boolean(pagedGroups[yr]));
 
   const fullyPaidCount = filteredRoster.filter((r: any) => r.status === "Fully Paid" || r.status === "Settled (Service)").length;
   const partialCount = filteredRoster.filter((r: any) => r.status === "Partially Paid").length;
@@ -326,7 +492,7 @@ export default function ReportsClient({
     let csv = "";
     
     if (isLiquidationReport) {
-      if (validLiquidations.length === 0) return alert("No liquidation records to export.");
+      if (validLiquidations.length === 0) return void clearAlert("No liquidation records to export.");
       csv = `Date,Audit ID,CA Reference,Officer / Requestor,Fund Source,Budget (CA),Liquidated Exp.,Cash Return (Surplus),Reimburse Due\n`;
       validLiquidations.forEach((l: any) => {
         const budget = (Number(l.totalExpense)||0) + (Number(l.varianceReturn)||0) - (Number(l.reimbursementDue)||0);
@@ -334,7 +500,7 @@ export default function ReportsClient({
         csv += `"${rawDate}","${l.auditId}","${l.referenceCaId || l.advanceId || ''}","${l.requestor}","${l.fundSource}",${budget},${l.totalExpense},${l.varianceReturn||0},${l.reimbursementDue||0}\n`;
       });
     } else if (isPenaltyReport) {
-      if (sortedYearLevels.length === 0) return alert("No penalty records to export.");
+      if (sortedYearLevels.length === 0) return void clearAlert("No penalty records to export.");
       csv = `Year Level,Student ID,Student Name,Duration,Assessed Fee,Amount Paid,Balance Due,Status,Particulars\n`;
       sortedYearLevels.forEach((yr: string) => {
         groupedRoster[yr].forEach((s: any) => {
@@ -342,7 +508,7 @@ export default function ReportsClient({
         });
       });
     } else {
-      if (sortedYearLevels.length === 0) return alert("No records to export for this category.");
+      if (sortedYearLevels.length === 0) return void clearAlert("No records to export for this category.");
       const headerName = reportCategory === "Activity & Item Dues (Unpaid)" ? "Remarks" : "OR Number(s) / Remarks";
       csv = `Year Level,Student ID,Student Name,Assessed Fee,Amount Paid,Balance Due,Status,${headerName}\n`;
       sortedYearLevels.forEach((yr: string) => {
@@ -429,24 +595,24 @@ export default function ReportsClient({
       `}} />
 
       <div className="print-container">
-        {/* ISO PRINT HEADER */}
+        {/* PRINT HEADER: use the Organization's saved report settings, not hard-coded institution details */}
         <div className="d-none d-print-flex justify-content-between align-items-center mb-3 pb-2 border-bottom border-dark border-opacity-50">
-          <div style={{ width: '90px', flexShrink: 0 }} className="text-center">
-            <img src={getAssetUrl('fcu.png')} alt="FCU Logo" style={{ width: '100%', maxHeight: '90px', objectFit: 'contain' }} />
+          <div style={{ width: '90px', minWidth: '90px', flexShrink: 0 }} className="text-center">
+            {reportHeaderLeftLogo ? (
+              <img src={reportHeaderLeftLogo} alt="School logo" style={{ width: '100%', maxHeight: '90px', objectFit: 'contain' }} />
+            ) : <div aria-hidden="true" />}
           </div>
           <div className="text-center flex-grow-1 px-3">
-            <div className="fw-bold text-uppercase" style={{ fontSize: '1.1rem' }}>Filamer Christian University</div>
-            <div className="fw-bold text-uppercase text-info" style={{ fontSize: '0.9rem', letterSpacing: '0.5px' }}>{orgName}</div>
-            <div className="text-muted small">Roxas Avenue, Roxas City, Capiz, Philippines 5800</div>
+            {schoolName.trim() ? <div className="fw-bold text-uppercase" style={{ fontSize: '1.1rem' }}>{schoolName.trim()}</div> : null}
+            <div className="fw-bold text-uppercase" style={{ fontSize: '0.9rem', letterSpacing: '0.5px' }}>{orgName}</div>
+            {schoolAddress.trim() ? <div className="small">{schoolAddress.trim()}</div> : null}
             <div className="mt-3 fw-bold text-uppercase" style={{ fontSize: '0.95rem' }}>Detailed Audit & Financial Report ({reportCategory})</div>
-            <div className="text-muted small fst-italic mt-1">{ay} &nbsp;|&nbsp; {term}</div>
+            <div className="small fst-italic mt-1">{ay} &nbsp;|&nbsp; {term}</div>
           </div>
-          <div style={{ width: '90px', flexShrink: 0 }} className="text-center">
-            <img 
-              src={logoUrl || getAssetUrl('engineering_logo.png')} 
-              alt="Entity Logo" 
-              style={{ width: '100%', maxHeight: '90px', objectFit: 'contain' }} 
-            />
+          <div style={{ width: '90px', minWidth: '90px', flexShrink: 0 }} className="text-center">
+            {(reportHeaderRightLogo || logoUrl) ? (
+              <img src={reportHeaderRightLogo || logoUrl} alt="Organization logo" style={{ width: '100%', maxHeight: '90px', objectFit: 'contain' }} />
+            ) : <div aria-hidden="true" />}
           </div>
         </div>
 
@@ -476,6 +642,14 @@ export default function ReportsClient({
             </div>
           </div>
 
+        {(Number(carriedIn) > 0 || Number(carriedOut) > 0) && (
+          <div className="alert alert-info small d-print-none">
+            Period available balance: <strong>{fmt(remainingBalance)}</strong>.
+            Carry-over received: <strong>{fmt(carriedIn)}</strong>; forwarded:
+            <strong> {fmt(carriedOut)}</strong>. These are balance transfers,
+            not student payments or new income.
+          </div>
+        )}
         <div className="row g-3 mb-3 d-print-none">
           <div className="col-12 col-md-4">
             <label className="form-label text-body-secondary small mb-1">Report Category</label>
@@ -493,12 +667,12 @@ export default function ReportsClient({
               )}
 
               {dynamicCategories.length > 0 && (
-                <optgroup label="Organization Collection Fees">
+                <optgroup label="Categories from Setup Collection Fees">
                   {dynamicCategories.map((cat: string, idx: number) => <option key={`dyn-${idx}`} value={cat}>{cat}</option>)}
                 </optgroup>
               )}
               
-              <optgroup label="Compliance & Audits">
+              <optgroup label="System Reports (not fee categories)">
                 <option value="Penalty Fee">Penalty Fee / Sanctions</option>
                 <option value="Liquidation / Audited Expenses">Liquidation / Audited Expenses</option>
               </optgroup>
@@ -510,10 +684,9 @@ export default function ReportsClient({
                 <label className="form-label text-body-secondary small mb-1">Year Level Filter</label>
                 <select className="form-select bg-body text-body border-secondary" value={yearFilter} onChange={e => setYearFilter(e.target.value)}>
                   <option value="All Year Levels">All Year Levels</option>
-                  <option value="1st Year">1st Year</option>
-                  <option value="2nd Year">2nd Year</option>
-                  <option value="3rd Year">3rd Year</option>
-                  <option value="4th Year">4th Year</option>
+                  {availableYearLevels.map((level: string) => (
+                    <option key={level} value={level}>{level}</option>
+                  ))}
                 </select>
               </div>
               <div className="col-12 col-md-3">
@@ -580,23 +753,23 @@ export default function ReportsClient({
 
         {!isLiquidationReport && viewMode === "Table" && (
           <div className="report-groups-container">
-            {sortedYearLevels.length === 0 ? (
+            {pagedYears.length === 0 ? (
               <div className="text-center text-muted py-4">No records found for the selected filters.</div>
             ) : (
-              sortedYearLevels.map((yr: string) => {
+              pagedYears.map((yr: string) => {
                 let lastColumnHeader = "OR Number(s)";
                 if (isPenaltyReport) {
                   lastColumnHeader = "Activities & Breakdown";
                 } else if (reportCategory === "Activity & Item Dues (Unpaid)") {
                   lastColumnHeader = "Remarks"; 
                 } else {
-                  const hasOR = groupedRoster[yr].some((row: any) => row.particulars && row.particulars !== "—");
+                  const hasOR = pagedGroups[yr].some((row: any) => row.particulars && row.particulars !== "—");
                   if (!hasOR) lastColumnHeader = "Remarks";
                 }
 
                 return (
                   <div key={yr} className="mb-4">
-                    <div className="badge bg-primary fs-6 mb-2 px-3 py-2 w-100 text-start">{yr} ({groupedRoster[yr].length} Students)</div>
+                    <div className="badge bg-primary fs-6 mb-2 px-3 py-2 w-100 text-start">{yr} ({pagedGroups[yr].length} Students)</div>
                     <div className="table-responsive">
                       <table className="table table-hover align-middle table-sm border-secondary text-body">
                         <thead>
@@ -612,7 +785,7 @@ export default function ReportsClient({
                           </tr>
                         </thead>
                         <tbody>
-                          {groupedRoster[yr].map((row: any, idx: number) => (
+                          {pagedGroups[yr].map((row: any, idx: number) => (
                             <tr key={`${row.id}-${idx}`}>
                               <td><span className="text-info font-monospace">{row.studentId}</span></td>
                               <td className="fw-semibold">{row.fullName}</td>
@@ -661,7 +834,7 @@ export default function ReportsClient({
                   {validLiquidations.length === 0 ? (
                     <tr><td colSpan={8} className="text-center text-muted py-4">No audited liquidation records found.</td></tr>
                   ) : (
-                    validLiquidations.map((l: any, idx: number) => {
+                    pagedLiquidations.map((l: any, idx: number) => {
                       const budget = (Number(l.totalExpense)||0) + (Number(l.varianceReturn)||0) - (Number(l.reimbursementDue)||0);
                       let resultBadge = <span className="badge bg-secondary">Exact (₱0.00)</span>;
                       if (Number(l.varianceReturn) > 0) resultBadge = <span className="badge bg-success">+{fmt(l.varianceReturn)} (Return)</span>;
@@ -684,6 +857,28 @@ export default function ReportsClient({
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
+
+        {viewMode === "Table" && (
+          <div className="d-print-none d-flex align-items-center justify-content-between flex-wrap gap-2 mt-3 mb-3 border-top border-secondary pt-3">
+            <div className="d-flex align-items-center gap-2">
+              <label className="small text-muted" htmlFor="clear-report-page-size">Rows per page</label>
+              <select id="clear-report-page-size" className="form-select form-select-sm border-secondary" style={{ width: 90 }} value={pageSize}
+                onChange={e => setPageSize(Number(e.target.value))}>
+                <option value={10}>10</option><option value={20}>20</option><option value={50}>50</option><option value={100}>100</option>
+              </select>
+              <span className="small text-muted">
+                {totalRecords === 0 ? "0" : `${(safePage - 1) * pageSize + 1}–${Math.min(safePage * pageSize, totalRecords)}`} of {totalRecords}
+              </span>
+            </div>
+            <nav aria-label="Detailed report pagination" className="btn-group btn-group-sm">
+              <button type="button" className="btn btn-outline-secondary" disabled={safePage === 1} onClick={() => setPage(1)}>First</button>
+              <button type="button" className="btn btn-outline-secondary" disabled={safePage === 1} onClick={() => setPage(p => Math.max(1, p - 1))}>Previous</button>
+              <span className="btn btn-outline-secondary disabled">Page {safePage} / {totalPages}</span>
+              <button type="button" className="btn btn-outline-secondary" disabled={safePage === totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>Next</button>
+              <button type="button" className="btn btn-outline-secondary" disabled={safePage === totalPages} onClick={() => setPage(totalPages)}>Last</button>
+            </nav>
           </div>
         )}
 
@@ -716,18 +911,48 @@ export default function ReportsClient({
       {showSettings && (
         <div className="modal fade show d-block d-print-none" tabIndex={-1} style={{ backgroundColor: "rgba(0,0,0,0.6)" }}>
           <div className="modal-dialog modal-dialog-centered modal-lg">
-            <div className="modal-content bg-body border-secondary text-body shadow-lg">
+            <div className="modal-content bg-body border-secondary text-body shadow-lg clear-theme-modal">
               <div className="modal-header border-secondary">
                 <h5 className="modal-title fw-bold text-info">
-                  <i className="bi bi-pen-fill me-2"></i>Configure Signatories
+                  <i className="bi bi-gear-fill me-2"></i>Report Settings
                 </h5>
                 <button type="button" className="btn-close" onClick={() => setShowSettings(false)}></button>
               </div>
               <div className="modal-body p-4">
                 <p className="small text-muted mb-3">
-                  Customize the official signatories for this department. Dragging/reordering is determined by the order they appear below.
+                  These institution details and logo images are shared by the Summary, Reports, and Audited Liquidation History printouts. The organization/department name remains the registered organization name.
                 </p>
 
+                <div className="border border-secondary rounded p-3 mb-4">
+                  <h6 className="fw-bold text-info mb-3">Institution / Print Header</h6>
+                  <div className="mb-3">
+                    <label className="form-label small fw-semibold">School Name</label>
+                    <input className="form-control bg-body text-body border-secondary" value={schoolName} onChange={(e) => setSchoolName(e.target.value)} placeholder="Enter school or institution name" />
+                  </div>
+                  <div className="mb-3">
+                    <label className="form-label small fw-semibold">Organization / Department Name</label>
+                    <input className="form-control bg-body-secondary text-body border-secondary" value={orgName || ""} readOnly />
+                    <div className="form-text">This comes from the registered organization name and cannot be changed here.</div>
+                  </div>
+                  <div className="mb-3">
+                    <label className="form-label small fw-semibold">School Address</label>
+                    <textarea className="form-control bg-body text-body border-secondary" value={schoolAddress} onChange={(e) => setSchoolAddress(e.target.value)} rows={2} placeholder="Enter school address" />
+                  </div>
+                  <div className="row g-3">
+                    <div className="col-md-6">
+                      <label className="form-label small fw-semibold">Left Header Logo</label>
+                      <input type="file" accept="image/png,image/jpeg,image/webp" className="form-control form-control-sm bg-body text-body border-secondary" onChange={(e) => setLeftLogoFile(e.target.files?.[0] || null)} />
+                      {reportHeaderLeftLogo && <div className="small text-muted mt-1">A left logo is currently saved. Upload another file to replace it.</div>}
+                    </div>
+                    <div className="col-md-6">
+                      <label className="form-label small fw-semibold">Right Header Logo</label>
+                      <input type="file" accept="image/png,image/jpeg,image/webp" className="form-control form-control-sm bg-body text-body border-secondary" onChange={(e) => setRightLogoFile(e.target.files?.[0] || null)} />
+                      {(reportHeaderRightLogo || logoUrl) && <div className="small text-muted mt-1">A right logo is currently available. Upload another file to replace it.</div>}
+                    </div>
+                  </div>
+                </div>
+
+                <h6 className="fw-bold text-info mb-3">Report Signatories</h6>
                 {signatories.map((sig: any, idx: number) => (
                   <div key={idx} className="row g-2 mb-3 align-items-center bg-body-secondary p-2 rounded border border-secondary">
                     <div className="col-md-3">
@@ -774,11 +999,15 @@ export default function ReportsClient({
               </div>
               <div className="modal-footer border-secondary">
                 <button type="button" className="btn btn-secondary btn-sm" onClick={() => {
-                  setSignatories(initialSignatories); 
+                  setSignatories(initialSignatories || []);
+                  setSchoolName(String(reportSchoolName || suppliedSchoolName || ""));
+                  setSchoolAddress(String(reportSchoolAddress || suppliedSchoolAddress || ""));
+                  setLeftLogoFile(null);
+                  setRightLogoFile(null);
                   setShowSettings(false);
                 }}>Cancel</button>
-                <button type="button" className="btn btn-info btn-sm text-dark fw-bold" onClick={handleSaveSignatories} disabled={isSaving}>
-                  {isSaving ? "Saving..." : "Save Signatories"}
+                <button type="button" className="btn btn-info btn-sm text-dark fw-bold" onClick={handleSaveReportSettings} disabled={isSaving}>
+                  {isSaving ? "Saving..." : "Save Report Settings"}
                 </button>
               </div>
             </div>

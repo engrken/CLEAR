@@ -1,0 +1,23 @@
+// Structured, append-only settlement activity. Linked to immutable official receipts.
+model PenaltySettlementEvent {
+  id              String       @id @default(uuid())
+  organizationId  String
+  penaltyRecordId String
+  receiptId       String?
+  method          String
+  amount          Float
+  minutesRendered Int          @default(0)
+  accountingAY    String
+  accountingTerm  String
+  balanceBefore   Float
+  balanceAfter    Float
+  recordedBy      String
+  note            String?
+  createdAt       DateTime     @default(now())
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  penalty         Penalty      @relation(fields: [penaltyRecordId], references: [id], onDelete: Restrict)
+  receipt         Collection?  @relation(fields: [receiptId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, penaltyRecordId, createdAt], map: "PSE_org_penalty_date_idx")
+  @@index([organizationId, receiptId], map: "PSE_org_receipt_idx")
+}

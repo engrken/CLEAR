@@ -2,6 +2,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { provisionSubEntityAction } from '../actions';
 
 export function EntityProvisionForm({
@@ -13,12 +14,14 @@ export function EntityProvisionForm({
   currentTier: string;
   canAddMore: boolean;
 }) {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (loading || !canAddMore) return;
     setLoading(true);
     setError('');
     setSuccess('');
@@ -30,6 +33,7 @@ export function EntityProvisionForm({
       await provisionSubEntityAction(formData);
       setSuccess('New entity workspace provisioned! You have been assigned as its administrator.');
       form.reset();
+      router.refresh();
     } catch (err: any) {
       setError(err.message || 'Failed to provision entity.');
     } finally {

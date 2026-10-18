@@ -1,0 +1,39 @@
+
+// CLEAR financial-period closure (new model; append to prisma/schema.prisma).
+model AcademicPeriodTransition {
+  id             String   @id @default(uuid())
+  organizationId String
+  sourceAY       String
+  sourceTerm     String
+  destinationAY  String
+  destinationTerm String
+  amount         Float    @default(0)
+  transferId     String?
+  feePolicy      String   @default("manual")
+  copiedFeesJson String   @default("[]")
+  reason         String
+  closedBy       String
+  closedAt       DateTime @default(now())
+  status         String   @default("Closed")
+  reopenedAt     DateTime?
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  @@unique([organizationId, sourceAY, sourceTerm])
+  @@index([organizationId, destinationAY, destinationTerm])
+}
+
+// Explicit link from a current-period receipt to an older obligation.
+// Never infer historical linkage from free-text descriptions.
+model ArrearPaymentLink {
+  id             String   @id @default(uuid())
+  organizationId String
+  receiptId      String   @unique
+  obligationType String
+  obligationId   String
+  originAY       String
+  originTerm     String
+  amount         Float
+  createdAt      DateTime @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  receipt        Collection @relation(fields: [receiptId], references: [id], onDelete: Restrict)
+  @@index([organizationId, obligationType, obligationId])
+}

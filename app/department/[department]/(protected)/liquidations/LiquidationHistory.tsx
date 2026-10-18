@@ -1,56 +1,131 @@
 // /app/department/[department]/(protected)/liquidations/LiquidationHistory.tsx
 
 "use client";
+import { clearAlert, clearConfirm, clearPrompt } from "@/lib/clear-dialogs";
 
-import React, { useState, useEffect } from "react";
+
+import React, { useState } from "react";
+import { useRouter } from "next/navigation";
 import { fmt } from "@/lib/utils";
+import { saveReportSettings, saveSignatories } from "../../actions";
+import { executeVoidTransaction } from "../void/actions";
 
-export default function LiquidationHistory({ 
-  audits, 
-  orgName, 
-  logoUrl, 
-  signatories, 
-  ay, 
-  term 
+export default function LiquidationHistory({
+  audits,
+  orgName,
+  logoUrl,
+  signatories: initialSignatories,
+  ay,
+  term,
+  department,
+  orgId,
+  schoolName: suppliedSchoolName = "",
+  schoolAddress: suppliedSchoolAddress = "",
+  reportSchoolName = "",
+  reportSchoolAddress = "",
+  reportHeaderLeftLogo = "",
+  reportHeaderRightLogo = "",
+  settingsManagedByParent = false,
+  canVoid = false,
+  isClosed = false,
 }: any) {
+  const router = useRouter();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [printData, setPrintData] = useState<any>(null);
-  const [mounted, setMounted] = useState(false);
+  const [voidingAudit, setVoidingAudit] = useState<string | null>(null);
+  const reverseAudit = async (audit: any) => {
+    if (!canVoid || isClosed || voidingAudit) return;
+    const reason = await clearPrompt(`Explain the reversal of audited liquidation ${audit.auditId}. Original expense items will be retained.`,
+      { title: "Void Audited Liquidation", multiline: true, confirmText: "Continue" });
+    if (reason === null) return;
+    if (reason.trim().length < 5) return void clearAlert("The reason must contain at least 5 characters.");
+    if (!await clearConfirm(`Void ${audit.auditId}? A linked cash advance will become Pending Liquidation again.`,
+      { title: "Confirm Liquidation Reversal", confirmText: "Void Liquidation" })) return;
+    setVoidingAudit(audit.id);
+    try {
+      await executeVoidTransaction({ department, category: "liquidations", referenceId: audit.auditId,
+        ay, term, reason: reason.trim() });
+      await clearAlert("Liquidation reversed; records and audit trail retained.", "success");
+      router.refresh();
+    } catch (e: any) { await clearAlert(e?.message || "Failed to void liquidation.", "error"); }
+    finally { setVoidingAudit(null); }
+  };
+  const [showSettings, setShowSettings] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [signatories, setSignatories] = useState(initialSignatories || []);
+  const [schoolName, setSchoolName] = useState(String(reportSchoolName || suppliedSchoolName || ""));
+  const [schoolAddress, setSchoolAddress] = useState(String(reportSchoolAddress || suppliedSchoolAddress || ""));
+  const [leftLogoFile, setLeftLogoFile] = useState<File | null>(null);
+  const [rightLogoFile, setRightLogoFile] = useState<File | null>(null);
 
-  useEffect(() => setMounted(true), []);
+  // When the parent owns Report Settings, use the latest saved props directly.
+  const printSchoolName = settingsManagedByParent
+    ? String(reportSchoolName || suppliedSchoolName || "")
+    : schoolName;
+  const printSchoolAddress = settingsManagedByParent
+    ? String(reportSchoolAddress || suppliedSchoolAddress || "")
+    : schoolAddress;
+  const printSignatories = settingsManagedByParent ? initialSignatories : signatories;
 
-  const getAssetUrl = (filename: string) => {
-    if (mounted && window.location.hostname.endsWith('.localhost')) {
-      return `http://localhost:${window.location.port}/${filename}`;
-    }
-    return `/${filename}`;
+  const labelOptions = ["Prepared by:", "Attested by:", "Noted by:", "Endorsed by:", "Verified by:", "Approved by:"];
+
+  const handleUpdateSignatory = (index: number, field: string, value: string) => {
+    setSignatories((current: any[]) => current.map((sig, i) => i === index ? { ...sig, [field]: value } : sig));
   };
 
-  const displayLogo = logoUrl || getAssetUrl('engineering_logo.png');
+  const handleAddSignatory = () => {
+    setSignatories((current: any[]) => [...current, { label: "Prepared by:", name: "", position: "" }]);
+  };
+
+  const handleRemoveSignatory = (index: number) => {
+    setSignatories((current: any[]) => current.filter((_: any, i: number) => i !== index));
+  };
+
+  const handleSaveReportSettings = async () => {
+    if (!department) {
+      void clearAlert("Unable to save report settings because the department identifier was not provided by the page.");
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const formData = new FormData();
+      formData.append("schoolName", schoolName.trim());
+      formData.append("schoolAddress", schoolAddress.trim());
+      if (leftLogoFile) formData.append("leftLogo", leftLogoFile);
+      if (rightLogoFile) formData.append("rightLogo", rightLogoFile);
+      await saveReportSettings(department, formData);
+      await saveSignatories(orgId, department, signatories);
+      setLeftLogoFile(null);
+      setRightLogoFile(null);
+      setShowSettings(false);
+      router.refresh();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      void clearAlert(`Failed to save report settings: ${message}`);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   // =================================================================
   // EXPORT CSV LOGIC
   // =================================================================
   const handleExportCSV = (audit: any) => {
+    const csvCell = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
     const headers = ["Quantity", "OR/SI Number", "Description", "Subtotal (PHP)"];
-    
-    const rows = audit.items.map((item: any) => [
-      item.qty,
-      `"${item.orSiNumber || 'N/A'}"`, 
-      `"${item.description.replace(/"/g, '""')}"`, 
-      item.subTotal.toFixed(2)
-    ]);
-
-    const csvContent = [headers.join(","), ...rows.map((r: any[]) => r.join(","))].join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const rows = (Array.isArray(audit.items) ? audit.items : []).map((item: any) =>
+      [item.qty, item.orSiNumber || "N/A", item.description || "", Number(item.subTotal || 0).toFixed(2)]
+        .map(csvCell).join(",")
+    );
+    const content = [headers.map(csvCell).join(","), ...rows].join("\r\n");
+    const blob = new Blob(["\uFEFF", content], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
-    
     const link = document.createElement("a");
     link.href = url;
-    link.download = `Liquidation_${audit.auditId}.csv`;
+    link.download = `Liquidation_${String(audit.auditId || "record").replace(/[^a-zA-Z0-9_-]/g, "_")}.csv`;
     document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
+    link.remove();
     URL.revokeObjectURL(url);
   };
 
@@ -120,6 +195,14 @@ export default function LiquidationHistory({
         }
       `}} />
 
+      {!settingsManagedByParent && (
+        <div className="d-flex justify-content-end mb-3 d-print-none">
+          <button className="btn btn-outline-info btn-sm fw-bold" onClick={() => setShowSettings(true)}>
+            <i className="bi bi-gear-fill me-1"></i>Report Settings
+          </button>
+        </div>
+      )}
+
       <div className="table-responsive d-print-none text-body">
         <table className="table table-hover align-middle mb-0" style={{ fontSize: '0.9rem' }}>
           <thead>
@@ -136,7 +219,10 @@ export default function LiquidationHistory({
               <React.Fragment key={audit.id}>
                 {/* PRIMARY ROW */}
                 <tr className="border-bottom border-secondary">
-                  <td className="fw-bold text-info">{audit.auditId}</td>
+                  <td className="fw-bold text-info">{audit.auditId}
+                    {/VOID|CANCEL/i.test(String(audit.status || "")) &&
+                      <span className="badge text-bg-secondary ms-2">Voided</span>}
+                  </td>
                   <td>{new Date(audit.date).toLocaleDateString()}</td>
                   <td className="fw-semibold">{audit.requestor}</td>
                   <td className="text-end fw-bold text-danger">{fmt(audit.totalExpense as any)}</td>
@@ -151,6 +237,13 @@ export default function LiquidationHistory({
                     <button className="btn btn-sm btn-outline-info me-2" onClick={() => handleExportCSV(audit)} title="Export Items to CSV">
                       <i className="bi bi-filetype-csv"></i>
                     </button>
+                    {canVoid && !isClosed && !/VOID|CANCEL/i.test(String(audit.status || "")) && (
+                      <button type="button" className="btn btn-sm btn-outline-danger me-2"
+                        disabled={Boolean(voidingAudit)} onClick={() => reverseAudit(audit)}
+                        title="Void audited liquidation (authorized users only)">
+                        {voidingAudit === audit.id ? "Voiding..." : "Void"}
+                      </button>
+                    )}
                     <button className="btn btn-sm btn-outline-primary" onClick={() => handlePrint(audit)} title="Print Audited Report">
                       <i className="bi bi-printer-fill"></i> Print
                     </button>
@@ -219,25 +312,24 @@ export default function LiquidationHistory({
       {printData && (
         <div className="print-container d-none d-print-block">
           
-          {/* INSTITUTIONAL HEADER */}
+          {/* INSTITUTIONAL HEADER: use saved report settings instead of hard-coded branding */}
           <div className="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom border-dark">
-            <div style={{ width: '90px' }} className="text-center">
-              <img src={getAssetUrl('fcu.png')} alt="FCU Logo" style={{ width: '100%', maxHeight: '90px', objectFit: 'contain' }} />
+            <div style={{ width: '90px', minWidth: '90px', flexShrink: 0 }} className="text-center">
+              {reportHeaderLeftLogo ? (
+                <img src={reportHeaderLeftLogo} alt="School logo" style={{ width: '100%', maxHeight: '90px', objectFit: 'contain' }} />
+              ) : <div aria-hidden="true" />}
             </div>
             <div className="text-center flex-grow-1 px-3">
-              <div className="fw-bold text-uppercase" style={{ fontSize: '1.1rem' }}>Filamer Christian University</div>
+              {printSchoolName.trim() ? <div className="fw-bold text-uppercase" style={{ fontSize: '1.1rem' }}>{printSchoolName.trim()}</div> : null}
               <div className="fw-bold text-uppercase" style={{ fontSize: '0.9rem' }}>{orgName}</div>
-              <div className="small">Roxas Avenue, Roxas City, Capiz</div>
+              {printSchoolAddress.trim() ? <div className="small">{printSchoolAddress.trim()}</div> : null}
               <div className="mt-3 fw-bold text-uppercase" style={{ fontSize: '0.95rem' }}>OFFICIAL AUDITED LIQUIDATION REPORT</div>
               <div className="small mt-1">{ay} &nbsp;|&nbsp; {term}</div>
             </div>
-            <div style={{ width: '90px' }} className="text-center">
-              <img 
-                src={displayLogo} 
-                alt="Org Logo" 
-                onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = getAssetUrl('engineering_logo.png'); }} 
-                style={{ width: '100%', maxHeight: '90px', objectFit: 'contain' }} 
-              />
+            <div style={{ width: '90px', minWidth: '90px', flexShrink: 0 }} className="text-center">
+              {(reportHeaderRightLogo || logoUrl) ? (
+                <img src={reportHeaderRightLogo || logoUrl} alt="Organization logo" style={{ width: '100%', maxHeight: '90px', objectFit: 'contain' }} />
+              ) : <div aria-hidden="true" />}
             </div>
           </div>
 
@@ -301,8 +393,8 @@ export default function LiquidationHistory({
 
           {/* DYNAMIC SIGNATORIES */}
           <div className="row mt-5 text-center signature-block small">
-            {signatories && signatories.length > 0 ? (
-              signatories.map((sig: any, idx: number) => (
+            {printSignatories && printSignatories.length > 0 ? (
+              printSignatories.map((sig: any, idx: number) => (
                 <div className="col" key={idx}>
                   <div className="text-muted mb-1" style={{ fontSize: '0.75rem' }}>{sig.label}</div>
                   <div style={{ height: '40px' }}></div>
@@ -317,6 +409,87 @@ export default function LiquidationHistory({
             )}
           </div>
 
+        </div>
+      )}
+
+      {!settingsManagedByParent && showSettings && (
+        <div className="modal fade show d-block d-print-none" tabIndex={-1} style={{ backgroundColor: "rgba(0,0,0,0.6)", zIndex: 1080 }}>
+          <div className="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+            <div className="modal-content bg-body border-secondary text-body shadow-lg clear-theme-modal">
+              <div className="modal-header border-secondary">
+                <h5 className="modal-title fw-bold text-info"><i className="bi bi-gear-fill me-2"></i>Report Settings</h5>
+                <button type="button" className="btn-close" onClick={() => setShowSettings(false)} aria-label="Close"></button>
+              </div>
+              <div className="modal-body p-4">
+                <p className="small text-muted mb-3">These settings are shared by the Summary, Reports, and Audited Liquidation History printouts.</p>
+                <div className="border border-secondary rounded p-3 mb-4">
+                  <h6 className="fw-bold text-info mb-3">Institution / Print Header</h6>
+                  <div className="mb-3">
+                    <label className="form-label small fw-semibold">School Name</label>
+                    <input className="form-control bg-body text-body border-secondary" value={schoolName} onChange={(e) => setSchoolName(e.target.value)} placeholder="Enter school or institution name" />
+                  </div>
+                  <div className="mb-3">
+                    <label className="form-label small fw-semibold">Organization / Department Name</label>
+                    <input className="form-control bg-body-secondary text-body border-secondary" value={orgName || ""} readOnly />
+                    <div className="form-text">This is the registered organization name and is retained on the printout.</div>
+                  </div>
+                  <div className="mb-3">
+                    <label className="form-label small fw-semibold">School Address</label>
+                    <textarea className="form-control bg-body text-body border-secondary" value={schoolAddress} onChange={(e) => setSchoolAddress(e.target.value)} rows={2} placeholder="Enter school address" />
+                  </div>
+                  <div className="row g-3">
+                    <div className="col-md-6">
+                      <label className="form-label small fw-semibold">Left Header Logo</label>
+                      <input type="file" accept="image/png,image/jpeg,image/webp" className="form-control form-control-sm bg-body text-body border-secondary" onChange={(e) => setLeftLogoFile(e.target.files?.[0] || null)} />
+                      {reportHeaderLeftLogo && <div className="small text-muted mt-1">A left logo is already saved. Upload a new file to replace it.</div>}
+                    </div>
+                    <div className="col-md-6">
+                      <label className="form-label small fw-semibold">Right Header Logo</label>
+                      <input type="file" accept="image/png,image/jpeg,image/webp" className="form-control form-control-sm bg-body text-body border-secondary" onChange={(e) => setRightLogoFile(e.target.files?.[0] || null)} />
+                      {(reportHeaderRightLogo || logoUrl) && <div className="small text-muted mt-1">A right logo is already available. Upload a new file to replace it.</div>}
+                    </div>
+                  </div>
+                </div>
+
+                <h6 className="fw-bold text-info mb-3">Report Signatories</h6>
+                {signatories.map((sig: any, idx: number) => (
+                  <div className="row g-2 mb-3 align-items-center bg-body-secondary p-2 rounded border border-secondary" key={idx}>
+                    <div className="col-md-3">
+                      <label className="form-label small fw-semibold">Action / Label</label>
+                      <select className="form-select form-select-sm bg-body text-body border-secondary" value={sig.label || "Prepared by:"} onChange={(e) => handleUpdateSignatory(idx, "label", e.target.value)}>
+                        {labelOptions.map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
+                      </select>
+                    </div>
+                    <div className="col-md-4">
+                      <label className="form-label small fw-semibold">Full Name</label>
+                      <input className="form-control form-control-sm bg-body text-body border-secondary" value={sig.name || ""} onChange={(e) => handleUpdateSignatory(idx, "name", e.target.value)} placeholder="Full name" />
+                    </div>
+                    <div className="col-md-4">
+                      <label className="form-label small fw-semibold">Position / Title</label>
+                      <input className="form-control form-control-sm bg-body text-body border-secondary" value={sig.position || ""} onChange={(e) => handleUpdateSignatory(idx, "position", e.target.value)} placeholder="Position or title" />
+                    </div>
+                    <div className="col-md-1 text-end mt-4">
+                      <button type="button" className="btn btn-outline-danger btn-sm" onClick={() => handleRemoveSignatory(idx)} title="Remove signatory"><i className="bi bi-trash"></i></button>
+                    </div>
+                  </div>
+                ))}
+                <button type="button" className="btn btn-outline-secondary btn-sm w-100 fw-bold mt-2" onClick={handleAddSignatory}><i className="bi bi-plus-lg me-1"></i>Add Signatory</button>
+              </div>
+              <div className="modal-footer border-secondary">
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => {
+                  setSignatories(initialSignatories || []);
+                  setSchoolName(String(reportSchoolName || suppliedSchoolName || ""));
+                  setSchoolAddress(String(reportSchoolAddress || suppliedSchoolAddress || ""));
+                  setLeftLogoFile(null);
+                  setRightLogoFile(null);
+                  setShowSettings(false);
+                }}>Cancel</button>
+                <button type="button" className="btn btn-info btn-sm text-dark fw-bold" onClick={handleSaveReportSettings} disabled={isSaving}>
+                  {isSaving ? "Saving..." : "Save Report Settings"}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </>

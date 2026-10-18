@@ -1,8 +1,11 @@
 // /app/department/[department]/(protected)/cashier-remittance/CashierRemittanceForm.tsx
 
 "use client";
+import { clearAlert, clearConfirm, clearPrompt } from "@/lib/clear-dialogs";
+
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { fmt } from "@/lib/utils";
 import { format } from "date-fns";
 import { recordCashierRemittance, voidCashierRemittance } from "./actions";
@@ -10,6 +13,8 @@ import { recordCashierRemittance, voidCashierRemittance } from "./actions";
 interface Fund {
   id: string;
   fundName: string;
+  availablePhysical?: number;
+  heldByCashier?: number;
 }
 
 interface CashierRemittance {
@@ -30,20 +35,42 @@ export default function CashierRemittanceForm({
   ay,
   term,
   funds,
-  remittances
+  remittances,
+  orgName,
+  reportSchoolName = "",
+  reportSchoolAddress = "",
+  cashierBalance = 0,
+  legacyPooledHeld = 0,
+  availableCash = 0,
+  periodClosed = false,
 }: {
   department: string;
   ay: string;
   term: string;
   funds: Fund[];
   remittances: CashierRemittance[];
+  orgName: string;
+  reportSchoolName?: string | null;
+  reportSchoolAddress?: string | null;
+  cashierBalance?: number;
+  legacyPooledHeld?: number;
+  availableCash?: number;
+  periodClosed?: boolean;
 }) {
+  const router = useRouter();
   const todayStr = new Date().toISOString().split("T")[0];
 
   const [transactionType, setTransactionType] = useState("Deposit");
   const [date, setDate] = useState(todayStr);
   const [remittedBy, setRemittedBy] = useState("");
-  const [fundSource, setFundSource] = useState("Remaining Balance (Net Ending Position)");
+  const legacyPool = "Remaining Balance (Net Ending Position)";
+  const defaultDepositFund = funds.find(f => (f.availablePhysical ?? 0) > 0.005)?.fundName ?? funds[0]?.fundName ?? "";
+  const defaultWithdrawalFund = funds.find(f => (f.heldByCashier ?? 0) > 0.005)?.fundName ?? (legacyPooledHeld > 0.005 ? legacyPool : "");
+  const [fundSource, setFundSource] = useState(defaultDepositFund);
+  const chooseTransactionType = (nextType: string) => {
+    setTransactionType(nextType);
+    setFundSource(nextType === "Deposit" ? defaultDepositFund : defaultWithdrawalFund);
+  };
   const [amount, setAmount] = useState("");
   const [cashierReceiptNo, setCashierReceiptNo] = useState("");
   const [remarks, setRemarks] = useState("");
@@ -71,10 +98,15 @@ export default function CashierRemittanceForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const parsedAmount = parseFloat(amount);
-    if (parsedAmount <= 0) return alert("Amount must be greater than zero.");
+    if (periodClosed) return void clearAlert("This term has already been carried over. Reverse the rollover before recording cashier transactions.");
+    if (!fundSource) return void clearAlert("Please select a valid source fund.");
+    if (transactionType === "Deposit" && fundSource === legacyPool) return void clearAlert("Select a real source fund; Net Ending Position is not a fund.");
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0 || Math.round(parsedAmount * 100) / 100 !== parsedAmount) return void clearAlert("Enter a positive amount with up to two decimal places.");
+    if (transactionType === "Deposit" && parsedAmount > availableCash + 0.001) return void clearAlert("Insufficient cash on hand for this deposit.");
+    if (transactionType === "Withdrawal" && parsedAmount > cashierBalance + 0.001) return void clearAlert("Insufficient safekeeping balance for this withdrawal.");
     
     const actionText = transactionType === "Deposit" ? "deposit to" : "withdraw from";
-    if (!confirm(`Are you sure you want to log a safekeeping ${actionText} the University Cashier for ${fmt(parsedAmount)}?`)) return;
+    if (!await clearConfirm(`Are you sure you want to log a safekeeping ${actionText} the University Cashier for ${fmt(parsedAmount)}?`)) return;
 
     setIsSubmitting(true);
     try {
@@ -106,20 +138,23 @@ export default function CashierRemittanceForm({
       setAmount("");
       setCashierReceiptNo("");
       setRemarks("");
+      // Refresh the ledger and history after successful deposit or withdrawal.
+      router.refresh();
     } catch (err: any) {
-      alert("Error: " + err.message);
+      void clearAlert("Error: " + err.message);
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleVoid = async (id: string, ref: string) => {
-    if (!confirm(`Are you sure you want to VOID record [${ref}]?`)) return;
+    if (!await clearConfirm(`Are you sure you want to VOID record [${ref}]?`)) return;
     try {
       await voidCashierRemittance(department, id);
-      alert("Record voided successfully.");
+      void clearAlert("Record voided successfully.");
+      router.refresh();
     } catch (err: any) {
-      alert("Error: " + err.message);
+      void clearAlert("Error: " + err.message);
     }
   };
 
@@ -170,8 +205,9 @@ export default function CashierRemittanceForm({
           <div className="card-body p-4 p-md-5">
             
             <div className="text-center mb-4 pb-3 border-bottom border-dark">
-              <h4 className="fw-bold text-uppercase mb-1">{decodeURIComponent(department)}</h4>
-              <div className="small">Filamer Christian University</div>
+              {reportSchoolName && <div className="fw-bold text-uppercase">{reportSchoolName}</div>}
+              <h4 className="fw-bold text-uppercase mb-1">{orgName}</h4>
+              {reportSchoolAddress && <div className="small">{reportSchoolAddress}</div>}
               <h5 className="mt-4 fw-bold text-uppercase" style={{ letterSpacing: '1px' }}>
                 {printData.type === "Deposit" ? "Cash Remittance Voucher" : "Cash Withdrawal Voucher"}
               </h5>
@@ -264,6 +300,8 @@ export default function CashierRemittanceForm({
   // =========================================================
   return (
     <>
+      {periodClosed && <div className="alert alert-warning">This term is closed by a carry-over. Reverse the rollover in Setup to reopen it.</div>}
+      <div className="alert alert-secondary small">Cashier held: <strong>{fmt(cashierBalance)}</strong> | Physical cash available: <strong>{fmt(availableCash)}</strong>. Safekeeping changes cash location, not income.</div>
       <form onSubmit={handleSubmit} className="mb-4 card p-3 border-secondary bg-body shadow-sm text-body">
         
         <div className="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom border-secondary">
@@ -271,10 +309,10 @@ export default function CashierRemittanceForm({
             <i className="bi bi-bank me-2"></i>University Cashier Transaction
           </h6>
           <div className="btn-group" role="group">
-            <input type="radio" className="btn-check" name="btnType" id="btnDeposit" autoComplete="off" checked={transactionType === "Deposit"} onChange={() => setTransactionType("Deposit")} />
+            <input type="radio" className="btn-check" name="btnType" id="btnDeposit" autoComplete="off" checked={transactionType === "Deposit"} onChange={() => chooseTransactionType("Deposit")} />
             <label className="btn btn-outline-success btn-sm fw-bold" htmlFor="btnDeposit">Deposit</label>
 
-            <input type="radio" className="btn-check" name="btnType" id="btnWithdraw" autoComplete="off" checked={transactionType === "Withdrawal"} onChange={() => setTransactionType("Withdrawal")} />
+            <input type="radio" className="btn-check" name="btnType" id="btnWithdraw" autoComplete="off" checked={transactionType === "Withdrawal"} onChange={() => chooseTransactionType("Withdrawal")} />
             <label className="btn btn-outline-danger btn-sm fw-bold" htmlFor="btnWithdraw">Withdraw</label>
           </div>
         </div>
@@ -294,14 +332,19 @@ export default function CashierRemittanceForm({
 
         <div className="row g-3 mb-3">
           <div className="col-md-6">
-            <label className="form-label text-muted small fw-semibold">Target Fund Pool</label>
+            <label className="form-label text-muted small fw-semibold">Source Fund (cash custody only)</label>
             <select className="form-select py-2 bg-body text-body border-secondary" value={fundSource} onChange={(e) => setFundSource(e.target.value)} required>
-              <option value="Remaining Balance (Net Ending Position)" className="fw-bold text-info">Remaining Balance (Net Ending Position)</option>
+              <option value="" disabled>Select a real fund</option>
               {funds.map((fund) => (
-                <option key={fund.id} value={fund.fundName}>{fund.fundName}</option>
+                <option key={fund.id} value={fund.fundName} disabled={transactionType === "Withdrawal" ? (fund.heldByCashier ?? 0) < 0.005 : (fund.availablePhysical ?? 0) < 0.005}>
+                  {fund.fundName}{transactionType === "Withdrawal" ? ` (held: ₱${Number(fund.heldByCashier ?? 0).toFixed(2)})` : ` (on hand: ₱${Number(fund.availablePhysical ?? 0).toFixed(2)})`}
+                </option>
               ))}
-              <option value="General Fund">General Fund</option>
+              {transactionType === "Withdrawal" && legacyPooledHeld > 0.005 && (
+                <option value={legacyPool}>Legacy pooled cashier balance (held: ₱{legacyPooledHeld.toFixed(2)})</option>
+              )}
             </select>
+            <div className="form-text text-secondary">Choose a real fund for new deposits. This moves cash to safekeeping without changing fund income or balances.</div>
           </div>
           <div className="col-md-6">
             <label className={`form-label fw-bold small ${transactionType === "Deposit" ? "text-success" : "text-danger"}`}>
@@ -322,7 +365,7 @@ export default function CashierRemittanceForm({
           </div>
         </div>
 
-        <button type="submit" className={`btn py-2 fw-bold w-100 text-white ${transactionType === "Deposit" ? "btn-success" : "btn-danger"}`} disabled={isSubmitting}>
+        <button type="submit" className={`btn py-2 fw-bold w-100 text-white ${transactionType === "Deposit" ? "btn-success" : "btn-danger"}`} disabled={isSubmitting || periodClosed}>
           {isSubmitting ? "Processing..." : `Log Safekeeping ${transactionType}`}
         </button>
       </form>
@@ -364,14 +407,14 @@ export default function CashierRemittanceForm({
                       </span>
                     </td>
                     <td>
-                      <strong className="d-block small">{r.fundSource}</strong>
+                      <strong className="d-block small">{r.fundSource === legacyPool ? "Legacy pooled position (historical)" : r.fundSource}</strong>
                       <span className="small text-muted">by {r.remittedBy}</span>
                     </td>
                     <td className={`text-end fw-bold ${r.type === "Deposit" ? "text-success" : "text-danger"}`}>
                       {r.type === "Withdrawal" ? "-" : "+"}{fmt(r.amount)}
                     </td>
                     <td className="text-center">
-                      <span className={`badge ${r.status === "Voided" ? "bg-secondary" : "bg-success"}`}>{r.status}</span>
+                      <span className={`badge ${r.status === "Voided" ? "bg-secondary" : r.type === "Withdrawal" ? "bg-danger" : "bg-success"}`}>{r.status === "Voided" ? "Voided" : r.type === "Withdrawal" ? "Withdrawn" : "Deposited"}</span>
                     </td>
                     <td className="text-center">
                       {r.status !== "Voided" && (

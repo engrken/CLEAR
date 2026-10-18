@@ -1,12 +1,16 @@
 // /app/department/[department]/(protected)/remittances/RemittanceVerificationQueue.tsx
 
 "use client";
+import { clearAlert, clearConfirm, clearPrompt } from "@/lib/clear-dialogs";
 
-import { useState } from "react";
+
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { fmt } from "@/lib/utils";
 import { format } from "date-fns";
-import { ThemedAlert } from "@/lib/alerts";
+import { ThemedAlert } from "@/lib/clear-dialogs";
 import { verifyOnlineRemittance, invalidateOnlineRemittance } from "./actions";
+import { executeVoidTransaction } from "../void/actions";
 
 interface OnlineRemittanceItem {
   id: string;
@@ -19,6 +23,7 @@ interface OnlineRemittanceItem {
   amountPaid: number;
   proofUrl: string | null;
   status: string | null;
+  orNumber?: string | null;
 }
 
 interface Fund {
@@ -32,7 +37,9 @@ export default function RemittanceVerificationQueue({
   term,
   remittances,
   nextOr,
-  funds
+  funds,
+  closed = false,
+  canVoid = false,
 }: {
   department: string;
   ay: string;
@@ -40,14 +47,38 @@ export default function RemittanceVerificationQueue({
   remittances: OnlineRemittanceItem[];
   nextOr: string;
   funds: Fund[];
+  closed?: boolean;
+  canVoid?: boolean;
 }) {
+  const router = useRouter();
   const [filterStatus, setFilterStatus] = useState("Pending");
   const [activeProof, setActiveProof] = useState<{ url: string; name: string } | null>(null);
   
   const [verifyingItem, setVerifyingItem] = useState<OnlineRemittanceItem | null>(null);
   const [orNumber, setOrNumber] = useState(nextOr);
+  useEffect(() => setOrNumber(nextOr), [nextOr]);
   const [fundAllocation, setFundAllocation] = useState(funds[0]?.fundName || "General Fund (Carried Over)");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [voidingId, setVoidingId] = useState<string | null>(null);
+  const voidVerifiedRemittance = async (item: OnlineRemittanceItem) => {
+    if (!canVoid || closed || !item.orNumber || voidingId) return;
+    const reason = await clearPrompt(`Explain why approved remittance ${item.referenceNumber} (OR ${item.orNumber}) must be reversed.`,
+      { title: "Void Approved Remittance", multiline: true, confirmText: "Continue" });
+    if (reason === null) return;
+    if (reason.trim().length < 5) return void clearAlert("A reason of at least 5 characters is required.");
+    const approved = await clearConfirm(`Void OR ${item.orNumber}, reverse its receipts and restore linked student dues? Original remittance proof is retained.`,
+      { title: "Confirm Financial Reversal", confirmText: "Void Approved Remittance" });
+    if (!approved) return;
+    setVoidingId(item.id);
+    try {
+      await executeVoidTransaction({ department, category: "collections", referenceId: item.orNumber,
+        ay, term, reason: reason.trim() });
+      await clearAlert("Approved remittance and linked OR reversed. The original proof and audit trail were retained.", "success");
+      router.refresh();
+    } catch (error: any) {
+      await clearAlert(error?.message || "Remittance reversal failed.", "error");
+    } finally { setVoidingId(null); }
+  };
 
   const filteredRemittances = remittances.filter(r => {
     const st = r.status || 'Pending';
@@ -66,6 +97,7 @@ export default function RemittanceVerificationQueue({
   const handleVerifySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!verifyingItem) return;
+    if (closed) return void clearAlert("This accounting term is closed by a rollover.");
 
     setIsSubmitting(true);
     try {
@@ -88,6 +120,7 @@ export default function RemittanceVerificationQueue({
       });
 
       setVerifyingItem(null);
+      router.refresh();
     } catch (err: any) {
       await ThemedAlert.fire({
         icon: 'error',
@@ -113,6 +146,7 @@ export default function RemittanceVerificationQueue({
 
     try {
       await invalidateOnlineRemittance(department, id);
+      router.refresh();
       await ThemedAlert.fire({
         icon: 'success',
         title: 'Rejected',
@@ -129,6 +163,7 @@ export default function RemittanceVerificationQueue({
 
   return (
     <div>
+      {closed && <div className="alert alert-warning">This term was carried forward. New verifications are disabled; existing records remain visible.</div>}
       <div className="d-flex justify-content-between align-items-center mb-3">
         <select 
           className="form-select form-select-sm bg-body-secondary text-body border-secondary fw-semibold" 
@@ -194,6 +229,12 @@ export default function RemittanceVerificationQueue({
                     </span>
                   </td>
                   <td className="text-center">
+                    {r.status === "Verified" && canVoid && !closed && Boolean(r.orNumber) && (
+                      <button type="button" className="btn btn-sm btn-outline-danger fw-semibold"
+                        disabled={Boolean(voidingId)} onClick={() => voidVerifiedRemittance(r)}>
+                        {voidingId === r.id ? "Voiding..." : "Void Approval"}
+                      </button>
+                    )}
                     {(!r.status || r.status.includes('Pending')) && (
                       <div className="d-flex gap-1 justify-content-center">
                         <button className="btn btn-success btn-sm py-0 fw-bold text-dark" onClick={() => handleOpenVerify(r)}>
@@ -215,7 +256,7 @@ export default function RemittanceVerificationQueue({
       {activeProof && (
         <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.7)' }}>
           <div className="modal-dialog modal-dialog-centered modal-lg">
-            <div className="modal-content bg-body text-body border-secondary shadow-lg">
+            <div className="modal-content bg-body text-body border-secondary shadow-lg clear-theme-modal">
               <div className="modal-header border-secondary">
                 <h5 className="modal-title fw-bold text-info"><i className="bi bi-receipt me-2"></i>Payment Proof Inspection</h5>
                 <button type="button" className="btn-close" onClick={() => setActiveProof(null)}></button>
@@ -234,7 +275,7 @@ export default function RemittanceVerificationQueue({
       {verifyingItem && (
         <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.7)' }}>
           <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content bg-body text-body border-secondary shadow-lg">
+            <div className="modal-content bg-body text-body border-secondary shadow-lg clear-theme-modal">
               <div className="modal-header border-secondary">
                 <h5 className="modal-title text-success fw-bold"><i className="bi bi-check-circle-fill me-2"></i>Verify Online Payment</h5>
                 <button type="button" className="btn-close" onClick={() => setVerifyingItem(null)}></button>
@@ -286,7 +327,7 @@ export default function RemittanceVerificationQueue({
                 </div>
                 <div className="modal-footer border-secondary bg-body-secondary">
                   <button type="button" className="btn btn-secondary btn-sm" onClick={() => setVerifyingItem(null)}>Cancel</button>
-                  <button type="submit" className="btn btn-success btn-sm fw-bold text-dark" disabled={isSubmitting}>
+                  <button type="submit" className="btn btn-success btn-sm fw-bold text-dark" disabled={isSubmitting || closed}>
                     {isSubmitting ? "Issuing OR..." : "Confirm & Issue Official Receipt"}
                   </button>
                 </div>

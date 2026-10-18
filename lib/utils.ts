@@ -1,59 +1,46 @@
-// /lib/utils.ts
-
-/**
- * Rounds a numeric value precisely to 2 decimal places (centavo level) 
- * to prevent floating-point accumulation errors in financial calculations.
- */
+/** Display-friendly rounding; invalid/empty input displays as zero. NOT for server-action validation. */
 export function money(val: number | string | null | undefined): number {
-  const num = parseFloat(String(val)) || 0;
-  return Math.round((num + Number.EPSILON) * 100) / 100;
+  if (val === null || val === undefined || String(val).trim() === '') return 0;
+  const n = Number(val);
+  return Number.isFinite(n) ? Math.round((n + Number.EPSILON) * 100) / 100 : 0;
 }
 
-/**
- * Formats a numeric value into Philippine Peso (₱) currency string.
- * Migrated from the legacy fmt() function in app.js.
- */
+/** Strict money parsing for financial writes; rejects NaN, infinity, malformed and negative values. */
+export function requireMoney(val: unknown, label = 'Amount'): number {
+  if (val === null || val === undefined || String(val).trim() === '') {
+    throw new Error(`${label} is required.`);
+  }
+  const n = Number(val);
+  if (!Number.isFinite(n) || n < 0 || !Number.isSafeInteger(Math.round(n * 100))) {
+    throw new Error(`${label} must be a non-negative finite monetary value.`);
+  }
+  if (Math.abs(n * 100 - Math.round(n * 100)) > 0.000001) {
+    throw new Error(`${label} must not have more than two decimal places.`);
+  }
+  return Math.round(n * 100) / 100;
+}
+
 export function fmt(val: number | string | null | undefined): string {
-  const num = money(val);
-  return "₱" + num.toLocaleString("en-US", { 
-    minimumFractionDigits: 2, 
-    maximumFractionDigits: 2 
+  return '₱' + money(val).toLocaleString('en-PH', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   });
 }
 
-/**
- * Sanitizes HTML strings.
- * Migrated from the legacy sanitizeHTML() function in app.js.
- * Note: React automatically escapes variables in JSX, so you will rarely 
- * need this unless you are explicitly using dangerouslySetInnerHTML.
- */
-export function sanitizeHTML(str: any): string {
-  if (str === null || str === undefined) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+/** Escapes text when building raw HTML/email; JSX already escapes content. */
+export function sanitizeHTML(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 }
 
-/**
- * Formats decimal hours into a readable 'X hrs Y mins' string.
- * Migrated from penalties.js for global use.
- */
 export function formatHoursAndMinutes(decimalHours: number | string): string {
-  const dec = parseFloat(String(decimalHours)) || 0;
-  if (dec <= 0) return "0 hrs";
-  
-  const totalMins = Math.round(dec * 60);
-  const hrs = Math.floor(totalMins / 60);
-  const mins = totalMins % 60;
-
-  if (hrs > 0 && mins > 0) {
-    return `${hrs} hr${hrs > 1 ? 's' : ''} ${mins} min${mins > 1 ? 's' : ''}`;
-  } else if (hrs > 0) {
-    return `${hrs} hr${hrs > 1 ? 's' : ''}`;
-  } else {
-    return `${mins} min${mins > 1 ? 's' : ''}`;
-  }
+  const n = Number(decimalHours);
+  if (!Number.isFinite(n) || n <= 0) return '0 hrs';
+  const total = Math.round(n * 60);
+  const hrs = Math.floor(total / 60);
+  const mins = total % 60;
+  if (hrs && mins) return `${hrs} hr${hrs > 1 ? 's' : ''} ${mins} min${mins > 1 ? 's' : ''}`;
+  if (hrs) return `${hrs} hr${hrs > 1 ? 's' : ''}`;
+  return `${mins} min${mins > 1 ? 's' : ''}`;
 }

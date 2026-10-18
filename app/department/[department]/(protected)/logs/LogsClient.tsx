@@ -2,6 +2,8 @@
 
 
 "use client";
+import { clearAlert, clearConfirm, clearPrompt } from "@/lib/clear-dialogs";
+
 
 import { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
@@ -42,7 +44,7 @@ export default function LogsClient({
   // =========================================================
   const handleExportCsv = () => {
     if (!logs || logs.length === 0) {
-      return alert("No audit logs available to export.");
+      return void clearAlert("No audit logs available to export.");
     }
 
     let csv = `Timestamp,User,Action,Details\n`;

@@ -1,11 +1,18 @@
 // /app/department/[department]/(protected)/users/UserManagementClient.tsx
 
 "use client";
+import { clearAlert, clearConfirm, clearPrompt } from "@/lib/clear-dialogs";
+
 
 import { useState } from "react";
-import { saveTenantUser, deleteTenantUser, updateUserAccountStatus } from "./actions";
-import { ThemedAlert } from '@/lib/alerts';
-import { isSuperAdminEmail } from "@/lib/permissions";
+import { useRouter } from "next/navigation";
+import {
+  saveTenantUser,
+  deleteTenantUser,
+  updateUserAccountStatus,
+} from "./actions";
+import { ThemedAlert } from "@/lib/clear-dialogs";
+import { PRESET_ROLE_TABS } from "@/lib/role-permissions";
 
 interface TenantUser {
   id: string;
@@ -17,6 +24,7 @@ interface TenantUser {
   status: string;
   otpAttempts?: number;
   allowedTabs?: string[];
+  isSuperAdmin: boolean;
 }
 
 const CLEAR_SYSTEM_TABS = [
@@ -37,28 +45,18 @@ const CLEAR_SYSTEM_TABS = [
   { id: 'tab-setup', label: 'System Setup' }
 ];
 
-const PRESET_ROLE_TABS: Record<string, string[]> = {
-  admin: CLEAR_SYSTEM_TABS.map(t => t.id),
-  treasurer: [
-    'tab-overview', 'tab-clearance', 'tab-reports',
-    'tab-payment', 'tab-remittances', 'tab-penalties', 'tab-advances',
-    'tab-collectibles', 'tab-report', 'tab-transfer'
-  ],
-  auditor: [
-    'tab-overview', 'tab-clearance', 'tab-reports', 'tab-audit', 'tab-report'
-  ],
-  viewer: [
-    'tab-overview', 'tab-clearance', 'tab-reports', 'tab-report'
-  ]
-};
-
-export default function UserManagementClient({  
-  initialUsers,  
-  department = 'engineering'  
-}: {  
-  initialUsers: TenantUser[];  
-  department: string;  
+export default function UserManagementClient({
+  initialUsers,
+  department,
+  currentUserId,
+  currentUserEmail,
+}: {
+  initialUsers: TenantUser[];
+  department: string;
+  currentUserId: string;
+  currentUserEmail: string;
 }) {
+  const router = useRouter();
   const [users, setUsers] = useState<TenantUser[]>(initialUsers);
   const [showModal, setShowModal] = useState(false);
   const [editingUser, setEditingUser] = useState<TenantUser | null>(null);
@@ -72,7 +70,10 @@ export default function UserManagementClient({
   const [status, setStatus] = useState("Active");
   const [selectedTabs, setSelectedTabs] = useState<string[]>(PRESET_ROLE_TABS.treasurer);
 
-  const safeDepartment = (department || 'Engineering').toUpperCase();
+  const safeDepartment = department.toUpperCase();
+  const isCurrentAccount = (user: TenantUser) =>
+    (Boolean(currentUserId) && user.id === currentUserId) ||
+    (Boolean(currentUserEmail) && user.email.trim().toLowerCase() === currentUserEmail.trim().toLowerCase());
 
   const handleRoleChange = (newRole: string) => {
     setRole(newRole);
@@ -113,7 +114,11 @@ export default function UserManagementClient({
   };
 
   const handleDeleteUser = async (userId: string, userName: string) => {
-    if (!confirm(`Are you sure you want to revoke access and delete account for "${userName}"?`)) {
+    if (users.some(u => u.id === userId && isCurrentAccount(u))) {
+      void clearAlert("You cannot delete your currently signed-in account.");
+      return;
+    }
+    if (!await clearConfirm(`Are you sure you want to revoke access and delete account for "${userName}"?`)) {
       return;
     }
 
@@ -121,22 +126,28 @@ export default function UserManagementClient({
       const res = await deleteTenantUser(userId, department);
       if (res.success) {
         setUsers(prev => prev.filter(u => u.id !== userId));
-        alert(res.message);
+        void clearAlert(res.message);
+        router.refresh();
       }
     } catch (err: any) {
-      alert(err.message || "Failed to delete user account.");
+      void clearAlert(err.message || "Failed to delete user account.");
     }
   };
 
   const handleStatusChangeAction = async (userId: string, newStatus: 'Active' | 'Inactive' | 'Blocked') => {
+    if (newStatus !== 'Active' && users.some(u => u.id === userId && isCurrentAccount(u))) {
+      void clearAlert("You cannot deactivate or block your currently signed-in account.");
+      return;
+    }
     try {
       const res = await updateUserAccountStatus(userId, newStatus, department);
       if (res.success) {
         setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: newStatus, otpAttempts: newStatus === 'Active' ? 0 : u.otpAttempts } : u));
-        alert(res.message);
+        void clearAlert(res.message);
+        router.refresh();
       }
     } catch (err: any) {
-      alert(err.message || "Failed to update account status.");
+      void clearAlert(err.message || "Failed to update account status.");
     }
   };
 
@@ -159,12 +170,12 @@ export default function UserManagementClient({
 
       const res = await saveTenantUser(payload);
       if (res.success) {
-        alert(res.message);
+        void clearAlert(res.message);
         setShowModal(false);
-        window.location.reload();
+        router.refresh();
       }
     } catch (err: any) {
-      alert(err.message || "Failed to save user account.");
+      void clearAlert(err.message || "Failed to save user account.");
     } finally {
       setIsSubmitting(false);
     }
@@ -251,7 +262,9 @@ export default function UserManagementClient({
                       </td>
                       <td className="text-end">
                         <div className="d-flex gap-1 justify-content-end align-items-center">
-                          {u.status === 'Blocked' ? (
+                          {isCurrentAccount(u) ? (
+                            <span className="badge bg-info-subtle text-info border border-info">Current Account</span>
+                          ) : u.status === 'Blocked' ? (
                             <button 
                               className="btn btn-sm btn-warning fw-bold text-dark px-2"
                               onClick={() => handleStatusChangeAction(u.id, 'Active')}
@@ -274,7 +287,7 @@ export default function UserManagementClient({
                           <button className="btn btn-sm btn-outline-info" onClick={() => openEditModal(u)}>
                             <i className="bi bi-pencil me-1"></i>Edit
                           </button>
-                          {!isSuperAdminEmail(u.email) && (
+                          {!u.isSuperAdmin && !isCurrentAccount(u) && (
                             <button className="btn btn-sm btn-outline-danger" onClick={() => handleDeleteUser(u.id, u.name)}>
                               <i className="bi bi-trash me-1"></i>Delete
                             </button>
@@ -300,7 +313,7 @@ export default function UserManagementClient({
       {showModal && (
         <div className="modal fade show d-block" tabIndex={1} style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
           <div className="modal-dialog modal-lg modal-dialog-centered">
-            <div className="modal-content card border-secondary shadow bg-card text-color">
+            <div className="modal-content card border-secondary shadow bg-card text-color clear-theme-modal">
               <div className="modal-header border-secondary">
                 <h5 className="modal-title text-accent">
                   <i className="bi bi-person-gear me-2"></i>{editingUser ? `Edit Account: ${editingUser.name}` : 'Add New Officer Account'}
@@ -317,7 +330,7 @@ export default function UserManagementClient({
                         className="form-control bg-card text-color border-secondary" 
                         value={fullName} 
                         onChange={(e) => setFullName(e.target.value)} 
-                        placeholder="e.g., Engr. Kenneth Mark Bulquerin" 
+                        placeholder="e.g., Alex Rivera" 
                         required 
                       />
                     </div>
@@ -328,7 +341,7 @@ export default function UserManagementClient({
                         className="form-control bg-card text-color border-secondary" 
                         value={email} 
                         onChange={(e) => setEmail(e.target.value)} 
-                        placeholder="officer@filamer.edu.ph" 
+                        placeholder="officer@example.edu" 
                         required 
                       />
                     </div>
@@ -342,7 +355,7 @@ export default function UserManagementClient({
                         className="form-control bg-card text-color border-secondary" 
                         value={username} 
                         onChange={(e) => setUsername(e.target.value)} 
-                        placeholder="e.g., kbulquerin" 
+                        placeholder="e.g., officer01" 
                         disabled={!!editingUser}
                         required 
                       />
@@ -367,6 +380,8 @@ export default function UserManagementClient({
                         className="form-select bg-card text-color border-secondary" 
                         value={status} 
                         onChange={(e) => setStatus(e.target.value)}
+                        disabled={!!editingUser && isCurrentAccount(editingUser)}
+                        title={editingUser && isCurrentAccount(editingUser) ? "You cannot change your own account status" : undefined}
                       >
                         <option value="Active">Active</option>
                         <option value="Inactive">Inactive</option>

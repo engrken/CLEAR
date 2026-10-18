@@ -31,7 +31,7 @@ export default function EntityAdminLoginPage() {
       }
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Failed to request OTP.');
+      if (!res.ok || data?.success === false) throw new Error(data.message || 'Failed to request OTP.');
 
       setOtpSent(true);
       setInfoMessage(data.message || `A 6-digit OTP has been sent to ${email}`);
@@ -55,7 +55,7 @@ export default function EntityAdminLoginPage() {
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'OTP verification failed.');
+      if (!res.ok || data?.success === false) throw new Error(data.message || 'OTP verification failed.');
 
       window.location.href = '/dashboard/entity/portal';
     } catch (err: any) {
@@ -127,7 +127,7 @@ export default function EntityAdminLoginPage() {
                 maxLength={6}
                 pattern="\d{6}"
                 value={otpCode}
-                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                 placeholder="000000"
                 className="form-control bg-dark text-white border-secondary text-center fs-4 fw-bold font-monospace"
                 style={{ letterSpacing: '0.4em' }}

@@ -17,7 +17,7 @@ export default function RootLayout({
         <Script id="theme-initializer" strategy="beforeInteractive">
           {`
             try {
-              const theme = localStorage.getItem('fcu_clear_theme') || 'dark';
+              const theme = localStorage.getItem('clearsys_clear_theme') || localStorage.getItem('fcu_clear_theme') || 'dark';
               document.documentElement.setAttribute('data-bs-theme', theme);
             } catch (e) {}
           `}

@@ -1,149 +1,109 @@
-// /lib/permissions.ts
+import 'server-only';
 
-import { auth } from "@/auth";
-import { prisma } from "@/lib/prisma";
-import { isSuperAdminEmail } from "@/lib/super-admin";
+import { auth } from '@/auth';
+import { prisma } from '@/lib/prisma';
+import { isSuperAdminEmail } from '@/lib/super-admin';
+import { PRESET_ROLE_TABS, parseAllowedTabs } from '@/lib/role-permissions';
 
-export const PRESET_ROLE_TABS: Record<string, string[]> = {
-  admin: [
-    "tab-overview", "tab-students", "tab-clearance", "tab-payment",
-    "tab-remittances", "tab-penalties", "tab-advances", "tab-audit",
-    "tab-collectibles", "tab-reports", "tab-void", "tab-report",
-    "tab-transfer", "tab-users", "tab-setup",
-  ],
-  treasurer: [
-    "tab-overview", "tab-clearance", "tab-reports", "tab-payment",
-    "tab-remittances", "tab-penalties", "tab-advances", "tab-collectibles",
-    "tab-report", "tab-transfer",
-  ],
-  auditor: ["tab-overview", "tab-clearance", "tab-reports", "tab-audit", "tab-report"],
-  viewer: ["tab-overview", "tab-clearance", "tab-reports", "tab-report"],
-};
+export { isSuperAdminEmail, PRESET_ROLE_TABS, parseAllowedTabs };
 
-// Fails closed (no hardcoded fallback address). Implementation lives in lib/super-admin.ts.
-export { isSuperAdminEmail };
+const ADMIN_ROLES = new Set(['admin', 'administrator', 'master']);
+const ALL_TABS = new Set(Object.values(PRESET_ROLE_TABS).flat());
 
-export function parseAllowedTabs(tabs: unknown): string[] {
-  if (Array.isArray(tabs)) return tabs.filter((v): v is string => typeof v === "string");
-  if (typeof tabs === "string") {
-    try {
-      const parsed = JSON.parse(tabs);
-      return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === "string") : [];
-    } catch { return []; }
+function normalizeDepartment(department: string): string {
+  let slug: string;
+  try { slug = decodeURIComponent(String(department ?? '')).trim().toLowerCase(); }
+  catch { throw new Error('Invalid department identifier.'); }
+  if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(slug)) {
+    throw new Error('Invalid department identifier.');
   }
-  return [];
+  return slug;
 }
 
-const ADMIN_ROLES = ["admin", "administrator", "master", "superadmin", "super_admin"];
-
-function cleanSlug(department: string): string {
-  let d = String(department || "");
-  try { d = decodeURIComponent(d); } catch { /* keep raw */ }
-  return d.trim().toLowerCase();
+function isSignedInSuperAdmin(user: any): boolean {
+  const role = String(user?.role ?? '').toLowerCase().replace(/[\s_-]/g, '');
+  return isSuperAdminEmail(user?.email) && role === 'superadmin';
 }
 
 export async function requireSuperAdmin() {
   const session = await auth();
-  if (!session?.user) throw new Error("401 Unauthorized: Session expired or invalid.");
-  const user = session.user as any;
-  const role = String(user.role || "").trim().toLowerCase().replace(/[\s_-]+/g, "");
-  if ((role !== "superadmin" && role !== "master") || !isSuperAdminEmail(user.email)) {
-    throw new Error("403 Forbidden: Super administrator privileges are required.");
+  if (!session?.user) throw new Error('401 Unauthorized: Session expired or invalid.');
+  if (!isSignedInSuperAdmin(session.user)) {
+    throw new Error('403 Forbidden: Super administrator privileges are required.');
   }
-  return user;
+  return session.user;
 }
 
-// ---------------------------------------------------------------------------
-// Shared core: who is calling, and what are they in THIS organization?
-// Membership, role and tabs always come from the database, never from the JWT.
-// ---------------------------------------------------------------------------
 async function loadAccess(department: string) {
   const session = await auth();
-  if (!session?.user) throw new Error("401 Unauthorized: Session expired or invalid.");
-
+  if (!session?.user?.email) throw new Error('401 Unauthorized: Session expired or invalid.');
   const sessionUser = session.user as any;
-  const sessionEmail = String(sessionUser.email || "").trim().toLowerCase();
-  const isSuper = isSuperAdminEmail(sessionEmail);
+  const email = String(sessionUser.email).trim().toLowerCase();
+  const isSuper = isSignedInSuperAdmin(sessionUser);
+  // Fail closed if a normal session somehow contains the privileged email.
+  if (isSuperAdminEmail(email) && !isSuper) throw new Error('403 Forbidden: Invalid Super Admin session.');
 
-  const cleanDept = cleanSlug(department);
-  if (!cleanDept) throw new Error("Organization not found.");
-
+  const slug = normalizeDepartment(department);
   const org = await prisma.organization.findUnique({
-    where: { subdomain: cleanDept },
-    select: { id: true, status: true, name: true },
+    where: { subdomain: slug },
+    select: { id: true, name: true, status: true },
   });
-  if (!org) throw new Error(`Organization "${cleanDept}" not found.`);
-
-  // Inactive or archived tenants are closed to everyone except the Super Admin.
-  if (org.status && org.status !== "Active" && !isSuper) {
-    throw new Error(`This department is currently ${org.status.toLowerCase()} and cannot be accessed.`);
+  if (!org) throw new Error('Organization not found.');
+  if (String(org.status ?? '').toLowerCase() !== 'active' && !isSuper) {
+    throw new Error('This organization is currently inactive or archived.');
   }
 
   if (isSuper) {
     return {
-      sessionUser, sessionEmail, isSuper, org,
-      id: String(sessionUser.id || "SuperAdmin"),
-      name: String(sessionUser.name || "Super Administrator"),
-      role: String(sessionUser.role || "SuperAdmin"),
-      allowedTabs: parseAllowedTabs(sessionUser.allowedTabs),
+      sessionUser, email, isSuper, org, id: String(sessionUser.id || 'SuperAdmin'),
+      name: String(sessionUser.name || 'Super Administrator'), role: 'SuperAdmin',
+      allowedTabs: [...ALL_TABS],
     };
   }
 
+  // Role and tab scope MUST come from a currently active tenant database record.
   const member = await prisma.tenantUser.findFirst({
-    where: { organizationId: org.id, email: { equals: sessionEmail, mode: "insensitive" }, status: "Active" },
+    where: { organizationId: org.id, email: { equals: email, mode: 'insensitive' }, status: 'Active' },
   });
-  if (!member) throw new Error("403 Forbidden: You do not belong to this organization.");
-
+  if (!member) throw new Error('403 Forbidden: You do not belong to this organization.');
+  const tabs = parseAllowedTabs(member.allowedTabs).filter(tab => ALL_TABS.has(tab));
   return {
-    sessionUser, sessionEmail, isSuper, org,
-    id: member.id,
-    name: member.fullName,
-    role: member.role,
-    allowedTabs: parseAllowedTabs(member.allowedTabs),
+    sessionUser, email, isSuper, org, id: member.id,
+    name: member.fullName, role: member.role, allowedTabs: tabs,
   };
 }
 
-function buildUser(a: Awaited<ReturnType<typeof loadAccess>>) {
+type Access = Awaited<ReturnType<typeof loadAccess>>;
+function buildUser(a: Access) {
   return {
     ...a.sessionUser,
-    id: a.id,
-    name: a.name,
-    fullName: a.name,
-    email: a.sessionEmail,
-    role: a.role,
-    allowedTabs: a.allowedTabs,
-    organizationId: a.org.id,
-    organizationName: a.org.name,
-    isSuper: a.isSuper,
+    id: a.id, name: a.name, fullName: a.name, email: a.email,
+    role: a.role, allowedTabs: a.allowedTabs,
+    organizationId: a.org.id, organizationName: a.org.name, isSuper: a.isSuper,
   };
 }
 
-/**
- * `department` is REQUIRED. Calling requireTabAccess("tab-x") with one argument used to skip the
- * organization-membership check, which let a user from Organization A act on Organization B.
- * TypeScript now rejects any such call.
- */
+/** Always supply department; never authorize based only on caller-provided organization IDs. */
 export async function requireTabAccess(requiredTab: string, department: string) {
-  const a = await loadAccess(department);
-
-  const role = String(a.role || "viewer").trim().toLowerCase();
-  if (!a.isSuper && !ADMIN_ROLES.includes(role)) {
-    const effectiveTabs = a.allowedTabs.length > 0
-      ? a.allowedTabs
+  if (!ALL_TABS.has(requiredTab)) throw new Error('403 Forbidden: Unknown module permission.');
+  const access = await loadAccess(department);
+  const role = String(access.role).trim().toLowerCase();
+  if (!access.isSuper && !ADMIN_ROLES.has(role)) {
+    // An empty allowedTabs string retains the existing preset-role fallback policy.
+    const effectiveTabs = access.allowedTabs.length > 0
+      ? access.allowedTabs
       : (PRESET_ROLE_TABS[role] || PRESET_ROLE_TABS.viewer);
     if (!effectiveTabs.includes(requiredTab)) {
-      throw new Error(`403 Forbidden: Your account scope lacks permission for the ${requiredTab} module.`);
+      throw new Error(`403 Forbidden: Your account scope lacks permission for ${requiredTab}.`);
     }
   }
-  return buildUser(a);
+  return buildUser(access);
 }
 
-/** Admin of this organization (or the Super Admin), regardless of tab list. */
 export async function requireOrgAdmin(department: string) {
-  const a = await loadAccess(department);
-  const role = String(a.role || "").trim().toLowerCase();
-  if (!a.isSuper && !ADMIN_ROLES.includes(role)) {
-    throw new Error("403 Forbidden: Administrator privileges are required.");
+  const access = await loadAccess(department);
+  if (!access.isSuper && !ADMIN_ROLES.has(String(access.role).trim().toLowerCase())) {
+    throw new Error('403 Forbidden: Administrator privileges are required.');
   }
-  return buildUser(a);
+  return buildUser(access);
 }

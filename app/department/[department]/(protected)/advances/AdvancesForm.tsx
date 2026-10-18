@@ -1,11 +1,14 @@
 // /app/department/[department]/(protected)/advances/AdvancesForm.tsx
 
 "use client";
+import { clearAlert, clearConfirm, clearPrompt } from "@/lib/clear-dialogs";
+
 
 import { useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { fmt } from "@/lib/utils";
 import { issueCashAdvance } from "./actions";
-import { ThemedAlert } from '@/lib/alerts';
+import { ThemedAlert } from '@/lib/clear-dialogs';
 
 interface Student { studentId: string; fullName: string; }
 interface Fund { name: string; balance: number; }
@@ -15,14 +18,17 @@ export default function AdvancesForm({
   ay,
   term,
   students,
-  funds
+  funds,
+  closed = false
 }: {
   department: string;
   ay: string;
   term: string;
   students: Student[];
   funds: Fund[];
+  closed?: boolean;
 }) {
+  const router = useRouter();
   const todayStr = new Date().toISOString().split('T')[0];
 
   const [dateIssued, setDateIssued] = useState(todayStr);
@@ -45,6 +51,8 @@ export default function AdvancesForm({
   const handleSearchInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setSearchQuery(val);
+    setStudentId("");
+    setRequestor("");
 
     const match = students.find(s => 
       `${s.fullName} (${s.studentId})`.toLowerCase() === val.toLowerCase() ||
@@ -63,8 +71,10 @@ export default function AdvancesForm({
     e.preventDefault();
     const amt = parseFloat(amount) || 0;
 
-    if (amt <= 0) return alert("Please enter a valid cash advance amount greater than ₱0.00.");
-    if (expectedReturnDate < dateIssued) return alert("Validation Error: Expected return date cannot be earlier than the date of issuance.");
+    if (closed) return void clearAlert("This term is closed by a carry-over rollover.");
+    if (amt <= 0) return void clearAlert("Please enter a valid cash advance amount greater than ₱0.00.");
+    if (Math.round(amt * 100) > Math.round(selectedFundBalance * 100)) return void clearAlert("Insufficient balance in the chosen fund.");
+    if (expectedReturnDate < dateIssued) return void clearAlert("Validation Error: Expected return date cannot be earlier than the date of issuance.");
 
     setIsSubmitting(true);
 
@@ -84,7 +94,8 @@ export default function AdvancesForm({
         term
       });
 
-      alert("Cash Advance issued successfully!");
+      void clearAlert("Cash Advance issued successfully!");
+      router.refresh();
       
       // Reset form
       setSearchQuery("");
@@ -96,7 +107,7 @@ export default function AdvancesForm({
       setExpectedReturnDate(todayStr);
       
     } catch (err: any) {
-      alert("Error: " + err.message);
+      void clearAlert("Error: " + err.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -104,6 +115,7 @@ export default function AdvancesForm({
 
   return (
     <form onSubmit={handleSubmit}>
+      {closed && <div className="alert alert-warning">This period has been carried forward; issuing advances is disabled.</div>}
       <div className="row g-2 mb-2">
         <div className="col-md-6">
           <label className="form-label text-secondary small fw-semibold">Date Issued</label>
@@ -164,7 +176,7 @@ export default function AdvancesForm({
         </div>
       </div>
 
-      <button type="submit" className="btn btn-info fw-bold w-100" disabled={isSubmitting}>
+      <button type="submit" className="btn btn-info fw-bold w-100" disabled={isSubmitting || closed || funds.length === 0}>
         {isSubmitting ? "Issuing..." : "Issue Cash Advance"}
       </button>
     </form>

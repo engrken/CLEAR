@@ -5,27 +5,7 @@
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import { isSuperAdminEmail } from '@/lib/permissions'; // 🚀 SECURITY FIX (F2)
-
-const PRESET_ROLE_TABS: Record<string, string[]> = {
-  admin: [
-    'tab-overview', 'tab-students', 'tab-clearance', 'tab-payment', 
-    'tab-remittances', 'tab-penalties', 'tab-advances', 'tab-audit', 
-    'tab-collectibles', 'tab-reports', 'tab-void', 'tab-report', 
-    'tab-transfer', 'tab-users', 'tab-setup'
-  ],
-  treasurer: [
-    'tab-overview', 'tab-clearance', 'tab-reports',
-    'tab-payment', 'tab-remittances', 'tab-penalties', 'tab-advances',
-    'tab-collectibles', 'tab-report', 'tab-transfer'
-  ],
-  auditor: [
-    'tab-overview', 'tab-clearance', 'tab-reports', 'tab-audit', 'tab-report'
-  ],
-  viewer: [
-    'tab-overview', 'tab-clearance', 'tab-reports', 'tab-report'
-  ]
-};
+import { PRESET_ROLE_TABS } from '@/lib/role-permissions';
 
 export default function DepartmentSidebar({
   department,
@@ -64,18 +44,18 @@ export default function DepartmentSidebar({
     ? 'admin' 
     : rawRole;
 
-  const isAdmin = normalizedRole === 'admin';
+  const isAdmin = normalizedRole === 'admin' || currentUser?.isSuperAdmin === true;
 
-  const effectiveTabs = (currentUser?.allowedTabs && currentUser.allowedTabs.length > 0)
-    ? currentUser.allowedTabs
-    : (PRESET_ROLE_TABS[normalizedRole] || PRESET_ROLE_TABS.viewer);
+  const effectiveTabs: string[] = isAdmin
+    ? PRESET_ROLE_TABS.admin
+    : (Array.isArray(currentUser?.allowedTabs) && currentUser.allowedTabs.length > 0)
+      ? currentUser.allowedTabs
+      : (PRESET_ROLE_TABS[normalizedRole] || PRESET_ROLE_TABS.viewer);
 
   // =========================================================
   // PATH & FORMATTING
   // =========================================================
-  const deptKey = department
-    ? decodeURIComponent(department).toLowerCase().replace(/\s+/g, '')
-    : 'engineering';
+  const deptKey = String(department || '').trim().toLowerCase();
 
   const basePath = `/department/${encodeURIComponent(deptKey)}`;
   const ay = searchParams.get('ay') || defaultAy;
@@ -109,8 +89,8 @@ export default function DepartmentSidebar({
   `;
 
   const canAccess = (tabId: string) => {
-    // SECURITY FIX (F2): Use central isSuperAdminEmail helper
-    if (isSuperAdminEmail(currentUser?.email)) return true;
+    // Server layouts and actions enforce the actual permissions; this controls links only.
+    if (isAdmin) return true;
     return effectiveTabs.includes(tabId);
   };
 

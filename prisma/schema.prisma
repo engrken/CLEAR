@@ -8,37 +8,47 @@ datasource db {
 }
 
 model Organization {
-  id                 String              @id @default(uuid())
-  subdomain          String              @unique
-  name               String
-  schoolGroup        String              @default("default-school")
-  tier               String              @default("Freemium")
-  status             String              @default("Active")
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @default(now()) @updatedAt
-  activeAy           String              @default("A.Y. 2026 - 2027")
-  activeTerm         String              @default("1st Sem")
-  type               String              @default("Department")
-  logo               String?
-  audits             Audit[]
-  cashAdvances       CashAdvance[]
-  cashierRemittances CashierRemittance[]
-  collectibles       Collectible[]
-  collections        Collection[]
-  collectionSetups   CollectionSetup[]
-  enrollments        Enrollment[]
-  expenseItems       ExpenseItem[]
-  funds              Fund[]
-  realignments       FundRealignment[]
-  fundTransfers      FundTransfer[]
-  MobileSession      MobileSession[]
-  onlineRemittances  OnlineRemittance[]
-  penalties          Penalty[]
-  signatories        Signatory[]
-  students           Student[]
-  systemLogs         SystemLog[]
-  tenantUsers        TenantUser[]
-  voidTransactions   VoidTransaction[]
+  penaltySettlementEvents     PenaltySettlementEvent[]
+  id                          String                       @id @default(uuid())
+  subdomain                   String                       @unique
+  name                        String
+  schoolGroup                 String                       @default("default-school")
+  tier                        String                       @default("Freemium")
+  status                      String                       @default("Active")
+  createdAt                   DateTime                     @default(now())
+  updatedAt                   DateTime                     @default(now()) @updatedAt
+  activeAy                    String                       @default("A.Y. 2026 - 2027")
+  activeTerm                  String                       @default("1st Sem")
+  type                        String                       @default("Department")
+  logo                        String?
+  reportSchoolName            String?
+  reportSchoolAddress         String?
+  reportHeaderLeftLogo        String?
+  reportHeaderRightLogo       String?
+  audits                      Audit[]
+  cashAdvances                CashAdvance[]
+  cashierRemittances          CashierRemittance[]
+  collectibles                Collectible[]
+  collections                 Collection[]
+  collectionSetups            CollectionSetup[]
+  enrollments                 Enrollment[]
+  expenseItems                ExpenseItem[]
+  funds                       Fund[]
+  realignments                FundRealignment[]
+  fundTransfers               FundTransfer[]
+  MobileSession               MobileSession[]
+  onlineRemittances           OnlineRemittance[]
+  penalties                   Penalty[]
+  signatories                 Signatory[]
+  students                    Student[]
+  systemLogs                  SystemLog[]
+  tenantUsers                 TenantUser[]
+  voidTransactions            VoidTransaction[]
+  academicPeriodConfigs       AcademicPeriodConfig[]
+  academicPeriodTransitions   AcademicPeriodTransition[]
+  arrearPaymentLinks          ArrearPaymentLink[]
+  digitalReceiptDeliveries    DigitalReceiptDelivery[]
+  transactionEmailPreferences TransactionEmailPreference[]
 }
 
 model Signatory {
@@ -96,26 +106,28 @@ model Fund {
 }
 
 model Collection {
-  id              String       @id @default(uuid())
-  organizationId  String
-  timestamp       DateTime     @default(now())
-  academicYear    String       @default("A.Y. 2026 - 2027")
-  term            String       @default("1st Sem")
-  date            DateTime     @default(now())
-  studentId       String?
-  studentName     String
-  orNumber        String
-  category        String
-  itemDescription String
-  paymentType     String
-  standardRate    Float        @default(0)
-  amountPaid      Float        @default(0)
-  balanceDue      Float        @default(0)
-  fundAllocation  String
-  status          String       @default("Valid")
-  encodedBy       String?
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  student         Student?     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  penaltySettlementEvents PenaltySettlementEvent[]
+  id                      String                   @id @default(uuid())
+  organizationId          String
+  timestamp               DateTime                 @default(now())
+  academicYear            String                   @default("A.Y. 2026 - 2027")
+  term                    String                   @default("1st Sem")
+  date                    DateTime                 @default(now())
+  studentId               String?
+  studentName             String
+  orNumber                String
+  category                String
+  itemDescription         String
+  paymentType             String
+  standardRate            Float                    @default(0)
+  amountPaid              Float                    @default(0)
+  balanceDue              Float                    @default(0)
+  fundAllocation          String
+  status                  String                   @default("Valid")
+  encodedBy               String?
+  organization            Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  student                 Student?                 @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  arrearPaymentLinks      ArrearPaymentLink[]
 
   @@unique([organizationId, orNumber, itemDescription])
   @@index([organizationId, academicYear, term])
@@ -138,21 +150,24 @@ model CollectionSetup {
 }
 
 model Penalty {
-  id             String       @id @default(uuid())
-  organizationId String
-  penaltyId      String       @unique
-  academicYear   String       @default("A.Y. 2026 - 2027")
-  term           String       @default("1st Sem")
-  date           DateTime     @default(now())
-  studentId      String?
-  studentName    String
-  activity       String
-  hoursLate      Float        @default(0)
-  ratePerHour    Float        @default(50)
-  fineAmount     Float        @default(0)
-  status         String       @default("Unsettled")
-  encodedBy      String?
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  settlementEvents PenaltySettlementEvent[]
+  assessedAmount   Float?
+  penaltyType      String                   @default("SERVICE_ELIGIBLE")
+  id               String                   @id @default(uuid())
+  organizationId   String
+  penaltyId        String                   @unique
+  academicYear     String                   @default("A.Y. 2026 - 2027")
+  term             String                   @default("1st Sem")
+  date             DateTime                 @default(now())
+  studentId        String?
+  studentName      String
+  activity         String
+  hoursLate        Float                    @default(0)
+  ratePerHour      Float                    @default(50)
+  fineAmount       Float                    @default(0)
+  status           String                   @default("Unsettled")
+  encodedBy        String?
+  organization     Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
 
 model CashAdvance {
@@ -269,23 +284,23 @@ model SystemLog {
 }
 
 model TenantUser {
-  id             String          @id @default(cuid())
-  organizationId String
-  userId         String
-  fullName       String
-  username       String
-  email          String
-  role           String
-  allowedTabs    String
-  status         String
-  otpCode        String?
-  otpExpires     DateTime?
-  otpAttempts    Int             @default(0)
+  id                 String          @id @default(cuid())
+  organizationId     String
+  userId             String
+  fullName           String
+  username           String
+  email              String
+  role               String
+  allowedTabs        String
+  status             String
+  otpCode            String?
+  otpExpires         DateTime?
+  otpAttempts        Int             @default(0)
   otpRequestCount    Int             @default(0)
   otpLastRequestedAt DateTime?
-  updatedAt      DateTime        @updatedAt
-  MobileSession  MobileSession[]
-  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  updatedAt          DateTime        @updatedAt
+  MobileSession      MobileSession[]
+  organization       Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, userId])
   @@unique([organizationId, username])
@@ -364,4 +379,120 @@ model MobileSession {
 
   @@index([organizationId])
   @@index([tenantUserId])
+}
+
+// Tenant-specific accounting calendar per academic year.
+model AcademicPeriodConfig {
+  id             String       @id @default(cuid())
+  organizationId String
+  academicYear   String
+  mode           String       @default("Semester")
+  includeSummer  Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, academicYear])
+  @@index([organizationId])
+}
+
+model AcademicPeriodTransition {
+  id              String       @id @default(uuid())
+  organizationId  String
+  sourceAY        String
+  sourceTerm      String
+  destinationAY   String
+  destinationTerm String
+  amount          Float        @default(0)
+  transferId      String?
+  feePolicy       String       @default("manual")
+  copiedFeesJson  String       @default("[]")
+  reason          String
+  closedBy        String
+  closedAt        DateTime     @default(now())
+  status          String       @default("Closed")
+  reopenedAt      DateTime?
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, sourceAY, sourceTerm])
+  @@index([organizationId, destinationAY, destinationTerm], map: "APT_org_destination_period_idx")
+}
+
+// Explicit link from a current-period receipt to an older obligation.
+// Never infer historical linkage from free-text descriptions.
+model ArrearPaymentLink {
+  id             String       @id @default(uuid())
+  organizationId String
+  receiptId      String       @unique
+  obligationType String
+  obligationId   String
+  originAY       String
+  originTerm     String
+  amount         Float
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  receipt        Collection   @relation(fields: [receiptId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, obligationType, obligationId], map: "APL_org_obligation_idx")
+}
+
+model PenaltySettlementEvent {
+  id              String       @id @default(uuid())
+  organizationId  String
+  penaltyRecordId String
+  receiptId       String?
+  method          String
+  amount          Float
+  minutesRendered Int          @default(0)
+  accountingAY    String
+  accountingTerm  String
+  balanceBefore   Float
+  balanceAfter    Float
+  recordedBy      String
+  note            String?
+  createdAt       DateTime     @default(now())
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  penalty         Penalty      @relation(fields: [penaltyRecordId], references: [id], onDelete: Restrict)
+  receipt         Collection?  @relation(fields: [receiptId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, penaltyRecordId, createdAt], map: "PSE_org_penalty_date_idx")
+  @@index([organizationId, receiptId], map: "PSE_org_receipt_idx")
+}
+
+model DigitalReceiptDelivery {
+  id             String       @id @default(cuid())
+  organizationId String
+  eventKey       String
+  documentType   String
+  referenceNo    String
+  recipientEmail String
+  recipientRole  String
+  subject        String
+  html           String       @db.Text
+  status         String       @default("Pending")
+  attempts       Int          @default(0)
+  nextAttemptAt  DateTime     @default(now())
+  lastError      String?
+  sentAt         DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, eventKey, recipientEmail], map: "DRD_unique_delivery")
+  @@index([status, nextAttemptAt], map: "DRD_retry_queue_idx")
+  @@index([organizationId, createdAt], map: "DRD_org_created_idx")
+}
+
+model TransactionEmailPreference {
+  id                       String       @id @default(cuid())
+  organizationId           String
+  email                    String
+  receiveParticipantEmails Boolean      @default(true)
+  receiveOfficerCopies     Boolean      @default(true)
+  createdAt                DateTime     @default(now())
+  updatedAt                DateTime     @updatedAt
+  organization             Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, email], map: "TEP_org_email_unique")
+  @@index([organizationId], map: "TEP_org_idx")
 }

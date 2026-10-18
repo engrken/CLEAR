@@ -1,6 +1,8 @@
 // /app/department/[department]/clearance/ClearanceManager.tsx
 
 "use client";
+import { clearAlert, clearConfirm, clearPrompt } from "@/lib/clear-dialogs";
+
 
 import { useState } from "react";
 import { fmt } from "@/lib/utils";
@@ -20,7 +22,8 @@ export default function ClearanceManager({
   term,
   students,
   feeOptions,
-  packageRate
+  packageRate,
+  closed = false
 }: {
   department: string;
   ay: string;
@@ -28,6 +31,7 @@ export default function ClearanceManager({
   students: StudentClearance[];
   feeOptions: { name: string; amount: number }[]; // <-- UPGRADED
   packageRate: number;
+  closed?: boolean;
 }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeStudent, setActiveStudent] = useState<StudentClearance | null>(null);
@@ -72,24 +76,32 @@ export default function ClearanceManager({
       setFullName(match.fullName);
       setEmail(match.email || "");
     } else {
-      alert("Student record not found in clearance roster.");
+      void clearAlert("Student record not found in clearance roster.");
     }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) setProofFile(file);
+    if (file) {
+      if (file.size > 5 * 1024 * 1024 || !["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+        void clearAlert("Receipt must be a PNG, JPEG or WebP image under 5MB.");
+        setProofFile(null);
+        return;
+      }
+      setProofFile(file);
+    }
   };
 
   const handleProofSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!studentId || !referenceNo || !proofFile || amount <= 0) {
-      return alert("Please complete all required fields and upload a valid receipt file.");
+    if (closed) return void clearAlert("Online payment submissions are closed for this term.");
+    if (!studentId || !referenceNo || !proofFile || !Number.isFinite(amount) || amount <= 0) {
+      return void clearAlert("Please complete all required fields and upload a valid receipt file.");
     }
 
     const finalParticulars = collectionType === "Other" ? customCollectionType.trim() : collectionType;
     if (!finalParticulars) {
-      return alert("Please specify what this payment is for.");
+      return void clearAlert("Please specify what this payment is for.");
     }
 
     setIsSubmitting(true);
@@ -97,24 +109,25 @@ export default function ClearanceManager({
       const formData = new FormData();
       formData.append("studentId", studentId);
       formData.append("studentName", fullName);
-      formData.append("email", email || "student@example.com");
+      formData.append("email", email);
       formData.append("paymentChannel", channel);
       formData.append("referenceNo", referenceNo);
       formData.append("particulars", finalParticulars);
       formData.append("amount", amount.toString());
       formData.append("ay", ay);
       formData.append("term", term);
+      formData.append("paymentMode", paymentMode);
       formData.append("receipt", proofFile);
 
       await submitOnlineRemittance(department, formData);
 
-      alert("Payment proof submitted successfully! Pending officer verification in Remittance Queue.");
+      void clearAlert("Payment proof submitted successfully! Pending officer verification in Remittance Queue.");
       setShowProofModal(false);
       setReferenceNo("");
       setProofFile(null);
       setCustomCollectionType("");
     } catch (err: any) {
-      alert("Error: " + err.message);
+      void clearAlert("Error: " + err.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -138,7 +151,7 @@ export default function ClearanceManager({
             </button>
           </form>
 
-          <button className="btn btn-success fw-bold text-dark d-flex align-items-center gap-2 px-3 py-2" onClick={() => setShowProofModal(true)}>
+          <button className="btn btn-success fw-bold text-dark d-flex align-items-center gap-2 px-3 py-2" onClick={() => setShowProofModal(true)} disabled={closed}>
             <i className="bi bi-upload"></i> Submit Payment Proof
           </button>
         </div>
@@ -193,7 +206,7 @@ export default function ClearanceManager({
       {showProofModal && (
         <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.7)' }}>
           <div className="modal-dialog modal-dialog-centered modal-lg">
-            <div className="modal-content card border-secondary bg-body text-body shadow-lg">
+            <div className="modal-content card border-secondary bg-body text-body shadow-lg clear-theme-modal">
               <div className="modal-header border-secondary">
                 <h5 className="modal-title fw-bold text-success"><i className="bi bi-shield-lock-fill me-2"></i>Submit Payment Proof</h5>
                 <button type="button" className="btn-close" onClick={() => setShowProofModal(false)}></button>
@@ -265,13 +278,13 @@ export default function ClearanceManager({
 
                   <div className="mb-3">
                     <label className="form-label text-muted small fw-semibold">Screenshot / Photo of Receipt</label>
-                    <input type="file" className="form-control bg-body text-body border-secondary" accept="image/*" onChange={handleFileChange} required />
+                    <input type="file" className="form-control bg-body text-body border-secondary" accept="image/png,image/jpeg,image/webp" onChange={handleFileChange} required />
                   </div>
                 </div>
 
                 <div className="modal-footer border-secondary bg-body-secondary">
                   <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowProofModal(false)}>Cancel</button>
-                  <button type="submit" className="btn btn-success btn-sm fw-bold px-4 text-dark" disabled={isSubmitting}>
+                  <button type="submit" className="btn btn-success btn-sm fw-bold px-4 text-dark" disabled={isSubmitting || closed}>
                     {isSubmitting ? "Submitting Proof..." : "Submit Payment Proof"}
                   </button>
                 </div>

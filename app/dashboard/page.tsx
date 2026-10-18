@@ -1,8 +1,9 @@
 // app/dashboard/page.tsx
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
-import AdminOtpModal from './components/AdminOtpModal';
 import { Metadata } from 'next';
+
+export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: 'Centralized Liquidation of Expenses & Audit Records',
@@ -83,7 +84,9 @@ export default async function DashboardPage() {
           </p>
 
           <div className="d-flex justify-content-center gap-3 flex-wrap">
-            {/* Master Admin Provisioning */}
+            {/* 
+			
+			Master Admin Provisioning 
             <button
               type="button"
               className="btn btn-info fw-bold px-4 py-2 shadow"
@@ -93,7 +96,13 @@ export default async function DashboardPage() {
               <i className="bi bi-gear-fill me-2"></i>
               System SuperAdmin Access
             </button>
+			
+			*/}
 
+            <button type="button" className="btn btn-info fw-bold px-4 py-2 shadow"
+              data-bs-toggle="modal" data-bs-target="#otpAuthModal">
+              <i className="bi bi-shield-lock me-2" />System SuperAdmin Access
+            </button>
             {/* Entity Admin Portal */}
             <Link
               href="/dashboard/entity/login"
@@ -130,7 +139,7 @@ export default async function DashboardPage() {
               </div>
               <h4 className="fw-bold text-white mb-2">No Active Entities Provisioned Yet</h4>
               <p className="text-secondary mb-0 mx-auto" style={{ maxWidth: '500px' }}>
-                Click <strong>System SuperAdmin Access</strong> above to authenticate as the Master Administrator and provision your first Department or Organization.
+                Use <strong>System SuperAdmin Access</strong> above to authenticate and provision your first Department or Organization.
               </p>
             </div>
           ) : (
@@ -200,7 +209,6 @@ export default async function DashboardPage() {
       </div>
 
       {/* ADMIN OTP LOGIN MODAL */}
-      <AdminOtpModal />
     </div>
   );
 }

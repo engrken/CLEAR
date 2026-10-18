@@ -1,6 +1,8 @@
 // /app/dashboard/components/AdminOtpModal.tsx
 
 'use client';
+import { clearAlert, clearConfirm, clearPrompt } from "@/lib/clear-dialogs";
+
 import { useState, useEffect } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
@@ -53,7 +55,7 @@ export default function AdminOtpModal() {
       );
       const data = await res.json();
       if (!res.ok || !data.success) {
-        alert(
+        void clearAlert(
           data.message ||
           'Failed to dispatch OTP.'
         );
@@ -71,7 +73,7 @@ export default function AdminOtpModal() {
         'OTP request error:',
         error
       );
-      alert(
+      void clearAlert(
         'Failed to connect to authentication server.'
       );
     } finally {
@@ -87,7 +89,7 @@ export default function AdminOtpModal() {
   ) => {
     e.preventDefault();
     if (code.length !== 6) {
-      alert(
+      void clearAlert(
         'Please enter the complete 6-digit verification code.'
       );
       return;
@@ -104,9 +106,9 @@ export default function AdminOtpModal() {
       );
 
       // 🚀 FIX: Properly extract result.code (CustomAuthError message) instead of showing "CredentialsSignin"
-      if (result?.error) {
-        const errorMsg = (result as any).code || result.error;
-        alert(errorMsg === 'CredentialsSignin' ? 'Invalid verification code or unauthorized access.' : errorMsg);
+      if (!result || result.error) {
+        const errorMsg = (result as any)?.code || result?.error || 'No login response';
+        void clearAlert(errorMsg === 'CredentialsSignin' ? 'Invalid verification code or unauthorized access.' : errorMsg);
         setCode('');
         return;
       }
@@ -162,7 +164,7 @@ export default function AdminOtpModal() {
         'OTP verification error:',
         error
       );
-      alert(
+      void clearAlert(
         'Verification failed.'
       );
     } finally {
@@ -182,7 +184,7 @@ export default function AdminOtpModal() {
       data-bs-backdrop="static"
     >
       <div className="modal-dialog modal-dialog-centered">
-        <div className="modal-content bg-card border-secondary text-color p-4 shadow-lg">
+        <div className="modal-content bg-card border-secondary text-color p-4 shadow-lg clear-theme-modal">
           {/* HEADER */}
           <div className="d-flex justify-content-between align-items-center mb-3">
             <h5 className="modal-title text-accent fw-bold">

@@ -3,15 +3,25 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { put } from '@vercel/blob';
+import crypto from 'node:crypto';
 
 export async function GET(req: Request) {
   // 1. Verify Vercel Cron secret to prevent unauthorized public triggers
   const authHeader = req.headers.get('authorization');
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!process.env.CRON_SECRET || authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ success: false, message: 'Unauthorized cron request.' }, { status: 401 });
   }
 
   try {
+    // Encrypt before uploading: Vercel Blob with public access is NOT a private backup vault.
+    // Provide a stable 32-byte key in BACKUP_ENCRYPTION_KEY (64 hex digits or base64).
+    const rawKey = process.env.BACKUP_ENCRYPTION_KEY || '';
+    const key = /^[a-f\d]{64}$/i.test(rawKey)
+      ? Buffer.from(rawKey, 'hex')
+      : Buffer.from(rawKey, 'base64');
+    if (key.length !== 32) {
+      return NextResponse.json({ success: false, message: 'BACKUP_ENCRYPTION_KEY must be configured (32 bytes).' }, { status: 503 });
+    }
     const organizations = await prisma.organization.findMany();
     const results = [];
 
@@ -93,27 +103,38 @@ export async function GET(req: Request) {
         },
       };
 
-      const dateStr = new Date().toISOString().split('T')[0];
-      const filename = `backups/${org.subdomain}_backup_${dateStr}.json`;
+      const dateStr = new Date().toISOString().replace(/[:.]/g, '-');
+      const filename = `backups/${org.subdomain}_backup_${dateStr}.encrypted.json`;
+      const plaintext = Buffer.from(JSON.stringify(backupPayload), 'utf8');
+      const iv = crypto.randomBytes(12);
+      const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+      cipher.setAAD(Buffer.from(orgId, 'utf8'));
+      const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+      const envelope = {
+        format: 'CLEAR_ENCRYPTED_BACKUP_V1',
+        organizationId: orgId,
+        algorithm: 'aes-256-gcm',
+        iv: iv.toString('base64'),
+        authTag: cipher.getAuthTag().toString('base64'),
+        ciphertext: ciphertext.toString('base64'),
+      };
 
-      // 3. Upload JSON snapshot automatically to Vercel Blob Storage
-      const blob = await put(filename, JSON.stringify(backupPayload, null, 2), {
-        access: 'public',
+      const blob = await put(filename, JSON.stringify(envelope), {
+        access: 'public', // Public URL contains only authenticated ciphertext.
         contentType: 'application/json',
-        addRandomSuffix: false,
+        addRandomSuffix: true,
       });
 
-      // 4. Log the automated backup event in system logs
       await prisma.systemLog.create({
         data: {
           organizationId: orgId,
           user: 'System Cron',
           action: 'AUTOMATED_DAILY_BACKUP',
-          details: `Generated and stored daily backup: ${blob.url}`,
-        }
-      }).catch(() => {});
-
-      results.push({ department: org.subdomain, url: blob.url });
+          details: `Encrypted snapshot saved: ${filename}. Blob pathname: ${new URL(blob.url).pathname}`,
+        },
+      });
+      // Do not publish backup URLs in the cron response or plain-text system logs.
+      results.push({ department: org.subdomain, encrypted: true });
     }
 
     return NextResponse.json({
@@ -124,6 +145,6 @@ export async function GET(req: Request) {
 
   } catch (error: any) {
     console.error('Automated Cron Backup Error:', error);
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, message: 'Encrypted backup failed; review server logs.' }, { status: 500 });
   }
 }

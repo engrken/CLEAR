@@ -1,11 +1,12 @@
-// /app/department/[department]/(protected)/liquidations/page.tsx
+// app/department/[department]/(protected)/liquidations/page.tsx
 
 import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
 import LiquidationsClient from './LiquidationsClient';
 import { redirect } from 'next/navigation';
 import { Metadata } from 'next';
-import { isSuperAdminEmail, requireTabAccess } from '@/lib/permissions';
+import { requireTabAccess } from '@/lib/permissions';
+import { getPeriodLedger } from '../realign/ledger';
 
 export const metadata: Metadata = {
   title: 'Centralized Liquidation of Expenses & Audit Records',
@@ -22,55 +23,44 @@ export default async function LiquidationsPage({
     caId?: string;
   }>;
 }) {
-  // =========================================================
-  // 1. EXTRACT PARAMS
-  // =========================================================
+  // 1. Extract and normalize the department slug.
   const { department } = await params;
+  const cleanDepartment = decodeURIComponent(department).trim().toLowerCase();
 
-  const cleanDepartment = decodeURIComponent(department)
-    .trim()
-    .toLowerCase();
-
-  // =========================================================
-  // 2. AUTHENTICATION & AUTHORIZATION
-  // =========================================================
+  // 2. Authentication and permission check.
   const session = await auth();
 
   if (!session?.user) {
-    redirect(
-      `/department/${encodeURIComponent(cleanDepartment)}?login=true`
-    );
+    redirect(`/department/${encodeURIComponent(cleanDepartment)}?login=true`);
   }
 
-  // 🚀 SECURITY FIX (F2 & F70): Use centralized permission & super-admin helpers
   try {
     await requireTabAccess('tab-audit', cleanDepartment);
   } catch {
-    redirect(
-      `/department/${encodeURIComponent(cleanDepartment)}?forbidden=true`
-    );
+    redirect(`/department/${encodeURIComponent(cleanDepartment)}?forbidden=true`);
   }
 
-  // =========================================================
-  // 3. RESOLVE SEARCH PARAMS
-  // =========================================================
+  // 3. Resolve requested academic year, term, and optional cash-advance prefill.
   const resolvedSearch = searchParams ? await searchParams : {};
-
-  const ay = resolvedSearch.ay || 'A.Y. 2026 - 2027';
-  const term = resolvedSearch.term || '1st Sem';
   const prefillCaId = resolvedSearch.caId || '';
 
-  // =========================================================
-  // 4. FIND DEPARTMENT & SIGNATORIES
-  // =========================================================
+  // 4. Load the department and all existing report branding settings.
   const organization = await prisma.organization.findUnique({
     where: { subdomain: cleanDepartment },
-    select: { 
-      id: true, 
-      name: true, 
+    select: {
+      id: true,
+      name: true,
       logo: true,
-      signatories: { orderBy: { order: 'asc' } } // Fetched for the Print View
-    }
+      activeAy: true,
+      activeTerm: true,
+      reportSchoolName: true,
+      reportSchoolAddress: true,
+      reportHeaderLeftLogo: true,
+      reportHeaderRightLogo: true,
+      signatories: {
+        orderBy: { order: 'asc' },
+      },
+    },
   });
 
   if (!organization) {
@@ -84,26 +74,21 @@ export default async function LiquidationsPage({
     );
   }
 
-  // =========================================================
-  // 5. FETCH PENDING ADVANCES, FUNDS, AND PAST AUDITS
-  // =========================================================
-  const [pendingAdvances, funds, rawPastAudits] = await Promise.all([
-    // 5a. Pending Cash Advances
+  const ay = resolvedSearch.ay || organization.activeAy || 'A.Y. 2026 - 2027';
+  const term = resolvedSearch.term || organization.activeTerm || '1st Sem';
+
+  // 5. Fetch cash advances, funds, historical liquidations, and the period status.
+  let canVoid = false;
+  try { await requireTabAccess("tab-void", cleanDepartment); canVoid = true; } catch { /* no void rights */ }
+  const [allAdvances, funds, rawPastAudits, periodLedger] = await Promise.all([
     prisma.cashAdvance.findMany({
       where: {
         organizationId: organization.id,
         academicYear: ay,
         term,
-        status: {
-          contains: 'Pending',
-        },
       },
-      orderBy: {
-        dateIssued: 'desc',
-      },
+      orderBy: { dateIssued: 'desc' },
     }),
-
-    // 5b. Existing Funds
     prisma.fund.findMany({
       where: {
         organizationId: organization.id,
@@ -111,32 +96,32 @@ export default async function LiquidationsPage({
         term,
       },
     }),
-
-    // 5c. Historical Liquidations
     prisma.audit.findMany({
-      where: {
-        organizationId: organization.id,
-        academicYear: ay,
-        term,
-      },
-      include: {
-        expenseItems: true,
-      },
-      orderBy: {
-        date: 'desc',
-      },
-    }).catch(() => []), 
+        where: {
+          organizationId: organization.id,
+          academicYear: ay,
+          term,
+        },
+        include: { expenseItems: true },
+        orderBy: { date: 'desc' },
+      }),
+    getPeriodLedger(prisma, organization.id, ay, term),
   ]);
 
-  // Map 'expenseItems' to 'items' so the LiquidationHistory component works instantly
-  const pastAudits = rawPastAudits.map(audit => ({
+  const pendingAdvances = allAdvances.filter(advance => {
+    const status = String(advance.status || '').toUpperCase();
+    return !/VOID|CANCEL/.test(status) && !status.includes('LIQUIDATED') &&
+      (status.includes('PENDING') || status.includes('UNLIQUIDATED') || status === 'ACTIVE');
+  });
+
+  // LiquidationHistory expects each audit's line items in `items`.
+  const pastAudits = rawPastAudits.map((audit: any) => ({
     ...audit,
-    items: audit.expenseItems
+    items: audit.expenseItems,
   }));
 
-  // =========================================================
-  // 6. RENDER WRAPPER CLIENT COMPONENT
-  // =========================================================
+  // 6. Send branding settings through to LiquidationsClient.
+  // LiquidationsClient must forward these props to its LiquidationHistory child.
   return (
     <div className="module card p-0 border-secondary shadow-sm overflow-hidden bg-body text-body">
       <LiquidationsClient
@@ -144,6 +129,10 @@ export default async function LiquidationsPage({
         department={cleanDepartment}
         orgName={organization.name}
         logoUrl={organization.logo}
+        reportSchoolName={organization.reportSchoolName ?? ''}
+        reportSchoolAddress={organization.reportSchoolAddress ?? ''}
+        reportHeaderLeftLogo={organization.reportHeaderLeftLogo ?? ''}
+        reportHeaderRightLogo={organization.reportHeaderRightLogo ?? ''}
         signatories={organization.signatories || []}
         ay={ay}
         term={term}
@@ -151,6 +140,8 @@ export default async function LiquidationsPage({
         funds={funds}
         prefillCaId={prefillCaId}
         pastAudits={pastAudits}
+        isClosed={Boolean(periodLedger.activeRollover)}
+        canVoid={canVoid}
       />
     </div>
   );

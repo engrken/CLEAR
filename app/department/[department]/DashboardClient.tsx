@@ -32,6 +32,8 @@ export default function DashboardClient({
   const totalDeposited = overview.totalDeposited || 0;
   const totalWithdrawn = overview.totalWithdrawn || 0;
   const physicalCashOnHand = (overview.remainingBalance || 0) - cashierBalance;
+  const carriedIn = Number(overview.carryOverInboundTotal || 0);
+  const carriedOut = Number(overview.carryOverOutboundTotal || 0);
 
   // --- CHART 1: Fund Allocation Health (Doughnut) ---
   const activeFunds = overview.fundsList.filter((f: any) => f.balance > 0);
@@ -87,6 +89,12 @@ export default function DashboardClient({
           </span>
           <h4 className="fw-bold mb-1 text-body">{organization.name}</h4>
           <p className="text-secondary small mb-0">Financial Analytics & Active Insights for {ay} | {term}</p>
+          {(carriedIn > 0 || carriedOut > 0) && (
+            <p className="small text-info mt-2 mb-0">
+              Carry-over received: {fmt(carriedIn)} | Forwarded to next term: {fmt(carriedOut)}
+              <span className="text-secondary ms-1">(period transfers, not new collections)</span>
+            </p>
+          )}
         </div>
 
         {/* QUICK ACTIONS */}

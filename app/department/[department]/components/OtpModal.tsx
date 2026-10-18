@@ -2,6 +2,8 @@
 
 
 "use client";
+import { clearAlert, clearConfirm, clearPrompt } from "@/lib/clear-dialogs";
+
 
 import { useState } from "react";
 import { signIn } from "next-auth/react";
@@ -40,7 +42,7 @@ export default function OtpModal({
       }
     } catch (error) {
       console.error("OTP request error:", error);
-      alert(
+      void clearAlert(
         error instanceof Error
           ? error.message
           : "Failed to send verification code."
@@ -57,7 +59,7 @@ export default function OtpModal({
     e.preventDefault();
 
     if (code.length !== 6) {
-      alert("Please enter the complete 6-digit verification code.");
+      void clearAlert("Please enter the complete 6-digit verification code.");
       return;
     }
 
@@ -73,16 +75,16 @@ export default function OtpModal({
         redirect: false,
       });
 
-      console.log("NextAuth signIn result:", result);
+      // Do not log authentication results to the browser console.
 
       if (!result) {
-        alert("No response was received from the authentication server.");
+        void clearAlert("No response was received from the authentication server.");
         return;
       }
 
       if (result.error) {
         console.error("NextAuth authentication error:", result.error);
-        alert(
+        void clearAlert(
           result.error === "CredentialsSignin"
             ? "The verification code was rejected. Please check that you entered the latest OTP correctly."
             : result.error
@@ -97,7 +99,7 @@ export default function OtpModal({
 
     } catch (error) {
       console.error("OTP verification error:", error);
-      alert(
+      void clearAlert(
         error instanceof Error
           ? error.message
           : "Verification failed. Please try again."
@@ -127,7 +129,7 @@ export default function OtpModal({
       aria-hidden="true"
     >
       <div className="modal-dialog modal-dialog-centered">
-        <div className="modal-content bg-card border-secondary text-color p-4 shadow-lg">
+        <div className="modal-content bg-card border-secondary text-color p-4 shadow-lg clear-theme-modal">
           
           {/* HEADER */}
           <div className="d-flex justify-content-between align-items-center mb-3">

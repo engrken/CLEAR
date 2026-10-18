@@ -26,7 +26,8 @@ export default async function StudentsPage({
   const search = resolvedSearch.search || '';
   const yearFilter = resolvedSearch.year || 'ALL';
   const statusFilter = resolvedSearch.status || 'ALL';
-  const page = Math.max(1, parseInt(resolvedSearch.page || '1', 10));
+  const rawPage = Number(resolvedSearch.page || '1');
+  const page = Number.isSafeInteger(rawPage) && rawPage >= 1 ? Math.min(rawPage, 100000) : 1;
   const pageSize = 10;
 
   const organization = await prisma.organization.findUnique({
@@ -51,37 +52,23 @@ export default async function StudentsPage({
   const ay = resolvedSearch.ay || organization.activeAy || 'A.Y. 2026 - 2027';
   const term = resolvedSearch.term || organization.activeTerm || '1st Sem';
 
-  const whereClause: any = {
-    organizationId: organization.id,
-    ...(search ? {
-      OR: [
-        { studentId: { contains: search, mode: 'insensitive' } },
-        { fullName: { contains: search, mode: 'insensitive' } },
-        { email: { contains: search, mode: 'insensitive' } },
-      ],
-    } : {}),
-    ...(yearFilter !== 'ALL' ? { yearLevel: yearFilter } : {}),
-  };
-
-  // 🚀 FIX: Require an explicit Enrollment row to determine active enrollment status correctly
-  if (statusFilter === 'Enrolled') {
-    whereClause.enrollments = {
-      some: { academicYear: ay, term, enrollmentStatus: 'Enrolled' }
-    };
-  } else if (statusFilter === 'Inactive') {
-    whereClause.OR = [
-      {
-        enrollments: {
-          some: { academicYear: ay, term, enrollmentStatus: { not: 'Enrolled' } }
-        }
-      },
-      {
-        enrollments: {
-          none: { academicYear: ay, term }
-        }
-      }
-    ];
+  // Preserve search filters when combining enrollment-status filters.
+  const andFilters: any[] = [{ organizationId: organization.id }];
+  if (search.trim()) {
+    const q = search.trim().slice(0, 120);
+    andFilters.push({ OR: [
+      { studentId: { contains: q, mode: 'insensitive' } },
+      { fullName: { contains: q, mode: 'insensitive' } },
+      { email: { contains: q, mode: 'insensitive' } },
+    ] });
   }
+  if (yearFilter !== 'ALL') andFilters.push({ yearLevel: yearFilter });
+  if (statusFilter === 'Enrolled') {
+    andFilters.push({ enrollments: { some: { academicYear: ay, term, enrollmentStatus: 'Enrolled' } } });
+  } else if (statusFilter === 'Inactive') {
+    andFilters.push({ enrollments: { none: { academicYear: ay, term, enrollmentStatus: 'Enrolled' } } });
+  }
+  const whereClause = { AND: andFilters };
 
   const [totalDirectory, absoluteEnrolledCount, totalFiltered, students] = await Promise.all([
     prisma.student.count({ where: { organizationId: organization.id } }),

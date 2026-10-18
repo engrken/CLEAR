@@ -1,192 +1,224 @@
-// /app/department/[department]/(protected)/liquidations/actions.ts
-
 "use server";
 
-import { prisma } from '@/lib/prisma';
-import { requireTabAccess } from '@/lib/permissions';
-import { revalidatePath } from 'next/cache';
+import { Prisma } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
+import { requireTabAccess } from "@/lib/permissions";
+import { revalidatePath } from "next/cache";
+import { getPeriodLedger, toCents, fromCents } from "../realign/ledger";
+import { randomUUID } from "node:crypto";
+import { assertAcademicPeriod } from "@/lib/academic-period-guard";
+import { enqueueAccountingNotice, scheduleDigitalReceiptDispatch } from "@/lib/digital-receipts";
 
-// =========================================================================
-// HELPER FUNCTIONS (Internal to this module)
-// =========================================================================
-
-function money(val: any, fieldName: string): number {
-  const parsed = parseFloat(val);
-  if (isNaN(parsed)) throw new Error(`Invalid monetary value for ${fieldName}`);
-  return parsed;
+interface ExpenseInput {
+  qty: number;
+  orsi: string;
+  desc: string;
+  subTotal: number;
+  proofBase64?: string;
+  proofMime?: string;
+}
+interface AuditInput {
+  date: string;
+  advanceId: string;
+  requestor: string;
+  fundSource: string;
+  budgetRequested: number;
+  totalExpense: number;
+  items: ExpenseInput[];
+  ay: string;
+  term: string;
 }
 
-function parseDate(val: any, fieldName: string): Date {
-  const date = new Date(val);
-  if (isNaN(date.getTime())) throw new Error(`Invalid date format for ${fieldName}`);
+const clean = (value: unknown): string => String(value ?? "").trim();
+const inactive = (status: unknown): boolean => /VOID|CANCEL|REJECT/i.test(clean(status));
+const isOpenAdvance = (status: unknown): boolean => {
+  const s = clean(status).toUpperCase();
+  return !inactive(s) && !s.includes("LIQUIDATED") &&
+    (s.includes("PENDING") || s.includes("UNLIQUIDATED") || s === "ACTIVE");
+};
+
+function dateOnly(value: unknown): Date {
+  const str = clean(value);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(str)) throw new Error("Use YYYY-MM-DD for audit date.");
+  const date = new Date(`${str}T12:00:00.000Z`);
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== str) {
+    throw new Error("Invalid audit date.");
+  }
   return date;
 }
 
-function generateReference(prefix: string): string {
-  const randomStr = Math.random().toString(36).substring(2, 8).toUpperCase();
-  const timestamp = Date.now().toString().slice(-4);
-  return `${prefix}-${randomStr}-${timestamp}`;
+const PROOF_FORMAT = /^data:(image\/(?:png|jpeg|webp)|application\/pdf);base64,([A-Za-z0-9+/]+={0,2})$/;
+function checkProof(proof: unknown, declaredMime: unknown): string | null {
+  if (!proof) return null;
+  if (typeof proof !== "string") throw new Error("Invalid receipt attachment.");
+  const match = PROOF_FORMAT.exec(proof);
+  if (!match || (clean(declaredMime) && clean(declaredMime) !== match[1])) {
+    throw new Error("Receipt attachment must be a PNG, JPEG, WebP image, or PDF.");
+  }
+  const byteSize = Buffer.byteLength(match[2], "base64");
+  if (byteSize < 1 || byteSize > 850 * 1024) {
+    throw new Error("Each receipt attachment must be 850 KB or less.");
+  }
+  return proof;
 }
 
-// =========================================================================
-// AUDIT / LIQUIDATION ACTIONS
-// =========================================================================
-
-export async function recordAudit(
-  department: string,
-  data: {
-    date: string;
-    advanceId: string;
-    requestor: string;
-    fundSource: string;
-    budgetRequested: number;
-    totalExpense: number;
-    items: {
-      qty: number;
-      orsi: string;
-      desc: string;
-      subTotal: number;
-      proofBase64?: string; // 🚀 ADDED SUPPORT FOR BLOB ATTACHMENTS
-      proofMime?: string;
-    }[];
-    ay: string;
-    term: string;
-  }
-) {
-  // 1. Verify Permission via Shared Guard
-  const customUser = await requireTabAccess("tab-audit", department);
-  const officerName = customUser.fullName || customUser.email || "System Administrator";
-
-  // 2. Resolve Organization ID
-  const organization = await prisma.organization.findUnique({
-    where: { subdomain: department.toLowerCase() }
+export async function recordAudit(department: string, data: AuditInput) {
+  const dept = clean(decodeURIComponent(department)).toLowerCase();
+  const actor = await requireTabAccess("tab-audit", dept);
+  const officer = clean((actor as any).fullName || (actor as any).name || (actor as any).email) || "Authorized Officer";
+  const org = await prisma.organization.findUnique({
+    where: { subdomain: dept },
+    select: { id: true },
   });
-
-  if (!organization) {
-    throw new Error(`Organization subdomain "${department}" not found.`);
+  if (!org) throw new Error("Department organization not found.");
+  const ay = clean(data.ay);
+  const term = clean(data.term);
+  const advanceId = clean(data.advanceId);
+  const date = dateOnly(data.date);
+  if (!ay || !term) {
+    throw new Error("Valid academic year and term are required.");
   }
-  const orgId = organization.id;
-
-  // 3. Validate Inputs
-  const date = parseDate(data.date, "audit date");
-  const budgetRequested = money(data.budgetRequested, "Budget requested");
-  const totalExpense = money(data.totalExpense, "Total expense");
-
-  if (totalExpense <= 0) {
-    throw new Error("Total expense must be greater than zero.");
+  if (!Array.isArray(data.items) || !data.items.length || data.items.length > 40) {
+    throw new Error("Provide between 1 and 40 expense items.");
   }
-
-  if (!Array.isArray(data.items)) {
-    throw new Error("Expense items are invalid.");
-  }
-
-  // 4. Validate Items & Re-calculate Total
-  let itemTotal = 0;
-
-  for (const item of data.items) {
+  const items = data.items.map((item, index) => {
     const qty = Number(item.qty);
-    const subTotal = money(item.subTotal, "Expense subtotal");
-
-    if (!Number.isInteger(qty) || qty <= 0) {
-      throw new Error("Expense quantity must be a positive whole number.");
+    const desc = clean(item.desc);
+    const subtotal = toCents(item.subTotal);
+    if (!Number.isSafeInteger(qty) || qty < 1 || qty > 100000) {
+      throw new Error(`Item ${index + 1}: quantity must be a positive whole number.`);
     }
-    itemTotal += subTotal;
-  }
-
-  itemTotal = Math.round(itemTotal * 100) / 100;
-
-  if (Math.abs(itemTotal - totalExpense) > 0.01) {
-    throw new Error(`Expense item total ₱${itemTotal.toFixed(2)} does not match total expense ₱${totalExpense.toFixed(2)}.`);
-  }
-
-  // 5. Calculate Variances
-  const auditId = generateReference("AUD");
-  const variance = Math.round((budgetRequested - totalExpense) * 100) / 100;
-  const cashReturn = variance > 0 ? variance : 0;
-  const reimbursement = variance < 0 ? Math.abs(variance) : 0;
-  const caRef = data.advanceId || "Direct Expense (No CA)";
-
-  // 6. Execute Database Transaction
-  await prisma.$transaction(async (tx) => {
-    // Check if linked to an Advance
-    if (data.advanceId) {
-      const advance = await tx.cashAdvance.findFirst({
-        where: { organizationId: orgId, advanceId: data.advanceId },
-      });
-
-      if (!advance) throw new Error("Cash advance record not found.");
-      
-      const status = String(advance.status || "").toUpperCase();
-      if (status.includes("LIQUIDATED")) {
-        throw new Error("This cash advance has already been liquidated.");
-      }
+    if (!desc || desc.length > 1000 || subtotal <= 0) {
+      throw new Error(`Item ${index + 1}: a description and positive subtotal are required.`);
     }
-
-    // Create Audit Header
-    await tx.audit.create({
-      data: {
-        organizationId: orgId,
-        auditId,
-        academicYear: data.ay,
-        term: data.term,
-        date,
-        referenceCaId: caRef,
-        requestor: String(data.requestor || "").trim(),
-        fundSource: String(data.fundSource || "").trim(),
-        budgetRequested,
-        totalExpense,
-        varianceReturn: cashReturn,
-        reimbursementDue: reimbursement,
-        status: "Audited & Verified",
-        encodedBy: officerName,
-      },
-    });
-
-    // Create Expense Items with Receipt Proof Blob URLs
-    for (const item of data.items) {
-      await tx.expenseItem.create({
-        data: {
-          organizationId: orgId,
-          auditId,
-          orSiNumber: String(item.orsi || "").trim() || null,
-          qty: Number(item.qty),
-          description: String(item.desc || "").trim(),
-          subTotal: money(item.subTotal, "Expense subtotal"),
-          receiptProofUrl: item.proofBase64 || null, // 🚀 SAVES THE ATTACHED BLOB TO THE DATABASE
-        },
-      });
-    }
-
-    // Update Cash Advance Status (if applicable)
-    if (data.advanceId) {
-      const advance = await tx.cashAdvance.findFirst({
-        where: { organizationId: orgId, advanceId: data.advanceId },
-      });
-
-      if (advance) {
-        await tx.cashAdvance.update({
-          where: { id: advance.id },
-          data: { status: "Liquidated" },
-        });
-      }
-    }
+    return {
+      qty,
+      orSiNumber: clean(item.orsi).slice(0, 150) || null,
+      description: desc,
+      subTotal: fromCents(subtotal),
+      receiptProofUrl: checkProof(item.proofBase64, item.proofMime),
+    };
   });
-
-  // 7. Audit Log
-  try {
-    await prisma.systemLog.create({
-      data: {
-        organizationId: orgId,
-        user: officerName,
-        action: "RECORD_LIQUIDATION",
-        details: `Verified liquidation [${auditId}] for ${data.requestor} totaling ₱${totalExpense.toFixed(2)}.`,
-      }
-    });
-  } catch (error) {
-    console.warn("System logging failed:", error);
+  // Keep Server Action requests within the default ~1MB Next.js request body limit.
+  const proofBytes = items.reduce((sum, item) => sum + (item.receiptProofUrl?.length || 0), 0);
+  if (proofBytes > 900000) {
+    throw new Error("Combined receipt attachments are too large. Upload smaller images/PDFs.");
   }
+  const actualExpenseCents = items.reduce((sum, item) => sum + toCents(item.subTotal), 0);
+  if (toCents(data.totalExpense) !== actualExpenseCents) {
+    throw new Error("Item subtotals do not match the submitted expense total.");
+  }
+  if (actualExpenseCents <= 0) throw new Error("The liquidation must have a positive expense total.");
 
-  // 8. Revalidate Cache
-  revalidatePath(`/department/${department}/liquidations`);
-  revalidatePath(`/department/${department}`);
+  let auditId = "";
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      auditId = `AUD-${randomUUID().slice(0, 8).toUpperCase()}`;
+      await prisma.$transaction(async tx => {
+        await assertAcademicPeriod(tx, org.id, ay, term);
+        const ledger = await getPeriodLedger(tx, org.id, ay, term);
+        if (ledger.activeRollover) {
+          throw new Error("This term has been carried over. Reverse the rollover before posting a liquidation.");
+        }
+        let requestor = clean(data.requestor);
+        let fundSource = clean(data.fundSource);
+        let budgetCents = 0;
+        let advance: Awaited<ReturnType<typeof tx.cashAdvance.findFirst>> = null;
+        if (advanceId) {
+          advance = await tx.cashAdvance.findFirst({
+            where: { organizationId: org.id, advanceId, academicYear: ay, term },
+          });
+          if (!advance) throw new Error("Cash advance not found in this academic term.");
+          if (!isOpenAdvance(advance.status)) throw new Error("This advance is not pending liquidation.");
+          const previous = await tx.audit.findFirst({
+            where: { organizationId: org.id, referenceCaId: advanceId,
+              NOT: { OR: [
+                { status: { contains: "VOID", mode: "insensitive" } },
+                { status: { contains: "CANCEL", mode: "insensitive" } },
+              ] },
+            },
+            select: { id: true },
+          });
+          if (previous) throw new Error("An audit already exists for this cash advance.");
+          // These values must come from the authenticated database, never from form inputs.
+          requestor = advance.requestor;
+          fundSource = advance.fundSource;
+          budgetCents = toCents(advance.amountApproved);
+        } else if (!requestor || requestor.length > 250) {
+          throw new Error("Enter a valid direct-expense requestor.");
+        }
+        if (!fundSource) throw new Error("Choose an existing fund pool.");
+        const fundBalance = ledger.funds.find(f => f.name === fundSource);
+        if (!fundBalance) throw new Error(`Fund pool '${fundSource}' was not found in this term.`);
+        // A pending advance already reserves its approved amount in the shared ledger.
+        // Posting the audit releases that hold and books the actual expense instead.
+        const additionalRequired = Math.max(0, actualExpenseCents - budgetCents);
+        if (additionalRequired > toCents(fundBalance.balance)) {
+          throw new Error(`Insufficient available balance in ${fundSource} for the excess/direct expense.`);
+        }
+        const varianceCents = budgetCents - actualExpenseCents;
+        const audit = await tx.audit.create({
+          data: {
+            organizationId: org.id,
+            auditId,
+            academicYear: ay,
+            term,
+            date,
+            referenceCaId: advanceId || "Direct Expense (No CA)",
+            requestor,
+            fundSource,
+            budgetRequested: fromCents(budgetCents),
+            totalExpense: fromCents(actualExpenseCents),
+            varianceReturn: advance ? fromCents(Math.max(0, varianceCents)) : 0,
+            reimbursementDue: advance ? fromCents(Math.max(0, -varianceCents)) : 0,
+            status: "Audited & Verified",
+            encodedBy: officer,
+          },
+        });
+        await tx.expenseItem.createMany({
+          data: items.map(item => ({
+            organizationId: org.id,
+            auditId: audit.auditId,
+            ...item,
+          })),
+        });
+        if (advance) {
+          await tx.cashAdvance.update({
+            where: { id: advance.id },
+            data: { status: "Liquidated" },
+          });
+        }
+        await tx.systemLog.create({
+          data: {
+            organizationId: org.id,
+            user: officer,
+            action: "RECORD_LIQUIDATION",
+            details: `Audit ${auditId}; CA ${advanceId || "DIRECT"}; ${ay} ${term}; ${fundSource}; budget ₱${fromCents(budgetCents).toFixed(2)}; spent ₱${fromCents(actualExpenseCents).toFixed(2)}; variance ₱${fromCents(varianceCents).toFixed(2)}.`,
+          },
+        });
+        const people = await tx.tenantUser.findMany({ where: { organizationId: org.id,
+          fullName: { equals: requestor, mode: "insensitive" } }, select: { email: true }, take: 2 });
+        await enqueueAccountingNotice(tx, { organizationId: org.id, eventKey: `liquidation:${auditId}`,
+          documentType: "Liquidation Audit Summary", referenceNo: auditId,
+          academicYear: ay, term, amount: fromCents(actualExpenseCents), officerName: officer,
+          officerEmail: String((actor as any).email || ""), participantName: requestor,
+          participantEmail: people.length === 1 ? people[0].email : null,
+          participantRole: "Liquidation Requestor",
+          details: [{label:"Source fund",value:fundSource},
+            {label:"Cash Advance",value:advanceId || "Direct expense"},
+            {label:"Audit result",value:"Audited — not proof of a cash disbursement"}],
+        });
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 20000 });
+      break;
+    } catch (error: any) {
+      if ((error?.code === "P2034" || error?.code === "P2002") && attempt < 2) continue;
+      throw error;
+    }
+  }
+  const root = `/department/${dept}`;
+  for (const route of ["", "/liquidations", "/advances", "/summary", "/reports", "/realign", "/clearance", "/setup"]) {
+    revalidatePath(root + route);
+  }
+  scheduleDigitalReceiptDispatch(org.id, `liquidation:${auditId}`);
+  return { success: true, auditId };
 }

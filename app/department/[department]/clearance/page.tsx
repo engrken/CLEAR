@@ -13,6 +13,9 @@ import ClearanceClientView from './ClearanceClientView';
 import ClearanceManager from './ClearanceManager';
 import DataPrivacyModal from '../components/DataPrivacyModal';
 import { Metadata } from 'next';
+import { decodeStudentDue, activeCollectibleDue } from '../(protected)/collectibles/due-link';
+import { getPeriodLedger } from '../(protected)/realign/ledger';
+import { listHistoricalDebts, type HistoricalDebt } from '@/lib/student-arrears';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,20 +50,21 @@ function getClearanceSecret(): string {
   return secret;
 }
 
-function generateClearanceSignature(studentId: string, ay: string, term: string): string {
+function generateClearanceSignature(orgId: string, studentId: string, ay: string, term: string): string {
   const secret = getClearanceSecret();
-  const payload = `${studentId.trim().toLowerCase()}|${ay.trim()}|${term.trim()}`;
+  const payload = `CLEAR-V2|${orgId}|${studentId.trim().toLowerCase()}|${ay.trim()}|${term.trim()}`;
   return crypto.createHmac('sha256', secret).update(payload).digest('hex');
 }
 
 function verifyClearanceSignature(
+  orgId: string,
   studentId: string,
   ay: string,
   term: string,
   providedSig: string
 ): boolean {
   try {
-    const expectedSig = generateClearanceSignature(studentId, ay, term);
+    const expectedSig = generateClearanceSignature(orgId, studentId, ay, term);
     const a = Buffer.from(expectedSig.toLowerCase(), 'utf8');
     const b = Buffer.from(String(providedSig || '').trim().toLowerCase(), 'utf8');
     if (a.length !== b.length) return false;
@@ -85,51 +89,18 @@ function isVoidedCollection(c: { paymentType?: unknown; status?: unknown }) {
   return pt.includes('VOID') || st.includes('VOID') || st.includes('CANCEL');
 }
 
-function buildTermPackage(collectionSetups: any[], term: string) {
-  const legacyPkgs: Record<
-    string,
-    { total: number; items: { name: string; rate: number; fund: string }[] }
-  > = {
-    '1st Sem': {
-      total: 650,
-      items: [
-        { name: 'JIECEP FCUSC Membership Fee (Student & Institutional)', rate: 250, fund: 'JIECEP Membership Fund' },
-        { name: 'General Orientation/Acquaintance Party', rate: 200, fund: 'General Orientation Fund' },
-        { name: 'COE FCUSR Activities', rate: 100, fund: 'FCUSR Activities Fund' },
-        { name: 'Sports and Cultural Fund', rate: 100, fund: 'Sports & Cultural Fund' },
-      ],
-    },
-    '2nd Sem': {
-      total: 900,
-      items: [
-        { name: 'JIECEP FCUSC Fund', rate: 50, fund: 'JIECEP FCUSC Fund' },
-        { name: 'JIECEP Week Activities (Local & Regional)', rate: 150, fund: 'JIECEP Week Activities Fund' },
-        { name: 'ECE Grand Ball', rate: 650, fund: 'ECE Grandball Fund' },
-        { name: 'Emergency/Calamity Fund', rate: 30, fund: 'Emergency/Calamity Fund' },
-        { name: 'FCUSR Activities & Projects', rate: 20, fund: 'FCUSR Activities Fund' },
-      ],
-    },
-    Summer: {
-      total: 200,
-      items: [
-        { name: 'Summer Departmental Operations', rate: 150, fund: 'New Accounts (Current Operations)' },
-        { name: 'Special Activities Fund', rate: 50, fund: 'JIECEP Activities Fund' },
-      ],
-    },
+function buildTermPackage(collectionSetups: any[], _term: string) {
+  // The official package is defined exclusively by this organization's setup.
+  // Never silently introduce FCU-specific default fees for an unrelated tenant.
+  const pkgItems = collectionSetups.filter(c => c.isPackage === true);
+  return {
+    total: money(pkgItems.reduce((sum: number, c: any) => sum + Number(c.amount || 0), 0)),
+    items: pkgItems.map((c: any) => ({
+      name: String(c.name || "").trim(),
+      rate: money(c.amount),
+      fund: String(c.targetFund || "").trim(),
+    })),
   };
-
-  const pkgItems = collectionSetups.filter((c: any) => c.isPackage !== false);
-  if (pkgItems.length > 0) {
-    return {
-      total: money(pkgItems.reduce((s: number, i: any) => s + (Number(i.amount) || 0), 0)),
-      items: pkgItems.map((s: any) => ({
-        name: String(s.name || '').trim(),
-        rate: money(s.amount),
-        fund: String(s.targetFund || '').trim(),
-      })),
-    };
-  }
-  return legacyPkgs[term] || legacyPkgs['1st Sem'];
 }
 
 const PublicHeader = ({ organizationName }: { organizationName: string }) => {
@@ -137,7 +108,7 @@ const PublicHeader = ({ organizationName }: { organizationName: string }) => {
   return (
     <header className="navbar border-bottom border-secondary px-4 py-3 bg-body shadow-sm d-print-none text-body">
       <div className="d-flex align-items-center gap-3 w-100">
-        <img src="/fcu.png" alt="FCU Logo" style={{ width: '55px', objectFit: 'contain' }} />
+        <img src="/clearsys.png" alt="clearsys Logo" style={{ width: '55px', objectFit: 'contain' }} />
         <div>
           <h5 className="mb-0 fw-bold text-info">CLEAR System</h5>
           <small className="text-muted text-uppercase fw-semibold" style={{ letterSpacing: '0.05em' }}>
@@ -168,7 +139,8 @@ export default async function ClearancePage({
   const basePath = `/department/${encodeURIComponent(cleanDepartment)}`;
 
   const headersList = await headers();
-  const host = headersList.get('host') || 'localhost:3000';
+  const rawHost = headersList.get('host') || 'localhost:3000';
+  const host = /^[a-z0-9.:-]+$/i.test(rawHost) ? rawHost : 'localhost:3000';
   const protocol = process.env.NODE_ENV === 'development' ? 'http' : 'https';
   const absoluteBaseUrl = `${protocol}://${host}`;
 
@@ -208,8 +180,18 @@ export default async function ClearancePage({
 
   const termPkg = buildTermPackage(collectionSetups, term);
 
+  const periodLedger = await getPeriodLedger(prisma, organization.id, ay, term);
+  const isClosed = Boolean(periodLedger.activeRollover);
+  // Historic debts are assessed records, not inferred fees for all prior years.
+  const historicalDebts = await listHistoricalDebts(prisma, organization.id, ay, term);
+  const historicalByStudent = new Map<string, HistoricalDebt[]>();
+  for (const debt of historicalDebts) {
+    const key = debt.studentId.trim().toLowerCase();
+    historicalByStudent.set(key, [...(historicalByStudent.get(key) || []), debt]);
+  }
+
   const feeOptions = [
-    { name: 'Departmental Fee (Full Package)', amount: termPkg.total },
+    ...(termPkg.total > 0 ? [{ name: 'Departmental Fee (Full Package)', amount: termPkg.total }] : []),
     ...collectionSetups.map((c) => ({
       name: c.name,
       amount: money(c.amount),
@@ -221,7 +203,8 @@ export default async function ClearancePage({
     student: { id: string; studentId: string; fullName: string },
     collections: any[],
     penalties: any[],
-    advances: any[]
+    advances: any[],
+    collectibles: any[] = []
   ) => {
     const unpaidItems: { category: string; itemDescription: string; balanceDue: number }[] = [];
     const studentDbIdKey = String(student.id || '').trim().toLowerCase();
@@ -271,7 +254,7 @@ export default async function ClearancePage({
     >();
     for (const c of myCollections) {
       const desc = String(c.itemDescription || '').trim();
-      if (!desc || isPackageCollection(desc)) continue;
+      if (!desc || isPackageCollection(desc) || /^Historical (Penalty|Collectible) \[/i.test(desc)) continue;
       const key = desc.toLowerCase();
       const group = standaloneGroups.get(key) || {
         category: String(c.category || 'Assessment'),
@@ -302,11 +285,12 @@ export default async function ClearancePage({
 
     const myPenalties = penalties.filter((p) => {
       const pSid = String(p.studentId || '').trim().toLowerCase();
-      const st = String(p.status || '');
+      const st = String(p.status || '').toUpperCase();
       return (
         (pSid === studentNumKey || pSid === studentDbIdKey) &&
-        !st.includes('Settled') &&
-        !st.includes('Voided')
+        !st.includes('SETTLED') &&
+        !st.includes('VOID') &&
+        !st.includes('CANCEL')
       );
     });
 
@@ -325,13 +309,14 @@ export default async function ClearancePage({
 
     const myAdvances = advances.filter((ca) => {
       const req = String(ca.requestor || '').toLowerCase();
-      const st = String(ca.status || '');
+      const st = String(ca.status || '').toUpperCase();
       return (
         studentNumKey &&
         req.includes(studentNumKey) &&
-        st.includes('Pending') &&
-        !st.includes('Cancel') &&
-        !st.includes('Liquidated')
+        (st.includes('PENDING') || st.includes('UNLIQUIDATED')) &&
+        !st.includes('CANCEL') &&
+        !st.includes('VOID') &&
+        !st.includes('LIQUIDATED')
       );
     });
 
@@ -345,6 +330,34 @@ export default async function ClearancePage({
       );
     }
 
+    const myCollectibles = collectibles.filter((due) => {
+      if (!activeCollectibleDue(due)) return false;
+      const marker = decodeStudentDue(due.status);
+      return marker && marker.studentId.toLowerCase() === studentNumKey;
+    });
+    for (const due of myCollectibles) {
+      const marker = decodeStudentDue(due.status);
+      if (!marker) continue;
+      // Replace duplicate item-level remainder derived from prior installment rows
+      // with the linked collectible's authoritative unpaid balance.
+      const existing = unpaidItems.findIndex((u) =>
+        u.itemDescription.trim().toLowerCase() === marker.itemDescription.trim().toLowerCase());
+      if (existing >= 0) unpaidItems.splice(existing, 1);
+      unpaidItems.push({
+        category: String(due.category || 'Collectible'),
+        itemDescription: marker.itemDescription,
+        balanceDue: money(due.balanceDue),
+      });
+    }
+    // Historic penalty/collectible obligations survive rollover and academic-year changes.
+    // Display originating period for officers; public view still reveals status only.
+    for (const debt of historicalByStudent.get(studentNumKey) || []) {
+      unpaidItems.push({
+        category: `${debt.category} — Previous Period`,
+        itemDescription: `${debt.itemDescription} (${debt.originTerm}, ${debt.originAY})`,
+        balanceDue: money(debt.balanceDue),
+      });
+    }
     return unpaidItems;
   };
 
@@ -352,7 +365,7 @@ export default async function ClearancePage({
   // 1. DIGITAL QR SIGNATURE VERIFICATION VIEW
   // =========================================================================
   if (sigParam && q) {
-    const isCryptoValid = verifyClearanceSignature(q, ay, term, sigParam);
+    const isCryptoValid = verifyClearanceSignature(organization.id, q, ay, term, sigParam);
     let isLiveCleared = false;
     let verifiedStudent: any = null;
     let liveUnpaid: { category: string; itemDescription: string; balanceDue: number }[] = [];
@@ -367,7 +380,7 @@ export default async function ClearancePage({
       });
 
       if (verifiedStudent) {
-        const [studentCols, studentPens, studentAdvs] = await Promise.all([
+        const [studentCols, studentPens, studentAdvs, studentDues] = await Promise.all([
           prisma.collection.findMany({
             where: {
               organizationId: organization.id,
@@ -396,13 +409,15 @@ export default async function ClearancePage({
               requestor: { contains: verifiedStudent.studentId, mode: 'insensitive' },
             },
           }),
+          prisma.collectible.findMany({ where: { organizationId: organization.id, academicYear: ay, term } }),
         ]);
 
         liveUnpaid = evaluateStudentObligations(
           verifiedStudent,
           studentCols,
           studentPens,
-          studentAdvs
+          studentAdvs,
+          studentDues
         );
         isLiveCleared = liveUnpaid.length === 0;
       }
@@ -430,7 +445,7 @@ export default async function ClearancePage({
                       <td className="text-muted py-2">Student ID:</td>
                       <td className="fw-bold text-info py-2">{verifiedStudent?.studentId || q}</td>
                     </tr>
-                    {verifiedStudent?.fullName && (
+                    {isOfficer && verifiedStudent?.fullName && (
                       <tr className="border-bottom border-secondary">
                         <td className="text-muted py-2">Student Name:</td>
                         <td className="fw-bold py-2">{verifiedStudent.fullName}</td>
@@ -451,7 +466,7 @@ export default async function ClearancePage({
                   </tbody>
                 </table>
                 <p className="text-success small fw-semibold m-0">
-                  This certificate confirms zero financial arrears, penalties, or unliquidated advances for the specified period.
+                  This certificate confirms no unpaid financial obligations for this student, including recorded previous-period arrears, at the verification time.
                 </p>
               </>
             ) : (
@@ -489,11 +504,12 @@ export default async function ClearancePage({
   // 2. OFFICER CLEARANCE DASHBOARD VIEW (SHOWS FULL ITEMIZED BREAKDOWN)
   // =========================================================================
   if (isOfficer && !sigParam) {
-    const [allStudents, allCollections, allPenalties, allAdvances] = await Promise.all([
+    const [allStudents, allCollections, allPenalties, allAdvances, allDues] = await Promise.all([
       prisma.student.findMany({ where: { organizationId: organization.id }, orderBy: { fullName: 'asc' } }),
       prisma.collection.findMany({ where: { organizationId: organization.id, academicYear: ay, term } }),
       prisma.penalty.findMany({ where: { organizationId: organization.id, academicYear: ay, term } }),
       prisma.cashAdvance.findMany({ where: { organizationId: organization.id, academicYear: ay, term } }),
+      prisma.collectible.findMany({ where: { organizationId: organization.id, academicYear: ay, term } }),
     ]);
 
     const clearanceRoster = allStudents.map((student) => {
@@ -501,7 +517,8 @@ export default async function ClearancePage({
         student,
         allCollections,
         allPenalties,
-        allAdvances
+        allAdvances,
+        allDues
       );
 
       return {
@@ -525,7 +542,7 @@ export default async function ClearancePage({
 
     const queriedClearanceSig =
       queriedStudent && queriedStudent.isCleared
-        ? generateClearanceSignature(queriedStudent.studentId, ay, term)
+        ? generateClearanceSignature(organization.id, queriedStudent.studentId, ay, term)
         : '';
     const queriedVerifyUrl =
       queriedStudent && queriedStudent.isCleared
@@ -548,9 +565,11 @@ export default async function ClearancePage({
                     <strong className="text-info fs-5">{queriedStudent.fullName}</strong>{' '}
                     <span className="text-muted">({queriedStudent.studentId})</span>
                   </div>
-                  <Link href={`${basePath}/clearance${queryString}`} className="btn btn-sm btn-outline-secondary">
-                    Clear Filter
-                  </Link>
+                  <div className="d-flex flex-wrap gap-2">
+                    {!queriedStudent.isCleared && <Link href={`${basePath}/collections/arrears?studentId=${encodeURIComponent(queriedStudent.studentId)}&ay=${encodeURIComponent(organization.activeAy || ay)}&term=${encodeURIComponent(organization.activeTerm || term)}`}
+                      className="btn btn-sm btn-outline-info">Pay Previous-Period Arrears</Link>}
+                    <Link href={`${basePath}/clearance${queryString}`} className="btn btn-sm btn-outline-secondary">Clear Filter</Link>
+                  </div>
                 </div>
 
                 {queriedStudent.isCleared ? (
@@ -618,6 +637,7 @@ export default async function ClearancePage({
               students={clearanceRoster}
               feeOptions={feeOptions}
               packageRate={termPkg.total}
+              closed={isClosed}
             />
           </div>
         </main>
@@ -645,7 +665,7 @@ export default async function ClearancePage({
     });
 
     if (studentRecord) {
-      const [collections, penalties, cashAdvances] = await Promise.all([
+      const [collections, penalties, cashAdvances, studentDues] = await Promise.all([
         prisma.collection.findMany({
           where: {
             organizationId: organization.id,
@@ -674,19 +694,21 @@ export default async function ClearancePage({
             requestor: { contains: studentRecord.studentId, mode: 'insensitive' },
           },
         }),
+        prisma.collectible.findMany({ where: { organizationId: organization.id, academicYear: ay, term } }),
       ]);
 
       const unpaidItems = evaluateStudentObligations(
         studentRecord,
         collections,
         penalties,
-        cashAdvances
+        cashAdvances,
+        studentDues
       );
 
       isCleared = unpaidItems.length === 0;
 
       if (isCleared) {
-        clearanceSig = generateClearanceSignature(studentRecord.studentId, ay, term);
+        clearanceSig = generateClearanceSignature(organization.id, studentRecord.studentId, ay, term);
         verifyUrl = `${absoluteBaseUrl}${basePath}/clearance?ay=${encodeURIComponent(ay)}&term=${encodeURIComponent(term)}&q=${encodeURIComponent(studentRecord.studentId)}&sig=${encodeURIComponent(clearanceSig)}`;
       }
     }
@@ -735,7 +757,7 @@ export default async function ClearancePage({
           {q && (
             <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.75)' }}>
               <div className="modal-dialog modal-dialog-centered modal-lg">
-                <div className="modal-content card border-secondary bg-body text-body shadow-lg">
+                <div className="modal-content card border-secondary bg-body text-body shadow-lg clear-theme-modal">
                   <div className="modal-header border-secondary">
                     <h5 className="modal-title text-info fw-bold">
                       <i className="bi bi-person-badge me-2"></i> Clearance Verification Result
@@ -758,9 +780,7 @@ export default async function ClearancePage({
                           <span className="text-muted small fw-bold">STUDENT RECORD:</span>
                           <span className="badge border border-secondary text-info">{term} ({ay})</span>
                         </div>
-                        <h4 className="fw-bold text-info mb-2">
-                          {studentRecord.fullName} <span className="text-muted fs-6">({studentRecord.studentId})</span>
-                        </h4>
+                        <div className="small text-muted mb-2">Verification result for the supplied student credentials.</div>
 
                         {isCleared ? (
                           <div className="alert border-success bg-success bg-opacity-10 text-success py-3 mb-0 text-center shadow-sm">
@@ -813,10 +833,11 @@ export default async function ClearancePage({
             ay={ay}
             term={term}
             defaultStudentId={studentRecord?.studentId || q || ''}
-            defaultFullName={studentRecord?.fullName || ''}
-            defaultEmail={studentRecord?.email || ''}
+            defaultFullName=""
+            defaultEmail=""
             feeOptions={feeOptions}
             packageRate={termPkg.total}
+            closed={isClosed}
           />
         </div>
       </main>
