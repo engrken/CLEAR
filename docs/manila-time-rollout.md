@@ -5,13 +5,13 @@ The CLEAR application must use the IANA time zone `Asia/Manila` (UTC+08:00) for 
 ## Implemented in this branch
 
 - Shared `lib/clear-timezone.ts` with environment-independent date formatting, date input defaults, and Manila day boundaries.
-- Manila-time audit log display and CSV timestamps (the SystemLog Prisma timestamp remains unchanged in this phase).
+- Manila-time audit log display and CSV timestamps, retaining original event instants.
 - Manila calendar-day defaults on financial forms.
 - Consistent Manila renderings for selected transaction histories, printable dates, penalties, and remittance queue.
 
 ## Not yet safe to deploy as full database migration
 
-The current `schema.prisma` uses unannotated Prisma `DateTime` columns. For PostgreSQL with Prisma 5, these commonly map to `timestamp(3) without time zone`, not `timestamptz`. Blindly adding `@db.Timestamptz(3)` can reinterpret existing values. Review database schema and sampled existing rows FIRST; export a verified backup before any DDL.
+The `main` branch originally used unannotated Prisma `DateTime` columns, which commonly map to `timestamp(3) without time zone` under PostgreSQL. This feature branch now marks 33 true event-time fields as `@db.Timestamptz(3)` and provides a staged, review-gated SQL conversion in `scripts/sql/manila-event-time-migration.sql`. These SQL changes have **not been run on production**. Review actual database column types, historical timestamp meanings, and a verified backup FIRST. See `docs/manila-database-migration.md`.
 
 Run these **read-only** queries in the target production database:
 
@@ -42,9 +42,9 @@ For each field classify:
 
 Never use `timestamp + interval '8 hours'` or globally change `process.env.TZ` as a data migration.
 
-## Recommended database migration (after inspection)
+## Database migration staged (requires live-data inspection)
 
-If a column is confirmed to store UTC wall-clock timestamps without time zone:
+A migration rehearsal using an isolated PostgreSQL test database verifies the conversion pattern below, but does **not** prove the source timezone of real CLEAR records. If a column is confirmed to store UTC wall-clock timestamps without time zone:
 
 ```sql
 -- EXAMPLE ONLY: not a production-ready migration.
@@ -68,4 +68,4 @@ For SQL reporting, `timestamptz_column AT TIME ZONE 'Asia/Manila'` provides a Ma
 - Verify historical row counts, identifiers, financial balances and original instants before and after any schema migration.
 - Test a reversible migration against a restored database snapshot, then schedule production DDL separately.
 
-No database credentials, actual database values, or secrets are included here.
+GitHub Actions now runs timezone tests, Prisma validation, TypeScript checking, an isolated Next.js production build, and an ephemeral PostgreSQL historical-timestamp conversion rehearsal. No database credentials, actual database values, or secrets are included here.

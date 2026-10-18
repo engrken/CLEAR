@@ -1,3 +1,4 @@
+import { formatManilaDateTime24 } from '@/lib/clear-timezone';
 import { manilaDateInput } from '@/lib/clear-timezone';
 // /app/api/backup/route.ts
 
@@ -157,9 +158,11 @@ export async function GET(req: Request) {
       }),
     ]);
 
+    const exportedAtInstant = new Date();
     const backupPayload = {
       version: '1.0',
-      exportedAt: new Date().toISOString(),
+      exportedAt: exportedAtInstant.toISOString(),
+      exportedAtManila: formatManilaDateTime24(exportedAtInstant),
       organization,
       metrics: {
         studentsCount: students.length,
