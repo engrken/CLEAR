@@ -198,22 +198,39 @@ export default function StudentsClient({
   };
 
   const handleDelete = async (studentInternalId: string, name: string) => {
+    if (isSubmitting) return;
     const res = await ThemedAlert.fire({
       icon: 'warning',
       title: 'Delete Student?',
-      text: `Permanently remove student "${name}" from the database?`,
+      text: `Permanently remove student "${name}"? Students with financial records cannot be deleted; use Set Inactive instead.`,
       showCancelButton: true,
       confirmButtonText: 'Yes, Delete',
-      confirmButtonColor: '#dc3545'
+      confirmButtonColor: '#dc3545',
     });
     if (!res.isConfirmed) return;
 
+    setIsSubmitting(true);
     try {
-      await deleteStudent(department, studentInternalId);
+      const outcome = await deleteStudent(department, studentInternalId);
+      if (!outcome.success) {
+        await ThemedAlert.fire({
+          icon: 'warning',
+          title: outcome.code === 'FINANCIAL_HISTORY' ? 'Deletion Not Allowed' : 'Student Not Found',
+          text: outcome.message,
+        });
+        return;
+      }
+      setSelectedIds(previous => previous.filter(id => id !== studentInternalId));
       clearRosterSearchAfterSuccess();
       await ThemedAlert.fire({ icon: 'success', title: 'Deleted', text: 'Student record successfully deleted.' });
-    } catch (err: any) {
-      await ThemedAlert.fire({ icon: 'error', title: 'Error', text: "Error deleting student: " + err.message });
+    } catch (err) {
+      console.error('Student deletion failed:', err);
+      await ThemedAlert.fire({
+        icon: 'error', title: 'Delete Failed',
+        text: 'Could not delete the student. Check the server logs for details, or use Set Inactive if financial history exists.',
+      });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 

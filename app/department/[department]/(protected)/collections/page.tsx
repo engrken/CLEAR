@@ -148,6 +148,9 @@ export default async function CollectionsPage({
     <div className="module card p-3 p-md-4 border-secondary shadow-sm">
       <div className="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
         <h5 className="text-accent mb-0"><i className="bi bi-cash-stack me-2" />Collection Remittance</h5>
+        <Link className="btn btn-outline-secondary btn-sm" href={`/department/${encodeURIComponent(cleanDepartment)}/collections/history?ay=${encodeURIComponent(ay)}&term=${encodeURIComponent(term)}`}>
+          <i className="bi bi-receipt me-1" />Receipt History
+        </Link>
         <Link className="btn btn-outline-info btn-sm" href={`/department/${encodeURIComponent(cleanDepartment)}/collections/arrears`}>
           <i className="bi bi-clock-history me-1" />Receive Previous-Term Arrears
         </Link>

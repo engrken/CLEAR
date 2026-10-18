@@ -74,6 +74,14 @@ export async function confirmAllEnrolled(department: string, _clientOrgId: strin
 }
 
 /**
+ * Deprecated bulk promotion endpoint, deliberately disabled.
+ * Individual student selection is mandatory to avoid accidental mass promotion.
+ */
+export async function promoteYearLevels(_department: string, _clientOrgId: string) {
+  throw new Error('Bulk year-level promotion is disabled. Select students in the roster and use Promote Selected.');
+}
+
+/**
  * Promote an explicitly selected set of students. No "promote all" fallback.
  * The caller's supplied organization ID is deliberately ignored.
  */
@@ -183,26 +191,40 @@ export async function saveStudent(department: string, _clientOrgId: string, ay: 
 
 export async function deleteStudent(department: string, studentInternalId: string) {
   const { dept, orgId, officer } = await scope(department);
-  await prisma.$transaction(async tx => {
+  // Expected accounting restrictions are returned as normal results.
+  // In production, throwing from a Server Action obscures the original
+  // message with a generic React error/digest on the client.
+  const result = await prisma.$transaction(async tx => {
     const student = await tx.student.findFirst({ where: { id: str(studentInternalId), organizationId: orgId } });
-    if (!student) throw new Error('Student not found in this organization.');
+    if (!student) {
+      return { success: false as const, code: 'NOT_FOUND' as const,
+        message: 'Student not found in this organization. Refresh the roster and try again.' };
+    }
     const [collections, penalties, remittances, enrollments] = await Promise.all([
       tx.collection.count({ where: { organizationId: orgId, studentId: student.id } }),
       tx.penalty.count({ where: { organizationId: orgId, studentId: student.studentId } }),
       tx.onlineRemittance.count({ where: { organizationId: orgId, studentId: student.studentId } }),
       tx.enrollment.count({ where: { organizationId: orgId, studentId: student.id } }),
     ]);
-    const due = await tx.collectible.findFirst({ where: { organizationId: orgId, status: { contains: `SID:${encodeURIComponent(student.studentId)}` } }, select: { id: true } });
+    const due = await tx.collectible.findFirst({
+      where: { organizationId: orgId, status: { contains: `SID:${encodeURIComponent(student.studentId)}` } },
+      select: { id: true },
+    });
     if (collections + penalties + remittances > 0 || due) {
-      throw new Error('Cannot delete a student with financial records. Set the student enrollment to Inactive instead.');
+      return { success: false as const, code: 'FINANCIAL_HISTORY' as const,
+        message: 'This student has financial records and cannot be permanently deleted. Use Set Inactive in the roster to preserve the audit trail.' };
     }
     await tx.enrollment.deleteMany({ where: { organizationId: orgId, studentId: student.id } });
     const removed = await tx.student.deleteMany({ where: { id: student.id, organizationId: orgId } });
     if (removed.count !== 1) throw new Error('Student deletion failed.');
-    await tx.systemLog.create({ data: { organizationId: orgId, user: officer, action: 'DELETE_STUDENT', details: `${student.studentId}: ${student.fullName}, ${enrollments} enrollments removed` } });
+    await tx.systemLog.create({ data: {
+      organizationId: orgId, user: officer, action: 'DELETE_STUDENT',
+      details: `${student.studentId}: ${student.fullName}, ${enrollments} enrollments removed`,
+    } });
+    return { success: true as const };
   });
-  refresh(dept);
-  return { success: true };
+  if (result.success) refresh(dept);
+  return result;
 }
 
 export async function bulkImportStudents(department: string, _clientOrgId: string, ay: string, term: string, records: Array<{ studentId: string; fullName: string; yearLevel: string; email?: string }>) {
