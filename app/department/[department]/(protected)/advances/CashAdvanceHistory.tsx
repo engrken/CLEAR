@@ -1,3 +1,4 @@
+import { formatManilaDate } from '@/lib/clear-timezone';
 "use client";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -62,7 +63,7 @@ export default function CashAdvanceHistory({ department, ay, term, advances, can
     <div className="table-responsive"><table className="table table-sm align-middle">
       <thead><tr><th>Advance ID / Date</th><th>Requestor / Purpose</th><th>Fund</th><th className="text-end">Amount</th><th>Status</th><th>Action</th></tr></thead>
       <tbody>{visible.map(a => <tr key={a.id}>
-        <td className="text-nowrap"><strong>{a.advanceId}</strong><div className="small text-body-secondary">{new Date(a.dateIssued).toLocaleDateString()}</div></td>
+        <td className="text-nowrap"><strong>{a.advanceId}</strong><div className="small text-body-secondary">{formatManilaDate(a.dateIssued)}</div></td>
         <td>{a.requestor}<div className="small text-body-secondary">{a.purpose || "—"}</div></td>
         <td>{a.fundSource}</td><td className="text-end">₱{Number(a.amountApproved).toFixed(2)}</td>
         <td><span className="badge text-bg-secondary">{a.status}</span></td>
