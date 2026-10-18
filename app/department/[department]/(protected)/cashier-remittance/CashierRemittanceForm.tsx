@@ -1,7 +1,7 @@
-import { manilaDateInput, formatManilaLongDate } from '@/lib/clear-timezone';
 // /app/department/[department]/(protected)/cashier-remittance/CashierRemittanceForm.tsx
 
 "use client";
+import { manilaDateInput, formatManilaLongDate } from '@/lib/clear-timezone';
 import { clearAlert, clearConfirm, clearPrompt } from "@/lib/clear-dialogs";
 
 
