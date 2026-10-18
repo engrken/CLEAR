@@ -1,3 +1,4 @@
+import { manilaDateInput } from '@/lib/clear-timezone';
 // /app/department/[department]/(protected)/advances/AdvancesForm.tsx
 
 "use client";
@@ -29,7 +30,7 @@ export default function AdvancesForm({
   closed?: boolean;
 }) {
   const router = useRouter();
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = manilaDateInput();
 
   const [dateIssued, setDateIssued] = useState(todayStr);
   const [expectedReturnDate, setExpectedReturnDate] = useState(todayStr);
