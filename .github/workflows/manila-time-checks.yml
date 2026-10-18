@@ -39,3 +39,38 @@ jobs:
         run: npm run test:time
       - name: TypeScript check
         run: npx tsc --noEmit
+
+  integration-build:
+    name: Next.js build against isolated PostgreSQL
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: clear_ci
+          POSTGRES_USER: clear_ci
+          POSTGRES_PASSWORD: clear_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U clear_ci -d clear_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://clear_ci:clear_ci@127.0.0.1:5432/clear_ci?schema=public
+      AUTH_SECRET: clear-ci-only-not-used-in-production
+      NEXTAUTH_SECRET: clear-ci-only-not-used-in-production
+      SUPER_ADMIN_EMAIL: test-admin@example.invalid
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Create a temporary test schema
+        run: npx prisma db push --skip-generate
+      - name: Next.js production build (test database only)
+        run: npm run build
