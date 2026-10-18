@@ -1,5 +1,6 @@
 // app/dashboard/components/ProvisionModal.tsx
 "use client";
+import { manilaMonth, manilaYear } from '@/lib/clear-timezone';
 import { useRef, useState } from "react";
 import { useRouter } from 'next/navigation';
 import { periodsFor, type CalendarMode } from "@/lib/academic-periods";
@@ -10,8 +11,7 @@ export default function ProvisionModal() {
   const closeBtnRef = useRef<HTMLButtonElement>(null); // Added ref for auto-closing
   const [loading, setLoading] = useState(false);
   const [calendarMode, setCalendarMode] = useState<CalendarMode>('Semester');
-  const current = new Date();
-  const startYear = current.getMonth() >= 5 ? current.getFullYear() : current.getFullYear() - 1;
+  const startYear = manilaYear() - (manilaMonth() < 6 ? 1 : 0);
   const initialAY = `A.Y. ${startYear} - ${startYear + 1}`;
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {

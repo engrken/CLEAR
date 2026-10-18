@@ -1,5 +1,6 @@
 // app/department/[department]/(protected)/collectibles/CollectiblesManager.tsx
 "use client";
+import { manilaDateInput } from '@/lib/clear-timezone';
 
 import React, { useMemo, useState } from "react";
 import Link from "next/link";
@@ -41,9 +42,7 @@ function dueState(row: Collectible): "Unpaid" | "Paid" | "Voided" {
 }
 
 function localToday(): string {
-  const now = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  return manilaDateInput();
 }
 
 function decodedDue(status: string): { studentId: string; description: string } | null {

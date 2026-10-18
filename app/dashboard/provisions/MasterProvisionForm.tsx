@@ -1,5 +1,6 @@
 // /app/dashboard/provisions/MasterProvisionForm.tsx
 'use client';
+import { manilaYear } from '@/lib/clear-timezone';
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -101,7 +102,7 @@ export function MasterProvisionForm() {
         <div className="mb-3">
           <label htmlFor="provision-academic-year" className="form-label small fw-bold">First Academic Year</label>
           <input id="provision-academic-year" name="initialAcademicYear" required pattern="(?:A\.Y\.\s*)?[0-9]{4}\s*-\s*[0-9]{4}"
-            defaultValue={`A.Y. ${new Date().getFullYear()} - ${new Date().getFullYear() + 1}`}
+            defaultValue={`A.Y. ${manilaYear()} - ${manilaYear() + 1}`}
             title="Example: A.Y. 2026 - 2027" className="form-control bg-body text-body border-secondary" />
         </div>
         <div className="mb-3">

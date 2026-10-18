@@ -1,3 +1,4 @@
+import { manilaDateInput } from '@/lib/clear-timezone';
 // /app/department/[department]/(protected)/setup/page.tsx
 
 
@@ -200,13 +201,13 @@ export default async function SetupPage({
         .trim(),
       destPeriod: `${transfer.term} (${transfer.academicYear})`,
       amount: Number(transfer.amount) || 0,
-      date: transfer.timestamp.toISOString().slice(0, 10),
+      date: manilaDateInput(transfer.timestamp),
       status: reversal ? "Reversed / Voided" : "Active",
       encodedBy: transfer.encodedBy || "System",
       reversalReason: reversal?.reason ?? null,
       reversedBy: reversal?.voidedBy ?? null,
       reversedAt:
-        reversal?.date.toISOString().slice(0, 10) ?? null,
+        reversal?.date ? manilaDateInput(reversal.date) : null,
     };
   });
 

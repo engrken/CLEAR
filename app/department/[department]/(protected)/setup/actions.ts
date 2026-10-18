@@ -3,6 +3,7 @@
 
 
 "use server";
+import { manilaDateInput } from '@/lib/clear-timezone';
 
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -499,7 +500,7 @@ export async function reverseRollover(
         details: `Reversed rollover ${id}; ₱${Number(transfer.amount).toFixed(2)}; ${transfer.sourceFund} -> ${transfer.destinationFund}; destination ${transfer.term} (${transfer.academicYear}); reason: ${explanation}`,
       },
     });
-    return { reversedBy: row.voidedBy, reversedAt: row.date.toISOString().slice(0, 10) };
+    return { reversedBy: row.voidedBy, reversedAt: manilaDateInput(row.date) };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 20000 });
 
   const root = `/department/${cleanDepartment}`;

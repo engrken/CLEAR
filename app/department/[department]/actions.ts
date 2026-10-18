@@ -1,6 +1,7 @@
 // /app/department/[department]/actions.ts
 
 'use server';
+import { manilaDateInput } from '@/lib/clear-timezone';
 import { put, del } from '@vercel/blob';
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
@@ -828,14 +829,14 @@ export async function getDepartmentFinancials(
         id: ca.advanceId,
         advanceId: ca.advanceId,
         date: ca.dateIssued
-          ? new Date(ca.dateIssued).toISOString().split('T')[0]
+          ? manilaDateInput(ca.dateIssued)
           : '',
         requestor: ca.requestor,
         fund,
         amount: amt,
         amountApproved: amt,
         due: ca.expectedReturnDate
-          ? new Date(ca.expectedReturnDate).toISOString().split('T')[0]
+          ? manilaDateInput(ca.expectedReturnDate)
           : '',
         status: ca.status,
       };

@@ -1,3 +1,4 @@
+import { formatManilaDateTime24, manilaDateInput } from '@/lib/clear-timezone';
 import "server-only";
 import { after } from "next/server";
 import { Prisma } from "@prisma/client";
@@ -43,7 +44,7 @@ export async function enqueueAccountingNotice(tx: Tx, n: NoticeInput) {
     ["Document", n.documentType], ["Reference", n.referenceNo],
     ["Academic year", n.academicYear], ["Period", n.term],
     [n.documentType === "Remittance Rejection Notice" ? "Submitted amount (not received)" : "Transaction amount", pesos(n.amount)], ["Processed by", n.officerName],
-    ["Issued at", new Date().toISOString()],
+    ["Issued at (PHT)", formatManilaDateTime24(new Date())],
     ...((n.details || []).map(x => [x.label, x.value] as [string,string])),
   ];
   const recipients = new Map<string, string[]>();
@@ -126,7 +127,7 @@ export async function enqueuePaymentReceipt(tx: Tx, args: {
     participantEmail: student?.email, participantRole: "Student",
     details: [
       ["Payment source", args.source || "COLLECTION"],
-      ["Payment date", rows[0].date.toISOString().slice(0, 10)],
+      ["Payment date", manilaDateInput(rows[0].date)],
       ["Payment breakdown", rows.map(r => `${r.category} / ${r.itemDescription}: ${pesos(r.amountPaid)} → ${r.fundAllocation}`).join(" | ")],
       ["Outstanding on receipt", pesos(rows.reduce((s,r) => s+r.balanceDue, 0))],
     ].map(([label,value]) => ({label, value})),
