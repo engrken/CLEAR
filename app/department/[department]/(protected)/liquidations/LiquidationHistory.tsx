@@ -1,3 +1,4 @@
+import { formatManilaDate, formatManilaLongDate } from '@/lib/clear-timezone';
 // /app/department/[department]/(protected)/liquidations/LiquidationHistory.tsx
 
 "use client";
@@ -223,7 +224,7 @@ export default function LiquidationHistory({
                     {/VOID|CANCEL/i.test(String(audit.status || "")) &&
                       <span className="badge text-bg-secondary ms-2">Voided</span>}
                   </td>
-                  <td>{new Date(audit.date).toLocaleDateString()}</td>
+                  <td>{formatManilaDate(audit.date)}</td>
                   <td className="fw-semibold">{audit.requestor}</td>
                   <td className="text-end fw-bold text-danger">{fmt(audit.totalExpense as any)}</td>
                   <td className="text-center">
@@ -337,7 +338,7 @@ export default function LiquidationHistory({
           <div className="row mb-3 mt-4 small">
             <div className="col-6">
               <div className="mb-1"><strong>Audit ID:</strong> <span className="font-monospace">{printData.auditId}</span></div>
-              <div className="mb-1"><strong>Date Liquidated:</strong> {new Date(printData.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+              <div className="mb-1"><strong>Date Liquidated:</strong> {formatManilaLongDate(printData.date)}</div>
               <div className="mb-1"><strong>Requestor:</strong> <span className="text-uppercase fw-semibold">{printData.requestor}</span></div>
             </div>
             <div className="col-6 text-end">
