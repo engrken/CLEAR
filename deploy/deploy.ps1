@@ -9,7 +9,9 @@ $ssh = "$env:WINDIR\System32\OpenSSH\ssh.exe"
 $scp = "$env:WINDIR\System32\OpenSSH\scp.exe"
 
 # Only the web app: the Expo app, docs and editor settings stay out.
-$exclude = @(":(exclude)mobile", ":(exclude).claude", ":(exclude)*.docx", ":(exclude)*.jpg", ":(exclude)seed-excel.js")
+$exclude = @(":(exclude)mobile", ":(exclude).claude", ":(exclude)*.docx", ":(exclude)*.jpg", ":(exclude)seed-excel.js",
+             ":(exclude)*.xlsx", ":(exclude)*.zip", ":(exclude)*.bak", ":(exclude)*.log", ":(exclude).clear-placeholder-backup",
+             ":(exclude)change-report.json", ":(exclude)add-department-arg.sh")
 
 $dirty = git status --porcelain -- . @exclude
 if ($dirty) {
