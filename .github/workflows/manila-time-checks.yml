@@ -74,3 +74,56 @@ jobs:
         run: npx prisma db push --skip-generate
       - name: Next.js production build (test database only)
         run: npm run build
+
+  migration-rehearsal:
+    name: Preserve legacy UTC instants in PostgreSQL
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: clear_ci
+          POSTGRES_USER: clear_ci
+          POSTGRES_PASSWORD: clear_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U clear_ci -d clear_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://clear_ci:clear_ci@127.0.0.1:5432/clear_ci?schema=public
+      PSQL_URL: postgresql://clear_ci:clear_ci@127.0.0.1:5432/clear_ci
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Recreate legacy date columns in isolated PostgreSQL
+        run: |
+          git show origin/main:prisma/schema.prisma > prisma/schema.legacy.ci.prisma
+          npx prisma db push --schema prisma/schema.legacy.ci.prisma --skip-generate
+      - name: Insert an unambiguous UTC fixture into the legacy SystemLog
+        run: |
+          psql "$PSQL_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO "Organization" ("id","subdomain","name","createdAt","updatedAt")
+          VALUES ('ci-mnl-org','ci-mnl','Migration Test','2026-10-18 16:15:00','2026-10-18 16:15:00');
+          INSERT INTO "SystemLog" ("id","organizationId","timestamp","user","action")
+          VALUES ('ci-mnl-log','ci-mnl-org','2026-10-18 16:15:00','CI','MIGRATION_TEST');
+          SQL
+      - name: Apply UTC-reviewed migration in the same SQL session
+        run: |
+          psql "$PSQL_URL" -v ON_ERROR_STOP=1 \
+            -c "SELECT set_config('clear.verified_legacy_timestamp_zone','UTC',false)" \
+            -f scripts/sql/manila-event-time-migration.sql
+      - name: Prove the original instant and Philippine display were preserved
+        run: |
+          actual="$(psql "$PSQL_URL" -At -v ON_ERROR_STOP=1 -c "SELECT to_char(\"timestamp\" AT TIME ZONE 'Asia/Manila','YYYY-MM-DD HH24:MI:SS') FROM \"SystemLog\" WHERE \"id\"='ci-mnl-log'")"
+          test "$actual" = '2026-10-19 00:15:00'
+          npx prisma db push --skip-generate
