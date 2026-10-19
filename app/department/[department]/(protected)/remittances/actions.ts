@@ -7,7 +7,7 @@ import { requireTabAccess } from '@/lib/permissions';
 import { revalidatePath } from 'next/cache';
 import { headers } from 'next/headers';
 import { withFinancialTransaction } from '@/lib/financial-transaction';
-import { receiptNumberConflictWhere } from "@/lib/receipt-number";
+import { lockReceiptNumber, receiptNumberConflictWhere } from "@/lib/receipt-number";
 import { randomUUID, createHash } from 'node:crypto';
 import { getPeriodLedger, toCents } from '../realign/ledger';
 import { assertAcademicPeriod } from '@/lib/academic-period-guard';
@@ -94,6 +94,7 @@ export async function verifyOnlineRemittance(
     if (!ledger.funds.some((fund) => fund.name.trim().toLowerCase() === fundAllocation.toLowerCase())) {
       throw new Error("Selected fund is not available in this academic term. Refresh the queue.");
     }
+    await lockReceiptNumber(tx, org.id, orNumber);
     const conflicted = await tx.collection.findFirst({ where: {
       organizationId: org.id, orNumber,
     }, select: { id: true } });
