@@ -55,8 +55,6 @@ export default function RemittanceVerificationQueue({
   const [activeProof, setActiveProof] = useState<{ url: string; name: string } | null>(null);
   
   const [verifyingItem, setVerifyingItem] = useState<OnlineRemittanceItem | null>(null);
-  const [orNumber, setOrNumber] = useState(nextOr);
-  useEffect(() => setOrNumber(nextOr), [nextOr]);
   const [fundAllocation, setFundAllocation] = useState(funds[0]?.fundName || "General Fund (Carried Over)");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [voidingId, setVoidingId] = useState<string | null>(null);
@@ -90,7 +88,6 @@ export default function RemittanceVerificationQueue({
 
   const handleOpenVerify = (item: OnlineRemittanceItem) => {
     setVerifyingItem(item);
-    setOrNumber(nextOr);
     setFundAllocation(funds[0]?.fundName || "General Fund (Carried Over)");
   };
 
@@ -101,9 +98,8 @@ export default function RemittanceVerificationQueue({
 
     setIsSubmitting(true);
     try {
-      await verifyOnlineRemittance(department, {
+      const result = await verifyOnlineRemittance(department, {
         remittanceId: verifyingItem.id,
-        orNumber,
         studentId: verifyingItem.studentId,
         studentName: verifyingItem.studentName,
         particulars: verifyingItem.itemDescription || "Online Payment",
@@ -116,7 +112,7 @@ export default function RemittanceVerificationQueue({
       await ThemedAlert.fire({
         icon: 'success',
         title: 'Remittance Verified',
-        text: `Remittance verified successfully! Official Receipt #${orNumber} issued.`
+        text: `Remittance verified successfully! Official Receipt #${result.orNumber} issued.`
       });
 
       setVerifyingItem(null);
@@ -307,8 +303,8 @@ export default function RemittanceVerificationQueue({
                   <hr className="border-secondary opacity-50" />
 
                   <div className="mb-3">
-                    <label className="form-label text-muted small fw-semibold">Assign Official Receipt (OR) Number</label>
-                    <input type="text" className="form-control font-monospace border-success bg-body text-body fw-bold" value={orNumber} onChange={e => setOrNumber(e.target.value)} required />
+                    <label className="form-label text-muted small fw-semibold">Official Receipt (OR) Number</label>
+                    <div className="form-control bg-body-secondary text-body">Automatically issued after verification</div>
                   </div>
 
                   <div className="mb-2">
