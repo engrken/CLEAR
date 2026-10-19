@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "postinstall": "prisma generate",
-    "test:time": "node --experimental-strip-types --test tests/clear-timezone.test.mjs"
+    "test:time": "node --experimental-strip-types --test tests/clear-timezone.test.mjs",
+    "test:finance": "node --test tests/financial-integrity*.test.mjs"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.3",
