@@ -4,6 +4,8 @@
 
 > **CRITICAL TIMEZONE FINDING (2026-10-19):** Uploaded legacy Apps Script and read-only Neon comparisons confirm mixed timestamp origins within `SystemLog.timestamp`: all 24 older `DAILY_BACKUP` entries match Manila-local backup title times while newer Vercel `AUTOMATED_DAILY_BACKUP` entries match UTC filename times. Legacy payment timestamps may also be local. **The current 33-column UTC-only migration is NOT APPROVED for production.** Prepare a row-/source-aware migration and retest on a fresh unconverted staging branch. See [legacy timezone evidence](manila-legacy-timezone-evidence-2026-10-19.md).
 
+> **UPDATED SCOPE — FUTURE-ONLY TIME STANDARDIZATION (2026-10-19):** Operator confirms the existing records are test data, and historical event-time accuracy is not required. Stop historical-source forensic work; prioritize correct timestamps for newly created CLEAR events. This waives old timestamp accuracy **only**, not financial amounts, accounting dates, identities or data-integrity controls. The original UTC-only migration guard must NOT be falsely acknowledged; prepare a distinct explicitly waived, reviewed migration and obtain separate authorization before any production change. See [future-only time plan](manila-future-only-time-standardization.md). Historical mixed-time evidence remains valid below.
+
 ## Current evidence
 
 - GitHub draft PR #17: `feature/manila-time-standardization-20261018`, 33 event-instant Prisma fields marked `@db.Timestamptz(3)`.
@@ -45,18 +47,18 @@ Run the **Manila GitHub branch** connected exclusively to `clear-manila-migratio
 - Make staging-only test transactions; compare financial ledger changes. NEVER test writes using the production connection string.
 - Ensure staging records and test transactions are **never merged over** production records.
 
-## Timestamp provenance gate
+## Historical event-time accuracy waived for test records
 
-For representative historical `SystemLog.timestamp`, `Collection.timestamp`, `OnlineRemittance.timestamp`, OTP expiries and mobile-session events, verify that legacy wall-clock values were recorded in UTC, using trustworthy server/app historical evidence or independently recorded event times. A UTC session timezone plus ORM defaults is suggestive but insufficient for records entered before the current code. If any values were Manila-local or mixed, stop and amend the migration by column/period.
+The existing mixed historical timestamp origins remain proven. The operator accepted their inaccurate display **only because this is test/pilot data**, so forensic classification is not a release blocker for those test timestamps. This does **not** satisfy the original SQL script's UTC-provenance guard. A separately reviewed, explicitly waived **future-only** migration is required to establish correct `timestamptz` semantics for all new events. No old accounting-date or financial amounts may be modified.
 
 ## Controlled production release — only after separate explicit authorization
 
 1. Put finance writes and scheduled jobs into maintenance mode; pause email/backup cron and verify no concurrent writes.
 2. Capture final production row counts, financial sums and per-table non-event-data fingerprints. Record max timestamps and capture a fresh recovery snapshot. Confirm production is the intended default/compute branch.
-3. With approved UTC provenance, run the **reviewed transaction-scoped** SQL `scripts/sql/manila-event-time-migration.sql` against the verified PRODUCTION branch only, in the same session as the explicit guard flag.
+3. Following the operator's test-history waiver and separate production authorization, execute a **new explicit future-only, test-history-waiver guarded migration**, reviewed and rehearsed on isolated staging, against the verified PRODUCTION branch. **Do not set** the existing script's `clear.verified_legacy_timestamp_zone=UTC` flag when its UTC assumption is known false.
 4. Validate 33 column types and original UTC-normalized timestamp fingerprints, all accounting-date values, and financial ledger invariants.
 5. Release the GitHub feature branch application using the Vercel production environment only after the database DDL is complete. Don't deploy the Prisma schema ahead of DB conversion. Confirm `prisma migrate status` and separately reconcile migration-history bookkeeping—manual SQL outside `prisma/migrations` will not be registered automatically.
 6. Run post-release read-only SQL and in-browser acceptance checks: login/OTP, public clearance, payments, penalties, advances, remittances, reports, logs, and exports.
 7. Resume jobs and writes only after invariants and service health pass. Keep the snapshot and original branch until stability is confirmed.
 
-**Never run `prisma db push` directly against production to force this schema.** Do not merge PR #17 just because CI is green: the release requires validated production migration timing, staging UI checks and explicit permission for production DDL.
+**Never run `prisma db push` directly against production to force this schema.** Do not merge PR #17 just because CI is green: the release requires a reviewed future-only guarded migration, a coordinated database/app cutover, new-event PHT verification and explicit permission for production DDL.
