@@ -36,7 +36,6 @@ export default function RemittanceVerificationQueue({
   ay,
   term,
   remittances,
-  nextOr,
   funds,
   closed = false,
   canVoid = false,
@@ -45,7 +44,6 @@ export default function RemittanceVerificationQueue({
   ay: string;
   term: string;
   remittances: OnlineRemittanceItem[];
-  nextOr: string;
   funds: Fund[];
   closed?: boolean;
   canVoid?: boolean;
