@@ -40,7 +40,6 @@ export default function CollectionsForm({
   students,
   funds,
   collectionItems,
-  nextOr,
   prefillId,
   penaltyId,
   prefillCategory,
@@ -56,7 +55,6 @@ export default function CollectionsForm({
   students: Student[];
   funds: Fund[];
   collectionItems: CollectionSetup[];
-  nextOr: string;
   prefillId: string;
   penaltyId?: string;
   prefillCategory?: string;
