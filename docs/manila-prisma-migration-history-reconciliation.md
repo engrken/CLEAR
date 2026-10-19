@@ -1,49 +1,32 @@
-# CLEAR — Prisma migration-history reconciliation before production Manila Time release
+# CLEAR — Prisma migration history recovery
 
-**Status (2026-10-19): BLOCKING finding.** This is documentation and read-only discovery only: do not alter `_prisma_migrations`, merge the Manila PR, or run production `prisma migrate deploy` / `prisma db push` to "repair" history.
+**Status (2026-10-19): Original historical migration files RECOVERED.** This resolves the previous missing-file discrepancy; it does **not** authorize production deployment or database migration.
 
-## What was checked
+## Confirmed source
 
-The connected Neon production database `clear-sys-db` / `main` / `neondb`, and the separate already-migrated staging database, each have **five successfully applied** Prisma migration rows in `public._prisma_migrations`:
+The original SQL files were located in GitHub branch `sync/vps-mobile` (commit `7b141ed679f838240b0d324f7c1c69797f4f2ac6`). All three originals have now been copied **unchanged** into the Manila Time feature branch at their canonical `prisma/migrations/<name>/migration.sql` locations.
 
-| Migration name | In GitHub feature-branch migration directory? |
-|---|---|
-| `20261005040205_add_system_logs` | Yes |
-| `20261006024331_add_active_term` | Yes |
-| `20261016000000_sync_schema_drift` | **No** |
-| `20261016104256_add_auth_throttle` | **No** |
-| `20261016122213_add_mobile_sessions` | **No** |
+| Applied migration | Recorded SHA-256 checksum | Original file recovered? |
+|---|---|---|
+| `20261016000000_sync_schema_drift` | `6e9ab9d3d125c8bc9d852c6d50cf6b9e347691388a38fede1cd954523bd5b5b8` | Yes — exact match |
+| `20261016104256_add_auth_throttle` | `87e4aaf9bb78a77c135eae42b0ffb8510fa0b7b049c36f9d784e3be925aa8c21` | Yes — exact match |
+| `20261016122213_add_mobile_sessions` | `ea9ded4974134efab787db864b96545d16ad825888a1ca5385455f2a8d24eeb0` | Yes — exact match |
 
-The branch contains only the first two migration folders and `migration_lock.toml`. A GitHub directory-path commit history search did not find the missing three files. Do not assume that missing files were never used: the database has recorded them as applied.
+Checksums were computed against the fetched original GitHub bytes (UTF-8) using PostgreSQL `sha256` in a **read-only query on the separate staging database**, and compared with the existing `_prisma_migrations.checksum` rows. **All three matched.** Original migrations `20261005040205_add_system_logs` and `20261006024331_add_active_term` remained in the repository already.
 
-Neon staging passed the manual, reviewed timestamp conversion against the real source-data copy (33/33 columns, 956 populated instants under the UTC assumption, 29 table fingerprints, 15 financial aggregates and seven accounting-date columns), but **that manual SQL was deliberately not recorded in `_prisma_migrations`**. This is distinct from the three missing historical migrations.
+Importantly, `20261016000000_sync_schema_drift` states explicitly that affected tables had previously reached production through `prisma db push` and this migration was marked applied with `prisma migrate resolve --applied`. **Never re-execute that historical SQL** on an already initialized production database.
 
-## Safe recovery workflow
+## Additional unapplied migration intentionally excluded
 
-1. On the actual CLEAR Windows workstation, in the repository root, run:
-   ```powershell
-   Get-ChildItem -Path .\prisma\migrations -Recurse -File | Select-Object -ExpandProperty FullName
-   git status --short
-   git branch --show-current
-   ```
-2. Search other local clones, offline backups or CI/build artifacts for the three **original** `migration.sql` files. Do **not** invent them or alter migration IDs/contents.
-3. For each recovered original `migration.sql`, compute `(Get-FileHash -Algorithm SHA256 .\prisma\migrations\<folder>\migration.sql).Hash.ToLower()` and compare it against the corresponding DB record's `checksum`. Use a read-only query:
-   ```sql
-   SELECT migration_name, checksum, finished_at
-   FROM public._prisma_migrations
-   WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL
-   ORDER BY migration_name;
-   ```
-4. Verify recovered folders against applied history **on the isolated Neon staging branch first**. Never silently edit an already-applied migration.
-5. If the exact files are irretrievable, plan and review a deliberate Prisma history **baseline/reconciliation** with a DB specialist. Do not create placeholder empty migrations or manually delete/rewrite applied production records to make `migrate status` green.
-6. The Manila timestamp migration itself must eventually be represented through an approved migration-history procedure, or future `prisma migrate deploy` and schema diff workflows can become misleading. Do not put unguarded event-timestamp DDL into an automatically applied migration while historical UTC provenance is still under review.
+Branch `sync/vps-mobile` also contains `20261017120000_saas_tenancy_and_otp_cap`, but this name is **not present** in the production or staging `_prisma_migrations` history. Its statements are idempotent `ADD COLUMN IF NOT EXISTS` operations. Because adding its directory to this feature branch could cause an unexpected future `prisma migrate deploy`, the SQL was **not imported**. Review it separately for later migration bookkeeping; do not mark it applied without reviewing the schema and proposed SQL.
 
-## Evidence and release gates
+## Remaining checks
 
-- Latest feature-branch GitHub Actions timezone/type/isolated-build tests: green as of 2026-10-19; Vercel commit status green. Successful CI does not validate production Prisma migration ledger.
-- Operator confirmed live migrated-staging application testing; details of acceptance scope are retained in `docs/manila-production-release-checklist.md`.
-- Native independent dump/restore was declined in favor of a verified Neon snapshot and recovery branches. **A new Neon snapshot is required immediately before actual production change**.
-- Production `main` retains legacy `timestamp without time zone` columns; do not release the new Prisma schema ahead of a controlled DDL and coordinated app release.
-- Historical event timestamps must be proven to have been recorded as UTC, particularly for older records or any manually entered/imported timestamps. Neither arithmetic equality nor server timezone alone proves provenance.
+1. Pull the updated feature branch to the local workstation.
+2. Point the locally invoked Prisma CLI **only at the staging Neon database**, not the production `DATABASE_URL`. Check the env scope before proceeding, and run `npx prisma migrate status` to compare recovered local migration folders with the staging migration ledger. This is a read-only status operation; do not run `migrate deploy` or `db push`.
+3. The Manila Time event-column DDL was executed on staging as guarded manual SQL and **has not been recorded as a Prisma migration**. Migration-status success would not prove the migration's type changes or ledger integration. Prepare a reviewed, guarded approach to the Manila migration's future Prisma bookkeeping without replaying timestamp conversions.
+4. Independently establish that historic event columns use UTC wall-clock representation; some old records may need special treatment.
+5. Keep the confirmed staging functional testing, snapshot recovery evidence and financial invariants. The operator declined a native PostgreSQL dump. Take a fresh Neon recovery snapshot at the actual production release window, with explicit control of restore finalization/routing.
+6. Production migration, merge and deployment remain on hold until those gates and separate authorization are satisfied.
 
-**Next action:** Recover or explicitly reconcile the three missing migration scripts from the local workstation, then perform documented staging-only Prisma history checks. Production migration and release remain blocked pending separate explicit authorization and a maintenance/rollback plan.
+**No production database writes, Prisma migration ledger changes, or `main` branch changes were made by the historical-file recovery.**

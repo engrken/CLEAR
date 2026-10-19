@@ -11,11 +11,15 @@
 - GitHub automated tests cover TypeScript, Prisma validation, timezone edge cases and a production build against isolated PostgreSQL. These are not equivalent to live migrated-staging browser acceptance tests.
 - Live staging application acceptance and independent historical UTC provenance must be evidenced separately before production release. Sample data and schema matching alone cannot prove historical UTC encoding.
 
-## Prisma migration history mismatch (BLOCKING)
+## Prisma migration history — historical files recovered
 
-Neon production and the migrated staging branch each report **five applied Prisma migrations**, but the GitHub branch retains **only two** migration directories. Missing: `20261016000000_sync_schema_drift`, `20261016104256_add_auth_throttle`, and `20261016122213_add_mobile_sessions`. Reconcile the original migration SQL and recorded checksums before attempting `prisma migrate deploy` or production schema release; see [migration history reconciliation](manila-prisma-migration-history-reconciliation.md). Do not fabricate empty historical migrations or rewrite the Prisma ledger without a reviewed recovery process.
+Neon production and staging each record five applied migrations. Three original migration SQL files were previously missing from `main` and the feature branch, but were recovered from `sync/vps-mobile`. All three original file SHA-256 values **exactly match** Neon's recorded `_prisma_migrations.checksum` values; they have been restored unchanged to the feature branch. See [Prisma migration history recovery](manila-prisma-migration-history-reconciliation.md).
 
-The operator has confirmed successful Manila staging application tests; **retain detailed smoke-test results** (tested modules, timestamps, receipts and outputs) for release evidence. Latest GitHub Actions and Vercel checks were passing as of 2026-10-19.
+The distinct `20261017120000_saas_tenancy_and_otp_cap` script exists on `sync/vps-mobile` but is **not applied** in production; it has **not** been copied into this branch. Do not introduce it through a deployment without separate review.
+
+On the local workstation, run **read-only** `npx prisma migrate status` against the **staging connection only** to confirm migration-folder status; this is still pending. The Manila Time timestamp migration was applied manually on staging and has no `_prisma_migrations` row; proper deployment/migration-history integration remains a release gate.
+
+The operator has confirmed successful Manila staging application testing; retain its detailed acceptance evidence. The latest completed GitHub Actions and Vercel checks passed as of 2026-10-19.
 
 ## Accepted limitation: no native PostgreSQL dump
 
