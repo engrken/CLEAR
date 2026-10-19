@@ -144,7 +144,9 @@ export default async function SummaryReportPage({
       count: Number(item.headcount || 0),
       amount: Number(item.total || 0),
     }))
-    .filter((item) => item.count !== 0 || item.amount !== 0)
+    // A zero-balance category is not an outstanding obligation, even if its
+    // original assessment count is nonzero. Preserve nonzero discrepancies.
+    .filter((item) => Number.isFinite(item.amount) && Math.round(item.amount * 100) !== 0)
     .sort((a, b) => b.amount - a.amount || a.category.localeCompare(b.category));
 
   const duesSummary = {
