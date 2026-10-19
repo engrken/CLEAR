@@ -142,7 +142,7 @@ jobs:
           psql "$PSQL_URL" -v ON_ERROR_STOP=1 <<'SQL'
           INSERT INTO "SystemLog" ("id","organizationId","user","action")
           VALUES ('ci-future-only-new-event', 'ci-mnl-org', 'CI', 'FUTURE_ONLY_NEW_EVENT');
-          DO $
+          DO $$
           DECLARE d double precision;
           BEGIN
             SELECT abs(extract(epoch FROM ("timestamp" - current_timestamp))) INTO d
@@ -150,5 +150,5 @@ jobs:
             IF d IS NULL OR d > 60 THEN
               RAISE EXCEPTION 'New SystemLog timestamp did not use the actual insert instant (delta=%)', d;
             END IF;
-          END $;
+          END $$;
           SQL
