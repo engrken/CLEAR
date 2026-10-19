@@ -268,7 +268,7 @@ describe('penalty payments (penaltyId, added after app 1.0.0)', () => {
     assert.equal(entry.balanceDueCentavos, 4000);
     const row = await prisma.collection.findUnique({ where: { id: entry.id } });
     assert.equal(row.fundAllocation, 'Penalty Fund');
-    assert.equal(row.category, 'Others');
+    assert.equal(row.category, 'Penalty');
     const pen = await prisma.penalty.findUnique({ where: { id: penalty.id } });
     assert.equal(pen.fineAmount, 40);
     assert.equal(pen.status, 'Partially Paid (Cash Payment)');
