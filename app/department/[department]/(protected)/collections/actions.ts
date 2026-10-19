@@ -6,7 +6,7 @@ import { requireTabAccess } from "@/lib/permissions";
 import { enqueuePaymentReceipt, scheduleDigitalReceiptDispatch } from "@/lib/digital-receipts";
 import { revalidatePath } from "next/cache";
 import { withFinancialTransaction } from "@/lib/financial-transaction";
-import { receiptNumberConflictWhere } from "@/lib/receipt-number";
+import { lockReceiptNumber, receiptNumberConflictWhere } from "@/lib/receipt-number";
 import { getPeriodLedger, toCents } from "../realign/ledger";
 import { applyPaymentToStudentCollectibles } from "../collectibles/due-link";
 import { PENALTY_FUND_NAME } from "@/lib/penalty-fund";
@@ -83,6 +83,7 @@ export async function recordPayment(department: string, data: {
     studentName = student.fullName;
     studentEmail = String(student.email || "").trim();
 
+    await lockReceiptNumber(tx, org.id, orNumber);
     const conflict = await tx.collection.findFirst({ where: receiptNumberConflictWhere(org.id, orNumber), select: { id: true } });
     if (conflict) throw new Error(`Official receipt ${orNumber} is already used. Refresh and select an unused OR.`);
 
