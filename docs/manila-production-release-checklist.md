@@ -6,6 +6,10 @@
 
 > **UPDATED SCOPE — FUTURE-ONLY TIME STANDARDIZATION (2026-10-19):** Operator confirms the existing records are test data, and historical event-time accuracy is not required. Stop historical-source forensic work; prioritize correct timestamps for newly created CLEAR events. This waives old timestamp accuracy **only**, not financial amounts, accounting dates, identities or data-integrity controls. The original UTC-only migration guard must NOT be falsely acknowledged; prepare a distinct explicitly waived, reviewed migration and obtain separate authorization before any production change. See [future-only time plan](manila-future-only-time-standardization.md). Historical mixed-time evidence remains valid below.
 
+## Final future-only staging rehearsal completed
+
+The new **`clear-manila-future-only-final-staging`** branch was migrated with the explicitly acknowledged test-history waiver; all 33 event-time columns are `timestamptz(3)`, 29 table fingerprints (1,244 rows) match, 15 financial amount totals and 7 accounting date fields match. The guarded migration rejected execution without a waiver. A new test System Log used the correct UTC instant and PHT display, and a five-minute OTP expiry was exactly 300 seconds; both changes were rolled back. Production remains unconverted. See [final staging verification](manila-future-only-final-staging-verification-2026-10-19.md).
+
 ## Current evidence
 
 - GitHub draft PR #17: `feature/manila-time-standardization-20261018`, 33 event-instant Prisma fields marked `@db.Timestamptz(3)`.
