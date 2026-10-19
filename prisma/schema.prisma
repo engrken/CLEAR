@@ -496,3 +496,34 @@ model TransactionEmailPreference {
   @@unique([organizationId, email], map: "TEP_org_email_unique")
   @@index([organizationId], map: "TEP_org_idx")
 }
+
+ 
+// Global platform operators live outside tenant-specific TenantUser records.
+// The original SUPER_ADMIN_EMAIL remains the break-glass/bootstrap operator.
+model GlobalSuperAdmin {
+  id                  String    @id @default(cuid())
+  email               String    @unique
+  fullName            String
+  status              String    @default("Pending")
+  invitedBy           String
+  invitationExpiresAt DateTime  @db.Timestamptz(3)
+  activatedAt         DateTime? @db.Timestamptz(3)
+  disabledAt          DateTime? @db.Timestamptz(3)
+  revokedAt           DateTime? @db.Timestamptz(3)
+  sessionVersion      Int       @default(1)
+  lastLoginAt         DateTime? @db.Timestamptz(3)
+  createdAt           DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime  @updatedAt @db.Timestamptz(3)
+  @@index([status])
+}
+
+model GlobalAdminAudit {
+  id          String   @id @default(cuid())
+  actorEmail  String
+  targetEmail String
+  action      String
+  details     String?
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  @@index([createdAt])
+  @@index([targetEmail, createdAt])
+}
