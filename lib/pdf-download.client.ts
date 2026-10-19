@@ -125,11 +125,16 @@ export async function downloadReportPdf(
     throw new Error("The report is not ready for PDF export. Try again.");
   }
 
+  // Keep the temporary staging node off-screen, but export its *inner*
+  // unpositioned child. Otherwise an off-screen left offset can be captured
+  // by html2canvas, resulting in a blank or clipped downloaded PDF.
+  const holder = document.createElement("div");
+  holder.style.cssText =
+    "position:fixed;left:-25000px;top:0;width:780px;z-index:-1;pointer-events:none;";
   const root = document.createElement("div");
   root.className = "clear-pdf-export";
   root.style.cssText =
-    "position:fixed;left:-25000px;top:0;width:780px;max-width:none;" +
-    "background:#fff;color:#111827;z-index:-1;pointer-events:none;";
+    "width:780px;max-width:none;background:#fff;color:#111827;";
 
   const styles = document.createElement("style");
   styles.textContent = `
@@ -154,7 +159,8 @@ export async function downloadReportPdf(
 
   root.appendChild(styles);
   root.appendChild(clonePrintableContent(source));
-  document.body.appendChild(root);
+  holder.appendChild(root);
+  document.body.appendChild(holder);
 
   try {
     // Allow the cloned report / print-only header layout to settle.
@@ -168,6 +174,6 @@ export async function downloadReportPdf(
       pagebreak: { mode: ["css", "legacy"], avoid: ["tr", ".signature-block", ".collection-category-header"] },
     }).from(root).save();
   } finally {
-    root.remove();
+    holder.remove();
   }
 }
