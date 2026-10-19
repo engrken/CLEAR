@@ -1,6 +1,7 @@
 // app/department/[department]/(protected)/void/actions.ts
 "use server";
 
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { withFinancialTransaction } from "@/lib/financial-transaction";
 import { revalidatePath } from "next/cache";
