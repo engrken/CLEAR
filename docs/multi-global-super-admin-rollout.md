@@ -66,28 +66,66 @@ continue to work. Never delete/change this environment variable during rollout.
 - Application-level live SMTP/OTP and login tests are **pending** until a
   controlled staging/production release.
 
-## Production release gate
-**Do NOT merge or deploy the feature while production lacks the two new
-tables.** The app references the registry on login and privileged requests.
-1. Review PR #20, green CI, staging tests and security design.
-2. Verify the existing `SUPER_ADMIN_EMAIL` and SMTP settings are intact.
-3. Choose a short maintenance window and create a **fresh** Neon snapshot of
-   the current production `main` branch; preserve backup/recovery branches.
-4. After explicit production approval, run
-   `npx prisma migrate status` and review the five already-applied migrations
-   plus this new migration. Historical manual `timestamptz` DDL was not
-   recorded as a Prisma migration; do not `prisma db push` or reapply that SQL.
-5. Apply **only the new account-tables migration** using the reviewed release
-   plan and `npx prisma migrate deploy` on the verified production branch.
-   This staging SQL rehearsal used manual DDL, not Prisma ledger tracking.
-6. Verify the two tables exist, all tenant/payment/audit counts and amounts
-   are unchanged, and the original SUPER_ADMIN_EMAIL is still configured.
-7. Merge the reviewed application PR and wait for Vercel Production **Ready**.
-8. Sign in as the **original** bootstrap Super Admin and open provisioning.
-   Invite one controlled test Super Admin, complete their OTP, test both global
-   entry points and verify Disable/Revoke immediately denies privileged routes.
-9. Monitor audit logs, mail send limits, and role-isolation failures, then
-   resume normal operations.
+## Production schema migration completed — October 19, 2026
 
-No production schema change, account creation, or deployment is authorized
-by the creation of PR #20 alone.
+The operator separately approved using a verified Neon recovery branch in lieu of
+a fresh snapshot, because the Neon project returned `snapshots limit exceeded`
+while creating a fresh snapshot. **Do not delete the older snapshot**.
+
+- Production branch: `main` (`br-calm-dew-b3vd1ira`), project
+  `wandering-wind-73071792`.
+- Verified **precutover recovery branch**:
+  `clear-global-superadmin-20261019-precutover-recovery`
+  (`br-delicate-rice-b3c67yej`). Immediately before the change, production
+  and recovery matched on 3 organizations, 492 collections, ₱124,152.00
+  collected, 12 TenantUser rows, 288 tenant audit logs, 7 mobile sessions,
+  and five applied Prisma migrations.
+- A mobile session's `lastUsedAt` advanced after the branch was made, so
+  that one non-financial value is not necessarily identical to the recovery
+  snapshot. Old financial data and row counts remained equal.
+- The six SQL DDL commands from
+  `prisma/migrations/20261019115000_global_super_admin_accounts/migration.sql`
+  were applied to **production only** as a single guarded Neon database
+  transaction (not via Prisma CLI). In the same transaction the exact source
+  SHA256 checksum was inserted into `_prisma_migrations`, with the expected
+  Prisma migration name, status, and `applied_steps_count=1`.
+  This is intentional manual migration-history synchronization, not a claim
+  that `npx prisma migrate deploy` was executed.
+- Recorded Prisma filename:
+  `20261019115000_global_super_admin_accounts`.
+  Checksum: `c8fce5c89b821c8305206856760788f4ea5d941e79203f1f95fa399be6099223`.
+- After execution: **two tables, six indexes** (two primary keys, four
+  additional indexes), **zero additional admin accounts**, **zero global
+  audit events**. There are now six successful migration-ledger entries,
+  with all five pre-existing migration checksums unchanged.
+- Business baseline remained 3 organizations, 492 collections,
+  ₱124,152.00 total collections, 12 TenantUser accounts, 288 SystemLogs
+  and seven MobileSessions.
+- **Do not rerun the SQL or call `prisma migrate resolve --applied`**
+  for this specific migration: it already has an applied history record.
+
+The application rollout remains a separate, uncompleted step: PR #20 is still
+**Draft and unmerged**, and Vercel Production has not yet deployed the new
+account-management version. The current production app can continue using
+the original `SUPER_ADMIN_EMAIL` because the migration was additive.
+
+### Application rollout — still pending
+
+1. Confirm the Production Vercel `SUPER_ADMIN_EMAIL` configuration is intact,
+   the SMTP email service is working, and new code passed GitHub CI.
+2. Review PR #20, mark Ready for Review, then merge to `main` when explicitly
+   approved. Wait for Vercel **Production Ready**, and verify it deployed the
+   merged commit.
+3. Sign in using the **existing** original Super Admin OTP. Visit
+   `/dashboard/provisions` and verify that **Global Super Admin Accounts**
+   is available.
+4. Invite one distinct test administrator, confirm invitation notice,
+   complete first personal email OTP, and test both NextAuth dashboard and
+   separate Entity Admin Portal sessions.
+5. Test Disable, Enable, and Revoke. Verify privileges disappear on an existing
+   logged-in session without waiting for JWT expiry. Review GlobalAdminAudit.
+6. Verify public clearance, protected tenant workflows, and audit attribution
+   remain correct; retain the recovery branch.
+
+The historical manual 33-column PHT timestamp cutover is **not** a migration
+tracked by Prisma. Do not `prisma db push` or rerun that conversion.
