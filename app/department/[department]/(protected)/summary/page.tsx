@@ -122,6 +122,10 @@ export default async function SummaryReportPage({
         ? receiptCategory
         : feeByItem.get(desc.toLowerCase()) || receiptCategory || 'Other Collections');
     if (/^Departmental Fee Package/i.test(desc)) category = 'Departmental Fee';
+    // Preserve cash accounting but show the actual nature of the generic Others receipt.
+    if (receiptCategory.toLowerCase() === 'others' && desc.toLowerCase() === 'penalty / fines') {
+      category = 'Penalty / Fines';
+    }
     // Do not turn descriptive identifiers into visible category labels.
     if (/\[PEN-|^Penalty Fine/i.test(category)) category = 'Penalty';
     const current = byCategory.get(category) || { category, students: new Set<string>(), totalCents: 0 };
