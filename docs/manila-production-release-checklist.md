@@ -2,6 +2,8 @@
 
 **State:** Release planning only. Do not merge or deploy before the checked gates and an explicit production change authorization.
 
+> **CRITICAL TIMEZONE FINDING (2026-10-19):** Uploaded legacy Apps Script and read-only Neon comparisons confirm mixed timestamp origins within `SystemLog.timestamp`: all 24 older `DAILY_BACKUP` entries match Manila-local backup title times while newer Vercel `AUTOMATED_DAILY_BACKUP` entries match UTC filename times. Legacy payment timestamps may also be local. **The current 33-column UTC-only migration is NOT APPROVED for production.** Prepare a row-/source-aware migration and retest on a fresh unconverted staging branch. See [legacy timezone evidence](manila-legacy-timezone-evidence-2026-10-19.md).
+
 ## Current evidence
 
 - GitHub draft PR #17: `feature/manila-time-standardization-20261018`, 33 event-instant Prisma fields marked `@db.Timestamptz(3)`.
