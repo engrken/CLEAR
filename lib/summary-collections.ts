@@ -52,7 +52,7 @@ function displayItemName(description: string, fallbackCategory: string): string 
 /** An exact-centavo partition of one received package payment. */
 function distributePackageCents(
   cents: number,
-  setups: SummaryFeeSetup[],
+  setups: readonly SummaryFeeSetup[],
 ): { name: string; cents: number }[] {
   const active = setups.filter(s => s.isPackage && Number(s.amount) > 0 && s.name.trim());
   const totalRate = active.reduce((sum, s) => sum + Number(s.amount), 0);
@@ -126,7 +126,7 @@ export function itemizeCollectionsForSummary(
     };
 
     const packageItems = PACKAGE_DESCRIPTIONS.has(description.toLowerCase())
-      ? distributePackageCents(cents, setups as SummaryFeeSetup[])
+      ? distributePackageCents(cents, setups)
       : [];
     if (packageItems.length) {
       for (const item of packageItems) addLine(item.name, item.cents);
