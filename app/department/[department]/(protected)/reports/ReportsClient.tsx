@@ -11,6 +11,7 @@ import { saveSignatories, saveReportSettings } from "../../actions";
 import { fmt } from "@/lib/utils";
 import OrganizationLogo from "@/components/OrganizationLogo";
 import SavePdfButton from "../../components/SavePdfButton";
+import { prepareReportLogo } from "@/lib/report-logo.client";
 import {
   Chart as ChartJS,
   ArcElement,
@@ -174,8 +175,8 @@ export default function ReportsClient({
       const formData = new FormData();
       formData.append("schoolName", schoolName.trim());
       formData.append("schoolAddress", schoolAddress.trim());
-      if (leftLogoFile) formData.append("leftLogo", leftLogoFile);
-      if (rightLogoFile) formData.append("rightLogo", rightLogoFile);
+      if (leftLogoFile) formData.append("leftLogo", await prepareReportLogo(leftLogoFile));
+      if (rightLogoFile) formData.append("rightLogo", await prepareReportLogo(rightLogoFile));
 
       // These settings are saved on the Organization and reused by all report printouts.
       await saveReportSettings(department, formData);

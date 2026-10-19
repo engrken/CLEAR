@@ -129,12 +129,15 @@ export async function downloadReportPdf(
   // unpositioned child. Otherwise an off-screen left offset can be captured
   // by html2canvas, resulting in a blank or clipped downloaded PDF.
   const holder = document.createElement("div");
+  // Folio is 215.9 mm wide, with 12.7 mm on each side: the content
+  // measures 190.5 mm = 720 CSS pixels at 96 dpi. A 780 px DOM subtree
+  // previously overflowed this printable width and cropped the last column.
   holder.style.cssText =
-    "position:fixed;left:-25000px;top:0;width:780px;z-index:-1;pointer-events:none;";
+    "position:fixed;left:-25000px;top:0;width:720px;z-index:-1;pointer-events:none;";
   const root = document.createElement("div");
   root.className = "clear-pdf-export";
   root.style.cssText =
-    "width:780px;max-width:none;background:#fff;color:#111827;";
+    "width:720px;max-width:none;background:#fff;color:#111827;box-sizing:border-box;";
 
   const styles = document.createElement("style");
   styles.textContent = `
@@ -146,14 +149,18 @@ export async function downloadReportPdf(
       -webkit-print-color-adjust: exact;
     }
     .clear-pdf-export { background-color: #fff !important; font-family: Arial, sans-serif; }
+    .clear-pdf-export, .clear-pdf-export * { box-sizing: border-box !important; }
+    .clear-pdf-export .print-container { width: 100% !important; max-width: 100% !important; min-width: 0 !important; }
     .clear-pdf-export .card, .clear-pdf-export .module { border: none !important; }
-    .clear-pdf-export .table-responsive { overflow: visible !important; }
-    .clear-pdf-export table { width: 100% !important; border-collapse: collapse !important; }
-    .clear-pdf-export th, .clear-pdf-export td { border: 1px solid #888 !important; padding: 4px 6px !important; }
+    .clear-pdf-export .flex-grow-1 { min-width: 0 !important; }
+    .clear-pdf-export .table-responsive { overflow: visible !important; max-width: 100% !important; }
+    .clear-pdf-export table { width: 100% !important; max-width: 100% !important; table-layout: fixed !important; border-collapse: collapse !important; }
+    .clear-pdf-export th, .clear-pdf-export td { border: 1px solid #888 !important; padding: 4px 6px !important; overflow-wrap: break-word !important; }
+    .clear-pdf-export .report-logo { object-fit: contain !important; max-width: 100% !important; }
     .clear-pdf-export thead { display: table-header-group !important; }
     .clear-pdf-export tr, .clear-pdf-export .signature-block { break-inside: avoid !important; }
     .clear-pdf-export .collection-category-header { break-after: avoid !important; }
-    .clear-pdf-export img { max-width: 100% !important; }
+    .clear-pdf-export img { max-width: 100% !important; height: auto; object-fit: contain; }
     .clear-pdf-export .alert-danger { border: 3px solid #b91c1c !important; font-weight: bold !important; }
   `;
 
