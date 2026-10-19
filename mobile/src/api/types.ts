@@ -38,8 +38,9 @@ export type Officer = {
 export type Session = { token: string; officer: Officer; org: Organization; expiresAt: string };
 
 export type ClearanceResult = {
-  studentName: string;
-  studentId: string;
+  /** Hidden on anonymous public lookups; present for authorized officers. */
+  studentName: string | null;
+  studentId: string | null;
   status: 'cleared' | 'hold';
   /** null on public lookups (cleared/on hold only); filled for an officer token with tab-clearance. */
   outstandingCentavos: number | null;
