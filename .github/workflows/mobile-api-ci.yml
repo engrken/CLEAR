@@ -45,6 +45,8 @@ jobs:
       NEXTAUTH_SECRET: clear-ci-mobile-otp-signing-key-1234567890abcdef
       SUPER_ADMIN_EMAIL: ci-global-admin@example.invalid
       API_URL: http://127.0.0.1:3000/api/mobile
+      AUTH_URL: http://127.0.0.1:3000
+      AUTH_TRUST_HOST: 'true'
       DEMO_REVIEWER_EMAIL: reviewer@demo.clear.invalid
       DEMO_REVIEWER_CODE: '135790'
     steps:
@@ -65,6 +67,8 @@ jobs:
           NEXTAUTH_SECRET=clear-ci-mobile-otp-signing-key-1234567890abcdef
           SUPER_ADMIN_EMAIL=ci-global-admin@example.invalid
           API_URL=http://127.0.0.1:3000/api/mobile
+          AUTH_URL=http://127.0.0.1:3000
+          AUTH_TRUST_HOST=true
           DEMO_REVIEWER_EMAIL=reviewer@demo.clear.invalid
           DEMO_REVIEWER_CODE=135790
           EOF
