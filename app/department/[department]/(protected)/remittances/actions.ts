@@ -7,6 +7,7 @@ import { requireTabAccess } from '@/lib/permissions';
 import { revalidatePath } from 'next/cache';
 import { headers } from 'next/headers';
 import { withFinancialTransaction } from '@/lib/financial-transaction';
+import { receiptNumberConflictWhere } from "@/lib/receipt-number";
 import { randomUUID, createHash } from 'node:crypto';
 import { getPeriodLedger, toCents } from '../realign/ledger';
 import { assertAcademicPeriod } from '@/lib/academic-period-guard';
