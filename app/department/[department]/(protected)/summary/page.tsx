@@ -135,8 +135,20 @@ export default async function SummaryReportPage({
     .sort((a, b) => a.category.localeCompare(b.category));
 
   const penaltySummary = summarizeCashOnlyPenaltyObligations(activePenalties);
+  // Reuse the finance engine's authoritative collectible buckets. Do not
+  // re-query/recalculate individual obligations or expose student identifiers.
+  // These rows always reconcile to the Dues / Collectibles summary above.
+  const duesBreakdown = (financials.collectiblesList || [])
+    .map((item: { category: string; headcount: number; total: number }) => ({
+      category: String(item.category || '').trim() || 'Unassigned',
+      count: Number(item.headcount || 0),
+      amount: Number(item.total || 0),
+    }))
+    .filter((item) => item.count !== 0 || item.amount !== 0)
+    .sort((a, b) => b.amount - a.amount || a.category.localeCompare(b.category));
+
   const duesSummary = {
-    count: (financials.collectiblesList || []).reduce((sum: number, item: { headcount: number }) => sum + Number(item.headcount || 0), 0),
+    count: duesBreakdown.reduce((sum, item) => sum + item.count, 0),
     amount: Number(financials.totalCollectibles || 0),
   };
 
@@ -159,6 +171,7 @@ export default async function SummaryReportPage({
         summaryCategories={summaryCategories}
         penaltySummary={penaltySummary}
         duesSummary={duesSummary}
+        duesBreakdown={duesBreakdown}
         grandCollectionTotal={financials.grandCollectionTotal}
         expensesByFund={financials.expensesByFund}
         grandExpenseTotal={financials.grandExpenseTotal}
