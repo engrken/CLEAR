@@ -1,4 +1,5 @@
-import { inviteGlobalAdmin, updateGlobalAdminStatus, renewGlobalAdminInvitation } from './super-admin-actions';
+import { updateGlobalAdminStatus, renewGlobalAdminInvitation } from './super-admin-actions';
+import GlobalAdminInviteForm from './GlobalAdminInviteForm';
 
 type Account = {
   id: string; email: string; fullName: string; status: string; invitedBy: string;
@@ -19,14 +20,7 @@ export function GlobalAdminManager({ accounts, audit, actorEmail }: {
       <strong>Bootstrap administrator:</strong> {process.env.SUPER_ADMIN_EMAIL?.trim().toLowerCase() || 'Not configured'}
       <span className="badge bg-info text-dark ms-2">Protected</span>
     </div>
-    <form action={inviteGlobalAdmin} className="row g-2 align-items-end mb-4">
-      <div className="col-md-4"><label className="form-label small">Full name</label>
-        <input name="fullName" type="text" minLength={2} maxLength={120}
-          required className="form-control" placeholder="Administrator's name" /></div>
-      <div className="col-md-5"><label className="form-label small">Email address</label>
-        <input name="email" type="email" maxLength={254} required className="form-control" placeholder="admin@institution.edu" /></div>
-      <div className="col-md-3"><button className="btn btn-info w-100 fw-semibold text-dark" type="submit">Invite Super Admin</button></div>
-    </form>
+    <GlobalAdminInviteForm />
     <p className="small text-secondary">
       Invitation expires after 7 days. The invited administrator activates their account by
       opening the main dashboard, choosing System SuperAdmin Access and completing their first email OTP.

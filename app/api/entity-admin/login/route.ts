@@ -9,7 +9,7 @@ import {
   signEntityToken,
   type EntitySessionClaims,
 } from '@/lib/entity-session';
-import { isGlobalSuperAdminEmail } from '@/lib/super-admin';
+import { isReservedGlobalAdminEmail, isGlobalSuperAdminEmail } from '@/lib/super-admin';
 import {
   issueSuperAdminOtp,
   verifySuperAdminOtp,
@@ -298,7 +298,8 @@ export async function POST(req: Request) {
     if (step === 'request_otp') {
       // The global Super Admin uses the existing protected OTP service,
       // not a duplicate TenantUser record.
-      if (await isGlobalSuperAdminEmail(email)) {
+      if (await isReservedGlobalAdminEmail(email)) {
+        if (!(await isGlobalSuperAdminEmail(email))) return genericResponse();
         const result = await issueSuperAdminOtp(email);
 
         return NextResponse.json({
@@ -453,7 +454,7 @@ export async function POST(req: Request) {
     }
 
     // Super Admin verification does not depend on a TenantUser row.
-    if (await isGlobalSuperAdminEmail(email)) {
+    if (await isReservedGlobalAdminEmail(email)) {
       const result = await verifySuperAdminOtp(email, submittedOtp);
 
       if (!result.ok) {

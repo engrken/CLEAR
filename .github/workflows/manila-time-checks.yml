@@ -39,6 +39,8 @@ jobs:
         run: npm run test:time
       - name: Receipt branding regression tests
         run: node --experimental-strip-types --test tests/receipt-branding.test.mjs
+      - name: Global administrator promotion regression tests
+        run: node --experimental-strip-types --test tests/global-admin-promotion.test.mjs
       - name: TypeScript check
         run: npx tsc --noEmit
       - name: TZ independence — Honolulu
