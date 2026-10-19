@@ -16,7 +16,7 @@ export async function lockReceiptNumber(
   }
   // Two independent 32-bit hash keys; collision only causes extra waiting,
   // never permits duplicate postings. Never interpolate user input into SQL.
-  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${organizationId}), hashtext(${orNumber}))`;
+  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${organizationId}), hashtext(${orNumber}))::text AS locked`;
 }
 
 /**
