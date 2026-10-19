@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import { Metadata } from 'next';
+import OrganizationLogo from '@/components/OrganizationLogo';
 
 export const dynamic = 'force-dynamic';
 
@@ -167,25 +168,17 @@ export default async function DashboardPage() {
 
                       {/* LOGO WRAPPER */}
                       <div className="logo-wrapper mt-3">
-                        {dept.logo ? (
-                          <img
-                            src={dept.logo}
-                            alt={`${dept.name} Logo`}
-                            className="img-fluid"
-                            style={{
-                              maxWidth: '100%',
-                              maxHeight: '100%',
-                              objectFit: 'contain',
-                              filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))',
-                            }}
-                          />
-                        ) : (
-                          <i
-                            className={`fs-1 text-secondary ${
-                              isOrgType(dept.type) ? 'bi bi-people-fill' : 'bi bi-building'
-                            }`}
-                          ></i>
-                        )}
+                        <OrganizationLogo
+                          src={dept.logo}
+                          alt={`${dept.name} logo`}
+                          className="img-fluid"
+                          style={{
+                            maxWidth: '100%',
+                            maxHeight: '100%',
+                            objectFit: 'contain',
+                            filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))',
+                          }}
+                        />
                       </div>
 
                       {/* ENTITY NAME & LINK */}
