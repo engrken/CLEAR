@@ -41,7 +41,7 @@ export default async function PrintCollectionsReceipt({ params }: {
     }`}</style>
     <div className="d-flex flex-wrap gap-2 mb-3 receipt-no-print">
       <Link href={`/department/${encodeURIComponent(slug)}/collections/history?ay=all&term=all`} className="btn btn-outline-secondary">Back to Receipt History</Link>
-      <PrintReceiptButton />
+      <PrintReceiptButton orNumber={orNumber} />
     </div>
     <article id="clear-reprint" className="card p-4 mx-auto shadow-sm border-secondary position-relative" style={{ maxWidth: 820 }}>
       {status !== "Valid" && <div role="alert" className="alert alert-danger fw-bold text-center fs-3">
