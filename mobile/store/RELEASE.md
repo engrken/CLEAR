@@ -167,3 +167,5 @@ Before building, check the remote versionCode is 2 (`npx eas-cli@latest build:ve
 - Clearer messages when a term is closed, an OR number is already used, or a payment is more than the balance.
 - Officers can see what is still unpaid on an on-hold clearance, including balances from earlier terms.
 ```
+
+**Submitted (2026-10-19, ~08:20):** 1.0.1 (3), EAS build ecf71c13, uploaded through the Play Developer API (play.mjs with the BahaySuite service account, which now has CLEAR app permissions) to **production**, full rollout, the same countries as 1.0.0. Server side: VPS revision 7e2d67b (Ken's main plus /api/mobile) was deployed first. Managed publishing is off, so it goes live once Google approves.
