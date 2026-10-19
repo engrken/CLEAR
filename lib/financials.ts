@@ -9,12 +9,14 @@
 // first (the mobile API's requireMobileOfficer guard).
 //
 // Additions (do not change Ken's math):
-//   - unpaidPackageStudents: Ken's local unpaidOrPartialPackageCount, returned.
+//   - Manila-normalized dates use the same helper as the current web finance engine.
+//   - unpaidPackageStudents: the web engine's unpaidOrPartialPackageCount, returned.
 //   - periodLedger: the getPeriodLedger snapshot he already computes, returned so
 //     callers can read activeRollover without a second query.
 // Keep in sync with Ken's source when it changes.
 
 import { prisma } from '@/lib/prisma';
+import { manilaDateInput } from '@/lib/clear-timezone';
 import { money as roundMoney } from '@/lib/utils';
 import { getPeriodLedger } from '@/app/department/[department]/(protected)/realign/ledger';
 
@@ -427,14 +429,14 @@ export async function computeDepartmentFinancials(organizationId: string, ay: st
         id: ca.advanceId,
         advanceId: ca.advanceId,
         date: ca.dateIssued
-          ? new Date(ca.dateIssued).toISOString().split('T')[0]
+          ? manilaDateInput(ca.dateIssued)
           : '',
         requestor: ca.requestor,
         fund,
         amount: amt,
         amountApproved: amt,
         due: ca.expectedReturnDate
-          ? new Date(ca.expectedReturnDate).toISOString().split('T')[0]
+          ? manilaDateInput(ca.expectedReturnDate)
           : '',
         status: ca.status,
       };
