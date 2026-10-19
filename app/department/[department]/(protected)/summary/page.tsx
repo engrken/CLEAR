@@ -6,6 +6,7 @@ import SummaryClient from './SummaryClient';
 import { Metadata } from 'next';
 import { getDepartmentFinancials } from '../../actions';
 import { requireTabAccess } from '@/lib/permissions';
+import { summarizeCashOnlyPenaltyObligations } from '@/lib/summary-penalties';
 
 export const metadata: Metadata = {
   title: 'Centralized Liquidation of Expenses & Audit Records',
@@ -90,13 +91,15 @@ export default async function SummaryReportPage({
 
   // Reporting-only aggregations. No student names, penalty reference IDs,
   // OR descriptions or individual collectible items are sent for display.
+  // Only cash-only LATE_FEE obligations contribute to summary liabilities;
+  // service-eligible penalties continue to affect clearance and penalty logs.
   const [feeSetups, receipts, activePenalties] = await Promise.all([
     prisma.collectionSetup.findMany({ where: { organizationId: organization.id, academicYear: ay, term },
       select: { category: true, name: true } }),
     prisma.collection.findMany({ where: { organizationId: organization.id, academicYear: ay, term },
       select: { studentId: true, studentName: true, category: true, itemDescription: true, amountPaid: true, status: true, paymentType: true } }),
-    prisma.penalty.findMany({ where: { organizationId: organization.id, academicYear: ay, term },
-      select: { studentId: true, studentName: true, fineAmount: true, status: true } }),
+    prisma.penalty.findMany({ where: { organizationId: organization.id, academicYear: ay, term, penaltyType: 'LATE_FEE' },
+      select: { studentId: true, studentName: true, fineAmount: true, status: true, penaltyType: true } }),
   ]);
   const feeByItem = new Map<string, string>();
   const configuredCategories = new Set(feeSetups.map(s => s.category.trim().toLowerCase()));
@@ -131,18 +134,7 @@ export default async function SummaryReportPage({
     .map(row => ({ category: row.category, count: row.students.size, total: row.totalCents / 100 }))
     .sort((a, b) => a.category.localeCompare(b.category));
 
-  const affectedPenaltyStudents = new Set<string>();
-  let unpaidPenaltyCents = 0;
-  for (const penalty of activePenalties) {
-    if (/VOID|CANCEL/i.test(penalty.status || '')) continue;
-    const id = String(penalty.studentId || penalty.studentName || '').trim().toLowerCase();
-    // The obligation table reports only students with an unpaid balance.
-    const outstanding = Math.round(Number(penalty.fineAmount || 0) * 100);
-    if (id && outstanding > 0) affectedPenaltyStudents.add(id);
-    // Penalty.fineAmount represents the *live outstanding balance*.
-    unpaidPenaltyCents += outstanding;
-  }
-  const penaltySummary = { count: affectedPenaltyStudents.size, amount: unpaidPenaltyCents / 100 };
+  const penaltySummary = summarizeCashOnlyPenaltyObligations(activePenalties);
   const duesSummary = {
     count: (financials.collectiblesList || []).reduce((sum: number, item: { headcount: number }) => sum + Number(item.headcount || 0), 0),
     amount: Number(financials.totalCollectibles || 0),
