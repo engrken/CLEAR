@@ -2,10 +2,10 @@ import 'server-only';
 
 import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
-import { isSuperAdminEmail } from '@/lib/super-admin';
+import { isSuperAdminEmail, isReservedGlobalAdminEmail, verifyGlobalAdminSession } from '@/lib/super-admin';
 import { PRESET_ROLE_TABS, parseAllowedTabs } from '@/lib/role-permissions';
 
-export { isSuperAdminEmail, PRESET_ROLE_TABS, parseAllowedTabs };
+export { isSuperAdminEmail, isReservedGlobalAdminEmail, PRESET_ROLE_TABS, parseAllowedTabs };
 
 const ADMIN_ROLES = new Set(['admin', 'administrator', 'master']);
 const ALL_TABS = new Set(Object.values(PRESET_ROLE_TABS).flat());
@@ -20,15 +20,18 @@ function normalizeDepartment(department: string): string {
   return slug;
 }
 
-function isSignedInSuperAdmin(user: any): boolean {
-  const role = String(user?.role ?? '').toLowerCase().replace(/[\s_-]/g, '');
-  return isSuperAdminEmail(user?.email) && role === 'superadmin';
+async function isSignedInSuperAdmin(user: any): Promise<boolean> {
+  return Boolean(await verifyGlobalAdminSession({
+    email: user?.email, role: user?.role,
+    globalAdminId: user?.globalAdminId,
+    globalAdminVersion: user?.globalAdminVersion,
+  }));
 }
 
 export async function requireSuperAdmin() {
   const session = await auth();
   if (!session?.user) throw new Error('401 Unauthorized: Session expired or invalid.');
-  if (!isSignedInSuperAdmin(session.user)) {
+  if (!(await isSignedInSuperAdmin(session.user))) {
     throw new Error('403 Forbidden: Super administrator privileges are required.');
   }
   return session.user;
@@ -39,9 +42,9 @@ async function loadAccess(department: string) {
   if (!session?.user?.email) throw new Error('401 Unauthorized: Session expired or invalid.');
   const sessionUser = session.user as any;
   const email = String(sessionUser.email).trim().toLowerCase();
-  const isSuper = isSignedInSuperAdmin(sessionUser);
+  const isSuper = await isSignedInSuperAdmin(sessionUser);
   // Fail closed if a normal session somehow contains the privileged email.
-  if (isSuperAdminEmail(email) && !isSuper) throw new Error('403 Forbidden: Invalid Super Admin session.');
+  if ((await isReservedGlobalAdminEmail(email)) && !isSuper) throw new Error('403 Forbidden: Invalid Super Admin session.');
 
   const slug = normalizeDepartment(department);
   const org = await prisma.organization.findUnique({

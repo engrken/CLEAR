@@ -4,7 +4,7 @@ import 'server-only';
 import crypto from 'node:crypto';
 import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
-import { isSuperAdminEmail } from '@/lib/super-admin';
+import { isReservedGlobalAdminEmail, verifyGlobalAdminSession } from '@/lib/super-admin';
 
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -13,6 +13,8 @@ export type EntitySessionClaims = {
   email: string;
   role: 'admin' | 'SuperAdmin';
   isSuperAdmin: boolean;
+  globalAdminId?: string;
+  globalAdminVersion?: number;
   tenantUserId?: string;
   organizationId?: string;
   iat: number;
@@ -171,6 +173,8 @@ export function verifyEntityToken(
       email: claims.email.trim().toLowerCase(),
       role: claims.role as 'admin' | 'SuperAdmin',
       isSuperAdmin: claims.isSuperAdmin,
+      globalAdminId: typeof claims.globalAdminId === 'string' ? claims.globalAdminId : undefined,
+      globalAdminVersion: typeof claims.globalAdminVersion === 'number' ? claims.globalAdminVersion : undefined,
       tenantUserId: claims.tenantUserId,
       organizationId: claims.organizationId,
       iat: claims.iat!,
@@ -196,12 +200,12 @@ export async function getAuthenticatedEntityAdmin():
     
 
     if (claims.isSuperAdmin) {
-      if (
-        claims.role !== 'SuperAdmin' ||
-        !isSuperAdminEmail(claims.email)
-      ) {
-        return null;
-      }
+      const permitted = await verifyGlobalAdminSession({
+        email: claims.email, role: claims.role,
+        globalAdminId: claims.globalAdminId,
+        globalAdminVersion: claims.globalAdminVersion,
+      });
+      if (!permitted) return null;
 
       return {
         email: claims.email,
@@ -218,7 +222,7 @@ export async function getAuthenticatedEntityAdmin():
 
     if (
       claims.role !== 'admin' ||
-      isSuperAdminEmail(claims.email) ||
+      (await isReservedGlobalAdminEmail(claims.email)) ||
       !claims.tenantUserId ||
       !claims.organizationId
     ) {

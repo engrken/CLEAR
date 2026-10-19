@@ -4,7 +4,7 @@ import 'server-only';
 import crypto from 'node:crypto';
 import { prisma } from '@/lib/prisma';
 import { sendEmail } from '@/lib/mailer';
-import { isSuperAdminEmail } from '@/lib/super-admin';
+import { findEligibleGlobalAdmin, isSuperAdminEmail, type GlobalIdentity } from '@/lib/super-admin';
 
 const TTL_MS = 5 * 60 * 1000;
 const MAX_GUESSES = 5;                       // wrong codes allowed per cycle
@@ -37,7 +37,7 @@ function safeEqual(a: string, b: string) {
 export async function issueSuperAdminOtp(email: string) {
   const generic = { success: true as const, message: SENT_MESSAGE };
   const e = norm(email);
-  if (!isSuperAdminEmail(e)) return generic;           // same answer, nothing is sent
+  if (!(await findEligibleGlobalAdmin(e))) return generic;           // same answer, nothing is sent
 
   const now = new Date();
 
@@ -104,9 +104,9 @@ export async function issueSuperAdminOtp(email: string) {
 export async function verifySuperAdminOtp(
   email: string,
   code: string
-): Promise<{ ok: true } | { ok: false; message: string }> {
+): Promise<{ ok: true; identity: GlobalIdentity } | { ok: false; message: string }> {
   const e = norm(email);
-  if (!isSuperAdminEmail(e)) return { ok: false, message: FAIL };
+  if (!(await findEligibleGlobalAdmin(e))) return { ok: false, message: FAIL };
 
   const now = new Date();
   const key = guessKey(e);
@@ -153,15 +153,43 @@ export async function verifySuperAdminOtp(
     return { ok: false, message: FAIL };
   }
 
-  // Single use, even if two correct submissions race.
-  const consumed = await prisma.verificationToken.deleteMany({
-    where: { identifier: e, token: tok.token },
-  });
-  if (consumed.count !== 1) return { ok: false, message: FAIL };
+  // The one-time token and membership activation are checked atomically.
+  // A disabled or revoked account cannot use an OTP issued before revocation.
+  const identity = await prisma.$transaction(async (tx): Promise<GlobalIdentity | null> => {
+    const consumed = await tx.verificationToken.deleteMany({
+      where: { identifier: e, token: tok.token, expires: { gt: now } },
+    });
+    if (consumed.count !== 1) return null;
 
+    if (isSuperAdminEmail(e)) return {
+      id: 'bootstrap', email: e, fullName: 'Primary Super Admin',
+      sessionVersion: 1, source: 'bootstrap',
+    };
+    const account = await tx.globalSuperAdmin.findUnique({ where: { email: e } });
+    if (!account) return null;
+    const where = account.status === 'Pending'
+      ? { id: account.id, status: 'Pending', invitationExpiresAt: { gt: now } }
+      : { id: account.id, status: 'Active' };
+    const activated = await tx.globalSuperAdmin.updateMany({
+      where,
+      data: {
+        status: 'Active',
+        ...(account.status === 'Pending' ? { activatedAt: now } : {}),
+        lastLoginAt: now,
+      },
+    });
+    if (activated.count !== 1) return null;
+    await tx.globalAdminAudit.create({
+      data: { actorEmail: e, targetEmail: e,
+        action: account.status === 'Pending' ? 'ACTIVATE_GLOBAL_ADMIN' : 'GLOBAL_ADMIN_SIGN_IN' },
+    });
+    return { id: account.id, email: e, fullName: account.fullName,
+      sessionVersion: account.sessionVersion, source: 'database' };
+  });
+  if (!identity) return { ok: false, message: FAIL };
   await prisma.authThrottle.updateMany({
     where: { key },
     data: { failedCount: 0, lockedUntil: null, updatedAt: now },
   });
-  return { ok: true };
+  return { ok: true, identity };
 }
