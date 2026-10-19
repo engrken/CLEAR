@@ -1,6 +1,7 @@
 // /app/department/[department]/(protected)/liquidations/LiquidationsForm.tsx
 
 "use client";
+import { manilaDateInput } from '@/lib/clear-timezone';
 import { clearAlert, clearConfirm, clearPrompt } from "@/lib/clear-dialogs";
 
 
@@ -49,7 +50,7 @@ export default function LiquidationsForm({
   isClosed?: boolean;
 }) {
   const router = useRouter();
-  const todayStr = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  const todayStr = manilaDateInput();
 
   const [date, setDate] = useState(todayStr);
   const [selectedCaRef, setSelectedCaRef] = useState(prefillCaId || "");

@@ -1,4 +1,5 @@
 "use client";
+import { formatManilaDate } from '@/lib/clear-timezone';
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
@@ -84,7 +85,7 @@ export default function ReceiptHistoryClient(p: Props) {
           <tbody>
             {!p.receipts.length && <tr><td colSpan={8} className="text-center text-muted py-4">No matching receipts.</td></tr>}
             {p.receipts.map(row => <tr key={row.orNumber}>
-              <td className="text-nowrap">{new Date(row.date).toLocaleDateString("en-PH")}</td>
+              <td className="text-nowrap">{formatManilaDate(row.date)}</td>
               <td className="fw-semibold">{row.orNumber}</td>
               <td><div>{row.studentName}</div><span className="text-muted">{row.studentNumber}</span></td>
               <td>{row.term}<div className="text-muted">{row.academicYear}</div></td>

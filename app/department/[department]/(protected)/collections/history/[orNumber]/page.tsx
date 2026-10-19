@@ -1,3 +1,4 @@
+import { manilaDateInput } from '@/lib/clear-timezone';
 import Link from "next/link";
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
@@ -52,7 +53,7 @@ export default async function PrintCollectionsReceipt({ params }: {
       </header>
       <div className="row mb-3 g-2">
         <div className="col-6"><strong>OR:</strong> {orNumber}</div>
-        <div className="col-6 text-end"><strong>Date:</strong> {first.date.toISOString().slice(0,10)}</div>
+        <div className="col-6 text-end"><strong>Date:</strong> {manilaDateInput(first.date)}</div>
         <div className="col-12"><strong>Student:</strong> {first.studentName}</div>
         <div className="col-12"><strong>Academic period:</strong> {first.academicYear} — {first.term}</div>
         <div className="col-12"><strong>Processed by:</strong> {first.encodedBy || "CLEAR Officer"}</div>

@@ -1,4 +1,5 @@
 "use server";
+import { parseClearAccountingDate } from '@/lib/clear-timezone';
 
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -38,13 +39,8 @@ const isOpenAdvance = (status: unknown): boolean => {
 };
 
 function dateOnly(value: unknown): Date {
-  const str = clean(value);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(str)) throw new Error("Use YYYY-MM-DD for audit date.");
-  const date = new Date(`${str}T12:00:00.000Z`);
-  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== str) {
-    throw new Error("Invalid audit date.");
-  }
-  return date;
+  try { return parseClearAccountingDate(clean(value)); }
+  catch { throw new Error("Invalid audit date. Use YYYY-MM-DD."); }
 }
 
 const PROOF_FORMAT = /^data:(image\/(?:png|jpeg|webp)|application\/pdf);base64,([A-Za-z0-9+/]+={0,2})$/;

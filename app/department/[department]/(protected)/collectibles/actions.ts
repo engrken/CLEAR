@@ -1,5 +1,6 @@
 // app/department/[department]/(protected)/collectibles/actions.ts
 "use server";
+import { isValidClearAccountingDate } from "@/lib/clear-timezone";
 
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -58,8 +59,7 @@ export async function assessStudentDue(department: string, data: {
   const studentId = required(data.studentId, "Student ID");
   const feeId = required(data.feeId, "Configured fee");
   const inputDate = required(data.date, "Assessment date");
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(inputDate) ||
-    !Number.isFinite(new Date(`${inputDate}T00:00:00Z`).getTime())) {
+  if (!isValidClearAccountingDate(inputDate)) {
     throw new Error("Enter a valid assessment date.");
   }
 

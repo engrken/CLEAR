@@ -1,4 +1,5 @@
 "use server";
+import { isValidClearAccountingDate, parseClearAccountingDate } from "@/lib/clear-timezone";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireTabAccess } from "@/lib/permissions";
@@ -35,7 +36,7 @@ export async function recordHistoricalArrearPayment(department: string, data: Ar
   if (!/^[A-Z0-9][A-Z0-9-]{2,50}$/.test(orNumber)) throw new Error("Enter a valid new official receipt number.");
   const amountCents = cents(data.amount);
   const dt = String(data.paymentDate || "");
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dt) || new Date(`${dt}T12:00:00.000Z`).toISOString().slice(0, 10) !== dt) {
+  if (!isValidClearAccountingDate(dt)) {
     throw new Error("Enter a valid payment date.");
   }
   if (data.obligationType !== "penalty" && data.obligationType !== "collectible") throw new Error("Invalid obligation type.");
@@ -95,7 +96,7 @@ export async function recordHistoricalArrearPayment(department: string, data: Ar
           if (updated.count !== 1) throw new Error("Collectible changed while posting.");
         }
         const receipt = await tx.collection.create({ data: { organizationId: org.id,
-          academicYear: data.ay, term: data.term, date: new Date(`${dt}T12:00:00.000Z`),
+          academicYear: data.ay, term: data.term, date: parseClearAccountingDate(dt),
           studentId: student.id, studentName: student.fullName,
           orNumber, category: due.category,
           itemDescription: `Historical ${due.obligationType === "penalty" ? "Penalty" : "Collectible"} [${due.obligationId}]: ${due.itemDescription} (${due.originTerm}, ${due.originAY})`,

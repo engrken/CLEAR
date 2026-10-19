@@ -1,4 +1,5 @@
 "use server";
+import { parseClearAccountingDate } from '@/lib/clear-timezone';
 
 import { Prisma } from "@prisma/client";
 import { randomBytes } from "node:crypto";
@@ -17,13 +18,8 @@ function actorName(user: any): string {
 }
 
 function parseDate(value: unknown): Date {
-  const raw = clean(value);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) throw new Error("Please provide a valid transaction date.");
-  const date = new Date(raw + "T12:00:00.000Z");
-  if (Number.isNaN(date.valueOf()) || date.toISOString().slice(0, 10) !== raw) {
-    throw new Error("Invalid transaction date.");
-  }
-  return date;
+  try { return parseClearAccountingDate(clean(value)); }
+  catch { throw new Error("Invalid transaction date. Use YYYY-MM-DD."); }
 }
 
 function refresh(department: string): void {

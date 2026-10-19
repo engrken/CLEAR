@@ -2,6 +2,7 @@
 
 
 "use client";
+import { manilaDateInput } from '@/lib/clear-timezone';
 import { clearAlert, clearConfirm, clearPrompt } from "@/lib/clear-dialogs";
 
 
@@ -47,7 +48,7 @@ export default function LogsClient({
       return void clearAlert("No audit logs available to export.");
     }
 
-    let csv = `Timestamp,User,Action,Details\n`;
+    let csv = `Timestamp (PHT),User,Action,Details\n`;
     logs.forEach(log => {
       // Escape double quotes to prevent CSV formatting issues
       const cleanDetails = String(log.details || "").replace(/"/g, '""');
@@ -60,7 +61,7 @@ export default function LogsClient({
     const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `CLEAR_Audit_Logs_${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = `CLEAR_Audit_Logs_${manilaDateInput()}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

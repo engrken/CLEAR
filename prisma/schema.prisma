@@ -15,8 +15,8 @@ model Organization {
   schoolGroup                 String                       @default("default-school")
   tier                        String                       @default("Freemium")
   status                      String                       @default("Active")
-  createdAt                   DateTime                     @default(now())
-  updatedAt                   DateTime                     @default(now()) @updatedAt
+  createdAt                   DateTime                     @default(now()) @db.Timestamptz(3)
+  updatedAt                   DateTime                     @default(now()) @updatedAt @db.Timestamptz(3)
   activeAy                    String                       @default("A.Y. 2026 - 2027")
   activeTerm                  String                       @default("1st Sem")
   type                        String                       @default("Department")
@@ -84,7 +84,7 @@ model Enrollment {
   academicYear     String       @default("A.Y. 2026 - 2027")
   term             String       @default("1st Sem")
   enrollmentStatus String       @default("Enrolled")
-  lastUpdated      DateTime     @default(now())
+  lastUpdated      DateTime     @default(now()) @db.Timestamptz(3)
   updatedBy        String?
   organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   student          Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
@@ -109,7 +109,7 @@ model Collection {
   penaltySettlementEvents PenaltySettlementEvent[]
   id                      String                   @id @default(uuid())
   organizationId          String
-  timestamp               DateTime                 @default(now())
+  timestamp               DateTime                 @default(now()) @db.Timestamptz(3)
   academicYear            String                   @default("A.Y. 2026 - 2027")
   term                    String                   @default("1st Sem")
   date                    DateTime                 @default(now())
@@ -142,7 +142,7 @@ model CollectionSetup {
   targetFund     String
   academicYear   String
   term           String
-  createdAt      DateTime     @default(now())
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
   isPackage      Boolean      @default(true)
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
@@ -237,7 +237,7 @@ model OnlineRemittance {
   id              String       @id @default(uuid())
   organizationId  String
   submissionId    String       @unique
-  timestamp       DateTime     @default(now())
+  timestamp       DateTime     @default(now()) @db.Timestamptz(3)
   academicYear    String       @default("A.Y. 2026 - 2027")
   term            String       @default("1st Sem")
   studentId       String?
@@ -260,7 +260,7 @@ model OnlineRemittance {
 model FundTransfer {
   id              String       @id @default(uuid())
   organizationId  String
-  timestamp       DateTime     @default(now())
+  timestamp       DateTime     @default(now()) @db.Timestamptz(3)
   academicYear    String       @default("A.Y. 2026 - 2027")
   term            String       @default("1st Sem")
   sourceFund      String
@@ -274,7 +274,7 @@ model FundTransfer {
 model SystemLog {
   id             String       @id @default(cuid())
   organizationId String
-  timestamp      DateTime     @default(now())
+  timestamp      DateTime     @default(now()) @db.Timestamptz(3)
   user           String
   action         String
   details        String?
@@ -294,11 +294,11 @@ model TenantUser {
   allowedTabs        String
   status             String
   otpCode            String?
-  otpExpires         DateTime?
+  otpExpires         DateTime? @db.Timestamptz(3)
   otpAttempts        Int             @default(0)
   otpRequestCount    Int             @default(0)
-  otpLastRequestedAt DateTime?
-  updatedAt          DateTime        @updatedAt
+  otpLastRequestedAt DateTime? @db.Timestamptz(3)
+  updatedAt          DateTime        @updatedAt @db.Timestamptz(3)
   MobileSession      MobileSession[]
   organization       Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
@@ -310,7 +310,7 @@ model TenantUser {
 model VerificationToken {
   identifier String   @id
   token      String
-  expires    DateTime
+  expires    DateTime @db.Timestamptz(3)
 }
 
 model VoidTransaction {
@@ -321,7 +321,7 @@ model VoidTransaction {
   amount          Float
   reason          String
   voidedBy        String
-  date            DateTime     @default(now())
+  date            DateTime     @default(now()) @db.Timestamptz(3)
   organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
 
@@ -351,7 +351,7 @@ model CashierRemittance {
   remarks          String?
   status           String       @default("Remitted")
   encodedBy        String
-  createdAt        DateTime     @default(now())
+  createdAt        DateTime     @default(now()) @db.Timestamptz(3)
   type             String       @default("Deposit")
   organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
@@ -359,9 +359,9 @@ model CashierRemittance {
 model AuthThrottle {
   key         String    @id
   failedCount Int       @default(0)
-  lockedUntil DateTime?
-  lastSentAt  DateTime?
-  updatedAt   DateTime
+  lockedUntil DateTime? @db.Timestamptz(3)
+  lastSentAt  DateTime? @db.Timestamptz(3)
+  updatedAt   DateTime @db.Timestamptz(3)
 }
 
 model MobileSession {
@@ -369,10 +369,10 @@ model MobileSession {
   tokenHash      String       @unique
   tenantUserId   String
   organizationId String
-  createdAt      DateTime     @default(now())
-  expiresAt      DateTime
-  lastUsedAt     DateTime     @default(now())
-  revokedAt      DateTime?
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  expiresAt      DateTime @db.Timestamptz(3)
+  lastUsedAt     DateTime     @default(now()) @db.Timestamptz(3)
+  revokedAt      DateTime? @db.Timestamptz(3)
   userAgent      String?
   Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   TenantUser     TenantUser   @relation(fields: [tenantUserId], references: [id], onDelete: Cascade)
@@ -388,8 +388,8 @@ model AcademicPeriodConfig {
   academicYear   String
   mode           String       @default("Semester")
   includeSummer  Boolean      @default(true)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime     @updatedAt @db.Timestamptz(3)
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, academicYear])
@@ -409,9 +409,9 @@ model AcademicPeriodTransition {
   copiedFeesJson  String       @default("[]")
   reason          String
   closedBy        String
-  closedAt        DateTime     @default(now())
+  closedAt        DateTime     @default(now()) @db.Timestamptz(3)
   status          String       @default("Closed")
-  reopenedAt      DateTime?
+  reopenedAt      DateTime? @db.Timestamptz(3)
   organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, sourceAY, sourceTerm])
@@ -429,7 +429,7 @@ model ArrearPaymentLink {
   originAY       String
   originTerm     String
   amount         Float
-  createdAt      DateTime     @default(now())
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   receipt        Collection   @relation(fields: [receiptId], references: [id], onDelete: Restrict)
 
@@ -450,7 +450,7 @@ model PenaltySettlementEvent {
   balanceAfter    Float
   recordedBy      String
   note            String?
-  createdAt       DateTime     @default(now())
+  createdAt       DateTime     @default(now()) @db.Timestamptz(3)
   organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   penalty         Penalty      @relation(fields: [penaltyRecordId], references: [id], onDelete: Restrict)
   receipt         Collection?  @relation(fields: [receiptId], references: [id], onDelete: Restrict)
@@ -471,11 +471,11 @@ model DigitalReceiptDelivery {
   html           String       @db.Text
   status         String       @default("Pending")
   attempts       Int          @default(0)
-  nextAttemptAt  DateTime     @default(now())
+  nextAttemptAt  DateTime     @default(now()) @db.Timestamptz(3)
   lastError      String?
-  sentAt         DateTime?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  sentAt         DateTime? @db.Timestamptz(3)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime     @updatedAt @db.Timestamptz(3)
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, eventKey, recipientEmail], map: "DRD_unique_delivery")
@@ -489,8 +489,8 @@ model TransactionEmailPreference {
   email                    String
   receiveParticipantEmails Boolean      @default(true)
   receiveOfficerCopies     Boolean      @default(true)
-  createdAt                DateTime     @default(now())
-  updatedAt                DateTime     @updatedAt
+  createdAt                DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt                DateTime     @updatedAt @db.Timestamptz(3)
   organization             Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, email], map: "TEP_org_email_unique")

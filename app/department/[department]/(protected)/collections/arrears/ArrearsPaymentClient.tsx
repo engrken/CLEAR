@@ -1,4 +1,5 @@
 "use client";
+import { manilaDateInput } from '@/lib/clear-timezone';
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { recordHistoricalArrearPayment } from "./actions";
@@ -11,7 +12,7 @@ export default function ArrearsPaymentClient({ department, ay, term, studentId, 
   const [selected, setSelected] = useState(debts[0]?.obligationId || "");
   const [orNumber, setOrNumber] = useState("");
   const [amount, setAmount] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(manilaDateInput());
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const item = debts.find(d => d.obligationId === selected);

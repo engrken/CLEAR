@@ -1,3 +1,4 @@
+import { formatManilaShortDate } from '@/lib/clear-timezone';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireTabAccess } from '@/lib/permissions';
@@ -30,7 +31,7 @@ function positiveInt(value: unknown, fallback: number): number {
 
 function dateLabel(value: Date | null | undefined): string {
   if (!value) return '—';
-  return value.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  return formatManilaShortDate(value);
 }
 
 export default async function VoidTransactionsPage({ params, searchParams }: {
