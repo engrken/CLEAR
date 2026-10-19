@@ -12,6 +12,7 @@ on:
       - 'lib/demo-reviewer.ts'
       - 'mobile/**'
       - 'tests/mobile-api/**'
+      - 'tests/financial-engine-parity.test.mjs'
       - 'prisma/**'
       - 'package*.json'
       - '.npmrc'
@@ -57,6 +58,8 @@ jobs:
           cache: npm
       - name: Install reproducible dependencies
         run: npm ci
+      - name: Guard financial math parity with current web engine
+        run: node --test tests/financial-engine-parity.test.mjs
       - name: Provision disposable PostgreSQL schema
         run: npx prisma db push --skip-generate
       - name: Write local-only test settings
