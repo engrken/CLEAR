@@ -597,7 +597,7 @@ export default function ReportsClient({
         }
       `}} />
 
-      <div className="print-container">
+      <div data-clear-pdf-detailed="true" className="print-container">
         {/* PRINT HEADER: use the Organization's saved report settings, not hard-coded institution details */}
         <div className="d-none d-print-flex justify-content-between align-items-center mb-3 pb-2 border-bottom border-dark border-opacity-50">
           <div style={{ width: '90px', minWidth: '90px', flexShrink: 0 }} className="text-center">
@@ -633,7 +633,7 @@ export default function ReportsClient({
             <button className="btn btn-outline-secondary btn-sm fw-bold" onClick={() => window.print()}>
               <i className="bi bi-printer me-1"></i>Print Report
             </button>
-            <SavePdfButton className="btn btn-outline-danger btn-sm fw-bold ms-2" />
+            <SavePdfButton targetSelector="[data-clear-pdf-detailed]" fileName={`CLEAR_Detailed_${department}_${ay}_${term}_${reportCategory}`} className="btn btn-outline-danger btn-sm fw-bold ms-2" />
           </div>
             <div className="btn-group btn-group-sm border border-secondary rounded">
               <button className={`btn ${viewMode === 'Table' ? 'btn-info text-dark fw-bold' : 'btn-outline-secondary'}`} onClick={() => setViewMode('Table')}>
