@@ -41,9 +41,9 @@ export function ClearanceCard({ studentName, studentId, status, outstanding = nu
         <IconWell icon="checkLg" bg={c.inkBlock} fg={c.mint} size={64} round />
         <View style={{ gap: 6 }}>
           <Text variant="display" accessibilityRole="header" style={{ fontSize: 40, lineHeight: 42 }}>
-            {`You're cleared, ${studentName}!`}
+            {studentName ? `You\'re cleared, ${studentName}!` : "You\'re cleared!"}
           </Text>
-          <Text variant="bodyStrong" color="mintInk" style={{ fontSize: 15 }}>{studentId}</Text>
+          {studentId ? <Text variant="bodyStrong" color="mintInk" style={{ fontSize: 15 }}>{studentId}</Text> : null}
         </View>
         <View style={styles.inset}>
           <View style={[styles.qr, { backgroundColor: c.qrGround }]} accessible accessibilityRole="image" accessibilityLabel="Clearance QR code">
@@ -62,8 +62,8 @@ export function ClearanceCard({ studentName, studentId, status, outstanding = nu
   return (
     <ResultBlock tone="coral" label="Clearance result: on hold">
       <IconWell icon="exclaim" bg={c.inkBlock} fg={c.coral} size={64} round />
-      <Text variant="display" accessibilityRole="header">{`Almost there, ${studentName}`}</Text>
-      <Text variant="bodyStrong" color="coralInk" style={{ fontSize: 15 }}>{`${studentId} · On hold`}</Text>
+      <Text variant="display" accessibilityRole="header">{studentName ? `Almost there, ${studentName}` : "Clearance on hold"}</Text>
+      <Text variant="bodyStrong" color="coralInk" style={{ fontSize: 15 }}>{studentId ? `${studentId} · On hold` : "On hold"}</Text>
       {outstanding === null ? (
         <Text variant="body" color="coralDeep">
           {"You still have dues to settle. Ask your treasurer for the amount, or send a GCash or Maya receipt if you've already paid."}
