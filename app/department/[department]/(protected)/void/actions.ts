@@ -1,8 +1,8 @@
 // app/department/[department]/(protected)/void/actions.ts
 "use server";
 
-import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { withFinancialTransaction } from "@/lib/financial-transaction";
 import { revalidatePath } from "next/cache";
 import { requireTabAccess, requireOrgAdmin } from "@/lib/permissions";
 import { getPeriodLedger } from "../realign/ledger";
@@ -30,23 +30,6 @@ function money(value: unknown): number {
   const amount = Number(value);
   if (!Number.isFinite(amount)) throw new Error("An invalid monetary amount was encountered.");
   return Math.round(amount * 100) / 100;
-}
-
-async function inTransaction<T>(
-  work: (tx: Prisma.TransactionClient) => Promise<T>
-): Promise<T> {
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      return await prisma.$transaction(work, {
-        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-        timeout: 20000,
-      });
-    } catch (error: unknown) {
-      if ((error as { code?: string })?.code === "P2034" && attempt < 2) continue;
-      throw error;
-    }
-  }
-  throw new Error("Concurrent transaction conflict. Please retry.");
 }
 
 /** Restore linked standalone assessments when a receipt is reversed.
@@ -181,7 +164,7 @@ export async function executeVoidTransaction(formData: {
 
   // All status mutations and audit entries are atomic. This also prevents
   // accepting a second void of the same record in concurrent requests.
-  const result = await inTransaction(async (tx) => {
+  const result = await withFinancialTransaction(async (tx) => {
     let affectedRecordIds: string[] = [];
     let amount = 0;
     let ay = "";
