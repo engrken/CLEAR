@@ -1,0 +1,160 @@
+name: CLEAR Manila time checks
+
+on:
+  push:
+    branches:
+      - 'feature/manila-time-standardization-*'
+  pull_request:
+    paths:
+      - 'lib/clear-timezone.ts'
+      - 'tests/clear-timezone.test.mjs'
+      - 'app/**'
+      - 'prisma/schema.prisma'
+      - 'package.json'
+      - '.github/workflows/manila-time-checks.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  types-and-time:
+    name: Types and Manila timezone tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: postgresql://clear_ci:clear_ci@127.0.0.1:5432/clear_ci?schema=public
+      AUTH_SECRET: clear-ci-only-not-used-in-production
+      SUPER_ADMIN_EMAIL: test-admin@example.invalid
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Validate Prisma schema
+        run: npx prisma validate
+      - name: Run timezone regression tests
+        run: npm run test:time
+      - name: Receipt branding regression tests
+        run: node --experimental-strip-types --test tests/receipt-branding.test.mjs
+      - name: Global administrator promotion regression tests
+        run: node --experimental-strip-types --test tests/global-admin-promotion.test.mjs
+      - name: TypeScript check
+        run: npx tsc --noEmit
+      - name: TZ independence — Honolulu
+        run: TZ=Pacific/Honolulu npm run test:time
+      - name: TZ independence — Berlin
+        run: TZ=Europe/Berlin npm run test:time
+
+  integration-build:
+    name: Next.js build against isolated PostgreSQL
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: clear_ci
+          POSTGRES_USER: clear_ci
+          POSTGRES_PASSWORD: clear_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U clear_ci -d clear_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://clear_ci:clear_ci@127.0.0.1:5432/clear_ci?schema=public
+      AUTH_SECRET: clear-ci-only-not-used-in-production
+      NEXTAUTH_SECRET: clear-ci-only-not-used-in-production
+      SUPER_ADMIN_EMAIL: test-admin@example.invalid
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Create a temporary test schema
+        run: npx prisma db push --skip-generate
+      - name: Next.js production build (test database only)
+        run: npm run build
+
+  migration-rehearsal:
+    name: Future-only migration and new event time
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: clear_ci
+          POSTGRES_USER: clear_ci
+          POSTGRES_PASSWORD: clear_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U clear_ci -d clear_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://clear_ci:clear_ci@127.0.0.1:5432/clear_ci?schema=public
+      PSQL_URL: postgresql://clear_ci:clear_ci@127.0.0.1:5432/clear_ci
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Recreate legacy date columns in isolated PostgreSQL
+        run: |
+          # Production main uses timestamptz; recreate a legacy fixture solely in CI.
+           cp prisma/schema.prisma prisma/schema.legacy.ci.prisma
+           sed -i 's/ @db.Timestamptz(3)//g' prisma/schema.legacy.ci.prisma
+          npx prisma db push --schema prisma/schema.legacy.ci.prisma --skip-generate
+      - name: Insert an unambiguous UTC fixture into the legacy SystemLog
+        run: |
+          psql "$PSQL_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO "Organization" ("id","subdomain","name","createdAt","updatedAt")
+          VALUES ('ci-mnl-org','ci-mnl','Migration Test','2026-10-18 16:15:00','2026-10-18 16:15:00');
+          INSERT INTO "SystemLog" ("id","organizationId","timestamp","user","action")
+          VALUES ('ci-mnl-log','ci-mnl-org','2026-10-18 16:15:00','CI','MIGRATION_TEST');
+          INSERT INTO "Penalty" ("id", "organizationId", "penaltyId", "studentName", "activity", "date")
+          VALUES ('ci-mnl-penalty', 'ci-mnl-org', 'CI-MNL-PENALTY', 'CI Student', 'CI Assessment', '2026-10-19 12:00:00');
+          SQL
+      - name: Apply future-only TEST-history waiver migration in same SQL session
+        run: |
+          psql "$PSQL_URL" -v ON_ERROR_STOP=1 \
+            -c "SELECT set_config('clear.future_only_test_history_waiver','ACCEPT_INACCURATE_LEGACY_TEST_TIMES',false)" \
+            -f scripts/sql/manila-future-only-event-time-migration.sql
+      - name: Prove the original instant and Philippine display were preserved
+        run: |
+          actual="$(psql "$PSQL_URL" -At -v ON_ERROR_STOP=1 -c "SELECT to_char(\"timestamp\" AT TIME ZONE 'Asia/Manila','YYYY-MM-DD HH24:MI:SS') FROM \"SystemLog\" WHERE \"id\"='ci-mnl-log'")"
+          test "$actual" = '2026-10-19 00:15:00'
+          penalty_date="$(psql "$PSQL_URL" -At -v ON_ERROR_STOP=1 -c "SELECT to_char(\"date\",'YYYY-MM-DD HH24:MI:SS') FROM \"Penalty\" WHERE \"id\"='ci-mnl-penalty'")"
+          test "$penalty_date" = '2026-10-19 12:00:00'
+          penalty_type="$(psql "$PSQL_URL" -At -v ON_ERROR_STOP=1 -c "SELECT data_type FROM information_schema.columns WHERE table_schema='public' AND table_name='Penalty' AND column_name='date'")"
+          test "$penalty_type" = 'timestamp without time zone'
+          npx prisma db push --skip-generate
+      - name: Verify new audit timestamps use real UTC instants
+        run: |
+          psql "$PSQL_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO "SystemLog" ("id","organizationId","user","action")
+          VALUES ('ci-future-only-new-event', 'ci-mnl-org', 'CI', 'FUTURE_ONLY_NEW_EVENT');
+          DO $$
+          DECLARE d double precision;
+          BEGIN
+            SELECT abs(extract(epoch FROM ("timestamp" - current_timestamp))) INTO d
+            FROM "SystemLog" WHERE id='ci-future-only-new-event';
+            IF d IS NULL OR d > 60 THEN
+              RAISE EXCEPTION 'New SystemLog timestamp did not use the actual insert instant (delta=%)', d;
+            END IF;
+          END $$;
+          SQL

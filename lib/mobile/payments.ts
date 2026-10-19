@@ -23,6 +23,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { ApiFailure } from '@/lib/mobile/http';
 import { toCentavos } from '@/lib/mobile/serialize';
+import { manilaDateInput, parseClearAccountingDate } from '@/lib/clear-timezone';
 import { assertAcademicPeriod } from '@/lib/academic-period-guard';
 import { enqueuePaymentReceipt, scheduleDigitalReceiptDispatch } from '@/lib/digital-receipts';
 import { PENALTY_FUND_NAME } from '@/lib/penalty-fund';
@@ -131,10 +132,9 @@ export async function suggestNextOr(org: Pick<Organization, 'id' | 'activeAy'>) 
 
 // ---------------------------------------------------------------- Record payment
 
-/** Today's calendar date in Asia/Manila (UTC+8, no DST) stored at 12:00 UTC, like Ken's dateOnly(). */
+/** Today's accounting date in Asia/Manila, stored exactly as Ken's dateOnly() does (lib/clear-timezone.ts). */
 export function manilaPaymentDate(now = new Date()) {
-  const ymd = new Date(now.getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  return new Date(`${ymd}T12:00:00.000Z`);
+  return parseClearAccountingDate(manilaDateInput(now));
 }
 
 export type MobilePaymentInput = {

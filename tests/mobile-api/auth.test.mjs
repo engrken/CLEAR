@@ -69,6 +69,24 @@ describe('POST /orgs/:org/auth/request-code', () => {
     }
   });
 
+  it("a global admin email (Ken's GlobalSuperAdmin registry) never gets a department code", async () => {
+    const user = await officerRow('devdept', 'auditor');
+    await clearThrottle('devdept', user.email);
+    const admin = await prisma.globalSuperAdmin.create({ data: {
+      id: `gsa-test-${Date.now()}`, email: user.email, fullName: 'Test Global Admin', status: 'Active',
+      invitedBy: 'auth.test', invitationExpiresAt: new Date(Date.now() + 86400000), activatedAt: new Date(),
+    } });
+    try {
+      expectGenericSent(await requestCode('devdept', user.email), user.email);
+      assert.equal(await storedCode('devdept', user.email), null, 'reserved emails get no tenant code');
+      await setKnownCode('devdept', user.email);
+      expectError(await verifyCode('devdept', user.email, KNOWN_CODE), 400, 'invalid_code');
+    } finally {
+      await prisma.globalSuperAdmin.delete({ where: { id: admin.id } });
+      await clearThrottle('devdept', user.email);
+    }
+  });
+
   it('missing email → 400 invalid', async () => {
     expectError(await api('POST', '/orgs/devdept/auth/request-code', { json: {} }), 400, 'invalid');
   });

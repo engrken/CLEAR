@@ -15,7 +15,7 @@ import crypto from 'node:crypto';
 import type { Organization, TenantUser } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { issueDepartmentOtp, verifyDepartmentOtp } from '@/lib/department-otp';
-import { isSuperAdminEmail } from '@/lib/super-admin';
+import { isReservedGlobalAdminEmail } from '@/lib/super-admin';
 import { demoReviewerCode } from '@/lib/demo-reviewer';
 import { ApiFailure } from '@/lib/mobile/http';
 
@@ -47,9 +47,10 @@ async function issueDemoReviewerCode(org: Pick<Organization, 'id'>, email: strin
 export async function requestMobileCode(org: Pick<Organization, 'id' | 'subdomain'>, rawEmail: string) {
   const email = String(rawEmail || '').trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new ApiFailure(400, 'invalid', 'Enter a valid email address.');
-  // The platform super admin signs in on the web only.
+  // Global admin emails (SUPER_ADMIN_EMAIL and the GlobalSuperAdmin registry) are reserved by
+  // lib/department-otp.ts: they never get department codes, so the app sends nothing for them.
   const reply = { message: GENERIC_SENT, sentTo: email };
-  if (isSuperAdminEmail(email)) return reply;
+  if (await isReservedGlobalAdminEmail(email)) return reply;
 
   const demoCode = demoReviewerCode(org.subdomain, email);
   if (demoCode) {
@@ -67,7 +68,7 @@ export async function requestMobileCode(org: Pick<Organization, 'id' | 'subdomai
 /** Checks a code; returns the officer, or throws a generic 400. */
 export async function verifyMobileCode(org: Pick<Organization, 'subdomain'>, rawEmail: string, code: string): Promise<TenantUser> {
   const email = String(rawEmail || '').trim().toLowerCase();
-  if (isSuperAdminEmail(email)) throw new ApiFailure(400, 'invalid_code', 'Invalid or expired verification code.');
+  if (await isReservedGlobalAdminEmail(email)) throw new ApiFailure(400, 'invalid_code', 'Invalid or expired verification code.');
   const result = await verifyDepartmentOtp(org.subdomain, email, code);
   if (!result.ok) throw new ApiFailure(400, 'invalid_code', result.message);
   return result.user;

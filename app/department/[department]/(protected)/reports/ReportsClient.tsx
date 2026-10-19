@@ -1,6 +1,7 @@
 // /app/department/[department]/(protected)/reports/ReportsClient.tsx
 
 "use client";
+import { manilaDateInput } from "@/lib/clear-timezone";
 import { clearAlert, clearConfirm, clearPrompt } from "@/lib/clear-dialogs";
 
 
@@ -496,7 +497,7 @@ export default function ReportsClient({
       csv = `Date,Audit ID,CA Reference,Officer / Requestor,Fund Source,Budget (CA),Liquidated Exp.,Cash Return (Surplus),Reimburse Due\n`;
       validLiquidations.forEach((l: any) => {
         const budget = (Number(l.totalExpense)||0) + (Number(l.varianceReturn)||0) - (Number(l.reimbursementDue)||0);
-        const rawDate = l.date ? String(l.date).split('T')[0] : '—';
+        const rawDate = l.date ? manilaDateInput(l.date) : '—';
         csv += `"${rawDate}","${l.auditId}","${l.referenceCaId || l.advanceId || ''}","${l.requestor}","${l.fundSource}",${budget},${l.totalExpense},${l.varianceReturn||0},${l.reimbursementDue||0}\n`;
       });
     } else if (isPenaltyReport) {
@@ -842,7 +843,7 @@ export default function ReportsClient({
 
                       return (
                         <tr key={`${l.id}-${idx}`}>
-                          <td className="text-muted small">{l.date ? String(l.date).split('T')[0] : '—'}</td>
+                          <td className="text-muted small">{l.date ? manilaDateInput(l.date) : '—'}</td>
                           <td><strong>{l.auditId}</strong></td>
                           <td><span className="text-info">{l.referenceCaId || l.advanceId || '—'}</span></td>
                           <td>{l.requestor || '—'}</td>

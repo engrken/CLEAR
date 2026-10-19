@@ -1,4 +1,5 @@
 "use server";
+import { manilaDateInput } from '@/lib/clear-timezone';
 
 import { prisma } from "@/lib/prisma";
 import { requireTabAccess } from "@/lib/permissions";
@@ -77,7 +78,7 @@ export async function resendCollectionsReceipt(
       participantEmail: studentEmail,
       participantRole: "Student",
       details: [
-        { label: "Original receipt date", value: rows[0].date.toISOString().slice(0, 10) },
+        { label: "Original receipt date", value: manilaDateInput(rows[0].date) },
         { label: "Receipt copy", value: "Reissued electronic copy of the ORIGINAL posted receipt; not a new payment." },
         { label: "Payment breakdown", value: rows.map(row =>
           `${row.category} / ${row.itemDescription}: PHP ${row.amountPaid.toFixed(2)} → ${row.fundAllocation}`).join(" | ") },

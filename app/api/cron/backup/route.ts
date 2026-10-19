@@ -1,3 +1,4 @@
+import { formatManilaDateTime24 } from '@/lib/clear-timezone';
 // /app/api/cron/backup/route.ts
 
 import { NextResponse } from 'next/server';
@@ -72,9 +73,11 @@ export async function GET(req: Request) {
         }),
       ]);
 
+      const exportedAtInstant = new Date();
       const backupPayload = {
         version: '1.0',
-        exportedAt: new Date().toISOString(),
+        exportedAt: exportedAtInstant.toISOString(),
+        exportedAtManila: formatManilaDateTime24(exportedAtInstant),
         organization: org,
         metrics: {
           studentsCount: students.length,

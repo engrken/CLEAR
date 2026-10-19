@@ -1,3 +1,5 @@
+import { formatManilaDateTime24, manilaDateInput } from '@/lib/clear-timezone';
+import { resolveReceiptBranding } from '@/lib/receipt-branding';
 import "server-only";
 import { after } from "next/server";
 import { Prisma } from "@prisma/client";
@@ -36,14 +38,17 @@ export async function enqueueAccountingNotice(tx: Tx, n: NoticeInput) {
     throw new Error("Invalid digital document attributes.");
   }
   const org = await tx.organization.findUnique({ where: { id: n.organizationId },
-    select: { name: true, reportSchoolName: true } });
+    select: { name: true, reportSchoolName: true, reportSchoolAddress: true } });
   if (!org) throw new Error("Receipt organization does not exist.");
-  const subject = `${n.documentType} ${n.referenceNo} — ${org.reportSchoolName || org.name}`;
+  const branding = resolveReceiptBranding(org);
+  const subject = `${n.documentType} ${n.referenceNo} — ${branding.schoolName}`;
   const common: Array<[string,string]> = [
+    ...(branding.configuredSchoolName ? [["School / Institution", branding.schoolName] as [string,string]] : []),
+    ["College / Department / Organization", branding.organizationName],
     ["Document", n.documentType], ["Reference", n.referenceNo],
     ["Academic year", n.academicYear], ["Period", n.term],
     [n.documentType === "Remittance Rejection Notice" ? "Submitted amount (not received)" : "Transaction amount", pesos(n.amount)], ["Processed by", n.officerName],
-    ["Issued at", new Date().toISOString()],
+    ["Issued at (PHT)", formatManilaDateTime24(new Date())],
     ...((n.details || []).map(x => [x.label, x.value] as [string,string])),
   ];
   const recipients = new Map<string, string[]>();
@@ -80,7 +85,9 @@ export async function enqueueAccountingNotice(tx: Tx, n: NoticeInput) {
       recipientRole: roles.join(" + "),
       subject,
       html: `<!doctype html><html><body style="font:14px Arial,sans-serif;color:#152334;max-width:680px;margin:auto;line-height:1.5">
-        <h2 style="color:#1268a5">${esc(org.reportSchoolName || org.name)}</h2>
+        <h2 style="color:#1268a5">${esc(branding.schoolName)}</h2>
+        ${branding.showOrganizationLine ? `<p style="font-weight:600;margin:0 0 4px"><strong>College / Department / Organization:</strong> ${esc(branding.organizationName)}</p>` : ""}
+        ${branding.schoolAddress ? `<p style="font-size:12px;color:#64748b;margin:0 0 12px">${esc(branding.schoolAddress)}</p>` : ""}
         <h3>${esc(n.documentType)}</h3>
         <p><b>Copy for:</b> ${esc(roles.join(" and "))}</p>
         ${n.participantName ? `<p><b>Student / Requestor:</b> ${esc(n.participantName)}</p>` : ""}
@@ -126,7 +133,7 @@ export async function enqueuePaymentReceipt(tx: Tx, args: {
     participantEmail: student?.email, participantRole: "Student",
     details: [
       ["Payment source", args.source || "COLLECTION"],
-      ["Payment date", rows[0].date.toISOString().slice(0, 10)],
+      ["Payment date", manilaDateInput(rows[0].date)],
       ["Payment breakdown", rows.map(r => `${r.category} / ${r.itemDescription}: ${pesos(r.amountPaid)} → ${r.fundAllocation}`).join(" | ")],
       ["Outstanding on receipt", pesos(rows.reduce((s,r) => s+r.balanceDue, 0))],
     ].map(([label,value]) => ({label, value})),

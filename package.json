@@ -10,7 +10,8 @@
     "postinstall": "prisma generate",
     "db:seed:dev": "node --env-file=.env prisma/seed-dev.js",
     "db:seed:demo": "node --env-file=.env prisma/seed-demo.js",
-    "test:api": "node --env-file=.env --experimental-strip-types --no-warnings=ExperimentalWarning --test --test-concurrency=1 tests/mobile-api/*.test.mjs"
+    "test:api": "node --env-file=.env --experimental-strip-types --no-warnings=ExperimentalWarning --test --test-concurrency=1 tests/mobile-api/*.test.mjs",
+    "test:time": "node --experimental-strip-types --test tests/clear-timezone.test.mjs"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.3",

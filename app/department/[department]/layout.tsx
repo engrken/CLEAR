@@ -4,7 +4,7 @@
 import type { ReactNode } from 'react';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
-import { isSuperAdminEmail } from '@/lib/super-admin';
+import { verifyGlobalAdminSession } from '@/lib/super-admin';
 
 import DepartmentSidebar from '@/app/department/[department]/Sidebar';
 import TopHeader from '@/app/department/[department]/TopHeader';
@@ -25,6 +25,8 @@ interface ExtendedUser {
   organizationId?: string | null;
   department?: string | null;
   allowedTabs?: string[];
+  globalAdminId?: string | null;
+  globalAdminVersion?: number | null;
 }
 
 export default async function ProtectedDepartmentLayout({
@@ -72,9 +74,18 @@ export default async function ProtectedDepartmentLayout({
     .trim()
     .toLowerCase();
 
-  // Determine global access only through the trusted server-side helper.
-  // A role string alone must not grant cross-tenant access.
-  const isSuperAdmin = isSuperAdminEmail(email);
+  // A tenant's outer layout must use the same database-verified global
+  // session identity as the protected server actions. The old email-only
+  // bootstrap check denied promoted/global administrators in the UI.
+  // Do not trust a SuperAdmin role or reserved email by itself: disabled,
+  // revoked or outdated sessions must fail closed.
+  const globalIdentity = await verifyGlobalAdminSession({
+    email,
+    role: authUser.role,
+    globalAdminId: authUser.globalAdminId,
+    globalAdminVersion: authUser.globalAdminVersion,
+  });
+  const isSuperAdmin = Boolean(globalIdentity);
 
   const allowedTabs = Array.isArray(authUser.allowedTabs)
     ? authUser.allowedTabs.filter(

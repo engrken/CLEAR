@@ -1,13 +1,13 @@
 // /app/department/[department]/(protected)/remittances/RemittanceVerificationQueue.tsx
 
 "use client";
+import { formatManilaDateTime24 } from '@/lib/clear-timezone';
 import { clearAlert, clearConfirm, clearPrompt } from "@/lib/clear-dialogs";
 
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { fmt } from "@/lib/utils";
-import { format } from "date-fns";
 import { ThemedAlert } from "@/lib/clear-dialogs";
 import { verifyOnlineRemittance, invalidateOnlineRemittance } from "./actions";
 import { executeVoidTransaction } from "../void/actions";
@@ -208,7 +208,7 @@ export default function RemittanceVerificationQueue({
             ) : (
               filteredRemittances.map(r => (
                 <tr key={r.id} className="border-bottom border-secondary">
-                  <td className="small text-muted">{format(new Date(r.timestamp), 'yyyy-MM-dd HH:mm')}</td>
+                  <td className="small text-muted">{formatManilaDateTime24(r.timestamp)}</td>
                   <td><strong className="fw-semibold">{r.studentName}</strong> <br /><small className="text-muted">({r.studentId})</small></td>
                   <td><span className="badge bg-body-secondary border border-secondary text-info">{r.paymentChannel}</span></td>
                   <td><strong className="font-monospace">{r.referenceNumber}</strong></td>

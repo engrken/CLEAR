@@ -2,7 +2,7 @@
 
 import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import { isSuperAdminEmail } from "@/lib/super-admin";
+import { isReservedGlobalAdminEmail } from "@/lib/super-admin";
 import { verifySuperAdminOtp } from "@/lib/super-admin-otp";
 import { verifyDepartmentOtp } from "@/lib/department-otp";
 
@@ -55,15 +55,17 @@ export const {
         // =====================================================
         // SUPER ADMIN (limits live in lib/super-admin-otp.ts)
         // =====================================================
-        if (isSuperAdminEmail(email)) {
+        if (await isReservedGlobalAdminEmail(email)) {
           const result = await verifySuperAdminOtp(email, code);
           if (!result.ok) throw new CustomAuthError(result.message);
 
           return {
-            id: "SuperAdmin",
-            name: "Super Admin",
-            email,
+            id: result.identity.id,
+            name: result.identity.fullName,
+            email: result.identity.email,
             role: "SuperAdmin",
+            globalAdminId: result.identity.id,
+            globalAdminVersion: result.identity.sessionVersion,
             organizationId: null,
             department: null,
             username: "SuperAdmin",
@@ -113,6 +115,8 @@ export const {
         token.department = authenticatedUser.department || null;
         token.username = authenticatedUser.username || null;
         token.allowedTabs = authenticatedUser.allowedTabs || [];
+        token.globalAdminId = authenticatedUser.globalAdminId || null;
+        token.globalAdminVersion = authenticatedUser.globalAdminVersion || null;
       }
       return token;
     },
@@ -125,6 +129,9 @@ export const {
         sessionUser.department = token.department || null;
         sessionUser.username = token.username || null;
         sessionUser.allowedTabs = token.allowedTabs || [];
+        sessionUser.globalAdminId = token.globalAdminId || null;
+        sessionUser.globalAdminVersion = token.globalAdminVersion || null;
+        sessionUser.id = String(token.sub || sessionUser.id || '');
       }
       return session;
     },
