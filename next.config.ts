@@ -1,10 +1,12 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  // Each report header logo is validated at <= 5 MiB; allow a form submission
-  // containing both images plus the school name/address to reach that validator.
-  serverActions: {
-    bodySizeLimit: '12mb',
+  experimental: {
+    // Default Server Action cap is 1 MiB. Report settings support two
+    // separately validated PNG/JPEG/WebP logos of up to 5 MiB each.
+    serverActions: {
+      bodySizeLimit: '12mb',
+    },
   },
 };
 
