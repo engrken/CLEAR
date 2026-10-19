@@ -12,6 +12,7 @@ import { fmt } from "@/lib/utils";
 import { saveReportSettings, saveSignatories } from "../../actions";
 import { executeVoidTransaction } from "../void/actions";
 import SavePdfButton from "../../components/SavePdfButton";
+import { prepareReportLogo } from "@/lib/report-logo.client";
 
 export default function LiquidationHistory({
   audits,
@@ -94,8 +95,8 @@ export default function LiquidationHistory({
       const formData = new FormData();
       formData.append("schoolName", schoolName.trim());
       formData.append("schoolAddress", schoolAddress.trim());
-      if (leftLogoFile) formData.append("leftLogo", leftLogoFile);
-      if (rightLogoFile) formData.append("rightLogo", rightLogoFile);
+      if (leftLogoFile) formData.append("leftLogo", await prepareReportLogo(leftLogoFile));
+      if (rightLogoFile) formData.append("rightLogo", await prepareReportLogo(rightLogoFile));
       await saveReportSettings(department, formData);
       await saveSignatories(orgId, department, signatories);
       setLeftLogoFile(null);
