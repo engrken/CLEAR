@@ -6,7 +6,7 @@ import { requireTabAccess } from "@/lib/permissions";
 import { enqueuePaymentReceipt, scheduleDigitalReceiptDispatch } from "@/lib/digital-receipts";
 import { revalidatePath } from "next/cache";
 import { withFinancialTransaction } from "@/lib/financial-transaction";
-import { lockReceiptNumber, receiptNumberConflictWhere } from "@/lib/receipt-number";
+import { allocateOfficialReceiptNumber } from "@/lib/receipt-number";
 import { getPeriodLedger, toCents } from "../realign/ledger";
 import { applyPaymentToStudentCollectibles } from "../collectibles/due-link";
 import { PENALTY_FUND_NAME } from "@/lib/penalty-fund";
@@ -36,7 +36,7 @@ function escapeHtml(value: unknown): string {
 }
 
 export async function recordPayment(department: string, data: {
-  orNumber: string; date: string; studentId: string; studentName: string;
+  orNumber?: string; date: string; studentId: string; studentName: string;
   studentEmail?: string; category: string; itemDescription: string;
   paymentType: string; standardRate: number; amountPaid: number;
   fundAllocation: string; ay: string; term: string; penaltyId?: string;
@@ -52,14 +52,13 @@ export async function recordPayment(department: string, data: {
   const term = String(data.term || "").trim();
   const category = String(data.category || "").trim();
   const itemDescription = String(data.itemDescription || "").trim();
-  const orNumber = String(data.orNumber || "").trim().toUpperCase();
+  let orNumber = "";
   const fundAllocation = String(data.fundAllocation || "").trim();
   const paid = money(data.amountPaid, "Payment");
   const date = dateOnly(data.date);
-  if (!ay || !term || !category || !itemDescription || !orNumber || !data.studentId) {
+  if (!ay || !term || !category || !itemDescription || !data.studentId) {
     throw new Error("Student, receipt number, category, item, academic year and term are required.");
   }
-  if (!/^[A-Z0-9][A-Z0-9-]{2,50}$/.test(orNumber)) throw new Error("Invalid official receipt number.");
 
   let actualPaymentType = "Partial Payment";
   let balanceDue = 0;
@@ -83,9 +82,7 @@ export async function recordPayment(department: string, data: {
     studentName = student.fullName;
     studentEmail = String(student.email || "").trim();
 
-    await lockReceiptNumber(tx, org.id, orNumber);
-    const conflict = await tx.collection.findFirst({ where: receiptNumberConflictWhere(org.id, orNumber), select: { id: true } });
-    if (conflict) throw new Error(`Official receipt ${orNumber} is already used. Refresh and select an unused OR.`);
+    orNumber = await allocateOfficialReceiptNumber(tx, org.id);
 
     const existing = await tx.collection.findMany({ where: {
       organizationId: org.id, academicYear: ay, term, studentId: student.id,
