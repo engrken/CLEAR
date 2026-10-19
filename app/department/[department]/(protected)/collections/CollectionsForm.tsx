@@ -73,7 +73,7 @@ export default function CollectionsForm({
   }, [collectionItems]);
 
   const [date, setDate] = useState(todayStr);
-  const [orNumber, setOrNumber] = useState(nextOr);
+
 
   const [searchQuery, setSearchQuery] = useState("");
   const [studentId, setStudentId] = useState("");
@@ -246,7 +246,6 @@ export default function CollectionsForm({
     setIsSubmitting(true);
     try {
       const result = await recordPayment(department, {
-        orNumber,
         date,
         studentId,
         studentName,
@@ -263,7 +262,8 @@ export default function CollectionsForm({
       });
 
       setReceiptData({
-        orNumber,
+        orNumber: result.orNumber,
+        orNumber: result.orNumber,
         date,
         studentId,
         studentName,
@@ -279,14 +279,6 @@ export default function CollectionsForm({
       setStudentName("");
       setStudentEmail("");
 
-      const parts = orNumber.split("-");
-      if (parts.length > 1) {
-        const numPart = parseInt(parts[1].replace(/[^0-9]/g, ""), 10);
-        if (!isNaN(numPart)) {
-          const nextNum = numPart + 1;
-          setOrNumber(`${parts[0]}-${nextNum < 1000 ? String(nextNum).padStart(3, "0") : nextNum}`);
-        }
-      }
 
     } catch (err: any) {
       await ThemedAlert.fire({ icon: 'error', title: 'Transaction Failed', text: err?.message || 'Unknown error occurred.' });
