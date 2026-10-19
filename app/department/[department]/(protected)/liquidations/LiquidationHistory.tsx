@@ -6,10 +6,13 @@ import { clearAlert, clearConfirm, clearPrompt } from "@/lib/clear-dialogs";
 
 
 import React, { useState } from "react";
+import { flushSync } from "react-dom";
 import { useRouter } from "next/navigation";
 import { fmt } from "@/lib/utils";
 import { saveReportSettings, saveSignatories } from "../../actions";
 import { executeVoidTransaction } from "../void/actions";
+import SavePdfButton from "../../components/SavePdfButton";
+import { prepareReportLogo } from "@/lib/report-logo.client";
 
 export default function LiquidationHistory({
   audits,
@@ -92,8 +95,8 @@ export default function LiquidationHistory({
       const formData = new FormData();
       formData.append("schoolName", schoolName.trim());
       formData.append("schoolAddress", schoolAddress.trim());
-      if (leftLogoFile) formData.append("leftLogo", leftLogoFile);
-      if (rightLogoFile) formData.append("rightLogo", rightLogoFile);
+      if (leftLogoFile) formData.append("leftLogo", await prepareReportLogo(leftLogoFile));
+      if (rightLogoFile) formData.append("rightLogo", await prepareReportLogo(rightLogoFile));
       await saveReportSettings(department, formData);
       await saveSignatories(orgId, department, signatories);
       setLeftLogoFile(null);
@@ -248,6 +251,17 @@ export default function LiquidationHistory({
                     <button className="btn btn-sm btn-outline-primary" onClick={() => handlePrint(audit)} title="Print Audited Report">
                       <i className="bi bi-printer-fill"></i> Print
                     </button>
+                    <SavePdfButton
+                      className="btn btn-sm btn-outline-danger ms-1"
+                      label="Save PDF"
+                      targetSelector="[data-clear-pdf-liquidation]"
+                      fileName={`CLEAR_Liquidation_${String(audit.auditId || audit.id)}`}
+                      beforeExport={() => {
+                        // Ensure the selected audit's previously hidden print template
+                        // has rendered before the browser PDF converter captures it.
+                        flushSync(() => setPrintData(audit));
+                      }}
+                    />
                   </td>
                 </tr>
                 
@@ -311,7 +325,7 @@ export default function LiquidationHistory({
           HIDDEN PRINT TEMPLATE (Activated via window.print)
       ================================================================= */}
       {printData && (
-        <div className="print-container d-none d-print-block">
+        <div data-clear-pdf-liquidation="true" className="print-container d-none d-print-block">
           
           {/* INSTITUTIONAL HEADER: use saved report settings instead of hard-coded branding */}
           <div className="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom border-dark">

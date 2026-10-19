@@ -5,9 +5,11 @@
 import { clearAlert, clearConfirm, clearPrompt } from "@/lib/clear-dialogs";
 
 
-import { useState, useEffect } from "react";
+import { Fragment, useState, useEffect } from "react";
 import { fmt } from "@/lib/utils";
 import { useRouter } from "next/navigation";
+import SavePdfButton from "../../components/SavePdfButton";
+import { prepareReportLogo } from "@/lib/report-logo.client";
 import {
   saveSignatories,
   saveReportSettings,
@@ -37,9 +39,13 @@ interface SummaryClientProps {
   ay: string;
   term: string;
 
-  summaryCategories?: { category: string; count: number; total: number }[];
+  summaryCategories?: {
+    category: string;
+    items: { name: string; count: number; amount: number }[];
+  }[];
   penaltySummary?: { count: number; amount: number };
   duesSummary?: { count: number; amount: number };
+  duesBreakdown?: { category: string; count: number; amount: number }[];
   grandCollectionTotal: number;
   expensesByFund: Record<string, number>;
   grandExpenseTotal: number;
@@ -68,6 +74,7 @@ export default function SummaryClient({
   summaryCategories = [],
   penaltySummary = { count: 0, amount: 0 },
   duesSummary = { count: 0, amount: 0 },
+  duesBreakdown = [],
   grandCollectionTotal,
   expensesByFund,
   grandExpenseTotal,
@@ -232,17 +239,11 @@ export default function SummaryClient({
     formData.append("schoolName", cleanSchoolName);
     formData.append("schoolAddress", cleanAddress);
 
-    if (leftLogoFile) {
-      formData.append("leftLogo", leftLogoFile);
-    }
-
-    if (rightLogoFile) {
-      formData.append("rightLogo", rightLogoFile);
-    }
-
     setIsSavingHeader(true);
 
     try {
+      if (leftLogoFile) formData.append("leftLogo", await prepareReportLogo(leftLogoFile));
+      if (rightLogoFile) formData.append("rightLogo", await prepareReportLogo(rightLogoFile));
       const result = await saveReportSettings(
         department,
         formData
@@ -400,6 +401,21 @@ export default function SummaryClient({
                 padding: 5px 8px !important;
               }
 
+              .print-container .collection-category-header {
+                break-after: avoid !important;
+                page-break-after: avoid !important;
+              }
+
+              .print-container .outstanding-obligations h6 {
+                break-after: avoid !important;
+                page-break-after: avoid !important;
+              }
+
+              .print-container .outstanding-obligations tr {
+                break-inside: avoid !important;
+                page-break-inside: avoid !important;
+              }
+
               .print-container .bg-dark {
                 background-color: #f8f9fa !important;
                 -webkit-print-color-adjust: exact !important;
@@ -429,7 +445,7 @@ export default function SummaryClient({
         }}
       />
 
-      <div className="card p-3 p-md-4 border-secondary shadow-sm bg-body text-body print-container">
+      <div data-clear-pdf-summary="true" className="card p-3 p-md-4 border-secondary shadow-sm bg-body text-body print-container">
 
         {/* REPORT TOOLBAR */}
         <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4 d-print-none">
@@ -461,6 +477,7 @@ export default function SummaryClient({
               <i className="bi bi-printer me-1" />
               Print Summary Report
             </button>
+            <SavePdfButton targetSelector="[data-clear-pdf-summary]" fileName={`CLEAR_Summary_${department}_${ay}_${term}`} className="btn btn-outline-danger btn-sm fw-bold ms-2" />
           </div>
         </div>
 
@@ -564,19 +581,32 @@ export default function SummaryClient({
           </div>
         </div>
 
-        {/* COLLECTIONS: aggregate by configured category; no item names, IDs or OR details. */}
+        {/* Actual paid receipts grouped by category and item. Category rows
+            are headings only: no subtotals or duplicated student counts. */}
         <h6 className="text-info text-uppercase fw-bold mt-2">Collections ({term})</h6>
         <div className="table-responsive mb-4">
-          <table className="table table-sm table-bordered border-dark align-middle text-body mb-0" style={{ fontSize: "0.85rem" }}>
+          <table className="table table-sm table-bordered border-dark align-middle text-body mb-0" style={{ fontSize: "0.85rem", tableLayout: "fixed", width: "100%" }}>
+            <colgroup><col style={{ width: "55%" }} /><col style={{ width: "20%" }} /><col style={{ width: "25%" }} /></colgroup>
             <thead><tr className="text-muted"><th>Collection Category</th><th className="text-end"># Students</th><th className="text-end">Total Collected</th></tr></thead>
             <tbody>
               {summaryCategories.length === 0 ? (
                 <tr><td colSpan={3} className="text-muted text-center">No collections recorded this term.</td></tr>
               ) : summaryCategories.map(row => (
-                <tr key={row.category}><td className="ps-3">{row.category}</td><td className="text-end">{row.count}</td><td className="text-end">{fmt(row.total)}</td></tr>
+                <Fragment key={row.category}>
+                  <tr className="fw-bold collection-category-header">
+                    <td colSpan={3} className="ps-3">{row.category}</td>
+                  </tr>
+                  {row.items.map(item => (
+                    <tr key={item.name}>
+                      <td className="ps-4">{item.name}</td>
+                      <td className="text-end">{item.count}</td>
+                      <td className="text-end">{fmt(item.amount)}</td>
+                    </tr>
+                  ))}
+                </Fragment>
               ))}
             </tbody>
-            <tfoot><tr className="fw-bold bg-dark text-white"><td colSpan={2} className="text-end">TOTAL COLLECTIONS:</td><td className="text-end text-info">{fmt(grandCollectionTotal || 0)}</td></tr></tfoot>
+            <tfoot><tr className="fw-bold bg-dark text-white"><td colSpan={2} className="text-end">SUB TOTAL:</td><td className="text-end text-info">{fmt(grandCollectionTotal || 0)}</td></tr></tfoot>
           </table>
         </div>
 
@@ -588,23 +618,24 @@ export default function SummaryClient({
         <div className="table-responsive mb-4">
           <table
             className="table table-sm table-bordered border-dark align-middle text-body mb-0"
-            style={{ fontSize: "0.85rem" }}
+            style={{ fontSize: "0.85rem", tableLayout: "fixed", width: "100%" }}
           >
+            <colgroup>
+              <col style={{ width: "55%" }} />
+              <col style={{ width: "20%" }} />
+              <col style={{ width: "25%" }} />
+            </colgroup>
             <thead>
               <tr className="text-muted">
                 <th>Fund Source Account</th>
-                <th style={{ width: "15%" }} />
-                <th style={{ width: "15%" }} />
-                <th className="text-end" style={{ width: "20%" }}>
-                  Total Amount
-                </th>
+                <th aria-hidden="true" />
+                <th className="text-end">Total Amount</th>
               </tr>
             </thead>
-
             <tbody>
               {Object.keys(safeExpenses).length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="text-center text-muted py-2">
+                  <td colSpan={3} className="text-center text-muted py-2">
                     No liquidated expenses recorded for this term.
                   </td>
                 </tr>
@@ -615,41 +646,71 @@ export default function SummaryClient({
                     <tr key={fundName}>
                       <td className="ps-3 fw-bold">{fundName}</td>
                       <td />
-                      <td />
-                      <td className="text-end text-danger">
-                        {fmt(totalAmount || 0)}
-                      </td>
+                      <td className="text-end text-danger">{fmt(totalAmount || 0)}</td>
                     </tr>
                   ))
               )}
             </tbody>
-
             <tfoot>
               <tr className="fw-bold bg-dark text-white">
-                <td colSpan={3} className="text-end py-1">
-                  SUB TOTAL:
-                </td>
-                <td className="text-end text-danger">
-                  {fmt(grandExpenseTotal || 0)}
-                </td>
+                <td colSpan={2} className="text-end py-1">SUB TOTAL:</td>
+                <td className="text-end text-danger">{fmt(grandExpenseTotal || 0)}</td>
               </tr>
             </tfoot>
           </table>
         </div>
 
-        {/* Outstanding liabilities only: never mix collectible balances with collected income. */}
-        <h6 className="text-warning text-uppercase fw-bold mt-3">Outstanding Student Obligations ({term})</h6>
-        <p className="small text-muted fst-italic mb-1">These amounts are unpaid balances, not cash receipts. Counts are distinct students for penalties, and outstanding assessments for dues.</p>
-        <div className="table-responsive mb-4">
-          <table className="table table-sm table-bordered border-dark align-middle text-body mb-0" style={{ fontSize: "0.85rem" }}>
-            <thead><tr className="text-muted"><th>Obligation Category</th><th className="text-end">Students / Assessments</th><th className="text-end">Outstanding Amount</th></tr></thead>
-            <tbody>
-              <tr><td className="ps-3">Penalty</td><td className="text-end">{penaltySummary.count}</td><td className="text-end">{fmt(penaltySummary.amount)}</td></tr>
-              <tr><td className="ps-3">Dues / Collectibles</td><td className="text-end">{duesSummary.count}</td><td className="text-end">{fmt(duesSummary.amount)}</td></tr>
-            </tbody>
-            <tfoot><tr className="fw-bold bg-dark text-white"><td colSpan={2} className="text-end">TOTAL OUTSTANDING:</td><td className="text-end text-warning">{fmt((penaltySummary.amount || 0) + (duesSummary.amount || 0))}</td></tr></tfoot>
-          </table>
-        </div>
+        {/* A single print-friendly liabilities table. The dues come from the
+            existing finance-engine buckets; do not duplicate the subtotal or
+            display zero-balance categories / student-identifying records. */}
+        {(Math.round(Number(penaltySummary.amount || 0) * 100) > 0 || duesBreakdown.length > 0) && (
+          <section className="outstanding-obligations mb-4">
+            <h6 className="text-warning text-uppercase fw-bold mt-3">
+              Collectibles ({term})
+            </h6>
+            <p className="small text-muted fst-italic mb-2">
+              Unpaid balances only, not cash receipts. Cash-only late fees exclude
+              community-service-eligible penalties. Penalty counts represent distinct
+              students; dues counts represent outstanding assessments.
+            </p>
+            <div className="table-responsive">
+              <table className="table table-sm table-bordered border-dark align-middle text-body mb-0" style={{ fontSize: "0.85rem", tableLayout: "fixed", width: "100%" }}>
+                <colgroup><col style={{ width: "55%" }} /><col style={{ width: "20%" }} /><col style={{ width: "25%" }} /></colgroup>
+                <thead>
+                  <tr className="text-muted">
+                    <th>Fee / Obligation</th>
+                    <th className="text-end">Students / Assessments</th>
+                    <th className="text-end">Outstanding Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Math.round(Number(penaltySummary.amount || 0) * 100) > 0 && (
+                    <tr>
+                      <td className="ps-3">Cash-Only Penalties (Late Fees)</td>
+                      <td className="text-end">{penaltySummary.count}</td>
+                      <td className="text-end">{fmt(penaltySummary.amount)}</td>
+                    </tr>
+                  )}
+                  {duesBreakdown.map((item, index) => (
+                    <tr key={`${item.category}-${index}`}>
+                      <td className="ps-3">{item.category}</td>
+                      <td className="text-end">{item.count}</td>
+                      <td className="text-end">{fmt(item.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="fw-bold border-top">
+                    <td colSpan={2} className="text-end">SUB TOTAL:</td>
+                    <td className="text-end text-warning">
+                      {fmt((penaltySummary.amount || 0) + (duesSummary.amount || 0))}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </section>
+        )}
 
         {/* NET TREASURY BALANCE */}
         <div className="card p-2 d-flex flex-row justify-content-between align-items-center flex-wrap gap-2 mb-4 bg-body-secondary border-dark print-border rounded-0">

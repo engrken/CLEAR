@@ -4,7 +4,6 @@
 
 import { prisma } from '@/lib/prisma';
 import { requireTabAccess } from '@/lib/permissions';
-import { logSystemAction } from '@/lib/logger';
 import { revalidatePath } from 'next/cache';
 import { headers } from 'next/headers';
 import { Prisma } from '@prisma/client';
@@ -13,6 +12,7 @@ import { getPeriodLedger, toCents } from '../realign/ledger';
 import { assertAcademicPeriod } from '@/lib/academic-period-guard';
 import { applyPaymentToStudentCollectibles } from '../collectibles/due-link';
 import { enqueuePaymentReceipt, enqueueAccountingNotice, scheduleDigitalReceiptDispatch } from '@/lib/digital-receipts';
+import { ingressClientIp, normalizePublicPaymentChannel } from '@/lib/public-remittance-security';
 
 // =========================================================================
 // SECURITY CONFIGURATIONS FOR PUBLIC SUBMISSION
@@ -88,6 +88,11 @@ export async function verifyOnlineRemittance(
     await assertAcademicPeriod(tx, org.id, remit.academicYear, remit.term);
     const ledger = await getPeriodLedger(tx, org.id, remit.academicYear, remit.term);
     if (ledger.activeRollover) throw new Error("This term has been carried forward and cannot accept verified payments.");
+    // Reject arbitrary fund names before posting an official receipt. The
+    // same ledger supplies the authorized fund options to the officer UI.
+    if (!ledger.funds.some((fund) => fund.name.trim().toLowerCase() === fundAllocation.toLowerCase())) {
+      throw new Error("Selected fund is not available in this academic term. Refresh the queue.");
+    }
     const conflicted = await tx.collection.findFirst({ where: {
       organizationId: org.id, orNumber,
     }, select: { id: true } });
@@ -266,48 +271,42 @@ export async function submitOnlineRemittance(
     where: { subdomain: cleanDepartment }
   });
   if (!organization) throw new Error(`Organization "${cleanDepartment}" not found.`);
+  if (String(organization.status || '').toLowerCase() !== 'active') {
+    throw new Error('This department is not currently accepting payment proofs.');
+  }
   const orgId = organization.id;
 
   // =========================================================
   // 1. IP-BASED RATE LIMITING (Using AuthThrottle Model)
   // =========================================================
   const headersList = await headers();
-  const forwardedIp = String(headersList.get('x-real-ip') || headersList.get('x-forwarded-for') || 'unknown').split(',')[0].trim().slice(0, 64);
+  const forwardedIp = ingressClientIp(headersList);
   const ipHash = createHash('sha256').update(`${orgId}|${forwardedIp}`).digest('hex').slice(0, 32);
   const throttleKey = `public_remit_${orgId}_${ipHash}`;
 
+  // One atomic UPSERT counts each attempt. A separate read/update allowed
+  // concurrent requests to bypass the limit. The period is fixed at the first
+  // request until its ten-minute window expires.
   const now = new Date();
-  const windowStartThreshold = new Date(now.getTime() - RATE_LIMIT_WINDOW_MS);
-
-  let throttle = await prisma.authThrottle.findUnique({
-    where: { key: throttleKey },
-  });
-
-  if (throttle) {
-    const lastSent = throttle.lastSentAt ? new Date(throttle.lastSentAt) : null;
-    if (lastSent && lastSent > windowStartThreshold) {
-      if (throttle.failedCount >= MAX_SUBMISSIONS_IN_WINDOW) {
-        throw new Error('Too many payment proof submissions from your network. Please wait 10 minutes before trying again.');
-      }
-      await prisma.authThrottle.update({
-        where: { key: throttleKey },
-        data: { failedCount: throttle.failedCount + 1, updatedAt: now },
-      });
-    } else {
-      await prisma.authThrottle.update({
-        where: { key: throttleKey },
-        data: { failedCount: 1, lastSentAt: now, updatedAt: now },
-      });
-    }
-  } else {
-    await prisma.authThrottle.create({
-      data: {
-        key: throttleKey,
-        failedCount: 1,
-        lastSentAt: now,
-        updatedAt: now,
-      },
-    });
+  const nowIso = now.toISOString();
+  const windowStartIso = new Date(now.getTime() - RATE_LIMIT_WINDOW_MS).toISOString();
+  const throttleRows = await prisma.$queryRaw<{ failedCount: number }[]>`
+    INSERT INTO "AuthThrottle" ("key", "failedCount", "lastSentAt", "updatedAt")
+    VALUES (${throttleKey}, 1,
+      (${nowIso}::timestamptz AT TIME ZONE 'UTC'),
+      (${nowIso}::timestamptz AT TIME ZONE 'UTC'))
+    ON CONFLICT ("key") DO UPDATE SET
+      "failedCount" = CASE
+        WHEN "AuthThrottle"."lastSentAt" > (${windowStartIso}::timestamptz AT TIME ZONE 'UTC')
+        THEN "AuthThrottle"."failedCount" + 1 ELSE 1 END,
+      "lastSentAt" = CASE
+        WHEN "AuthThrottle"."lastSentAt" > (${windowStartIso}::timestamptz AT TIME ZONE 'UTC')
+        THEN "AuthThrottle"."lastSentAt" ELSE EXCLUDED."lastSentAt" END,
+      "updatedAt" = EXCLUDED."updatedAt"
+    RETURNING "failedCount"
+  `;
+  if (Number(throttleRows[0]?.failedCount ?? 0) > MAX_SUBMISSIONS_IN_WINDOW) {
+    throw new Error('Too many payment proof submissions from your network. Please wait 10 minutes before trying again.');
   }
 
   // =========================================================
@@ -357,7 +356,10 @@ export async function submitOnlineRemittance(
   if (amount <= 0) throw new Error("Amount must be greater than zero.");
 
   const targetStudentId = String(data.studentId || "").trim();
-  const paymentChannel = String(data.paymentChannel || "").trim();
+  const paymentChannel = normalizePublicPaymentChannel(data.paymentChannel);
+  if (!paymentChannel) {
+    throw new Error('Choose a valid payment channel: GCash, Maya, or Bank Transfer.');
+  }
   const referenceNumber = String(data.referenceNo || "").trim();
   if (!paymentChannel || !referenceNumber || referenceNumber.length > 100) throw new Error("Payment channel and reference number are required.");
   if (!data.ay || !data.term) throw new Error("Academic year and term are required.");
@@ -386,41 +388,59 @@ export async function submitOnlineRemittance(
     throw new Error(`Student ID "${targetStudentId}" is not registered under this department. Please verify your student ID.`);
   }
 
-  const ledger = await getPeriodLedger(prisma, orgId, data.ay, data.term);
-  if (ledger.activeRollover) throw new Error("The selected term has been closed; new proof submissions are unavailable.");
-  const duplicate = await prisma.onlineRemittance.findFirst({ where: {
-    organizationId: orgId, paymentChannel, referenceNumber,
-    status: { in: ["Pending", "Pending Verification", "Verified"] },
-  }, select: { id: true } });
-  if (duplicate) throw new Error("This payment reference has already been submitted for verification.");
   const submissionId = generateReference("SUB");
 
-  await prisma.onlineRemittance.create({
-    data: {
-      organizationId: orgId,
-      submissionId,
-      academicYear: data.ay,
-      term: data.term,
-      studentId: targetStudentId,
-      studentName: studentExists.fullName,
-      studentEmail: cleanEmail,
-      paymentChannel,
-      referenceNumber,
-      category: "Online Remittance",
-      itemDescription: String(data.particulars || "").trim().slice(0, 200),
-      paymentMode: String(data.paymentMode || "Online").slice(0, 30),
-      amountPaid: amount,
-      proofUrl: data.proofBase64,
-      status: "Pending Verification",
-    },
-  });
+  // The unique-reference check and insert must share the same serializable
+  // transaction. Parallel requests for one channel/reference can no longer
+  // both pass the check and write duplicate Pending submissions.
+  await prisma.$transaction(async (tx) => {
+    await assertAcademicPeriod(tx, orgId, data.ay, data.term);
+    const ledger = await getPeriodLedger(tx, orgId, data.ay, data.term);
+    if (ledger.activeRollover) {
+      throw new Error('The selected term has been closed; new proof submissions are unavailable.');
+    }
+    const duplicate = await tx.onlineRemittance.findFirst({
+      where: {
+        organizationId: orgId,
+        paymentChannel: { equals: paymentChannel, mode: 'insensitive' },
+        referenceNumber: { equals: referenceNumber, mode: 'insensitive' },
+        status: { in: ["Pending", "Pending Verification", "Verified"] },
+      },
+      select: { id: true },
+    });
+    if (duplicate) {
+      throw new Error("This payment reference has already been submitted for verification.");
+    }
 
-  await logSystemAction(
-    orgId,
-    "Public Submission",
-    "SUBMIT_REMITTANCE",
-    `Received ₱${amount.toFixed(2)} online payment proof from registered student ${studentExists.studentId} via ${paymentChannel}.`
-  );
+    await tx.onlineRemittance.create({
+      data: {
+        organizationId: orgId,
+        submissionId,
+        academicYear: data.ay,
+        term: data.term,
+        studentId: targetStudentId,
+        studentName: studentExists.fullName,
+        studentEmail: cleanEmail,
+        paymentChannel,
+        referenceNumber,
+        category: "Online Remittance",
+        itemDescription: String(data.particulars || "").trim().slice(0, 200),
+        paymentMode: String(data.paymentMode || "Online").slice(0, 30),
+        amountPaid: amount,
+        proofUrl: data.proofBase64,
+        status: "Pending Verification",
+      },
+    });
+
+    await tx.systemLog.create({
+      data: {
+        organizationId: orgId,
+        user: "Public Submission",
+        action: "SUBMIT_REMITTANCE",
+        details: `Received ₱${amount.toFixed(2)} online payment proof from registered student ${studentExists.studentId} via ${paymentChannel}.`,
+      },
+    });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
   revalidatePath(`/department/${cleanDepartment}/remittances`);
   revalidatePath(`/department/${cleanDepartment}/clearance`);

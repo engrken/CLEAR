@@ -16,6 +16,7 @@ import { Metadata } from 'next';
 import { decodeStudentDue, activeCollectibleDue } from '../(protected)/collectibles/due-link';
 import { getPeriodLedger } from '../(protected)/realign/ledger';
 import { listHistoricalDebts, type HistoricalDebt } from '@/lib/student-arrears';
+import { isOutstandingPenalty } from '@/lib/penalty-clearance-status';
 
 export const dynamic = 'force-dynamic';
 
@@ -285,12 +286,9 @@ export default async function ClearancePage({
 
     const myPenalties = penalties.filter((p) => {
       const pSid = String(p.studentId || '').trim().toLowerCase();
-      const st = String(p.status || '').toUpperCase();
       return (
         (pSid === studentNumKey || pSid === studentDbIdKey) &&
-        !st.includes('SETTLED') &&
-        !st.includes('VOID') &&
-        !st.includes('CANCEL')
+        isOutstandingPenalty(p)
       );
     });
 

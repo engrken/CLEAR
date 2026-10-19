@@ -41,6 +41,10 @@ jobs:
         run: node --experimental-strip-types --test tests/receipt-branding.test.mjs
       - name: Global administrator promotion regression tests
         run: node --experimental-strip-types --test tests/global-admin-promotion.test.mjs
+      - name: Organization logo fallback regression tests
+        run: node --experimental-strip-types --test tests/organization-logo.test.mjs
+      - name: Clearance and remittance security regression tests
+        run: node --experimental-strip-types --test tests/clearance-remittance-security.test.mjs
       - name: TypeScript check
         run: npx tsc --noEmit
       - name: TZ independence — Honolulu

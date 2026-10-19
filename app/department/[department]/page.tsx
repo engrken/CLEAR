@@ -7,6 +7,7 @@ import { auth } from "@/auth";
 import OtpModal from "./components/OtpModal";
 import DashboardClient from "./DashboardClient";
 import { Metadata } from 'next';
+import OrganizationLogo from '@/components/OrganizationLogo';
 
 export const dynamic = 'force-dynamic';
 
@@ -75,9 +76,6 @@ export default async function EntityOverviewPage({
   // 5. PREMIUM UNAUTHENTICATED ENTRY (PUBLIC TENANT PORTAL)
   // =========================================================
   if (!isAuthenticated) {
-    // 🚀 Fixed F35: Graceful fallback for missing organization logo
-    const orgLogo = organization.logo || `/${cleanSubdomain}_logo.png`;
-
     return (
       <>
         <div className="container py-5 d-flex flex-column align-items-center justify-content-center" style={{ minHeight: '80vh' }}>
@@ -90,9 +88,9 @@ export default async function EntityOverviewPage({
             
             <div className="mb-4 position-relative" style={{ zIndex: 1 }}>
               <div className="d-inline-flex align-items-center justify-content-center bg-body-tertiary border border-secondary-subtle rounded-circle mb-3 shadow" style={{ width: '100px', height: '100px', padding: '15px' }}>
-  <img 
-    src={orgLogo} 
-    alt={`${organization.name} Logo`} 
+  <OrganizationLogo
+    src={organization.logo}
+    alt={`${organization.name} logo`}
     style={{ width: '100%', height: '100%', objectFit: 'contain' }}
   />
 </div>

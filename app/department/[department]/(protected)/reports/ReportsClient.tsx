@@ -9,6 +9,9 @@ import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { saveSignatories, saveReportSettings } from "../../actions";
 import { fmt } from "@/lib/utils";
+import OrganizationLogo from "@/components/OrganizationLogo";
+import SavePdfButton from "../../components/SavePdfButton";
+import { prepareReportLogo } from "@/lib/report-logo.client";
 import {
   Chart as ChartJS,
   ArcElement,
@@ -172,8 +175,8 @@ export default function ReportsClient({
       const formData = new FormData();
       formData.append("schoolName", schoolName.trim());
       formData.append("schoolAddress", schoolAddress.trim());
-      if (leftLogoFile) formData.append("leftLogo", leftLogoFile);
-      if (rightLogoFile) formData.append("rightLogo", rightLogoFile);
+      if (leftLogoFile) formData.append("leftLogo", await prepareReportLogo(leftLogoFile));
+      if (rightLogoFile) formData.append("rightLogo", await prepareReportLogo(rightLogoFile));
 
       // These settings are saved on the Organization and reused by all report printouts.
       await saveReportSettings(department, formData);
@@ -595,7 +598,7 @@ export default function ReportsClient({
         }
       `}} />
 
-      <div className="print-container">
+      <div data-clear-pdf-detailed="true" className="print-container">
         {/* PRINT HEADER: use the Organization's saved report settings, not hard-coded institution details */}
         <div className="d-none d-print-flex justify-content-between align-items-center mb-3 pb-2 border-bottom border-dark border-opacity-50">
           <div style={{ width: '90px', minWidth: '90px', flexShrink: 0 }} className="text-center">
@@ -611,9 +614,11 @@ export default function ReportsClient({
             <div className="small fst-italic mt-1">{ay} &nbsp;|&nbsp; {term}</div>
           </div>
           <div style={{ width: '90px', minWidth: '90px', flexShrink: 0 }} className="text-center">
-            {(reportHeaderRightLogo || logoUrl) ? (
-              <img src={reportHeaderRightLogo || logoUrl} alt="Organization logo" style={{ width: '100%', maxHeight: '90px', objectFit: 'contain' }} />
-            ) : <div aria-hidden="true" />}
+            <OrganizationLogo
+              src={reportHeaderRightLogo || logoUrl}
+              alt={`${orgName} logo`}
+              style={{ width: '100%', maxHeight: '90px', objectFit: 'contain' }}
+            />
           </div>
         </div>
 
@@ -629,6 +634,7 @@ export default function ReportsClient({
             <button className="btn btn-outline-secondary btn-sm fw-bold" onClick={() => window.print()}>
               <i className="bi bi-printer me-1"></i>Print Report
             </button>
+            <SavePdfButton targetSelector="[data-clear-pdf-detailed]" fileName={`CLEAR_Detailed_${department}_${ay}_${term}_${reportCategory}`} className="btn btn-outline-danger btn-sm fw-bold ms-2" />
           </div>
             <div className="btn-group btn-group-sm border border-secondary rounded">
               <button className={`btn ${viewMode === 'Table' ? 'btn-info text-dark fw-bold' : 'btn-outline-secondary'}`} onClick={() => setViewMode('Table')}>
