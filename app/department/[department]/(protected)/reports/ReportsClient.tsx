@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import { saveSignatories, saveReportSettings } from "../../actions";
 import { fmt } from "@/lib/utils";
 import OrganizationLogo from "@/components/OrganizationLogo";
+import SavePdfButton from "../../components/SavePdfButton";
 import {
   Chart as ChartJS,
   ArcElement,
@@ -632,6 +633,7 @@ export default function ReportsClient({
             <button className="btn btn-outline-secondary btn-sm fw-bold" onClick={() => window.print()}>
               <i className="bi bi-printer me-1"></i>Print Report
             </button>
+            <SavePdfButton className="btn btn-outline-danger btn-sm fw-bold ms-2" />
           </div>
             <div className="btn-group btn-group-sm border border-secondary rounded">
               <button className={`btn ${viewMode === 'Table' ? 'btn-info text-dark fw-bold' : 'btn-outline-secondary'}`} onClick={() => setViewMode('Table')}>
