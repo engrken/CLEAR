@@ -109,8 +109,8 @@ export default function Clearance() {
       {result && org.data ? (
         <ClearanceCard
           orgName={org.data.name}
-          studentName={result.studentName}
-          studentId={result.studentId}
+          studentName={result.studentName || ''}
+          studentId={result.studentId || ''}
           status={result.status}
           outstanding={result.outstandingCentavos === null ? null : fromCentavos(result.outstandingCentavos)}
           qrToken={result.qrToken ?? undefined}
@@ -126,7 +126,7 @@ export default function Clearance() {
         <Button
           block
           icon="upload"
-          onPress={() => router.push({ pathname: '/d/[dept]/submit-proof', params: { dept, studentId: result.studentId } })}>
+          onPress={() => router.push({ pathname: '/d/[dept]/submit-proof', params: { dept, studentId: result.studentId || (query.includes('@') ? '' : query.trim()) } })}>
           I paid — send my receipt
         </Button>
       ) : null}
