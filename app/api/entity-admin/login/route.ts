@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { cookies } from 'next/headers';
 import crypto from 'node:crypto';
-import nodemailer from 'nodemailer';
+import { sendEmail } from '@/lib/mailer';
 import {
   signEntityToken,
   type EntitySessionClaims,
@@ -73,37 +73,11 @@ async function dispatchOtpEmail(
   otpCode: string,
   orgName: string
 ): Promise<void> {
-  const smtpUser =
-    process.env.GMAIL_USER ||
-    process.env.EMAIL_USER ||
-    process.env.SMTP_USER ||
-    process.env.MAIL_USER;
-
-  const smtpPass =
-    process.env.GMAIL_APP_PASSWORD ||
-    process.env.GMAIL_PASS ||
-    process.env.EMAIL_PASS ||
-    process.env.SMTP_PASSWORD ||
-    process.env.MAIL_PASS;
-
-  if (!smtpUser || !smtpPass) {
-    throw new Error('Entity OTP email service is not configured.');
-  }
-
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: smtpUser,
-      pass: smtpPass,
-    },
-  });
-
-  await transporter.sendMail({
-    from: `"CLEAR System Security" <${smtpUser}>`,
+  await sendEmail({
     to: toEmail,
     subject: '[CLEAR System] Entity Admin Verification Code',
     text:
-      `Your CLEAR System verification code is ${otpCode}. ` +
+      'Your CLEAR System verification code is ' + otpCode + '. ' +
       'It expires in 5 minutes.',
     html: `
       <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;background:#0f172a;color:#f8fafc;border-radius:12px">
