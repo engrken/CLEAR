@@ -4,7 +4,6 @@
 
 import { prisma } from '@/lib/prisma';
 import { requireTabAccess } from '@/lib/permissions';
-import { logSystemAction } from '@/lib/logger';
 import { revalidatePath } from 'next/cache';
 import { headers } from 'next/headers';
 import { Prisma } from '@prisma/client';
