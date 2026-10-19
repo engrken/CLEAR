@@ -18,3 +18,16 @@ test('collection schema retains package-compatible receipt uniqueness', () => {
   assert.ok(model.includes('@@unique([organizationId, orNumber, itemDescription])'));
   assert.ok(!model.includes('@@unique([organizationId, orNumber])'));
 });
+
+test('financial posting uses Serializable transactions and bounded retries', () => {
+  const source = read('lib/financial-transaction.ts');
+  assert.ok(source.includes('TransactionIsolationLevel.Serializable'));
+  assert.ok(source.includes('P2034'));
+  assert.ok(source.includes('maxAttempts'));
+});
+
+test('both posting paths share package-aware OR lookup', () => {
+  for (const path of ['app/department/[department]/(protected)/collections/actions.ts', 'app/department/[department]/(protected)/remittances/actions.ts']) {
+    assert.ok(read(path).includes('receiptNumberConflictWhere(org.id, orNumber)'), path);
+  }
+});
