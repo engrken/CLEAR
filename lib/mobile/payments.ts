@@ -227,7 +227,8 @@ export async function recordMobilePayment(
   // The web form sends category + itemDescription; the app sends a fee id.
   // Resolve it to the same pair for the active term. A penalty receipt uses the
   // category and description Ken's Penalty Logs link prefills.
-  let category = 'Others';
+  // Penalty receipts must be classified as penalties, never under vague Others.
+  let category = penaltyId ? 'Penalty' : 'Others';
   let itemDescription = '';
   if (!penaltyId) {
     const isPackageId = feeId.startsWith(PACKAGE_FEE_PREFIX);
