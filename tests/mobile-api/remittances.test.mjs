@@ -64,6 +64,13 @@ describe('POST /remittances/:id/verify', () => {
     assert.equal(row.status, 'Pending Verification');
   });
 
+  it('rejects an unknown fund before recording a verified receipt', async () => {
+    const res = await verify(r1.id, { orNumber: uniq('OR'), fundAllocation: 'Invented Cash Fund' });
+    expectError(res, 400, 'invalid');
+    const row = await prisma.onlineRemittance.findUnique({ where: { id: r1.id } });
+    assert.equal(row.status, 'Pending Verification');
+  });
+
   it('with an OR number → 200 { orNumber, lines }, records a collection and queues the receipt', async () => {
     const r = expectStatus(await verify(r1.id, { orNumber: verifiedOr }), 200);
     assert.equal(r.orNumber, verifiedOr);
