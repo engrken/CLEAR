@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireTabAccess } from "@/lib/permissions";
 import { enqueuePaymentReceipt, scheduleDigitalReceiptDispatch } from "@/lib/digital-receipts";
 import { revalidatePath } from "next/cache";
-import { Prisma } from "@prisma/client";
+import { withFinancialTransaction } from "@/lib/financial-transaction";
 import { getPeriodLedger, toCents } from "../realign/ledger";
 import { applyPaymentToStudentCollectibles } from "../collectibles/due-link";
 import { PENALTY_FUND_NAME } from "@/lib/penalty-fund";
@@ -67,7 +67,7 @@ export async function recordPayment(department: string, data: {
   let paymentEntries = 0;
   let postedDescription = itemDescription;
 
-  const postOnce = async () => prisma.$transaction(async (tx) => {
+  const postOnce = async () => withFinancialTransaction(async (tx) => {
     await assertAcademicPeriod(tx, org.id, ay, term);
     const ledger = await getPeriodLedger(tx, org.id, ay, term);
     if (ledger.activeRollover) throw new Error("This academic term is closed by a carry-over. Reverse the rollover before recording payments.");
@@ -254,15 +254,9 @@ export async function recordPayment(department: string, data: {
       details: `OR ${orNumber}: ₱${paid.toFixed(2)} from ${studentName} for ${penaltyId ? `penalty ${penaltyId}` : itemDescription}, across ${entries.length} fund line(s).`,
     } });
     await enqueuePaymentReceipt(tx, { organizationId: org.id, orNumber, officerName, officerEmail: String(officer.email || ""), source: "COLLECTION" });
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 20000 });
+  });
 
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try { await postOnce(); break; }
-    catch (error: unknown) {
-      if ((error as { code?: string })?.code === "P2034" && attempt < 2) continue;
-      throw error;
-    }
-  }
+  await postOnce();
 
   // Digital receipts are delivered from the transactional outbox after commit.
   scheduleDigitalReceiptDispatch(org.id, `payment:${orNumber}`);
