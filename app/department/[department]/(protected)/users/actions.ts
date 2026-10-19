@@ -9,7 +9,7 @@ import { revalidatePath } from 'next/cache';
 import {
   requireOrgAdmin,
   requireTabAccess as sharedRequireTabAccess,
-  isSuperAdminEmail,
+  isReservedGlobalAdminEmail,
   PRESET_ROLE_TABS,
 } from '@/lib/permissions';
 
@@ -49,10 +49,8 @@ async function isActingOnOwnAccount(target: { id: string; email: string }): Prom
   );
 }
 
-function isProtectedMasterAccount(email: unknown): boolean {
-  const normalizedEmail = String(email ?? '').trim().toLowerCase();
-
-  return isSuperAdminEmail(normalizedEmail);
+async function isProtectedMasterAccount(email: unknown): Promise<boolean> {
+  return isReservedGlobalAdminEmail(email);
 }
 
 function resolveRole(role: unknown): string {
@@ -183,9 +181,9 @@ export async function saveTenantUser(formData: {
   }
 
   // Do not create a tenant account using a protected Super Admin email.
-  if (isProtectedMasterAccount(email)) {
+  if (await isProtectedMasterAccount(email)) {
     throw new Error(
-      'This email is reserved for the primary Super Admin account.'
+      'This email is reserved for the global Super Admin account.'
     );
   }
 
@@ -208,9 +206,9 @@ export async function saveTenantUser(formData: {
     );
   }
 
-  if (targetUser && isProtectedMasterAccount(targetUser.email)) {
+  if (targetUser && await isProtectedMasterAccount(targetUser.email)) {
     throw new Error(
-      'Action denied: Cannot modify the primary Super Admin account.'
+      'Action denied: Cannot modify the global Super Admin account.'
     );
   }
 
@@ -348,11 +346,11 @@ export async function updateUserAccountStatus(
   }
 
   if (
-    isProtectedMasterAccount(targetUser.email) &&
+    (await isProtectedMasterAccount(targetUser.email)) &&
     status !== 'Active'
   ) {
     throw new Error(
-      'Action denied: Cannot deactivate or block the primary Super Admin account.'
+      'Action denied: Cannot deactivate or block the global Super Admin account.'
     );
   }
 
@@ -421,9 +419,9 @@ export async function deleteTenantUser(
     throw new Error('User not found in this department.');
   }
 
-  if (isProtectedMasterAccount(targetUser.email)) {
+  if (await isProtectedMasterAccount(targetUser.email)) {
     throw new Error(
-      'Action denied: Cannot delete the primary Super Admin account.'
+      'Action denied: Cannot delete the global Super Admin account.'
     );
   }
 

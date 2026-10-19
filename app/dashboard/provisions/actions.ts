@@ -5,7 +5,7 @@ import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { signOut } from '@/auth';
 import { prisma } from '@/lib/prisma';
-import { requireSuperAdmin, isSuperAdminEmail } from '@/lib/permissions';
+import { requireSuperAdmin, isReservedGlobalAdminEmail } from '@/lib/permissions';
 import { PRESET_ROLE_TABS } from '@/lib/role-permissions';
 import { academicYearStart, isCalendarMode, periodsFor, type CalendarMode } from '@/lib/academic-periods';
 
@@ -115,7 +115,7 @@ export async function provisionEntityWithTier(data: {
     throw new Error('A valid administrator email address is required.');
   }
   if (!adminName || adminName.length > 150) throw new Error('Administrator name must be between 1 and 150 characters.');
-  if (isSuperAdminEmail(adminEmail)) {
+  if (await isReservedGlobalAdminEmail(adminEmail)) {
     throw new Error('The system Super Admin cannot be provisioned as a tenant administrator.');
   }
 

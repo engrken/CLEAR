@@ -8,6 +8,8 @@ declare module "next-auth" {
       id: string;
       role: string;
       organizationId: string | null;
+      globalAdminId?: string | null;
+      globalAdminVersion?: number | null;
     } & DefaultSession["user"];
   }
 
@@ -15,6 +17,8 @@ declare module "next-auth" {
     id: string;
     role: string;
     organizationId: string | null;
+    globalAdminId?: string | null;
+    globalAdminVersion?: number | null;
   }
 }
 
@@ -22,5 +26,7 @@ declare module "next-auth/jwt" {
   interface JWT {
     role?: string;
     organizationId?: string | null;
+    globalAdminId?: string | null;
+    globalAdminVersion?: number | null;
   }
 }

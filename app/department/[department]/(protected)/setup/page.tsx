@@ -7,7 +7,6 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import {
   requireTabAccess,
-  isSuperAdminEmail,
 } from "@/lib/permissions";
 import SetupClient from "./SetupClient";
 import { PENALTY_FUND_NAME } from "@/lib/penalty-fund";
@@ -44,7 +43,7 @@ export default async function SetupPage({
     );
   }
 
-  await requireTabAccess("tab-setup", cleanDepartment);
+  const scope = await requireTabAccess("tab-setup", cleanDepartment);
 
   const organization = await prisma.organization.findUnique({
     where: { subdomain: cleanDepartment },
@@ -69,7 +68,7 @@ export default async function SetupPage({
   let canManageBackups = false;
 
   if (sessionEmail) {
-    if (isSuperAdminEmail(sessionEmail)) {
+    if (scope.isSuper) {
       canManageBackups = true;
     } else {
       const dbUser = await prisma.tenantUser.findFirst({
