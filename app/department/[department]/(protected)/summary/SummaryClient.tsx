@@ -9,6 +9,7 @@ import { Fragment, useState, useEffect } from "react";
 import { fmt } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import SavePdfButton from "../../components/SavePdfButton";
+import { prepareReportLogo } from "@/lib/report-logo.client";
 import {
   saveSignatories,
   saveReportSettings,
@@ -238,17 +239,11 @@ export default function SummaryClient({
     formData.append("schoolName", cleanSchoolName);
     formData.append("schoolAddress", cleanAddress);
 
-    if (leftLogoFile) {
-      formData.append("leftLogo", leftLogoFile);
-    }
-
-    if (rightLogoFile) {
-      formData.append("rightLogo", rightLogoFile);
-    }
-
     setIsSavingHeader(true);
 
     try {
+      if (leftLogoFile) formData.append("leftLogo", await prepareReportLogo(leftLogoFile));
+      if (rightLogoFile) formData.append("rightLogo", await prepareReportLogo(rightLogoFile));
       const result = await saveReportSettings(
         department,
         formData
