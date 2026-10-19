@@ -6,6 +6,7 @@ import { requireTabAccess } from "@/lib/permissions";
 import { enqueuePaymentReceipt, scheduleDigitalReceiptDispatch } from "@/lib/digital-receipts";
 import { revalidatePath } from "next/cache";
 import { withFinancialTransaction } from "@/lib/financial-transaction";
+import { receiptNumberConflictWhere } from "@/lib/receipt-number";
 import { getPeriodLedger, toCents } from "../realign/ledger";
 import { applyPaymentToStudentCollectibles } from "../collectibles/due-link";
 import { PENALTY_FUND_NAME } from "@/lib/penalty-fund";
