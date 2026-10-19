@@ -3,7 +3,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { issueDepartmentOtp } from '@/lib/department-otp';
-import { requireTabAccess, isSuperAdminEmail } from '@/lib/permissions';
+import { requireTabAccess, isReservedGlobalAdminEmail } from '@/lib/permissions';
 import { logSystemAction } from '@/lib/logger';
 
 // All OTP issuing rules (cooldown, daily cap, Super Admin routing) live in lib/department-otp.ts.
@@ -45,8 +45,8 @@ export async function updateUserAccountStatus(
   if (!actorIsSuper && !isAdminRole(actor.role)) {
     throw new Error('Only an Admin or Super Admin can change account status or unblock users.');
   }
-  if (isSuperAdminEmail(target.email) && !actorIsSuper) {
-    throw new Error('The system owner account cannot be modified.');
+  if (await isReservedGlobalAdminEmail(target.email)) {
+    throw new Error('Global Super Admin accounts cannot be modified as tenant users.');
   }
   if (target.id === actor.id && newStatus !== 'Active') {
     throw new Error('You cannot deactivate or block your own account.');

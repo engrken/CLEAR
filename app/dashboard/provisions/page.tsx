@@ -7,6 +7,7 @@ import { requireSuperAdmin } from '@/lib/permissions';
 import { logoutProvisioningAction } from './actions';
 import { MasterProvisionForm } from './MasterProvisionForm';
 import { ProvisionRow } from './ProvisionRow';
+import { GlobalAdminManager } from './GlobalAdminManager';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
@@ -22,6 +23,14 @@ export default async function ProvisionsPage() {
   } catch {
     redirect('/dashboard');
   }
+
+  const [additionalAdmins, globalAdminAudit] = await Promise.all([
+    prisma.globalSuperAdmin.findMany({ orderBy: { createdAt: 'desc' },
+      select: { id: true, email: true, fullName: true, status: true, invitedBy: true,
+        invitationExpiresAt: true, lastLoginAt: true, activatedAt: true, createdAt: true } }),
+    prisma.globalAdminAudit.findMany({ orderBy: { createdAt: 'desc' }, take: 30,
+      select: { id: true, actorEmail: true, targetEmail: true, action: true, createdAt: true } }),
+  ]);
 
   const organizations = await prisma.organization.findMany({
     orderBy: [{ schoolGroup: 'asc' }, { name: 'asc' }],
@@ -62,6 +71,7 @@ export default async function ProvisionsPage() {
         </p>
       </div>
 
+      <GlobalAdminManager accounts={additionalAdmins} audit={globalAdminAudit} actorEmail={email} />
       <div className="row g-4">
         <div className="col-12 col-lg-4">
           <div className="p-4 rounded-4 shadow-lg border border-secondary border-opacity-50 h-100" style={{ backgroundColor: '#1e293b' }}>

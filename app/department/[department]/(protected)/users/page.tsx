@@ -85,6 +85,12 @@ export default async function UserManagementPage({
 
   // Pass only the fields required by the Client Component.
   // The global Super Admin flag is calculated on the server.
+  const reservedGlobalAdmins = await prisma.globalSuperAdmin.findMany({
+    where: { email: { in: dbUsers.map(u => u.email.trim().toLowerCase()) } },
+    select: { email: true },
+  });
+  const reservedGlobalEmails = new Set(reservedGlobalAdmins.map(x => x.email));
+
   const users = dbUsers.map((user) => ({
     id: user.id,
     userId: user.userId,
@@ -95,7 +101,7 @@ export default async function UserManagementPage({
     status: user.status,
     otpAttempts: user.otpAttempts,
     allowedTabs: parseAllowedTabs(user.allowedTabs),
-    isSuperAdmin: isSuperAdminEmail(user.email),
+    isSuperAdmin: isSuperAdminEmail(user.email) || reservedGlobalEmails.has(user.email.trim().toLowerCase()),
   }));
 
   const session = await auth();
