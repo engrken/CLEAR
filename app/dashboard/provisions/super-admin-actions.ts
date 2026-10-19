@@ -4,11 +4,34 @@ import { prisma } from '@/lib/prisma';
 import { requireSuperAdmin } from '@/lib/permissions';
 import { isReservedGlobalAdminEmail, isSuperAdminEmail, normalizeGlobalAdminEmail } from '@/lib/super-admin';
 import { revalidatePath } from 'next/cache';
+import { sendEmail } from '@/lib/mailer';
 
 const MANAGE_PATH = '/dashboard/provisions';
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function refresh() { revalidatePath(MANAGE_PATH); }
+async function sendGlobalAdminInvitation(email: string, name: string) {
+  // Notification only; NEVER email a login token or impersonation link.
+  // If SMTP is unavailable, authorization remains Pending and the admin can
+  // request an OTP directly from System SuperAdmin Access.
+  try {
+    await sendEmail({
+      to: email,
+      subject: 'CLEAR System — Global Super Admin Invitation',
+      text: `Hello ${name}, you have been invited as a CLEAR System global Super Admin. Open the official CLEAR dashboard and select System SuperAdmin Access. Enter this email address to request your own single-use verification code. This invitation expires after seven days. If unexpected, contact the system owner.`,
+      html: `<div style="font:14px Arial,sans-serif;max-width:560px;margin:auto;padding:20px">
+        <h2 style="color:#0b7292">CLEAR Global Super Admin Invitation</h2>
+        <p>You've been invited to administer the CLEAR platform.</p>
+        <p>Open the official CLEAR dashboard and choose <strong>System SuperAdmin Access</strong>.
+           Use the invited email address to request and verify your personal one-time code.</p>
+        <p>This invitation expires in 7 days. If you did not expect it, contact the system owner.</p>
+      </div>`,
+    });
+  } catch (err) {
+    console.error('Global Super Admin invitation notification unavailable:', err);
+  }
+}
+
 
 export async function inviteGlobalAdmin(formData: FormData) {
   const actor = await requireSuperAdmin();
@@ -35,6 +58,32 @@ export async function inviteGlobalAdmin(formData: FormData) {
       details: 'Invitation awaits first verified email OTP, expires in 7 days',
     } });
   });
+  await sendGlobalAdminInvitation(email, fullName);
+  refresh();
+}
+
+export async function renewGlobalAdminInvitation(formData: FormData) {
+  const actor = await requireSuperAdmin();
+  const actorEmail = normalizeGlobalAdminEmail(actor.email);
+  const id = String(formData.get('id') || '').trim();
+  if (!id || id.length > 128) throw new Error('Invalid invitation target.');
+  const target = await prisma.$transaction(async tx => {
+    const found = await tx.globalSuperAdmin.findUnique({ where: { id } });
+    if (!found || found.status !== 'Pending' || found.email === actorEmail)
+      throw new Error('Only a pending invitation may be renewed.');
+    const changed = await tx.globalSuperAdmin.updateMany({
+      where: { id, status: 'Pending', sessionVersion: found.sessionVersion },
+      data: { invitationExpiresAt: new Date(Date.now() + 7*24*60*60*1000),
+        sessionVersion: { increment: 1 } },
+    });
+    if (changed.count !== 1) throw new Error('Invitation changed concurrently.');
+    await tx.verificationToken.deleteMany({ where: { identifier: found.email } });
+    await tx.globalAdminAudit.create({ data: {
+      actorEmail, targetEmail: found.email, action: 'RENEW_GLOBAL_ADMIN_INVITATION',
+    } });
+    return found;
+  });
+  await sendGlobalAdminInvitation(target.email, target.fullName);
   refresh();
 }
 
@@ -54,18 +103,21 @@ export async function updateGlobalAdminStatus(formData: FormData) {
 
     const allowed =
       (command === 'disable' && ['Active', 'Pending'].includes(target.status)) ||
-      (command === 'enable' && target.status === 'Disabled' && target.activatedAt !== null) ||
+      (command === 'enable' && target.status === 'Disabled') ||
       (command === 'revoke' && target.status !== 'Revoked');
     if (!allowed) throw new Error('Invalid status transition.');
 
     const nextStatus = command === 'disable' ? 'Disabled' :
-      command === 'enable' ? 'Active' : 'Revoked';
+      command === 'enable' ? (target.activatedAt ? 'Active' : 'Pending') : 'Revoked';
     const now = new Date();
     const changed = await tx.globalSuperAdmin.updateMany({
       where: { id, status: target.status, sessionVersion: target.sessionVersion },
       data: {
         status: nextStatus, sessionVersion: { increment: 1 },
         disabledAt: command === 'disable' ? now : null,
+        ...(command === 'enable' && !target.activatedAt ? {
+          invitationExpiresAt: new Date(now.getTime() + 7*24*60*60*1000),
+        } : {}),
         ...(command === 'revoke' ? { revokedAt: now } : {}),
       },
     });

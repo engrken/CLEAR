@@ -161,10 +161,15 @@ export async function verifySuperAdminOtp(
     });
     if (consumed.count !== 1) return null;
 
-    if (isSuperAdminEmail(e)) return {
-      id: 'bootstrap', email: e, fullName: 'Primary Super Admin',
-      sessionVersion: 1, source: 'bootstrap',
-    };
+    if (isSuperAdminEmail(e)) {
+      await tx.globalAdminAudit.create({ data: {
+        actorEmail: e, targetEmail: e, action: 'BOOTSTRAP_GLOBAL_SIGN_IN',
+      } });
+      return {
+        id: 'bootstrap', email: e, fullName: 'Primary Super Admin',
+        sessionVersion: 1, source: 'bootstrap',
+      };
+    }
     const account = await tx.globalSuperAdmin.findUnique({ where: { email: e } });
     if (!account) return null;
     const where = account.status === 'Pending'

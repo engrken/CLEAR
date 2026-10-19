@@ -1,4 +1,4 @@
-import { inviteGlobalAdmin, updateGlobalAdminStatus } from './super-admin-actions';
+import { inviteGlobalAdmin, updateGlobalAdminStatus, renewGlobalAdminInvitation } from './super-admin-actions';
 
 type Account = {
   id: string; email: string; fullName: string; status: string; invitedBy: string;
@@ -47,12 +47,20 @@ export function GlobalAdminManager({ accounts, audit, actorEmail }: {
               {['Active','Pending'].includes(account.status) && <form action={updateGlobalAdminStatus}>
                 <input type="hidden" name="id" value={account.id}/><input type="hidden" name="command" value="disable"/>
                 <button className="btn btn-outline-warning btn-sm" type="submit">Disable</button></form>}
-              {account.status === 'Disabled' && account.activatedAt && <form action={updateGlobalAdminStatus}>
+              {account.status === 'Pending' && <form action={renewGlobalAdminInvitation}>
+                <input type="hidden" name="id" value={account.id}/>
+                <button className="btn btn-outline-info btn-sm" type="submit">Renew invitation</button></form>}
+              {account.status === 'Disabled' && <form action={updateGlobalAdminStatus}>
                 <input type="hidden" name="id" value={account.id}/><input type="hidden" name="command" value="enable"/>
                 <button className="btn btn-outline-success btn-sm" type="submit">Enable</button></form>}
-              <form action={updateGlobalAdminStatus}>
-                <input type="hidden" name="id" value={account.id}/><input type="hidden" name="command" value="revoke"/>
-                <button className="btn btn-outline-danger btn-sm" type="submit">Revoke permanently</button></form>
+              <details className="small"><summary className="text-danger" role="button">Revoke account…</summary>
+                <p className="small text-warning mb-1 mt-2">This permanently disables access and expires existing sessions.</p>
+                <form action={updateGlobalAdminStatus}>
+                  <input type="hidden" name="id" value={account.id}/>
+                  <input type="hidden" name="command" value="revoke"/>
+                  <button className="btn btn-danger btn-sm" type="submit">Confirm permanent revocation</button>
+                </form>
+              </details>
             </div>}
           </td>
         </tr>)}
