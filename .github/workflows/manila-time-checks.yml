@@ -123,11 +123,11 @@ jobs:
           INSERT INTO "Penalty" ("id", "organizationId", "penaltyId", "studentName", "activity", "date")
           VALUES ('ci-mnl-penalty', 'ci-mnl-org', 'CI-MNL-PENALTY', 'CI Student', 'CI Assessment', '2026-10-19 12:00:00');
           SQL
-      - name: Apply UTC-reviewed migration in the same SQL session
+      - name: Apply future-only TEST-history waiver migration in same SQL session
         run: |
           psql "$PSQL_URL" -v ON_ERROR_STOP=1 \
-            -c "SELECT set_config('clear.verified_legacy_timestamp_zone','UTC',false)" \
-            -f scripts/sql/manila-event-time-migration.sql
+            -c "SELECT set_config('clear.future_only_test_history_waiver','ACCEPT_INACCURATE_LEGACY_TEST_TIMES',false)" \
+            -f scripts/sql/manila-future-only-event-time-migration.sql
       - name: Prove the original instant and Philippine display were preserved
         run: |
           actual="$(psql "$PSQL_URL" -At -v ON_ERROR_STOP=1 -c "SELECT to_char(\"timestamp\" AT TIME ZONE 'Asia/Manila','YYYY-MM-DD HH24:MI:SS') FROM \"SystemLog\" WHERE \"id\"='ci-mnl-log'")"
@@ -137,3 +137,18 @@ jobs:
           penalty_type="$(psql "$PSQL_URL" -At -v ON_ERROR_STOP=1 -c "SELECT data_type FROM information_schema.columns WHERE table_schema='public' AND table_name='Penalty' AND column_name='date'")"
           test "$penalty_type" = 'timestamp without time zone'
           npx prisma db push --skip-generate
+      - name: Verify new audit timestamps use real UTC instants
+        run: |
+          psql "$PSQL_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO "SystemLog" ("id","organizationId","user","action")
+          VALUES ('ci-future-only-new-event', 'ci-mnl-org', 'CI', 'FUTURE_ONLY_NEW_EVENT');
+          DO $
+          DECLARE d double precision;
+          BEGIN
+            SELECT abs(extract(epoch FROM ("timestamp" - current_timestamp))) INTO d
+            FROM "SystemLog" WHERE id='ci-future-only-new-event';
+            IF d IS NULL OR d > 60 THEN
+              RAISE EXCEPTION 'New SystemLog timestamp did not use the actual insert instant (delta=%)', d;
+            END IF;
+          END $;
+          SQL

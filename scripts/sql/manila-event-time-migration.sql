@@ -1,3 +1,6 @@
+-- LEGACY UTC-PROVENANCE SCRIPT IS DISABLED FOR CLEAR'S MIXED-HISTORY DATA.
+-- It has been superseded by scripts/sql/manila-future-only-event-time-migration.sql.
+-- DO NOT RUN IT. Its historical UTC premise has been disproven by backup records.
 -- CLEAR 2026: REVIEW-GATED event instant type migration.
 -- DO NOT RUN ON PRODUCTION WITHOUT VERIFIED BACKUP AND HISTORICAL-TIME AUDIT.
 -- This script converts ONLY true event instants, not accounting/calendar dates.
@@ -10,6 +13,7 @@
 -- followed by this script. The flag does NOT verify data by itself.
 
 BEGIN;
+DO $disabled_old_utc_migration$ BEGIN RAISE EXCEPTION 'Obsolete CLEAR UTC-only migration is disabled; use reviewed future-only waiver migration'; END $disabled_old_utc_migration$;
 SET LOCAL lock_timeout = '10s';
 SET LOCAL statement_timeout = '15min';
 SET LOCAL TIME ZONE 'UTC';

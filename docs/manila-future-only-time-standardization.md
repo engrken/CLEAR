@@ -33,3 +33,21 @@ The database contains mixed legacy local and UTC-naive event times. Since the op
 8. Separately reconcile Prisma migration-history tracking for the manually reviewed schema change. `prisma migrate status` only assesses recorded migrations, not arbitrary DDL.
 
 Production DDL or Vercel deployment requires a **new, explicit operator authorization** after the correct future-only plan/script is reviewed. GitHub PR #17 stays draft until cutover is safely coordinated.
+
+## Verified staging execution entrypoint
+
+Reviewed SQL: `scripts/sql/manila-future-only-event-time-migration.sql`. The
+obsolete UTC-provenance script `scripts/sql/manila-event-time-migration.sql`
+is deliberately disabled to prevent accidental production misuse. A running
+PostgreSQL SQL session must explicitly acknowledge the legacy TEST-clock waiver,
+then invoke the future-only script in that same session. The migration refuses
+already-partly-migrated columns, uses UTC for legacy type reinterpretation and
+**does not change any accounting/calendar fields**. Production release is still
+subject to explicit authorization and a fresh Neon snapshot.
+
+Example for a fully verified, non-production connection:
+```sh
+psql "$STAGING_DIRECT_URL" -v ON_ERROR_STOP=1 \
+  -c "SELECT set_config('clear.future_only_test_history_waiver','ACCEPT_INACCURATE_LEGACY_TEST_TIMES',false)" \
+  -f scripts/sql/manila-future-only-event-time-migration.sql
+```
