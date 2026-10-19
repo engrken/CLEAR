@@ -80,7 +80,7 @@ jobs:
         run: npm run build
 
   migration-rehearsal:
-    name: Preserve legacy UTC instants in PostgreSQL
+    name: Future-only migration and new event time
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
