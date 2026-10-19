@@ -1,6 +1,6 @@
 # Redesign "B · Bright Campus": implementation plan (version 1.1.0)
 
-**Status:** planned 2026-10-17. **Don't start coding until 1.0.0 is live on Google Play** (production review was submitted in `4852802`). Work then happens on a branch, so hotfixes to 1.0.x can still ship from `main`.
+**Status:** built 2026-10-19 on branch `redesign-b` (from 1.0.1). Decisions taken: light only; whole pesos on the home tiles only; "Next proof" after verifying; friendly words on student screens only; full student name on results. The tab bar uses the JS `Tabs` `tabBar` prop (the fallback below), not the experimental headless tabs.
 
 **Mockups:** Design canvas https://claude.ai/artifact/DMUtmacWMDXEUkhdrnRBfY
 - Page **Directions**, row B: clearance (cleared), sign-in code, officer home, review remittance.

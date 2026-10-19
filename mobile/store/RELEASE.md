@@ -169,3 +169,28 @@ Before building, check the remote versionCode is 2 (`npx eas-cli@latest build:ve
 ```
 
 **Submitted (2026-10-19, ~08:20):** 1.0.1 (3), EAS build ecf71c13, uploaded through the Play Developer API (play.mjs with the BahaySuite service account, which now has CLEAR app permissions) to **production**, full rollout, the same countries as 1.0.0. Server side: VPS revision 7e2d67b (Ken's main plus /api/mobile) was deployed first. Managed publishing is off, so it goes live once Google approves.
+
+## 1.1.0 (Bright Campus redesign)
+
+The new look from mobile/docs/redesign-b.md, built on 1.0.1 (branch `redesign-b`). Look only: the API, data, flows and permissions are the same as 1.0.1.
+
+- Light only, with the B palette (cobalt, sun, mint, coral on white) and Bricolage Grotesque + Figtree type, replacing IBM Plex.
+- Pill buttons and fields, rounded OTP cells, coloured header blocks on the gateway and sign-in, full-colour clearance results, and full-screen success pages for "Receipt sent" and "Verified".
+- A floating ink tab bar with a Verify badge for pending proofs.
+- The home tiles show whole pesos; every other amount shows centavos.
+- After verifying, "Next proof" opens the next pending remittance.
+- Student screens use friendlier words ("Almost there"); officer screens keep the web's wording.
+- Proof uploads match the server: PNG, JPEG or WebP, up to 5 MB.
+
+Before release: retake the Play screenshots in the new look (`store/screenshots.md`), and check 130% font scale and TalkBack on a phone.
+
+**Play "What's new" (en-US):**
+
+```text
+A fresh new look for CLEAR!
+- Brighter, easier-to-read screens with bigger buttons.
+- Clear colours for cleared, on hold and pending.
+- A new floating menu for officers, with a badge for proofs waiting to be checked.
+- After verifying a payment, jump straight to the next one.
+- Receipt uploads now accept PNG, JPG or WebP up to 5 MB.
+```

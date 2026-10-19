@@ -1,5 +1,5 @@
 import { useRef, useState, type ComponentRef } from 'react';
-import { Pressable, StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
+import { Platform, Pressable, StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
 
 import { radius, size, spacing, type, useTheme } from '@/theme';
 import { Icon } from './icon';
@@ -134,7 +134,8 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderRadius: radius.pill,
   },
-  input: { flex: 1, minWidth: 0, paddingVertical: spacing[3] },
+  // The pill draws the focus ring; drop the browser's own outline on web.
+  input: { flex: 1, minWidth: 0, paddingVertical: spacing[3], ...(Platform.OS === 'web' ? { outlineStyle: 'none' as never } : null) },
   inputText: { ...type.body, fontFamily: 'Figtree_600SemiBold', fontSize: 17 },
   help: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 6 },
   cells: { flexDirection: 'row', gap: spacing[2] },

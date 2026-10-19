@@ -1,4 +1,4 @@
-import { Tabs } from 'expo-router';
+import { router, Tabs, type Href } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -17,13 +17,10 @@ const TABS: TabDef[] = [
   { name: 'more', title: 'More', icon: 'more', allowed: () => true },
 ];
 
-type BarProps = {
-  state: { index: number; routes: { key: string; name: string }[] };
-  navigation: { navigate: (name: string) => void; emit: (e: { type: 'tabPress'; target: string; canPreventDefault: true }) => { defaultPrevented: boolean } };
-};
+type BarProps = { state: { index: number; routes: { key: string; name: string }[] } };
 
 /** The floating ink pill. A tab the role can't use has no button at all. */
-function FloatingTabBar({ state, navigation }: BarProps) {
+function FloatingTabBar({ state }: BarProps) {
   const { c } = useTheme();
   const { can } = useSession();
   const pending = usePendingCount();
@@ -36,7 +33,6 @@ function FloatingTabBar({ state, navigation }: BarProps) {
       <View accessibilityRole="tablist" style={[styles.bar, { backgroundColor: c.inkBlock }]}>
         {visible.map((t) => {
           const focused = current === t.name;
-          const route = state.routes.find((r) => r.name === t.name);
           const badge = t.name === 'verify' && pending ? pending : 0;
           return (
             <Pressable
@@ -45,8 +41,7 @@ function FloatingTabBar({ state, navigation }: BarProps) {
               accessibilityState={{ selected: focused }}
               accessibilityLabel={badge ? `${t.title}, ${badge} pending` : t.title}
               onPress={() => {
-                const event = navigation.emit({ type: 'tabPress', target: route?.key ?? t.name, canPreventDefault: true });
-                if (!focused && !event.defaultPrevented) navigation.navigate(t.name);
+                if (!focused) router.navigate(`/${t.name}` as Href);
               }}
               style={[styles.item, focused && { backgroundColor: '#FFFFFF' }]}>
               <Icon name={t.icon} size={20} tint={focused ? c.ink : c.tabInactive} />

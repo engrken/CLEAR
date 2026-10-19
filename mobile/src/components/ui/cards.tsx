@@ -193,7 +193,7 @@ const styles = StyleSheet.create({
   card: { borderRadius: radius.lg },
   hero: { borderRadius: radius.lg, paddingVertical: 20, paddingHorizontal: 22, gap: 4 },
   tile: { flex: 1, minWidth: 0, borderRadius: radius.md, paddingVertical: 14, paddingHorizontal: 12, gap: 4 },
-  avatar: { alignItems: 'center', justifyContent: 'center', flex: 0 },
+  avatar: { alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

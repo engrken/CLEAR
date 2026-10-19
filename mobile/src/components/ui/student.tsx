@@ -197,5 +197,5 @@ const styles = StyleSheet.create({
   track: { height: 6, borderRadius: radius.pill, overflow: 'hidden' },
   bar: { height: '100%', borderRadius: radius.pill },
   remove: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
-  mark: { alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  mark: { alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 },
 });

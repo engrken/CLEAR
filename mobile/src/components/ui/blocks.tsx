@@ -13,7 +13,7 @@ export function IconWell({ icon, bg, fg, size = 56, round }: {
   icon: IconName; bg: string; fg: string; size?: number; round?: boolean;
 }) {
   return (
-    <View style={{ width: size, height: size, borderRadius: round ? size / 2 : Math.round(size / 3.1), backgroundColor: bg, alignItems: 'center', justifyContent: 'center' }}>
+    <View style={{ width: size, height: size, borderRadius: round ? size / 2 : Math.round(size / 3.1), backgroundColor: bg, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
       <Icon name={icon} size={Math.round(size * 0.5)} tint={fg} />
     </View>
   );

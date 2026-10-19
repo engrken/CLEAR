@@ -181,10 +181,9 @@ function Review({ id }: { id: string }) {
               {` · ${l.itemDescription}`}
             </Text>
           </View>
-          <View>
-            <StatusPill status={l.status} />
-          </View>
         </View>
+        {/* Own row: the stored wording ("Pending Verification") is too long to share the name line. */}
+        <StatusPill status={l.status} />
         <Money value={amount} size="xl" />
         <View style={styles.chips}>
           <Chip label="Channel" value={l.paymentChannel} />
