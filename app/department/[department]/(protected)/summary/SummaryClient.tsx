@@ -8,6 +8,7 @@ import { clearAlert, clearConfirm, clearPrompt } from "@/lib/clear-dialogs";
 import { useState, useEffect } from "react";
 import { fmt } from "@/lib/utils";
 import { useRouter } from "next/navigation";
+import SavePdfButton from "../../components/SavePdfButton";
 import {
   saveSignatories,
   saveReportSettings,
@@ -473,6 +474,7 @@ export default function SummaryClient({
               <i className="bi bi-printer me-1" />
               Print Summary Report
             </button>
+            <SavePdfButton className="btn btn-outline-danger btn-sm fw-bold ms-2" />
           </div>
         </div>
 
@@ -579,7 +581,8 @@ export default function SummaryClient({
         {/* COLLECTIONS: aggregate by configured category; no item names, IDs or OR details. */}
         <h6 className="text-info text-uppercase fw-bold mt-2">Collections ({term})</h6>
         <div className="table-responsive mb-4">
-          <table className="table table-sm table-bordered border-dark align-middle text-body mb-0" style={{ fontSize: "0.85rem" }}>
+          <table className="table table-sm table-bordered border-dark align-middle text-body mb-0" style={{ fontSize: "0.85rem", tableLayout: "fixed", width: "100%" }}>
+            <colgroup><col style={{ width: "55%" }} /><col style={{ width: "20%" }} /><col style={{ width: "25%" }} /></colgroup>
             <thead><tr className="text-muted"><th>Collection Category</th><th className="text-end"># Students</th><th className="text-end">Total Collected</th></tr></thead>
             <tbody>
               {summaryCategories.length === 0 ? (
@@ -663,7 +666,8 @@ export default function SummaryClient({
               students; dues counts represent outstanding assessments.
             </p>
             <div className="table-responsive">
-              <table className="table table-sm table-bordered border-dark align-middle text-body mb-0" style={{ fontSize: "0.85rem" }}>
+              <table className="table table-sm table-bordered border-dark align-middle text-body mb-0" style={{ fontSize: "0.85rem", tableLayout: "fixed", width: "100%" }}>
+                <colgroup><col style={{ width: "55%" }} /><col style={{ width: "20%" }} /><col style={{ width: "25%" }} /></colgroup>
                 <thead>
                   <tr className="text-muted">
                     <th>Fee / Obligation</th>
