@@ -38,7 +38,7 @@ export function positiveMoneyCents(value: unknown, label = "Amount"): number {
   if (typeof value !== "number" && typeof value !== "string") {
     throw new Error(`${label} must be numeric.`);
   }
-  if (typeof value === "string" && !/^(?:0|[1-9]\\d*)(?:\\.\\d{1,2})?$/.test(value.trim())) {
+  if (typeof value === "string" && !/^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/.test(value.trim())) {
     throw new Error(`${label} must have at most two decimal places.`);
   }
   const amount = Number(value);
