@@ -263,7 +263,6 @@ export default function CollectionsForm({
 
       setReceiptData({
         orNumber: result.orNumber,
-        orNumber: result.orNumber,
         date,
         studentId,
         studentName,
@@ -378,7 +377,7 @@ export default function CollectionsForm({
         </div>
         <div className="col-md-6">
           <label className="form-label text-muted small fw-semibold">OR Number</label>
-          <input type="text" className="form-control bg-body text-body font-monospace border-warning fw-bold" value={orNumber} onChange={(e) => setOrNumber(e.target.value)} required />
+          <div className="form-control bg-body-secondary text-body">Automatically issued after successful payment</div>
         </div>
       </div>
 
