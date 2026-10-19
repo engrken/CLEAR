@@ -402,6 +402,16 @@ export default function SummaryClient({
                 padding: 5px 8px !important;
               }
 
+              .print-container .outstanding-obligations h6 {
+                break-after: avoid !important;
+                page-break-after: avoid !important;
+              }
+
+              .print-container .outstanding-obligations tr {
+                break-inside: avoid !important;
+                page-break-inside: avoid !important;
+              }
+
               .print-container .bg-dark {
                 background-color: #f8f9fa !important;
                 -webkit-print-color-adjust: exact !important;
@@ -639,60 +649,56 @@ export default function SummaryClient({
           </table>
         </div>
 
-        {/* Outstanding liabilities only: never mix collectible balances with collected income. */}
-        <h6 className="text-warning text-uppercase fw-bold mt-3">Outstanding Student Obligations ({term})</h6>
-        <p className="small text-muted fst-italic mb-1">These are unpaid balances, not cash receipts. Penalty totals include only cash-only late fees (such as late enrollment), counting distinct students. Community-service-eligible penalties are excluded from this monetary summary but still appear in Penalty Logs and may affect clearance. Dues count outstanding assessments.</p>
-        <div className="table-responsive mb-4">
-          <table className="table table-sm table-bordered border-dark align-middle text-body mb-0" style={{ fontSize: "0.85rem" }}>
-            <thead><tr className="text-muted"><th>Obligation Category</th><th className="text-end">Students / Assessments</th><th className="text-end">Outstanding Amount</th></tr></thead>
-            <tbody>
-              <tr><td className="ps-3">Cash-Only Penalties (Late Fees)</td><td className="text-end">{penaltySummary.count}</td><td className="text-end">{fmt(penaltySummary.amount)}</td></tr>
-              <tr><td className="ps-3">Dues / Collectibles</td><td className="text-end">{duesSummary.count}</td><td className="text-end">{fmt(duesSummary.amount)}</td></tr>
-            </tbody>
-            <tfoot><tr className="fw-bold bg-dark text-white"><td colSpan={2} className="text-end">TOTAL OUTSTANDING:</td><td className="text-end text-warning">{fmt((penaltySummary.amount || 0) + (duesSummary.amount || 0))}</td></tr></tfoot>
-          </table>
-        </div>
-
-        {/* Itemized monetary dues summary; use the SAME finance-engine buckets
-            as the headline. Do not display student identifiers in the summary. */}
-        <h6 className="fw-bold text-uppercase text-body mb-1">
-          Dues / Collectibles — Itemized Breakdown ({term})
-        </h6>
-        <p className="small text-muted fst-italic mb-2">
-          Grouped unpaid assessments by fee or obligation; amounts are outstanding balances, not receipts.
-          For student-level records, use the authorized Collectibles module.
-        </p>
-        <div className="table-responsive mb-4">
-          <table className="table table-sm table-bordered border-dark align-middle text-body mb-0" style={{ fontSize: "0.85rem" }}>
-            <thead>
-              <tr className="text-muted">
-                <th>Fee / Obligation</th>
-                <th className="text-end">Assessments</th>
-                <th className="text-end">Outstanding Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {duesBreakdown.length === 0 ? (
-                <tr><td colSpan={3} className="text-center text-muted">No outstanding dues or collectibles for this term.</td></tr>
-              ) : (
-                duesBreakdown.map((item, index) => (
-                  <tr key={`${item.category}-${index}`}>
-                    <td className="ps-3">{item.category}</td>
-                    <td className="text-end">{item.count}</td>
-                    <td className="text-end">{fmt(item.amount)}</td>
+        {/* A single print-friendly liabilities table. The dues come from the
+            existing finance-engine buckets; do not duplicate the subtotal or
+            display zero-balance categories / student-identifying records. */}
+        {(Math.round(Number(penaltySummary.amount || 0) * 100) > 0 || duesBreakdown.length > 0) && (
+          <section className="outstanding-obligations mb-4">
+            <h6 className="text-warning text-uppercase fw-bold mt-3">
+              Outstanding Student Obligations ({term})
+            </h6>
+            <p className="small text-muted fst-italic mb-2">
+              Unpaid balances only, not cash receipts. Cash-only late fees exclude
+              community-service-eligible penalties. Penalty counts represent distinct
+              students; dues counts represent outstanding assessments.
+            </p>
+            <div className="table-responsive">
+              <table className="table table-sm table-bordered border-dark align-middle text-body mb-0" style={{ fontSize: "0.85rem" }}>
+                <thead>
+                  <tr className="text-muted">
+                    <th>Fee / Obligation</th>
+                    <th className="text-end">Students / Assessments</th>
+                    <th className="text-end">Outstanding Amount</th>
                   </tr>
-                ))
-              )}
-            </tbody>
-            <tfoot>
-              <tr className="fw-bold">
-                <td className="text-end">TOTAL DUES / COLLECTIBLES:</td>
-                <td className="text-end">{duesSummary.count}</td>
-                <td className="text-end text-warning">{fmt(duesSummary.amount)}</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+                </thead>
+                <tbody>
+                  {Math.round(Number(penaltySummary.amount || 0) * 100) > 0 && (
+                    <tr>
+                      <td className="ps-3">Cash-Only Penalties (Late Fees)</td>
+                      <td className="text-end">{penaltySummary.count}</td>
+                      <td className="text-end">{fmt(penaltySummary.amount)}</td>
+                    </tr>
+                  )}
+                  {duesBreakdown.map((item, index) => (
+                    <tr key={`${item.category}-${index}`}>
+                      <td className="ps-3">{item.category}</td>
+                      <td className="text-end">{item.count}</td>
+                      <td className="text-end">{fmt(item.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="fw-bold border-top">
+                    <td colSpan={2} className="text-end">TOTAL OUTSTANDING:</td>
+                    <td className="text-end text-warning">
+                      {fmt((penaltySummary.amount || 0) + (duesSummary.amount || 0))}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </section>
+        )}
 
         {/* NET TREASURY BALANCE */}
         <div className="card p-2 d-flex flex-row justify-content-between align-items-center flex-wrap gap-2 mb-4 bg-body-secondary border-dark print-border rounded-0">
