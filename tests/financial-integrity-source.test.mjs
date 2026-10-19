@@ -4,12 +4,10 @@ import { readFileSync } from 'node:fs';
 
 const read = (path) => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 
-test('both posting paths lock receipt number before duplicate check', () => {
+test('both posting paths allocate receipts on the server', () => {
   for (const path of ['app/department/[department]/(protected)/collections/actions.ts', 'app/department/[department]/(protected)/remittances/actions.ts']) {
     const source = read(path);
-    const lock = source.indexOf('await lockReceiptNumber(tx, org.id, orNumber)');
-    const duplicate = source.indexOf('const conflict', lock);
-    assert.ok(lock >= 0 && duplicate > lock, path);
+    assert.ok(source.includes('await allocateOfficialReceiptNumber(tx, org.id)'), path);
   }
 });
 
@@ -26,8 +24,9 @@ test('financial posting uses Serializable transactions and bounded retries', () 
   assert.ok(source.includes('maxAttempts'));
 });
 
-test('both posting paths share package-aware OR lookup', () => {
-  for (const path of ['app/department/[department]/(protected)/collections/actions.ts', 'app/department/[department]/(protected)/remittances/actions.ts']) {
-    assert.ok(read(path).includes('receiptNumberConflictWhere(org.id, orNumber)'), path);
-  }
+test('receipt allocator uses the database sequence and duplicate check', () => {
+  const source = read('lib/receipt-number.ts');
+  assert.ok(source.includes("nextval('clear_receipt_sequence'::regclass)"));
+  assert.ok(source.includes('receiptNumberConflictWhere(organizationId, orNumber)'));
+  assert.ok(source.includes('lockReceiptNumber(tx, organizationId, orNumber)'));
 });
