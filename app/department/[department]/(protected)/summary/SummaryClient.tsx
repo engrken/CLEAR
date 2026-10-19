@@ -450,7 +450,7 @@ export default function SummaryClient({
         }}
       />
 
-      <div className="card p-3 p-md-4 border-secondary shadow-sm bg-body text-body print-container">
+      <div data-clear-pdf-summary="true" className="card p-3 p-md-4 border-secondary shadow-sm bg-body text-body print-container">
 
         {/* REPORT TOOLBAR */}
         <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4 d-print-none">
@@ -482,7 +482,7 @@ export default function SummaryClient({
               <i className="bi bi-printer me-1" />
               Print Summary Report
             </button>
-            <SavePdfButton className="btn btn-outline-danger btn-sm fw-bold ms-2" />
+            <SavePdfButton targetSelector="[data-clear-pdf-summary]" fileName={`CLEAR_Summary_${department}_${ay}_${term}`} className="btn btn-outline-danger btn-sm fw-bold ms-2" />
           </div>
         </div>
 
