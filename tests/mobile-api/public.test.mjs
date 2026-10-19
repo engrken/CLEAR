@@ -68,8 +68,8 @@ describe('GET /orgs/:org/clearance', () => {
 
   it('finds a student by school ID; public view hides the amount', async () => {
     const r = expectStatus(await api('GET', q('devdept', schoolId('devdept', 1))), 200);
-    assert.equal(r.studentName, 'Ana Reyes');
-    assert.equal(r.studentId, schoolId('devdept', 1));
+    assert.equal(r.studentName, null, 'anonymous lookup must not disclose roster names');
+    assert.equal(r.studentId, null, 'anonymous lookup must not disclose student numbers');
     assert.equal(r.status, 'hold', 'nobody has paid yet, so the student is on hold');
     assert.equal(r.outstandingCentavos, null, 'public lookups must not reveal the outstanding amount (F54)');
     assert.equal(r.qrToken, null, 'no QR for a student on hold');
@@ -79,7 +79,7 @@ describe('GET /orgs/:org/clearance', () => {
 
   it('finds a student by email', async () => {
     const r = expectStatus(await api('GET', q('devdept', 'dev-2026-0002@students.local')), 200);
-    assert.equal(r.studentName, 'Ben Santos');
+    assert.equal(r.studentName, null);
     assert.equal(r.outstandingCentavos, null);
   });
 
@@ -101,6 +101,8 @@ describe('GET /orgs/:org/clearance', () => {
     const r = expectStatus(await api('GET', q('devdept', schoolId('devdept', 1)), { token }), 200);
     assertCentavos(r.outstandingCentavos, 'outstandingCentavos');
     assert.equal(r.outstandingCentavos, PACKAGE_CENTAVOS);
+    assert.equal(r.studentName, 'Ana Reyes', 'authorized officer may see the name');
+    assert.equal(r.studentId, schoolId('devdept', 1), 'authorized officer may see the school ID');
   });
 
   it("another org's officer token does not reveal the amount", async () => {
