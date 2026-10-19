@@ -1,0 +1,97 @@
+name: CLEAR Mobile API isolation tests
+
+on:
+  pull_request:
+    paths:
+      - 'app/api/mobile/**'
+      - 'lib/mobile/**'
+      - 'lib/clearance.ts'
+      - 'lib/financials.ts'
+      - 'lib/roles.ts'
+      - 'lib/request-ip.ts'
+      - 'lib/demo-reviewer.ts'
+      - 'mobile/**'
+      - 'tests/mobile-api/**'
+      - 'prisma/**'
+      - 'package*.json'
+      - '.npmrc'
+      - '.github/workflows/mobile-api-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  mobile-api-integration:
+    name: Mobile API with isolated PostgreSQL
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: clear_mobile_ci
+          POSTGRES_USER: clear_ci
+          POSTGRES_PASSWORD: clear_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U clear_ci -d clear_mobile_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://clear_ci:clear_ci@127.0.0.1:5432/clear_mobile_ci?schema=public
+      AUTH_SECRET: clear-ci-mobile-otp-signing-key-1234567890abcdef
+      NEXTAUTH_SECRET: clear-ci-mobile-otp-signing-key-1234567890abcdef
+      SUPER_ADMIN_EMAIL: ci-global-admin@example.invalid
+      API_URL: http://127.0.0.1:3000/api/mobile
+      DEMO_REVIEWER_EMAIL: reviewer@demo.clear.invalid
+      DEMO_REVIEWER_CODE: '135790'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install reproducible dependencies
+        run: npm ci
+      - name: Provision disposable PostgreSQL schema
+        run: npx prisma db push --skip-generate
+      - name: Write local-only test settings
+        run: |
+          cat > .env <<'EOF'
+          DATABASE_URL=postgresql://clear_ci:clear_ci@127.0.0.1:5432/clear_mobile_ci?schema=public
+          AUTH_SECRET=clear-ci-mobile-otp-signing-key-1234567890abcdef
+          NEXTAUTH_SECRET=clear-ci-mobile-otp-signing-key-1234567890abcdef
+          SUPER_ADMIN_EMAIL=ci-global-admin@example.invalid
+          API_URL=http://127.0.0.1:3000/api/mobile
+          DEMO_REVIEWER_EMAIL=reviewer@demo.clear.invalid
+          DEMO_REVIEWER_CODE=135790
+          EOF
+      - name: Seed isolated test departments
+        run: |
+          node --env-file=.env prisma/seed-dev.js
+          node --env-file=.env prisma/seed-demo.js
+      - name: Start disposable Next.js server
+        run: |
+          npm run dev -- --hostname 127.0.0.1 > /tmp/clear-mobile-dev.log 2>&1 &
+          echo $! > /tmp/clear-mobile-dev.pid
+          for attempt in $(seq 1 80); do
+            if curl --fail --silent http://127.0.0.1:3000/api/mobile/orgs >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/clear-mobile-dev.log
+          exit 1
+      - name: Run mobile route, privacy, transaction and tenant-isolation tests
+        run: npm run test:api
+      - name: Show server logs if a test failed
+        if: failure()
+        run: tail -n 250 /tmp/clear-mobile-dev.log || true
+      - name: Stop disposable server
+        if: always()
+        run: |
+          if test -f /tmp/clear-mobile-dev.pid; then
+            kill $(cat /tmp/clear-mobile-dev.pid) || true
+          fi
