@@ -371,6 +371,12 @@ export async function verifyRemittance(org: Organization, officer: Officer, data
         }
 
         const isPackage = /departmental\s+fee.*package|departmental.*package/i.test(itemDescription);
+        // The officer may select only an actual ledger fund for this period;
+        // arbitrary names would create untracked fund allocations.
+        if (!isPackage && (!fundAllocation ||
+          !ledger.funds.some((fund) => fund.name.trim().toLowerCase() === fundAllocation!.toLowerCase()))) {
+          throw new DomainError('Selected fund is not available in this academic term.', 'invalid');
+        }
         const packageItems = isPackage
           ? await tx.collectionSetup.findMany({
               where: { organizationId: org.id, academicYear: remit.academicYear, term: remit.term, isPackage: true },
