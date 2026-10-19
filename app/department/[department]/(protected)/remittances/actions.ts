@@ -165,10 +165,7 @@ export async function verifyOnlineRemittance(
         category: String(remit.category || "Online Remittance") });
     }
 
-    const existingOr = await tx.collection.findFirst({ where: {
-      organizationId: org.id,
-      OR: [{ orNumber }, { orNumber: { startsWith: `${orNumber}-P` } }],
-    }, select: { id: true } });
+    const existingOr = await tx.collection.findFirst({ where: receiptNumberConflictWhere(org.id, orNumber), select: { id: true } });
     if (existingOr) throw new Error(`Official receipt ${orNumber} or its package lines already exist.`);
     const updated = await tx.onlineRemittance.updateMany({ where: {
       id: remit.id, organizationId: org.id, status: remit.status,
