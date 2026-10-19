@@ -96,7 +96,8 @@ export async function verifyOnlineRemittance(
     }
     await lockReceiptNumber(tx, org.id, orNumber);
     const conflicted = await tx.collection.findFirst({ where: {
-      organizationId: org.id, orNumber,
+      organizationId: org.id,
+      OR: [{ orNumber }, { orNumber: { startsWith: `${orNumber}-P` } }],
     }, select: { id: true } });
     if (conflicted) throw new Error(`Official receipt ${orNumber} already exists.`);
 
