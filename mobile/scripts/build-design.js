@@ -42,8 +42,8 @@ const size = Object.fromEntries(tokens.size.tokens.map((t) => [camel(t.name), px
 // ---------------------------------------------------------------- type
 // Map (family, weight) to the face names registered by @expo-google-fonts.
 const FACE = {
-  sans: { 400: 'IBMPlexSans_400Regular', 500: 'IBMPlexSans_500Medium', 600: 'IBMPlexSans_600SemiBold' },
-  mono: { 400: 'IBMPlexMono_400Regular', 500: 'IBMPlexMono_500Medium', 600: 'IBMPlexMono_600SemiBold' },
+  display: { 600: 'BricolageGrotesque_600SemiBold', 700: 'BricolageGrotesque_700Bold', 800: 'BricolageGrotesque_800ExtraBold' },
+  sans: { 400: 'Figtree_400Regular', 500: 'Figtree_500Medium', 600: 'Figtree_600SemiBold', 700: 'Figtree_700Bold' },
 };
 const type = {};
 for (const group of tokens.type.groups) {
@@ -57,8 +57,7 @@ for (const group of tokens.type.groups) {
       const ls = String(s.letterSpacing);
       style.letterSpacing = ls.endsWith('em') ? +(parseFloat(ls) * px(s.fontSize)).toFixed(2) : px(ls);
     }
-    if (s.name === 'label') style.textTransform = 'uppercase';
-    if (fam === 'mono') style.fontVariant = ['tabular-nums'];
+    if (s.tabular) style.fontVariant = ['tabular-nums'];
     type[camel(s.name)] = style;
   }
 }
@@ -68,7 +67,7 @@ const out =
   header +
   `export const colors = ${JSON.stringify(colors, null, 2)} as const;\n\n` +
   `export type ThemeName = keyof typeof colors;\n` +
-  `export type ColorTokens = { [K in keyof (typeof colors)['dark']]: string };\n\n` +
+  `export type ColorTokens = { [K in keyof (typeof colors)['${themeIds[0]}']]: string };\n\n` +
   `export const spacing = ${JSON.stringify(spacing)} as const;\n` +
   `export const radius = ${JSON.stringify(radius)} as const;\n` +
   `export const size = ${JSON.stringify(size)} as const;\n\n` +
@@ -86,6 +85,8 @@ const ICONS = {
   close: 'x-lg', more: 'three-dots', image: 'image', safe: 'safe2', cash: 'cash-coin',
   search: 'search', person: 'person-circle', logout: 'box-arrow-right', camera: 'camera',
   plus: 'plus-lg', envelope: 'envelope', transfer: 'arrow-left-right', bank: 'bank',
+  checkLg: 'check-lg', exclaim: 'exclamation-lg', sendUp: 'box-arrow-up', chevronDown: 'chevron-down',
+  arrowRight: 'arrow-right', zoom: 'zoom-in', hourglass: 'hourglass-split', badge: 'person-badge',
 };
 const iconData = {};
 for (const [name, file] of Object.entries(ICONS)) {
@@ -105,4 +106,4 @@ fs.writeFileSync(
     `export type IconName = keyof typeof iconData;\n`
 );
 
-console.log(`tokens: ${themeIds.join('/')} · ${Object.keys(colors.dark).length} colors · ${Object.keys(type).length} type styles · ${Object.keys(iconData).length} icons`);
+console.log(`tokens: ${themeIds.join('/')} · ${Object.keys(colors[themeIds[0]]).length} colors · ${Object.keys(type).length} type styles · ${Object.keys(iconData).length} icons`);

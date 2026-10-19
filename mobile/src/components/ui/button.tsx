@@ -4,7 +4,11 @@ import { radius, size, spacing, type, useTheme } from '@/theme';
 import { Icon, type IconName } from './icon';
 import { Text } from './text';
 
-type Variant = 'primary' | 'secondary' | 'danger' | 'ghost';
+/**
+ * primary: cobalt fill · ink: dark fill (home and success actions) · secondary: ink outline ·
+ * danger: coral-ink fill · light: white fill on a coloured screen · ghost: text only.
+ */
+type Variant = 'primary' | 'ink' | 'secondary' | 'danger' | 'light' | 'ghost';
 
 type Props = {
   children: string;
@@ -17,21 +21,26 @@ type Props = {
   /** What is happening while loading, e.g. "Sending code…". */
   loadingLabel?: string;
   disabled?: boolean;
+  /** Text colour for `ghost` on a coloured ground. */
+  ghostTint?: string;
   style?: ViewStyle;
 };
 
-/** Thumb-sized action. One primary per screen. */
+/** A full pill. One primary per screen. */
 export function Button({
-  children, onPress, variant = 'primary', size: s = 'md', block, icon, loading, loadingLabel, disabled, style,
+  children, onPress, variant = 'primary', size: s = 'md', block, icon, loading, loadingLabel, disabled, ghostTint, style,
 }: Props) {
   const { c } = useTheme();
   const palette = {
-    primary: { bg: c.accentFill, fg: c.onAccent, border: c.accentFill },
-    secondary: { bg: 'transparent', fg: c.ink, border: c.borderStrong },
-    danger: { bg: c.dangerFill, fg: c.onDanger, border: c.dangerFill },
-    ghost: { bg: 'transparent', fg: c.accentInk, border: 'transparent' },
+    primary: { bg: c.cobalt, fg: c.onAccent, border: c.cobalt },
+    ink: { bg: c.inkBlock, fg: '#FFFFFF', border: c.inkBlock },
+    secondary: { bg: c.ground, fg: c.ink, border: c.ink },
+    danger: { bg: c.coralInk, fg: c.onDanger, border: c.coralInk },
+    light: { bg: '#FFFFFF', fg: c.ink, border: '#FFFFFF' },
+    ghost: { bg: 'transparent', fg: ghostTint ?? c.cobalt, border: 'transparent' },
   }[variant];
   const inactive = disabled || loading;
+  const small = s === 'sm';
 
   return (
     <Pressable
@@ -43,8 +52,8 @@ export function Button({
       style={({ pressed }) => [
         styles.base,
         {
-          minHeight: s === 'sm' ? size.touchMin : size.buttonHeight,
-          paddingHorizontal: s === 'sm' || variant === 'ghost' ? spacing[4] : spacing[6],
+          minHeight: small ? 44 : size.buttonHeight,
+          paddingHorizontal: small ? 18 : spacing[6],
           backgroundColor: palette.bg,
           borderColor: palette.border,
           opacity: disabled && !loading ? 0.45 : pressed && Platform.OS === 'ios' ? 0.7 : 1,
@@ -56,9 +65,9 @@ export function Button({
         {loading ? (
           <ActivityIndicator color={palette.fg} size="small" />
         ) : icon ? (
-          <Icon name={icon} size={18} tint={palette.fg} />
+          <Icon name={icon} size={small ? 16 : 20} tint={palette.fg} />
         ) : null}
-        <Text variant="button" style={{ color: palette.fg, fontSize: s === 'sm' ? 14 : type.button.fontSize }}>
+        <Text variant="button" style={{ color: palette.fg, fontSize: small ? 14 : type.button.fontSize }}>
           {loading ? loadingLabel ?? 'Working…' : children}
         </Text>
       </View>
@@ -68,13 +77,13 @@ export function Button({
 
 const styles = StyleSheet.create({
   base: {
-    borderRadius: radius.sm,
-    borderWidth: 1.5,
+    borderRadius: radius.pill,
+    borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
     alignSelf: 'flex-start',
   },
   block: { alignSelf: 'stretch' },
-  inner: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
+  inner: { flexDirection: 'row', alignItems: 'center', gap: 10 },
 });
