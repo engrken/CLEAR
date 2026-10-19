@@ -30,3 +30,9 @@ test('receipt allocator uses the database sequence and duplicate check', () => {
   assert.ok(source.includes('receiptNumberConflictWhere(organizationId, orNumber)'));
   assert.ok(source.includes('lockReceiptNumber(tx, organizationId, orNumber)'));
 });
+
+test('receipt form uses server-issued OR number', () => {
+  const form = read('app/department/[department]/(protected)/collections/CollectionsForm.tsx');
+  assert.ok(form.includes('orNumber: result.orNumber'));
+  assert.ok(!form.includes('setOrNumber'));
+});
