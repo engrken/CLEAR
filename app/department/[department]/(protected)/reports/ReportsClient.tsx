@@ -9,6 +9,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { saveSignatories, saveReportSettings } from "../../actions";
 import { fmt } from "@/lib/utils";
+import OrganizationLogo from "@/components/OrganizationLogo";
 import {
   Chart as ChartJS,
   ArcElement,
@@ -611,9 +612,11 @@ export default function ReportsClient({
             <div className="small fst-italic mt-1">{ay} &nbsp;|&nbsp; {term}</div>
           </div>
           <div style={{ width: '90px', minWidth: '90px', flexShrink: 0 }} className="text-center">
-            {(reportHeaderRightLogo || logoUrl) ? (
-              <img src={reportHeaderRightLogo || logoUrl} alt="Organization logo" style={{ width: '100%', maxHeight: '90px', objectFit: 'contain' }} />
-            ) : <div aria-hidden="true" />}
+            <OrganizationLogo
+              src={reportHeaderRightLogo || logoUrl}
+              alt={`${orgName} logo`}
+              style={{ width: '100%', maxHeight: '90px', objectFit: 'contain' }}
+            />
           </div>
         </div>
 

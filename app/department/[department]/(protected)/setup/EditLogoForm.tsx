@@ -5,6 +5,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { updateEntityLogo } from "./actions";
+import OrganizationLogo from "@/components/OrganizationLogo";
 
 export default function EditLogoForm({ 
   organizationId, 
@@ -57,18 +58,18 @@ export default function EditLogoForm({
         <i className="bi bi-cloud-upload me-2"></i>Upload New Logo
       </h6>
       
-      {currentLogo && (
-        <div className="mb-3 d-flex align-items-center gap-3 border-bottom border-secondary pb-3">
-          <div className="rounded p-1" style={{ width: '50px', height: '50px' }}>
-            <img 
-              src={currentLogo} 
-              alt="Current Logo" 
-              style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
-            />
-          </div>
-          <span className="small text-secondary fw-semibold">Current Active Logo</span>
+      <div className="mb-3 d-flex align-items-center gap-3 border-bottom border-secondary pb-3">
+        <div className="rounded p-1" style={{ width: '50px', height: '50px' }}>
+          <OrganizationLogo
+            src={currentLogo}
+            alt={currentLogo ? "Current organization logo" : "Default CLEAR logo"}
+            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+          />
         </div>
-      )}
+        <span className="small text-secondary fw-semibold">
+          {currentLogo ? "Current active organization logo" : "Default CLEAR logo (no custom logo uploaded)"}
+        </span>
+      </div>
 
       {message && (
         <div className={`alert ${message.type === 'success' ? 'alert-success' : 'alert-danger'} py-2 small fw-bold`}>

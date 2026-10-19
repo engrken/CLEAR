@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { PRESET_ROLE_TABS } from '@/lib/role-permissions';
+import OrganizationLogo from '@/components/OrganizationLogo';
 
 export default function DepartmentSidebar({
   department,
@@ -61,9 +62,6 @@ export default function DepartmentSidebar({
   const ay = searchParams.get('ay') || defaultAy;
   const term = searchParams.get('term') || defaultTerm;
   const queryString = `?ay=${encodeURIComponent(ay)}&term=${encodeURIComponent(term)}`;
-
-  const fallbackLogoPath = '/engineering_logo.png';
-  const displayLogo = logoUrl || fallbackLogoPath;
 
   // =========================================================
   // ACTIVE LINK DETECTION
@@ -134,10 +132,9 @@ export default function DepartmentSidebar({
         {/* HEADER */}
         <div className="d-flex align-items-center mb-4 px-2">
           <div style={{ width: '40px', flexShrink: 0 }} className="text-center me-2">
-            <img
-              src={displayLogo}
-              alt={`${department} Logo`}
-              onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = fallbackLogoPath; }}
+            <OrganizationLogo
+              src={logoUrl}
+              alt={`${orgName || department} logo`}
               style={{ width: '100%', maxHeight: '40px', objectFit: 'contain' }}
             />
           </div>
