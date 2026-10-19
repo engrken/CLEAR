@@ -28,8 +28,10 @@ export const GET = handler(async (req, { params }: Ctx) => {
   const outstanding = result.unpaidItems.reduce((sum, i) => sum + toCentavos(i.balanceDue), 0);
 
   return {
-    studentName: result.student.fullName,
-    studentId: result.student.studentId,
+    // Public lookup returns clearance status, not roster identity.
+    // Identifying fields and detailed debt data require an officer session.
+    studentName: officer ? result.student.fullName : null,
+    studentId: officer ? result.student.studentId : null,
     status: result.isCleared ? 'cleared' : 'hold',
     outstandingCentavos: officer ? outstanding : null,
     unpaidItems: officer
