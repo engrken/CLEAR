@@ -1,4 +1,5 @@
 import { manilaDateInput } from '@/lib/clear-timezone';
+import { resolveReceiptBranding } from '@/lib/receipt-branding';
 import Link from "next/link";
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
@@ -25,6 +26,7 @@ export default async function PrintCollectionsReceipt({ params }: {
     ? "Inconsistent" : receiptStatus(rows);
   const first = rows.find(r => r.orNumber.toUpperCase() === orNumber) || rows[0];
   const total = rows.reduce((sum, row) => sum + Math.round(row.amountPaid * 100), 0) / 100;
+  const branding = resolveReceiptBranding(org);
   return <>
     <style>{`@media print {
       @page { size: A4; margin: 14mm; }
@@ -46,8 +48,11 @@ export default async function PrintCollectionsReceipt({ params }: {
         {status === "Voided" ? "VOIDED RECEIPT — NOT VALID FOR PAYMENT" : "RECEIPT UNDER REVIEW — DO NOT USE"}
       </div>}
       <header className="text-center mb-3">
-        <h4 className="mb-1">{org.reportSchoolName || org.name}</h4>
-        {org.reportSchoolAddress && <p className="mb-1 small">{org.reportSchoolAddress}</p>}
+        <h4 className="mb-1">{branding.schoolName}</h4>
+        {branding.showOrganizationLine && (
+           <p className="mb-1 fw-semibold">College / Department / Organization: {branding.organizationName}</p>
+         )}
+         {branding.schoolAddress && <p className="mb-1 small">{branding.schoolAddress}</p>}
         <h5 className="mt-3">{status === "Valid" ? "OFFICIAL PAYMENT RECEIPT (COPY)" : "RECEIPT AUDIT COPY"}</h5>
         <div className="small text-muted">Reprint of the original transaction. No new payment recorded.</div>
       </header>
