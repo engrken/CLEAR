@@ -1,6 +1,26 @@
 const { PrismaClient } = require('@prisma/client');
-const XLSX = require('xlsx');
 const path = require('path');
+const { spawnSync } = require('node:child_process');
+
+// This utility can write financial records: require an explicit staging opt-in.
+if (process.env.CLEAR_LEGACY_SEED_CONFIRM !== 'STAGING_BACKUP_VERIFIED') {
+  throw new Error('Legacy seeding disabled. Verify your STAGING database and backup, then set CLEAR_LEGACY_SEED_CONFIRM=STAGING_BACKUP_VERIFIED.');
+}
+
+function loadTrustedLegacyWorkbook(filePath) {
+  const python = process.env.CLEAR_SEED_PYTHON || (process.platform === 'win32' ? 'py' : 'python3');
+  const result = spawnSync(python, [path.join(__dirname, 'scripts', 'read-seed-workbook.py'), filePath], {
+    encoding: 'utf8', windowsHide: true, maxBuffer: 64 * 1024 * 1024,
+  });
+  if (result.error || result.status !== 0) {
+    throw new Error('Legacy Excel reader failed: ' + (result.stderr || result.error?.message || 'unknown Python error'));
+  }
+  return { Sheets: JSON.parse(result.stdout) };
+}
+
+// The read-only utility emits the same row-object shape used below.
+const XLSX = { utils: { sheet_to_json: rows => rows || [] } };
+
 
 const prisma = new PrismaClient();
 
@@ -8,7 +28,7 @@ async function main() {
   console.log('🔄 Starting idempotent safe synchronization from Excel...');
 
   const excelPath = path.join(process.cwd(), 'Department Financial Audit Database.xlsx');
-  const workbook = XLSX.readFile(excelPath);
+  const workbook = loadTrustedLegacyWorkbook(excelPath);
 
   // 1. Ensure Department Tenant Organization exists
   const org = await prisma.organization.upsert({
