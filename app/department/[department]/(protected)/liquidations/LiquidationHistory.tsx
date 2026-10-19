@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import { fmt } from "@/lib/utils";
 import { saveReportSettings, saveSignatories } from "../../actions";
 import { executeVoidTransaction } from "../void/actions";
+import SavePdfButton from "../../components/SavePdfButton";
 
 export default function LiquidationHistory({
   audits,
@@ -248,6 +249,7 @@ export default function LiquidationHistory({
                     <button className="btn btn-sm btn-outline-primary" onClick={() => handlePrint(audit)} title="Print Audited Report">
                       <i className="bi bi-printer-fill"></i> Print
                     </button>
+                    <SavePdfButton className="btn btn-sm btn-outline-danger ms-1" label="PDF" onClick={() => handlePrint(audit)} />
                   </td>
                 </tr>
                 
