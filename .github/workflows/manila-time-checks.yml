@@ -37,6 +37,8 @@ jobs:
         run: npx prisma validate
       - name: Run timezone regression tests
         run: npm run test:time
+      - name: Receipt branding regression tests
+        run: node --experimental-strip-types --test tests/receipt-branding.test.mjs
       - name: TypeScript check
         run: npx tsc --noEmit
       - name: TZ independence — Honolulu
@@ -111,7 +113,9 @@ jobs:
       - run: npm ci
       - name: Recreate legacy date columns in isolated PostgreSQL
         run: |
-          git show origin/main:prisma/schema.prisma > prisma/schema.legacy.ci.prisma
+          # Production main uses timestamptz; recreate a legacy fixture solely in CI.
+           cp prisma/schema.prisma prisma/schema.legacy.ci.prisma
+           sed -i 's/ @db.Timestamptz(3)//g' prisma/schema.legacy.ci.prisma
           npx prisma db push --schema prisma/schema.legacy.ci.prisma --skip-generate
       - name: Insert an unambiguous UTC fixture into the legacy SystemLog
         run: |
