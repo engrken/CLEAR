@@ -1,3 +1,39 @@
+/**
+ * ARCHIVED LEGACY EXCEL MIGRATION — developer-only, manual use.
+ *
+ * Historical Google Sheets / Apps Script -> CLEAR data migration utility.
+ * NOT a normal setup/seed command and NOT verified against the current schema.
+ * May UPDATE existing financial balances, payment records and user details.
+ *
+ * Refuses to run unless manually opted in, using an isolated LOCAL PostgreSQL
+ * instance and a non-production Node environment. A local hostname does NOT
+ * protect against a tunnel/proxy to a production database; verify the target.
+ *
+ * See scripts/legacy/README.md before running or adapting this program.
+ */
+const localDbHosts = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
+let localDb = false;
+try {
+  const databaseUrl = new URL(process.env.DATABASE_URL || "");
+  localDb =
+    ["postgres:", "postgresql:"].includes(databaseUrl.protocol) &&
+    localDbHosts.has(databaseUrl.hostname.toLowerCase());
+} catch {
+  // Missing or malformed DATABASE_URL fails closed.
+}
+if (
+  process.env.CLEAR_LEGACY_EXCEL_IMPORT !== "ALLOW_LOCAL_DEV_ONLY" ||
+  process.env.NODE_ENV === "production" ||
+  Boolean(process.env.VERCEL) ||
+  !localDb
+) {
+  console.error(
+    "Archived Excel migration is disabled. It requires deliberate local-dev opt-in " +
+      "and an isolated local PostgreSQL DATABASE_URL. Read scripts/legacy/README.md."
+  );
+  process.exit(1);
+}
+
 const { PrismaClient } = require('@prisma/client');
 const XLSX = require('xlsx');
 const path = require('path');
