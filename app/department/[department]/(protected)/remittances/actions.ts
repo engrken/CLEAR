@@ -88,6 +88,11 @@ export async function verifyOnlineRemittance(
     await assertAcademicPeriod(tx, org.id, remit.academicYear, remit.term);
     const ledger = await getPeriodLedger(tx, org.id, remit.academicYear, remit.term);
     if (ledger.activeRollover) throw new Error("This term has been carried forward and cannot accept verified payments.");
+    // Reject arbitrary fund names before posting an official receipt. The
+    // same ledger supplies the authorized fund options to the officer UI.
+    if (!ledger.funds.some((fund) => fund.name.trim().toLowerCase() === fundAllocation.toLowerCase())) {
+      throw new Error("Selected fund is not available in this academic term. Refresh the queue.");
+    }
     const conflicted = await tx.collection.findFirst({ where: {
       organizationId: org.id, orNumber,
     }, select: { id: true } });
