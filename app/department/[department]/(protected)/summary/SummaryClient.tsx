@@ -5,7 +5,7 @@
 import { clearAlert, clearConfirm, clearPrompt } from "@/lib/clear-dialogs";
 
 
-import { useState, useEffect } from "react";
+import { Fragment, useState, useEffect } from "react";
 import { fmt } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import SavePdfButton from "../../components/SavePdfButton";
@@ -38,7 +38,10 @@ interface SummaryClientProps {
   ay: string;
   term: string;
 
-  summaryCategories?: { category: string; count: number; total: number }[];
+  summaryCategories?: {
+    category: string;
+    items: { name: string; count: number; amount: number }[];
+  }[];
   penaltySummary?: { count: number; amount: number };
   duesSummary?: { count: number; amount: number };
   duesBreakdown?: { category: string; count: number; amount: number }[];
@@ -403,6 +406,11 @@ export default function SummaryClient({
                 padding: 5px 8px !important;
               }
 
+              .print-container .collection-category-header {
+                break-after: avoid !important;
+                page-break-after: avoid !important;
+              }
+
               .print-container .outstanding-obligations h6 {
                 break-after: avoid !important;
                 page-break-after: avoid !important;
@@ -578,7 +586,8 @@ export default function SummaryClient({
           </div>
         </div>
 
-        {/* COLLECTIONS: aggregate by configured category; no item names, IDs or OR details. */}
+        {/* Actual paid receipts grouped by category and item. Category rows
+            are headings only: no subtotals or duplicated student counts. */}
         <h6 className="text-info text-uppercase fw-bold mt-2">Collections ({term})</h6>
         <div className="table-responsive mb-4">
           <table className="table table-sm table-bordered border-dark align-middle text-body mb-0" style={{ fontSize: "0.85rem", tableLayout: "fixed", width: "100%" }}>
@@ -588,7 +597,18 @@ export default function SummaryClient({
               {summaryCategories.length === 0 ? (
                 <tr><td colSpan={3} className="text-muted text-center">No collections recorded this term.</td></tr>
               ) : summaryCategories.map(row => (
-                <tr key={row.category}><td className="ps-3">{row.category}</td><td className="text-end">{row.count}</td><td className="text-end">{fmt(row.total)}</td></tr>
+                <Fragment key={row.category}>
+                  <tr className="fw-bold collection-category-header">
+                    <td colSpan={3} className="ps-3">{row.category}</td>
+                  </tr>
+                  {row.items.map(item => (
+                    <tr key={item.name}>
+                      <td className="ps-4">{item.name}</td>
+                      <td className="text-end">{item.count}</td>
+                      <td className="text-end">{fmt(item.amount)}</td>
+                    </tr>
+                  ))}
+                </Fragment>
               ))}
             </tbody>
             <tfoot><tr className="fw-bold bg-dark text-white"><td colSpan={2} className="text-end">TOTAL COLLECTIONS:</td><td className="text-end text-info">{fmt(grandCollectionTotal || 0)}</td></tr></tfoot>
