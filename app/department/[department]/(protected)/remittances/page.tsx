@@ -66,20 +66,6 @@ export default async function RemittancesPage({
     studentId: r.studentId ?? '',
   }));
 
-  const receipts = await prisma.collection.findMany({
-    where: { organizationId: organization.id, academicYear: ay },
-    select: { orNumber: true }
-  });
-
-  const yearPrefix = ay.match(/\d{4}/)?.[0]?.slice(-2) || '26';
-  let nextOr = `${yearPrefix}-001`;
-
-  const used = receipts.map(c => String(c.orNumber || ""));
-  const maxNum = used.reduce((max, value) => {
-    const match = value.match(new RegExp(`^${yearPrefix}-(\\d+)(?:-P\\d+)?$`, 'i'));
-    return match ? Math.max(max, Number(match[1])) : max;
-  }, 0);
-  nextOr = `${yearPrefix}-${String(maxNum + 1).padStart(3, '0')}`;
   const fundOptions = ledger.funds.filter(f => f.balance >= 0).map(f => ({
     id: f.name, fundName: f.name
   }));
@@ -96,7 +82,6 @@ export default async function RemittancesPage({
         ay={ay}
         term={term}
         remittances={serialize(remittances)}
-        nextOr={nextOr}
         funds={fundOptions.length > 0 ? fundOptions : funds}
         closed={Boolean(ledger.activeRollover)}
         canVoid={canVoid} 
