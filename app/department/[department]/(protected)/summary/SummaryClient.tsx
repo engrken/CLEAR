@@ -639,12 +639,12 @@ export default function SummaryClient({
 
         {/* Outstanding liabilities only: never mix collectible balances with collected income. */}
         <h6 className="text-warning text-uppercase fw-bold mt-3">Outstanding Student Obligations ({term})</h6>
-        <p className="small text-muted fst-italic mb-1">These amounts are unpaid balances, not cash receipts. Counts are distinct students for penalties, and outstanding assessments for dues.</p>
+        <p className="small text-muted fst-italic mb-1">These are unpaid balances, not cash receipts. Penalty totals include only cash-only late fees (such as late enrollment), counting distinct students. Community-service-eligible penalties are excluded from this monetary summary but still appear in Penalty Logs and may affect clearance. Dues count outstanding assessments.</p>
         <div className="table-responsive mb-4">
           <table className="table table-sm table-bordered border-dark align-middle text-body mb-0" style={{ fontSize: "0.85rem" }}>
             <thead><tr className="text-muted"><th>Obligation Category</th><th className="text-end">Students / Assessments</th><th className="text-end">Outstanding Amount</th></tr></thead>
             <tbody>
-              <tr><td className="ps-3">Penalty</td><td className="text-end">{penaltySummary.count}</td><td className="text-end">{fmt(penaltySummary.amount)}</td></tr>
+              <tr><td className="ps-3">Cash-Only Penalties (Late Fees)</td><td className="text-end">{penaltySummary.count}</td><td className="text-end">{fmt(penaltySummary.amount)}</td></tr>
               <tr><td className="ps-3">Dues / Collectibles</td><td className="text-end">{duesSummary.count}</td><td className="text-end">{fmt(duesSummary.amount)}</td></tr>
             </tbody>
             <tfoot><tr className="fw-bold bg-dark text-white"><td colSpan={2} className="text-end">TOTAL OUTSTANDING:</td><td className="text-end text-warning">{fmt((penaltySummary.amount || 0) + (duesSummary.amount || 0))}</td></tr></tfoot>
