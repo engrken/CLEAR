@@ -7,6 +7,7 @@ import { Metadata } from 'next';
 import { getDepartmentFinancials } from '../../actions';
 import { requireTabAccess } from '@/lib/permissions';
 import { summarizeCashOnlyPenaltyObligations } from '@/lib/summary-penalties';
+import { itemizeCollectionsForSummary } from '@/lib/summary-collections';
 
 export const metadata: Metadata = {
   title: 'Centralized Liquidation of Expenses & Audit Records',
@@ -89,54 +90,23 @@ export default async function SummaryReportPage({
     term
   );
 
-  // Reporting-only aggregations. No student names, penalty reference IDs,
-  // OR descriptions or individual collectible items are sent for display.
+  // Reporting-only aggregations. Receipt descriptions are summarized by
+  // collection item. No student names, student IDs or OR identifiers are sent
+  // to the client, and the category headings carry no subtotal amount.
   // Only cash-only LATE_FEE obligations contribute to summary liabilities;
   // service-eligible penalties continue to affect clearance and penalty logs.
   const [feeSetups, receipts, activePenalties] = await Promise.all([
     prisma.collectionSetup.findMany({ where: { organizationId: organization.id, academicYear: ay, term },
-      select: { category: true, name: true } }),
+      select: { category: true, name: true, amount: true, isPackage: true } }),
     prisma.collection.findMany({ where: { organizationId: organization.id, academicYear: ay, term },
       select: { studentId: true, studentName: true, category: true, itemDescription: true, amountPaid: true, status: true, paymentType: true } }),
     prisma.penalty.findMany({ where: { organizationId: organization.id, academicYear: ay, term, penaltyType: 'LATE_FEE' },
       select: { studentId: true, studentName: true, fineAmount: true, status: true, penaltyType: true } }),
   ]);
-  const feeByItem = new Map<string, string>();
-  const configuredCategories = new Set(feeSetups.map(s => s.category.trim().toLowerCase()));
-  for (const setup of feeSetups) {
-    const key = setup.name.trim().toLowerCase();
-    // Ambiguous item names must not override a trusted receipt category.
-    if (key && !feeByItem.has(key)) feeByItem.set(key, setup.category.trim());
-  }
-  type CategoryBucket = { category: string; students: Set<string>; totalCents: number };
-  const byCategory = new Map<string, CategoryBucket>();
-  for (const row of receipts) {
-    if (/VOID|CANCEL/i.test(`${row.status || ''} ${row.paymentType || ''}`)) continue;
-    const paidCents = Math.round(Number(row.amountPaid || 0) * 100);
-    if (paidCents <= 0) continue; // due markers/assessments are not cash income
-    const desc = String(row.itemDescription || '').trim();
-    const receiptCategory = String(row.category || '').trim();
-    let category = /^Penalty Fine(?:\s*\[|:)/i.test(desc) || /^Penalty(?:\s*\/\s*Fines)?$/i.test(receiptCategory)
-      ? 'Penalty'
-      : (configuredCategories.has(receiptCategory.toLowerCase())
-        ? receiptCategory
-        : feeByItem.get(desc.toLowerCase()) || receiptCategory || 'Other Collections');
-    if (/^Departmental Fee Package/i.test(desc)) category = 'Departmental Fee';
-    // Preserve cash accounting but show the actual nature of the generic Others receipt.
-    if (receiptCategory.toLowerCase() === 'others' && desc.toLowerCase() === 'penalty / fines') {
-      category = 'Penalty / Fines';
-    }
-    // Do not turn descriptive identifiers into visible category labels.
-    if (/\[PEN-|^Penalty Fine/i.test(category)) category = 'Penalty';
-    const current = byCategory.get(category) || { category, students: new Set<string>(), totalCents: 0 };
-    const key = String(row.studentId || row.studentName || '').trim().toLowerCase();
-    if (key) current.students.add(key);
-    current.totalCents += paidCents;
-    byCategory.set(category, current);
-  }
-  const summaryCategories = Array.from(byCategory.values())
-    .map(row => ({ category: row.category, count: row.students.size, total: row.totalCents / 100 }))
-    .sort((a, b) => a.category.localeCompare(b.category));
+  // This breakdown uses actual valid paid receipts; package-only receipts are
+  // apportioned across configured package items, preserving exact centavos.
+  // Do not use this to recalculate or alter the authoritative finance engine.
+  const summaryCategories = itemizeCollectionsForSummary(receipts, feeSetups);
 
   const penaltySummary = summarizeCashOnlyPenaltyObligations(activePenalties);
   // Reuse the finance engine's authoritative collectible buckets. Do not
