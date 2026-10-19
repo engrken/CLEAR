@@ -83,8 +83,7 @@ export async function recordPayment(department: string, data: {
     studentName = student.fullName;
     studentEmail = String(student.email || "").trim();
 
-    const conflict = await tx.collection.findFirst({ where: { organizationId: org.id,
-      OR: [{ orNumber }, { orNumber: { startsWith: `${orNumber}-P` } }] }, select: { id: true } });
+    const conflict = await tx.collection.findFirst({ where: receiptNumberConflictWhere(org.id, orNumber), select: { id: true } });
     if (conflict) throw new Error(`Official receipt ${orNumber} is already used. Refresh and select an unused OR.`);
 
     const existing = await tx.collection.findMany({ where: {
