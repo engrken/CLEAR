@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import { prisma } from '@/lib/prisma';
 import { sendEmail } from '@/lib/mailer';
 import { sanitizeHTML } from '@/lib/utils';
-import { isSuperAdminEmail } from '@/lib/super-admin';
+import { isReservedGlobalAdminEmail, isGlobalSuperAdminEmail } from '@/lib/super-admin';
 import { issueSuperAdminOtp } from '@/lib/super-admin-otp';
 import { parseAllowedTabs } from '@/lib/role-permissions';
 
@@ -67,7 +67,14 @@ export async function issueDepartmentOtp(department: string, email: string) {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
     throw new Error('A valid email address is required.');
   }
-  if (isSuperAdminEmail(normalizedEmail)) return issueSuperAdminOtp(normalizedEmail);
+  // Global operator emails (including pending, disabled and revoked) cannot
+  // obtain independent tenant credentials. Live invitations use global OTP.
+  if (await isReservedGlobalAdminEmail(normalizedEmail)) {
+    if (await isGlobalSuperAdminEmail(normalizedEmail)) {
+      return issueSuperAdminOtp(normalizedEmail);
+    }
+    return { success: true as const, message: GENERIC_SENT };
+  }
 
   const departmentSlug = slug(department);
   if (!departmentSlug) return { success: true as const, message: GENERIC_SENT };
@@ -140,6 +147,7 @@ export async function issueDepartmentOtp(department: string, email: string) {
 
 export async function verifyDepartmentOtp(department: string, email: string, code: string) {
   const fail = { ok: false as const, message: GENERIC_FAILURE };
+  if (await isReservedGlobalAdminEmail(norm(email))) return fail;
   const departmentSlug = slug(department);
   if (!departmentSlug || !/^\d{6}$/.test(code)) return fail;
   const org = await prisma.organization.findUnique({

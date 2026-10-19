@@ -2,7 +2,7 @@
 
 import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import { isGlobalSuperAdminEmail } from "@/lib/super-admin";
+import { isReservedGlobalAdminEmail } from "@/lib/super-admin";
 import { verifySuperAdminOtp } from "@/lib/super-admin-otp";
 import { verifyDepartmentOtp } from "@/lib/department-otp";
 
@@ -55,7 +55,7 @@ export const {
         // =====================================================
         // SUPER ADMIN (limits live in lib/super-admin-otp.ts)
         // =====================================================
-        if (await isGlobalSuperAdminEmail(email)) {
+        if (await isReservedGlobalAdminEmail(email)) {
           const result = await verifySuperAdminOtp(email, code);
           if (!result.ok) throw new CustomAuthError(result.message);
 

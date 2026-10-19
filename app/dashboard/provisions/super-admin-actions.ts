@@ -5,6 +5,7 @@ import { requireSuperAdmin } from '@/lib/permissions';
 import { isReservedGlobalAdminEmail, isSuperAdminEmail, normalizeGlobalAdminEmail } from '@/lib/super-admin';
 import { revalidatePath } from 'next/cache';
 import { sendEmail } from '@/lib/mailer';
+import { validateTenantPromotion } from '@/lib/global-admin-promotion-policy';
 
 const MANAGE_PATH = '/dashboard/provisions';
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -33,33 +34,125 @@ async function sendGlobalAdminInvitation(email: string, name: string) {
 }
 
 
-export async function inviteGlobalAdmin(formData: FormData) {
+export type GlobalAdminInviteState = {
+  status: 'idle' | 'error' | 'success';
+  message: string;
+};
+
+class InviteValidationError extends Error {}
+
+export async function inviteGlobalAdmin(
+  _previousState: GlobalAdminInviteState,
+  formData: FormData,
+): Promise<GlobalAdminInviteState> {
+  // Server-only Super Admin authorization cannot be bypassed by the client.
   const actor = await requireSuperAdmin();
   const actorEmail = normalizeGlobalAdminEmail(actor.email);
   const email = normalizeGlobalAdminEmail(formData.get('email'));
-  const fullName = String(formData.get('fullName') || '').trim();
-  if (!EMAIL.test(email) || email.length > 254) throw new Error('Enter a valid administrator email.');
-  if (fullName.length < 2 || fullName.length > 120) throw new Error('Administrator name must have 2–120 characters.');
-  if (email === actorEmail || (await isReservedGlobalAdminEmail(email)))
-    throw new Error('This email is already reserved for a global administrator.');
-  // Separate from all tenant memberships: avoid ambiguous login and privilege scopes.
-  const tenantMembership = await prisma.tenantUser.findFirst({
-    where: { email: { equals: email, mode: 'insensitive' } }, select: { id: true },
-  });
-  if (tenantMembership) throw new Error('This email is already a tenant member. Use a distinct global administrator email.');
+  const suppliedName = String(formData.get('fullName') || '').trim();
+  const promoteTenant = formData.get('promoteExistingTenant') === 'on';
 
-  await prisma.$transaction(async (tx) => {
-    await tx.globalSuperAdmin.create({ data: {
-      email, fullName, status: 'Pending', invitedBy: actorEmail,
-      invitationExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-    } });
-    await tx.globalAdminAudit.create({ data: {
-      actorEmail, targetEmail: email, action: 'INVITE_GLOBAL_ADMIN',
-      details: 'Invitation awaits first verified email OTP, expires in 7 days',
-    } });
-  });
-  await sendGlobalAdminInvitation(email, fullName);
-  refresh();
+  try {
+    if (!EMAIL.test(email) || email.length > 254)
+      throw new InviteValidationError('Enter a valid administrator email.');
+    if (suppliedName.length < 2 || suppliedName.length > 120)
+      throw new InviteValidationError('Administrator name must have 2–120 characters.');
+    if (email === actorEmail || isSuperAdminEmail(email))
+      throw new InviteValidationError('The original Super Admin account cannot be invited or modified.');
+
+    // A serializable DB transaction ensures that invitation, legacy OTP
+    // invalidation, mobile-session revocation and audit entry happen together.
+    const invite = await prisma.$transaction(async tx => {
+      const existing = await tx.globalSuperAdmin.findUnique({ where: { email } });
+      if (existing) throw new InviteValidationError(
+        'This email is already registered as a global administrator (' + existing.status + ').'
+      );
+
+      const memberships = await tx.tenantUser.findMany({
+        where: { email: { equals: email, mode: 'insensitive' } },
+        select: { id: true, organizationId: true, fullName: true, role: true, status: true },
+      });
+      if (memberships.length && !promoteTenant) {
+        throw new InviteValidationError(
+          'This is an existing tenant account. Check "Promote existing tenant" to authorize its promotion.'
+        );
+      }
+      if (promoteTenant && !memberships.length) {
+        throw new InviteValidationError(
+          'No tenant account was found for this email. Uncheck promotion to invite a new administrator.'
+        );
+      }
+
+      if (promoteTenant) {
+        const orgIds = Array.from(new Set(memberships.map(m => m.organizationId)));
+        const candidates = await tx.tenantUser.findMany({
+          where: { organizationId: { in: orgIds }, status: 'Active' },
+          select: { id: true, organizationId: true, email: true, role: true, status: true },
+        });
+        const existingGlobals = await tx.globalSuperAdmin.findMany({
+          where: { email: { in: candidates.map(u => u.email.trim().toLowerCase()) } },
+          select: { email: true },
+        });
+        const globalEmails = new Set(existingGlobals.map(u => u.email));
+        const policyError = validateTenantPromotion(
+          memberships,
+          candidates.map(u => ({
+            ...u,
+            reservedGlobalAdmin:
+              isSuperAdminEmail(u.email) || globalEmails.has(u.email.trim().toLowerCase()),
+          })),
+        );
+        if (policyError) throw new InviteValidationError(policyError);
+      }
+
+      const fullName = promoteTenant ? memberships[0].fullName.trim() : suppliedName;
+      if (fullName.length < 2 || fullName.length > 120) {
+        throw new InviteValidationError('The tenant profile name must have 2–120 characters.');
+      }
+
+      await tx.globalSuperAdmin.create({ data: {
+        email, fullName, status: 'Pending', invitedBy: actorEmail,
+        invitationExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      } });
+
+      if (promoteTenant) {
+        const memberIds = memberships.map(m => m.id);
+        // Preserve TenantUser records and transaction attribution.
+        // Existing tenant OTPs and mobile sessions must not remain usable.
+        await tx.tenantUser.updateMany({
+          where: { id: { in: memberIds } },
+          data: { otpCode: null, otpExpires: null, otpAttempts: 0 },
+        });
+        await tx.mobileSession.updateMany({
+          where: { tenantUserId: { in: memberIds }, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
+      }
+
+      await tx.globalAdminAudit.create({ data: {
+        actorEmail, targetEmail: email,
+        action: promoteTenant ? 'PROMOTE_TENANT_TO_GLOBAL_ADMIN' : 'INVITE_GLOBAL_ADMIN',
+        details: promoteTenant
+          ? 'Tenant memberships preserved; tenant OTPs and mobile sessions invalidated. First global OTP activation required.'
+          : 'Invitation awaits first verified email OTP; expires in seven days.',
+      } });
+      return { fullName, promoted: promoteTenant };
+    });
+
+    await sendGlobalAdminInvitation(email, invite.fullName);
+    refresh();
+    return {
+      status: 'success',
+      message: invite.promoted
+        ? 'Promotion invitation created. The tenant record is preserved; this email will now use global Super Admin OTP after verification.'
+        : 'Global Super Admin invitation created. The person must activate it using their own email OTP.',
+    };
+  } catch (error) {
+    if (error instanceof InviteValidationError)
+      return { status: 'error', message: error.message };
+    console.error('Global Super Admin invitation failed:', error);
+    return { status: 'error', message: 'Unable to save the invitation. Check the account details and try again.' };
+  }
 }
 
 export async function renewGlobalAdminInvitation(formData: FormData) {
