@@ -153,7 +153,7 @@ Follows the web app's new rules (Ken's main). Needs the matching `/api/mobile` s
 - Roster shows dropped students as "Inactive".
 - Term labels can be trimesters or a full year.
 - Clear messages for a closed term, a reused OR number, overpayment, an inactive student and too many attempts.
-- On-hold clearance can list the unpaid items, including arrears from earlier terms.
+- Officers see the unpaid items on an on-hold clearance, including arrears from earlier terms (public lookups show status and QR only, like the web).
 
 Before building, check the remote versionCode is 2 (`npx eas-cli@latest build:version:get -p android`), so this build gets 3.
 
@@ -165,5 +165,5 @@ Before building, check the remote versionCode is 2 (`npx eas-cli@latest build:ve
 - Students no longer enrolled are shown as "Inactive".
 - Supports trimester and full-year terms.
 - Clearer messages when a term is closed, an OR number is already used, or a payment is more than the balance.
-- On-hold clearances can list what is still unpaid, including balances from earlier terms.
+- Officers can see what is still unpaid on an on-hold clearance, including balances from earlier terms.
 ```
