@@ -1,0 +1,2 @@
+# Shell scripts run on Linux (the VPS): always LF.
+*.sh text eol=lf
