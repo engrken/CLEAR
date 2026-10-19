@@ -6,7 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { requireTabAccess } from '@/lib/permissions';
 import { revalidatePath } from 'next/cache';
 import { headers } from 'next/headers';
-import { Prisma } from '@prisma/client';
+import { withFinancialTransaction } from '@/lib/financial-transaction';
 import { randomUUID, createHash } from 'node:crypto';
 import { getPeriodLedger, toCents } from '../realign/ledger';
 import { assertAcademicPeriod } from '@/lib/academic-period-guard';
@@ -74,7 +74,7 @@ export async function verifyOnlineRemittance(
   if (!/^[A-Z0-9][A-Z0-9-]{2,50}$/.test(orNumber)) throw new Error("A valid OR number is required.");
   if (!fundAllocation || fundAllocation === "Multiple Funds (Package Split)") throw new Error("A valid fund is required.");
 
-  await prisma.$transaction(async (tx) => {
+  await withFinancialTransaction(async (tx) => {
     const remit = await tx.onlineRemittance.findFirst({ where: {
       id: data.remittanceId, organizationId: org.id,
     } });
@@ -196,7 +196,7 @@ export async function verifyOnlineRemittance(
       details: `Verified ${remit.submissionId}; OR ${orNumber}; ₱${amount.toFixed(2)}; ${student.studentId}.`,
     } });
     await enqueuePaymentReceipt(tx, { organizationId: org.id, orNumber, officerName, officerEmail: String(officer.email || ""), source: "APPROVED_REMITTANCE" });
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  });
 
   for (const route of ["remittances", "collections", "clearance", "reports", "summary", "realign", "collectibles"]) {
     revalidatePath(`/department/${cleanDepartment}/${route}`);
@@ -212,7 +212,7 @@ export async function invalidateOnlineRemittance(department: string, remittanceI
   const officerName = String(officer.name || officer.fullName || officer.email || "Officer");
   const org = await prisma.organization.findUnique({ where: { subdomain: cleanDepartment }, select: { id: true } });
   if (!org) throw new Error("Department not found.");
-  await prisma.$transaction(async (tx) => {
+  await withFinancialTransaction(async (tx) => {
     const remit = await tx.onlineRemittance.findFirst({ where: { id: remittanceId, organizationId: org.id } });
     if (!remit || !["PENDING", "PENDING VERIFICATION"].includes(String(remit.status || "").toUpperCase())) {
       throw new Error("Only pending remittances can be rejected.");
@@ -239,7 +239,7 @@ export async function invalidateOnlineRemittance(department: string, remittanceI
       details: [{label:"Decision",value:"Rejected — no official payment receipt issued"},
         {label:"Channel reference",value:remit.referenceNumber}],
     });
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  });
   revalidatePath(`/department/${cleanDepartment}/remittances`);
   scheduleDigitalReceiptDispatch(org.id, `remittance-rejected:${remittanceId}`);
   return { success: true, message: "Remittance rejected." };
@@ -393,7 +393,7 @@ export async function submitOnlineRemittance(
   // The unique-reference check and insert must share the same serializable
   // transaction. Parallel requests for one channel/reference can no longer
   // both pass the check and write duplicate Pending submissions.
-  await prisma.$transaction(async (tx) => {
+  await withFinancialTransaction(async (tx) => {
     await assertAcademicPeriod(tx, orgId, data.ay, data.term);
     const ledger = await getPeriodLedger(tx, orgId, data.ay, data.term);
     if (ledger.activeRollover) {
@@ -440,7 +440,7 @@ export async function submitOnlineRemittance(
         details: `Received ₱${amount.toFixed(2)} online payment proof from registered student ${studentExists.studentId} via ${paymentChannel}.`,
       },
     });
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  });
 
   revalidatePath(`/department/${cleanDepartment}/remittances`);
   revalidatePath(`/department/${cleanDepartment}/clearance`);
