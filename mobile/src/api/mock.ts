@@ -9,6 +9,24 @@ import {
 
 export const DEMO_OTP = '123456';
 
+/** A plain, unbranded sample "payment sent" receipt for the offline demo (SVG data URL). */
+function sampleProof(r: { amountCentavos: number; reference: string; paymentChannel: string }) {
+  const amount = `PHP ${(r.amountCentavos / 100).toFixed(2)}`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="420" viewBox="0 0 600 420">
+<rect width="600" height="420" fill="#E9EEF5"/>
+<rect x="150" y="24" width="300" height="372" rx="22" fill="#FFFFFF"/>
+<circle cx="300" cy="86" r="30" fill="#2E7D5B"/><path d="M286 86l10 10 19-20" stroke="#FFF" stroke-width="7" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="300" y="150" font-family="Arial" font-size="20" fill="#555B75" text-anchor="middle">Payment sent via ${r.paymentChannel}</text>
+<text x="300" y="196" font-family="Arial" font-weight="700" font-size="34" fill="#11142B" text-anchor="middle">${amount}</text>
+<line x1="180" y1="226" x2="420" y2="226" stroke="#E4E6EE" stroke-width="2"/>
+<text x="180" y="262" font-family="Arial" font-size="16" fill="#555B75">To</text><text x="420" y="262" font-family="Arial" font-size="16" fill="#11142B" text-anchor="end">Dept. Treasurer</text>
+<text x="180" y="296" font-family="Arial" font-size="16" fill="#555B75">Ref. No.</text><text x="420" y="296" font-family="Arial" font-size="16" fill="#11142B" text-anchor="end">${r.reference}</text>
+<text x="180" y="330" font-family="Arial" font-size="16" fill="#555B75">Mobile no.</text><text x="420" y="330" font-family="Arial" font-size="16" fill="#11142B" text-anchor="end">hidden</text>
+<text x="300" y="372" font-family="Arial" font-size="13" fill="#8A90A6" text-anchor="middle">Sample receipt (demo data)</text>
+</svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
 const wait = (ms = 450) => new Promise((r) => setTimeout(r, ms));
 
 const AY = 'A.Y. 2026 - 2027';
@@ -116,13 +134,14 @@ export const mockApi: ClearApi = {
       qrToken: hold ? null : `https://clear.rupertbulquerin.com/department/${org.subdomain}/clearance?q=${s.studentId}&sig=demo`,
       ay: org.activeAy,
       term: org.activeTerm,
-      unpaidItems: hold
+      // Like the server: the itemised list is for officers only; public lookups get null.
+      unpaidItems: hold && officerView
         ? [
             { label: 'Org Shirt', amount: 35000, academicYear: org.activeAy, term: org.activeTerm, kind: 'fee' },
             { label: 'Membership Fee', amount: 15000, academicYear: 'A.Y. 2025 - 2026', term: '2nd Sem', kind: 'arrear' },
             { label: 'General Assembly penalty', amount: 20000, kind: 'penalty' },
           ]
-        : undefined,
+        : hold ? null : undefined,
     };
   },
 
@@ -242,7 +261,7 @@ export const mockApi: ClearApi = {
     authed(s, 'tab-remittances');
     const r = LEDGER.find((l) => l.id === id && l.kind === 'online-remittance') as Remit | undefined;
     if (!r) throw new ApiError('This remittance no longer exists.', 'not_found', 404);
-    return { ...r, studentEmail: `${r.studentId.toLowerCase()}@students.local`, proofDataUrl: null, reviewNotes: null, reviewedBy: null };
+    return { ...r, studentEmail: `${r.studentId.toLowerCase()}@students.local`, proofDataUrl: sampleProof(r), reviewNotes: null, reviewedBy: null };
   },
 
   async verifyRemittance(s, id, p) {

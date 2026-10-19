@@ -1,6 +1,8 @@
 # Screenshot shot list
 
-Uploaded 2026-10-16: `screenshots/02-org.png` … `06-signin.png` (emulator 1080x2400 scaled onto a 1080x1920 9:16 canvas, because Play allows at most 2:1). Officer screens were not captured: the reviewer code is a credential and was not typed by Claude.
+**Current set (1.1.0, Bright Campus, 2026-10-19):** `screenshots/01-gateway.png` … `08-verified.png`, 1080x1920. Captured with headless Edge from the Expo web build on **mock data** (`EXPO_PUBLIC_API_MODE=mock`; sample names and numbers only), at a 405x720 CSS viewport and 8/3 pixel ratio. The mock-only "Offline demo" hints are hidden in the shots. Script: `scripts/play-screenshots.mjs`. The 1.0 set (dark theme) is in `screenshots/1.0/`.
+
+1.0 set, uploaded 2026-10-16: `screenshots/1.0/02-org.png` … `06-signin.png` (emulator 1080x2400 scaled onto a 1080x1920 9:16 canvas, because Play allows at most 2:1). Officer screens were not captured: the reviewer code is a credential and was not typed by Claude.
 
 Play needs **2–8 phone screenshots**, PNG or JPEG, 9:16 portrait. Capture at **1080×1920** (or 1080×2400 then crop) so they qualify for Play's larger placements. Use the **dev seed** data (`devdept`, students `DEV-2026-0001` / `DEV-2026-0002`), never real student names, IDs or receipts.
 
