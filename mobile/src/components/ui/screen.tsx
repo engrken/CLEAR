@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import type { ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, View, type ViewStyle } from 'react-native';
-import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets, type Edge } from 'react-native-safe-area-context';
 
 import { radius, spacing, useTheme, type ColorTokens } from '@/theme';
 import { Icon } from './icon';
@@ -18,7 +18,7 @@ type Props = {
   contentStyle?: ViewStyle;
   /** Screen ground; coloured success screens set it. */
   ground?: keyof ColorTokens;
-  /** Extra bottom padding, e.g. room for the floating tab bar. */
+  /** Extra bottom padding, e.g. room for the floating tab bar (the safe-area inset is added when edges skip 'bottom'). */
   bottomInset?: number;
 };
 
@@ -27,7 +27,9 @@ export function Screen({
   children, header, footer, scroll = true, edges = ['top', 'bottom'], contentStyle, ground = 'canvas', bottomInset = 0,
 }: Props) {
   const { c } = useTheme();
-  const body = [styles.content, { paddingBottom: spacing[4] + bottomInset }, contentStyle];
+  const insets = useSafeAreaInsets();
+  const extra = bottomInset && !edges.includes('bottom') ? bottomInset + Math.max(insets.bottom, 12) - 12 : bottomInset;
+  const body = [styles.content, { paddingBottom: spacing[4] + extra }, contentStyle];
   return (
     <SafeAreaView edges={edges} style={[styles.root, { backgroundColor: c[ground] }]}>
       {header}

@@ -8,7 +8,7 @@ const MESSAGES: Record<string, string> = {
   invalid_student: 'This student isn’t on the department’s active roster.',
   rate_limited: 'Too many attempts. Wait a minute, then try again.',
   invalid_code: 'Invalid or expired verification code.',
-  payload_too_large: 'This file is over 4 MB. Choose a smaller screenshot.',
+  payload_too_large: 'This file is over 5 MB. Choose a smaller screenshot.',
   unauthorized: 'Your session has ended. Sign in again.',
   forbidden: 'Your role can’t use this module.',
   not_found: 'This record no longer exists.',

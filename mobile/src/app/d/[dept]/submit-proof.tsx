@@ -1,17 +1,19 @@
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { api, type ApiError, type FeeItem } from '@/api';
-import { Banner, Button, ProofUpload, Screen, Text, TextField, type PickedFile } from '@/components/ui';
+import { BackHeader, Banner, Button, Icon, ProofUpload, Screen, SuccessScreen, Text, TextField, type PickedFile } from '@/components/ui';
 import { formatPeso } from '@/lib/money';
 import { useAsync } from '@/lib/use-async';
-import { radius, spacing, useTheme } from '@/theme';
+import { spacing, useTheme } from '@/theme';
 
+// Values exactly as the API expects; the pills show a shorter word for the bank.
 const CHANNELS = ['GCash', 'Maya', 'Bank transfer'] as const;
-const MAX_BYTES = 4 * 1024 * 1024; // server limit (413 payload_too_large above this)
-const ACCEPTED = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+const CHANNEL_LABEL: Record<(typeof CHANNELS)[number], string> = { GCash: 'GCash', Maya: 'Maya', 'Bank transfer': 'Bank' };
+const MAX_BYTES = 5 * 1024 * 1024; // server limit (413 payload_too_large above this)
+const ACCEPTED = ['image/png', 'image/jpeg', 'image/webp']; // what the server accepts (checked by file contents)
 
 /** A student's online remittance: channel, reference, fee item and receipt. */
 export default function SubmitProof() {
@@ -39,12 +41,12 @@ export default function SubmitProof() {
     const mimeType = a.mimeType ?? 'image/jpeg';
     if (!ACCEPTED.includes(mimeType)) {
       setFile(undefined);
-      setFileError('Use a JPG, PNG, WebP or GIF screenshot. HEIC photos must be converted first.');
+      setFileError('Use a JPG, PNG or WebP screenshot. HEIC photos must be converted first.');
       return;
     }
     if (a.fileSize && a.fileSize > MAX_BYTES) {
       setFile(undefined);
-      setFileError('This file is over 4 MB. Choose a smaller screenshot.');
+      setFileError('This file is over 5 MB. Choose a smaller screenshot.');
       return;
     }
     setFileError(undefined);
@@ -82,20 +84,23 @@ export default function SubmitProof() {
 
   if (done) {
     return (
-      <Screen edges={['bottom']} footer={<Button block onPress={() => router.back()}>Done</Button>}>
-        <Banner tone="success" title="Payment proof submitted">
-          An officer will verify it and email your official receipt. Keep reference {done} for follow-ups.
-        </Banner>
-      </Screen>
+      <SuccessScreen
+        tone="mint"
+        title="Receipt sent!"
+        body="An officer will check it and email your official receipt. Your clearance updates once it’s verified."
+        refLabel="Keep this reference"
+        refValue={done}
+        actions={<Button block variant="ink" onPress={() => router.back()}>Done</Button>}
+      />
     );
   }
 
   return (
     <Screen
-      edges={['bottom']}
+      header={<BackHeader title="Send your receipt" />}
       footer={
-        <Button block icon="upload" onPress={submit} loading={busy} loadingLabel="Uploading receipt…">
-          Submit payment proof
+        <Button block onPress={submit} loading={busy} loadingLabel="Uploading receipt…">
+          Send for checking
         </Button>
       }>
       {errors.form ? <Banner tone="danger" title="Couldn’t submit">{errors.form}</Banner> : null}
@@ -109,11 +114,18 @@ export default function SubmitProof() {
         error={errors.studentId}
       />
 
-      <View style={{ gap: spacing[2] }}>
-        <Text variant="label" color="inkMuted">Paid through</Text>
-        <View style={styles.segment}>
+      <View style={styles.group}>
+        <Text variant="label" style={styles.legend}>Paid through</Text>
+        <View style={styles.segment} accessibilityRole="radiogroup" accessibilityLabel="Paid through">
           {CHANNELS.map((ch) => (
-            <Option key={ch} label={ch} selected={channel === ch} onPress={() => setChannel(ch)} style={styles.segmentOption} />
+            <ChannelPill
+              key={ch}
+              value={ch}
+              label={CHANNEL_LABEL[ch]}
+              selected={channel === ch}
+              onPress={() => setChannel(ch)}
+              grow={ch === 'Bank transfer' ? 1.2 : 1}
+            />
           ))}
         </View>
       </View>
@@ -129,61 +141,100 @@ export default function SubmitProof() {
         error={errors.reference}
       />
 
-      <View style={{ gap: spacing[2] }}>
-        <Text variant="label" color="inkMuted">What you paid for</Text>
-        <View style={{ gap: spacing[2] }}>
+      <View style={styles.group}>
+        <Text variant="label" style={styles.legend}>What you paid for</Text>
+        <View style={styles.group} accessibilityRole="radiogroup" accessibilityLabel="What you paid for">
           {fees.data?.map((f) => (
-            <Option
+            <FeeRow
               key={f.id}
               label={f.name}
-              detail={formatPeso(f.amountCentavos / 100)}
+              amount={formatPeso(f.amountCentavos / 100)}
               selected={feeId === f.id}
               onPress={() => setFeeId(f.id)}
             />
           ))}
         </View>
-        {errors.fee ? <Text variant="bodySm" color="dangerInk">{errors.fee}</Text> : null}
+        {errors.fee ? (
+          <View style={styles.help}>
+            <Icon name="alert" size={14} color="dangerInk" />
+            <Text variant="bodySm" color="dangerInk" style={{ flex: 1 }}>{errors.fee}</Text>
+          </View>
+        ) : null}
       </View>
 
-      <View style={{ gap: spacing[2] }}>
-        <Text variant="label" color="inkMuted">Receipt screenshot</Text>
-        <ProofUpload file={file} error={fileError} onPick={pick} onRemove={() => setFile(undefined)} />
-      </View>
+      <ProofUpload file={file} error={fileError} onPick={pick} onRemove={() => setFile(undefined)} />
     </Screen>
   );
 }
 
-function Option({ label, detail, selected, onPress, style }: { label: string; detail?: string; selected: boolean; onPress: () => void; style?: StyleProp<ViewStyle> }) {
+/** A channel as a segmented pill; selected is cobalt with a tick. `value` is what the API stores. */
+function ChannelPill({ value, label, selected, onPress, grow }: {
+  value: string; label: string; selected: boolean; onPress: () => void; grow: number;
+}) {
+  const { c } = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="radio"
+      accessibilityLabel={value}
+      accessibilityState={{ selected }}
+      style={({ pressed }) => [
+        styles.pill,
+        { flexGrow: grow, backgroundColor: selected ? c.cobalt : c.soft, opacity: pressed && !selected ? 0.8 : 1 },
+      ]}>
+      {selected ? <Icon name="check" size={16} color="onAccent" /> : null}
+      <Text variant="bodyStrong" color={selected ? 'onAccent' : 'ink'} numberOfLines={1} style={{ fontSize: 15 }}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+/** A fee item as a selectable row; selected is ink with white text and a tick. */
+function FeeRow({ label, amount, selected, onPress }: { label: string; amount: string; selected: boolean; onPress: () => void }) {
   const { c } = useTheme();
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="radio"
       accessibilityState={{ selected }}
-      style={[
-        styles.option,
-        { backgroundColor: selected ? c.accentTint : c.card, borderColor: selected ? c.accent : c.borderStrong },
-        style,
+      style={({ pressed }) => [
+        styles.fee,
+        { backgroundColor: selected ? c.inkBlock : c.soft, opacity: pressed && !selected ? 0.8 : 1 },
       ]}>
-      <Text variant="bodyStrong" color={selected ? 'accentInk' : 'ink'} style={{ flex: 1 }}>{label}</Text>
-      {detail ? <Text variant="figureSm" color={selected ? 'accentInk' : 'inkMuted'}>{detail}</Text> : null}
+      {selected ? <Icon name="check" size={18} color="onAccent" /> : null}
+      <Text variant="bodyStrong" color={selected ? 'onAccent' : 'ink'} style={{ flex: 1, fontSize: 15 }}>{label}</Text>
+      <Text variant="figureSm" color={selected ? 'onAccent' : 'ink'} style={{ fontFamily: 'BricolageGrotesque_800ExtraBold' }}>
+        {amount}
+      </Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
+  group: { gap: spacing[2] },
+  legend: { paddingLeft: 6 },
   // No flexWrap: with wrapping, Yoga reserved height for phantom extra lines and
   // left a blank gap under the channel buttons on Android.
   segment: { flexDirection: 'row', gap: spacing[2] },
-  segmentOption: { flexBasis: 0 },
-  option: {
-    flexGrow: 1,
+  pill: {
+    flexBasis: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    minHeight: 48,
+    paddingHorizontal: spacing[2],
+    borderRadius: 999,
+  },
+  fee: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[3],
     minHeight: 48,
-    paddingHorizontal: spacing[4],
-    borderWidth: 1.5,
-    borderRadius: radius.sm,
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    borderRadius: 20,
   },
+  help: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 6 },
 });

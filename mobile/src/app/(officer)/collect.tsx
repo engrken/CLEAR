@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { api, type ApiError, type FeeItem, type Student } from '@/api';
-import { Banner, Button, Screen, Text, TextField } from '@/components/ui';
+import { Avatar, Banner, Button, Icon, Screen, Text, TextField } from '@/components/ui';
 import { isEnrolled } from '@/lib/enrollment';
 import { formatPeso, fromCentavos } from '@/lib/money';
 import { useOfficerSession } from '@/lib/session';
+import { TAB_BAR_SPACE } from '@/lib/tab-bar';
 import { useAsync } from '@/lib/use-async';
 import { radius, spacing, useTheme } from '@/theme';
 
@@ -63,35 +64,39 @@ export default function Collect() {
     }
   };
 
+  // The button repeats the amount once it reads as one ("Record ₱350.00").
+  const typed = Number(amount.replace(/,/g, ''));
+  const submitLabel = amount.trim() && Number.isFinite(typed) && typed > 0 ? `Record ${formatPeso(typed)}` : 'Record payment';
+
+  const header = (
+    <View style={styles.header}>
+      <Text variant="title" accessibilityRole="header" style={styles.heading}>Record a payment</Text>
+    </View>
+  );
+
   return (
-    <Screen
-      edges={[]}
-      footer={<Button block icon="receipt" onPress={submit} loading={busy} loadingLabel="Recording…">Record payment</Button>}>
+    <Screen edges={['top']} header={header} bottomInset={TAB_BAR_SPACE}>
       {recorded ? <Banner tone="success" title="Payment recorded">{recorded}. The receipt was emailed to the student.</Banner> : null}
       {errors.form ? <Banner tone="danger" title="Payment not recorded">{errors.form}</Banner> : null}
 
-      <View style={{ gap: spacing[2] }}>
-        {student ? (
-          <View style={{ gap: spacing[2] }}>
-            <Text variant="label" color="inkMuted">Student</Text>
-            <Picked title={student.fullName} detail={student.studentId} onClear={() => setStudentId(undefined)} />
-          </View>
-        ) : (
-          <>
-            <TextField label="Student" value={search} onChangeText={setSearch} placeholder="Search name or ID" autoCorrect={false} error={errors.student} />
-            <View style={{ gap: spacing[2] }}>
-              {matches.slice(0, 4).map((s) => (
-                <Choice key={s.id} title={s.fullName} detail={`${s.studentId} · ${s.yearLevel}`} onPress={() => setStudentId(s.id)} />
-              ))}
-            </View>
-          </>
-        )}
-      </View>
+      {student ? (
+        <View style={styles.group}>
+          <Text variant="label" style={styles.groupLabel}>Student</Text>
+          <Picked name={student.fullName} detail={`${student.studentId} · ${student.yearLevel}`} onClear={() => setStudentId(undefined)} />
+        </View>
+      ) : (
+        <View style={{ gap: spacing[2] }}>
+          <TextField label="Student" value={search} onChangeText={setSearch} placeholder="Search name or ID" autoCorrect={false} error={errors.student} />
+          {matches.slice(0, 4).map((s) => (
+            <StudentChoice key={s.id} name={s.fullName} detail={`${s.studentId} · ${s.yearLevel}`} onPress={() => setStudentId(s.id)} />
+          ))}
+        </View>
+      )}
 
       <View style={{ gap: spacing[2] }}>
-        <Text variant="label" color="inkMuted">Fee item</Text>
+        <Text variant="label" style={styles.groupLabel}>Fee item</Text>
         {fees.data?.map((f) => (
-          <Choice
+          <FeeChoice
             key={f.id}
             title={f.name}
             detail={`${f.category} · ${f.targetFund}`}
@@ -100,16 +105,83 @@ export default function Collect() {
             onPress={() => chooseFee(f)}
           />
         ))}
-        {errors.fee ? <Text variant="bodySm" color="dangerInk">{errors.fee}</Text> : null}
+        {errors.fee ? (
+          <View style={styles.help}>
+            <Icon name="alert" size={14} color="dangerInk" />
+            <Text variant="bodySm" color="dangerInk" style={{ flex: 1 }}>{errors.fee}</Text>
+          </View>
+        ) : null}
       </View>
 
-      <TextField label="Amount received" prefix="₱" mono inputMode="decimal" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} placeholder="0.00" error={errors.amount} />
-      <TextField label="OR number" mono autoCapitalize="characters" autoCorrect={false} value={orNumber} onChangeText={setOrNumber} placeholder="OR-2026-000185" error={errors.or} />
+      <View style={styles.pair}>
+        <View style={styles.half}>
+          <TextField label="Amount received" prefix="₱" mono inputMode="decimal" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} placeholder="0.00" error={errors.amount} />
+        </View>
+        <View style={styles.half}>
+          <TextField label="OR number" autoCapitalize="characters" autoCorrect={false} value={orNumber} onChangeText={setOrNumber} placeholder="OR-2026-000185" error={errors.or} />
+        </View>
+      </View>
+
+      <Button block onPress={submit} loading={busy} loadingLabel="Recording…">{submitLabel}</Button>
     </Screen>
   );
 }
 
-function Choice({ title, detail, amount, selected, onPress }: { title: string; detail: string; amount?: string; selected?: boolean; onPress: () => void }) {
+const initials = (name: string) =>
+  name
+    .replace(/[^A-Za-z\s-]/g, ' ')
+    .split(/[\s-]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0].toUpperCase())
+    .join('') || '·';
+
+/** A search result: soft row with an initials avatar. */
+function StudentChoice({ name, detail, onPress }: { name: string; detail: string; onPress: () => void }) {
+  const { c } = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="radio"
+      accessibilityState={{ selected: false }}
+      style={({ pressed }) => [styles.studentRow, { backgroundColor: pressed ? c.cobaltTint : c.soft }]}>
+      <Avatar name={name} tone="info" size={44} />
+      <View style={styles.rowMain}>
+        <Text variant="bodyStrong" numberOfLines={1}>{name}</Text>
+        <Text variant="bodySm" color="inkMuted" numberOfLines={1}>{detail}</Text>
+      </View>
+    </Pressable>
+  );
+}
+
+/** The chosen student on cobalt tint, with a white "Change" pill. */
+function Picked({ name, detail, onClear }: { name: string; detail: string; onClear: () => void }) {
+  const { c } = useTheme();
+  return (
+    <View style={[styles.studentRow, styles.picked, { backgroundColor: c.cobaltTint }]}>
+      <View
+        importantForAccessibility="no-hide-descendants"
+        accessibilityElementsHidden
+        style={[styles.pickedAvatar, { backgroundColor: c.cobalt }]}>
+        <Text variant="caption" color="onAccent" style={{ fontFamily: 'Figtree_700Bold', fontSize: 14 }}>{initials(name)}</Text>
+      </View>
+      <View style={styles.rowMain}>
+        <Text variant="bodyStrong" numberOfLines={1}>{name}</Text>
+        <Text variant="bodySm" color="inkMuted" numberOfLines={1}>{detail}</Text>
+      </View>
+      <Pressable
+        onPress={onClear}
+        accessibilityRole="button"
+        hitSlop={4}
+        style={({ pressed }) => [styles.change, { backgroundColor: '#FFFFFF', opacity: pressed ? 0.7 : 1 }]}>
+        <Text variant="label" color="cobalt">Change</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+/** A fee option: soft row, ink when selected. */
+function FeeChoice({ title, detail, amount, selected, onPress }: { title: string; detail: string; amount: string; selected?: boolean; onPress: () => void }) {
   const { c } = useTheme();
   return (
     <Pressable
@@ -117,40 +189,47 @@ function Choice({ title, detail, amount, selected, onPress }: { title: string; d
       accessibilityRole="radio"
       accessibilityState={{ selected: !!selected }}
       style={({ pressed }) => [
-        styles.choice,
-        { backgroundColor: selected || pressed ? c.accentTint : c.card, borderColor: selected ? c.accent : c.borderStrong },
+        styles.fee,
+        { backgroundColor: selected ? c.inkBlock : pressed ? c.cobaltTint : c.soft },
       ]}>
-      <View style={{ flex: 1, gap: 2 }}>
-        <Text variant="bodyStrong" color={selected ? 'accentInk' : 'ink'}>{title}</Text>
-        <Text variant="bodySm" color="inkMuted">{detail}</Text>
+      <View style={styles.rowMain}>
+        <Text variant="bodyStrong" color={selected ? 'onAccent' : 'ink'} style={{ fontSize: 15, lineHeight: 20 }}>{title}</Text>
+        <Text variant="caption" style={{ fontSize: 12, lineHeight: 16, color: selected ? c.tabInactive : c.inkMuted }}>{detail}</Text>
       </View>
-      {amount ? <Text variant="figureSm" color={selected ? 'accentInk' : 'ink'}>{amount}</Text> : null}
+      <Text variant="figure" color={selected ? 'onAccent' : 'ink'} style={{ fontSize: 16 }}>{amount}</Text>
     </Pressable>
   );
 }
 
-function Picked({ title, detail, onClear }: { title: string; detail: string; onClear: () => void }) {
-  const { c } = useTheme();
-  return (
-    <View style={[styles.choice, { backgroundColor: c.accentTint, borderColor: c.accent }]}>
-      <View style={{ flex: 1, gap: 2 }}>
-        <Text variant="bodyStrong" color="accentInk">{title}</Text>
-        <Text variant="code" color="inkMuted">{detail}</Text>
-      </View>
-      <Button variant="ghost" size="sm" onPress={onClear}>Change</Button>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  choice: {
+  header: { paddingTop: 18, paddingHorizontal: 20, paddingBottom: 6 },
+  heading: { fontSize: 30, lineHeight: 34, letterSpacing: -0.3 },
+  group: { gap: 6 },
+  groupLabel: { paddingLeft: 6 },
+  studentRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[3],
-    minHeight: 56,
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[2],
-    borderWidth: 1.5,
-    borderRadius: radius.sm,
+    minHeight: 64,
+    paddingVertical: 10,
+    paddingLeft: 12,
+    paddingRight: 12,
+    borderRadius: 24,
   },
+  picked: { paddingRight: 10 },
+  pickedAvatar: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  rowMain: { flex: 1, minWidth: 0, gap: 1 },
+  change: { minHeight: 40, paddingHorizontal: 14, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
+  fee: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    minHeight: 52,
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+    borderRadius: 20,
+  },
+  help: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 6 },
+  pair: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  half: { flex: 1, minWidth: 0 },
 });

@@ -36,8 +36,11 @@ const TILE: Record<'mint' | 'sun' | 'coral', { bg: keyof ColorTokens; fg: keyof 
 };
 
 /** A small coloured KPI tile in whole pesos (Safekeeping, Pending, Owed). */
-export function ColorTile({ label, value, tone, onPress }: {
+export function ColorTile({ label, value, tone, onPress, accessibilityLabel, accessibilityHint }: {
   label: string; value: number; tone: keyof typeof TILE; onPress?: () => void;
+  /** Full spoken text, e.g. "Pending, 2 proofs to verify, ₱550". */
+  accessibilityLabel?: string;
+  accessibilityHint?: string;
 }) {
   const { c } = useTheme();
   const t = TILE[tone];
@@ -46,6 +49,8 @@ export function ColorTile({ label, value, tone, onPress }: {
       onPress={onPress}
       disabled={!onPress}
       accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityHint={accessibilityHint}
       style={({ pressed }) => [styles.tile, { backgroundColor: c[t.bg], opacity: pressed ? 0.85 : 1 }]}>
       <Text variant="caption" color={t.fg} numberOfLines={1} style={{ fontFamily: 'Figtree_700Bold', fontSize: 12 }}>
         {label}

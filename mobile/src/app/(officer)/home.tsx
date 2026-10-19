@@ -1,12 +1,14 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import { api } from '@/api';
-import { Banner, Button, LedgerList, LedgerRow, Screen, SectionHeader, StatTile, TermChip, Text } from '@/components/ui';
+import { Banner, Button, ColorTile, HeroStat, LedgerList, LedgerRow, Screen, SectionHeader, TermChip, Text } from '@/components/ui';
 import { formatWhen } from '@/lib/dates';
 import { fromCentavos } from '@/lib/money';
+import { setPendingCount } from '@/lib/pending-count';
 import { useOfficerSession, useSession } from '@/lib/session';
+import { TAB_BAR_SPACE } from '@/lib/tab-bar';
 import { useAsync } from '@/lib/use-async';
 import { spacing, useTheme } from '@/theme';
 
@@ -26,14 +28,29 @@ export default function Home() {
   useFocusEffect(useCallback(() => { reloadSummary(); reloadLedger(); }, [reloadSummary, reloadLedger]));
 
   const s = summary.data;
-  return (
-    <Screen edges={[]}>
-      <View style={{ gap: spacing[2] }}>
-        <Text variant="caption" color="inkMuted">{session.officer.fullName} · {session.officer.role}</Text>
-        <Text variant="display">{session.org.name}</Text>
+
+  // Feed the Verify tab badge from the dashboard already loaded here.
+  const pendingCount = s?.pendingCount;
+  useEffect(() => {
+    if (pendingCount !== undefined) setPendingCount(pendingCount);
+  }, [pendingCount]);
+
+  const header = (
+    <View style={styles.header}>
+      <View style={styles.headerTop}>
+        <Text variant="bodySm" color="inkMuted" numberOfLines={1} style={styles.greeting}>
+          Hi, {session.officer.fullName}
+        </Text>
         <TermChip ay={session.org.activeAy} term={session.org.activeTerm} />
       </View>
+      <Text variant="headline" accessibilityRole="header" style={styles.orgName}>
+        {session.org.name}
+      </Text>
+    </View>
+  );
 
+  return (
+    <Screen edges={['top']} header={header} bottomInset={TAB_BAR_SPACE} contentStyle={{ gap: 12 }}>
       {s && s.pendingCount > 0 && can('tab-remittances') ? (
         <Banner tone="warning" title={plural(s.pendingCount, 'proof') + ' waiting'}>
           Verify online remittances so students get their official receipts.
@@ -41,33 +58,33 @@ export default function Home() {
       ) : null}
 
       {!s ? (
-        <ActivityIndicator color={c.accent} />
+        <ActivityIndicator color={c.cobalt} />
       ) : (
-        <View style={styles.grid}>
-          <View style={styles.gridRow}>
-            <StatTile label="Cash on hand" value={fromCentavos(s.cashOnHandCentavos)} caption={plural(s.collectionsToday, 'collection') + ' today'} icon="wallet" />
-            <StatTile label="Safekeeping" value={fromCentavos(s.safekeepingCentavos)} caption="With the university cashier" icon="safe" tone="success" />
-          </View>
-          <View style={styles.gridRow}>
-            <StatTile
-              label="Pending"
+        <>
+          <HeroStat
+            label="Cash on hand"
+            value={fromCentavos(s.cashOnHandCentavos)}
+            caption={plural(s.collectionsToday, 'collection') + ' today'}
+          />
+          <View style={styles.tiles}>
+            <ColorTile label="Safekeeping" value={fromCentavos(s.safekeepingCentavos)} tone="mint" />
+            <ColorTile
+              label={`Pending · ${s.pendingCount}`}
               value={fromCentavos(s.pendingCentavos)}
-              caption={plural(s.pendingCount, 'proof') + ' to verify'}
-              icon="clock"
-              tone="warning"
+              tone="sun"
               onPress={can('tab-remittances') ? () => router.push('/verify') : undefined}
             />
-            <StatTile label="Outstanding" value={fromCentavos(s.outstandingCentavos)} caption={`${s.outstandingStudents} students`} icon="alert" tone="danger" />
+            <ColorTile label={`Owed · ${s.outstandingStudents}`} value={fromCentavos(s.outstandingCentavos)} tone="coral" />
           </View>
-        </View>
+        </>
       )}
 
       {can('tab-payment') ? (
-        <Button block icon="receipt" onPress={() => router.push('/collect')}>Record payment</Button>
+        <Button block variant="ink" icon="plus" onPress={() => router.push('/collect')}>Record a payment</Button>
       ) : null}
 
-      <View style={{ gap: spacing[3] }}>
-        <SectionHeader title="Today’s activity" />
+      <View style={{ gap: spacing[2], marginTop: 6 }}>
+        <SectionHeader title="Today" />
         {ledger.data ? (
           <LedgerList>
             {ledger.data.map((l, i) => (
@@ -88,7 +105,7 @@ export default function Home() {
             ))}
           </LedgerList>
         ) : (
-          <ActivityIndicator color={c.accent} />
+          <ActivityIndicator color={c.cobalt} />
         )}
       </View>
     </Screen>
@@ -96,6 +113,9 @@ export default function Home() {
 }
 
 const styles = StyleSheet.create({
-  grid: { gap: spacing[3] },
-  gridRow: { flexDirection: 'row', gap: spacing[3] },
+  header: { paddingTop: 18, paddingHorizontal: 20, paddingBottom: 8, gap: 2 },
+  headerTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing[3] },
+  greeting: { flex: 1, fontFamily: 'Figtree_600SemiBold' },
+  orgName: { fontSize: 22, lineHeight: 28, letterSpacing: -0.22 },
+  tiles: { flexDirection: 'row', gap: spacing[2] },
 });
