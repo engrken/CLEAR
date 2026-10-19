@@ -40,6 +40,7 @@ interface SummaryClientProps {
   summaryCategories?: { category: string; count: number; total: number }[];
   penaltySummary?: { count: number; amount: number };
   duesSummary?: { count: number; amount: number };
+  duesBreakdown?: { category: string; count: number; amount: number }[];
   grandCollectionTotal: number;
   expensesByFund: Record<string, number>;
   grandExpenseTotal: number;
@@ -68,6 +69,7 @@ export default function SummaryClient({
   summaryCategories = [],
   penaltySummary = { count: 0, amount: 0 },
   duesSummary = { count: 0, amount: 0 },
+  duesBreakdown = [],
   grandCollectionTotal,
   expensesByFund,
   grandExpenseTotal,
@@ -648,6 +650,47 @@ export default function SummaryClient({
               <tr><td className="ps-3">Dues / Collectibles</td><td className="text-end">{duesSummary.count}</td><td className="text-end">{fmt(duesSummary.amount)}</td></tr>
             </tbody>
             <tfoot><tr className="fw-bold bg-dark text-white"><td colSpan={2} className="text-end">TOTAL OUTSTANDING:</td><td className="text-end text-warning">{fmt((penaltySummary.amount || 0) + (duesSummary.amount || 0))}</td></tr></tfoot>
+          </table>
+        </div>
+
+        {/* Itemized monetary dues summary; use the SAME finance-engine buckets
+            as the headline. Do not display student identifiers in the summary. */}
+        <h6 className="fw-bold text-uppercase text-body mb-1">
+          Dues / Collectibles — Itemized Breakdown ({term})
+        </h6>
+        <p className="small text-muted fst-italic mb-2">
+          Grouped unpaid assessments by fee or obligation; amounts are outstanding balances, not receipts.
+          For student-level records, use the authorized Collectibles module.
+        </p>
+        <div className="table-responsive mb-4">
+          <table className="table table-sm table-bordered border-dark align-middle text-body mb-0" style={{ fontSize: "0.85rem" }}>
+            <thead>
+              <tr className="text-muted">
+                <th>Fee / Obligation</th>
+                <th className="text-end">Assessments</th>
+                <th className="text-end">Outstanding Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {duesBreakdown.length === 0 ? (
+                <tr><td colSpan={3} className="text-center text-muted">No outstanding dues or collectibles for this term.</td></tr>
+              ) : (
+                duesBreakdown.map((item, index) => (
+                  <tr key={`${item.category}-${index}`}>
+                    <td className="ps-3">{item.category}</td>
+                    <td className="text-end">{item.count}</td>
+                    <td className="text-end">{fmt(item.amount)}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+            <tfoot>
+              <tr className="fw-bold">
+                <td className="text-end">TOTAL DUES / COLLECTIBLES:</td>
+                <td className="text-end">{duesSummary.count}</td>
+                <td className="text-end text-warning">{fmt(duesSummary.amount)}</td>
+              </tr>
+            </tfoot>
           </table>
         </div>
 
