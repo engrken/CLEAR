@@ -7,7 +7,7 @@ import { requireTabAccess } from '@/lib/permissions';
 import { revalidatePath } from 'next/cache';
 import { headers } from 'next/headers';
 import { withFinancialTransaction } from '@/lib/financial-transaction';
-import { lockReceiptNumber, receiptNumberConflictWhere } from "@/lib/receipt-number";
+import { allocateOfficialReceiptNumber, receiptNumberConflictWhere } from "@/lib/receipt-number";
 import { randomUUID, createHash } from 'node:crypto';
 import { getPeriodLedger, toCents } from '../realign/ledger';
 import { assertAcademicPeriod } from '@/lib/academic-period-guard';
@@ -60,7 +60,7 @@ async function resolveStudentDbId(orgId: string, identifier: string | null) {
 export async function verifyOnlineRemittance(
   department: string,
   data: {
-    remittanceId: string; orNumber: string; studentId: string;
+    remittanceId: string; orNumber?: string; studentId: string;
     studentName: string; particulars: string; amount: number;
     ay: string; term: string; fundAllocation: string;
   }
@@ -70,9 +70,8 @@ export async function verifyOnlineRemittance(
   const officerName = String(officer.name || officer.fullName || officer.email || "System Administrator");
   const org = await prisma.organization.findUnique({ where: { subdomain: cleanDepartment }, select: { id: true } });
   if (!org) throw new Error("Department not found.");
-  const orNumber = String(data.orNumber || "").trim().toUpperCase();
+  let orNumber = "";
   const fundAllocation = String(data.fundAllocation || "").trim();
-  if (!/^[A-Z0-9][A-Z0-9-]{2,50}$/.test(orNumber)) throw new Error("A valid OR number is required.");
   if (!fundAllocation || fundAllocation === "Multiple Funds (Package Split)") throw new Error("A valid fund is required.");
 
   await withFinancialTransaction(async (tx) => {
@@ -94,12 +93,7 @@ export async function verifyOnlineRemittance(
     if (!ledger.funds.some((fund) => fund.name.trim().toLowerCase() === fundAllocation.toLowerCase())) {
       throw new Error("Selected fund is not available in this academic term. Refresh the queue.");
     }
-    await lockReceiptNumber(tx, org.id, orNumber);
-    const conflicted = await tx.collection.findFirst({ where: {
-      organizationId: org.id,
-      OR: [{ orNumber }, { orNumber: { startsWith: `${orNumber}-P` } }],
-    }, select: { id: true } });
-    if (conflicted) throw new Error(`Official receipt ${orNumber} already exists.`);
+    orNumber = await allocateOfficialReceiptNumber(tx, org.id);
 
     const student = await tx.student.findFirst({ where: {
       organizationId: org.id,
