@@ -7,17 +7,16 @@
 // listHistoricalDebts (lib/student-arrears.ts), decodeStudentDue /
 // activeCollectibleDue (collectibles/due-link.ts).
 //
-// One deliberate difference from Ken's page: his penalty filter (~286-295) drops any
-// penalty whose upper-cased status *contains* "SETTLED", which also drops
-// "Unsettled", so unsettled penalties never block clearance there. Here only
-// statuses that START with SETTLED count as settled, the same rule his arrears code
-// uses (/^SETTLED/i in lib/student-arrears.ts) and his payment code checks.
+// The clearance penalty status policy is shared with the web via
+// lib/penalty-clearance-status.ts; "UNSETTLED" must remain outstanding.
 //
 // No authorization here; callers decide what to show.
 
 import crypto from 'node:crypto';
 import { prisma } from '@/lib/prisma';
 import { money } from '@/lib/utils';
+import { isOutstandingPenalty } from '@/lib/penalty-clearance-status';
+export { isClosedPenaltyStatus } from '@/lib/penalty-clearance-status';
 import { listHistoricalDebts, type HistoricalDebt } from '@/lib/student-arrears';
 import {
   activeCollectibleDue,
@@ -102,12 +101,6 @@ export function buildTermPackage(collectionSetups: any[], _term?: string): TermP
       fund: String(c.targetFund || '').trim(),
     })),
   };
-}
-
-/** Penalty statuses that no longer owe anything. See the header note on Ken's bug. */
-export function isClosedPenaltyStatus(status: unknown) {
-  const st = String(status || '').trim().toUpperCase();
-  return st.startsWith('SETTLED') || st.includes('VOID') || st.includes('CANCEL');
 }
 
 /**
@@ -196,7 +189,7 @@ export function evaluateStudentObligations(
   // DIFFERENCE FROM KEN (~286-295): only /^SETTLED/ counts as settled (see header).
   const myPenalties = penalties.filter((p) => {
     const pSid = String(p.studentId || '').trim().toLowerCase();
-    return (pSid === studentNumKey || pSid === studentDbIdKey) && !isClosedPenaltyStatus(p.status);
+    return (pSid === studentNumKey || pSid === studentDbIdKey) && isOutstandingPenalty(p);
   });
 
   if (myPenalties.length > 0) {
