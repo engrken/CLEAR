@@ -194,3 +194,5 @@ A fresh new look for CLEAR!
 - After verifying a payment, jump straight to the next one.
 - Receipt uploads now accept PNG, JPG or WebP up to 5 MB.
 ```
+
+**Submitted (2026-10-19, ~09:56):** 1.1.0 (4), EAS build fff08f9d, went to **production** (full rollout) through the Play Developer API in one edit together with the 8 new phone screenshots (en-US listing). Preview APK of the same code: EAS build 2b458437 (versionCode 4). Managed publishing is off, so it goes live once Google approves.
