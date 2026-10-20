@@ -13,6 +13,7 @@ import { getPeriodLedger, toCents } from '../realign/ledger';
 import { assertAcademicPeriod } from '@/lib/academic-period-guard';
 import { applyPaymentToStudentCollectibles } from '../collectibles/due-link';
 import { enqueuePaymentReceipt, enqueueAccountingNotice, scheduleDigitalReceiptDispatch } from '@/lib/digital-receipts';
+import { selectConfiguredRemittanceFee, isRemittancePackageDescription } from '@/lib/remittance-fee-policy';
 import { ingressClientIp, normalizePublicPaymentChannel } from '@/lib/public-remittance-security';
 
 // =========================================================================
@@ -126,34 +127,18 @@ export async function verifyOnlineRemittance(
     if (/^Penalty Fine\s*(?:\[|:)/i.test(itemDescription) || /^penalt(?:y|ies)$/i.test(String(remit.category || "").trim())) {
       throw new Error("Penalty remittances need a linked penalty ID and an atomic balance adjustment. Use Penalty Logs → Pay in Cash; do not verify this as a generic fee.");
     }
-    const isPackage = /departmental\s+fee.*package|departmental.*package/i.test(itemDescription);
-    const packageItems = isPackage ? await tx.collectionSetup.findMany({ where: {
+    // Authorization is derived from the configured assessment, never an ad hoc label.
+    // Legacy single-fee proofs with a generic category can be verified only
+    // when their fee name is unique; ambiguous legacy packages must be resubmitted.
+    const periodSetups = await tx.collectionSetup.findMany({ where: {
       organizationId: org.id, academicYear: remit.academicYear, term: remit.term,
-      isPackage: true,
-    }, orderBy: [{ category: "asc" }, { name: "asc" }] }) : [];
-    if (isPackage && packageItems.length === 0) {
-      throw new Error("No departmental package fee setup exists for this academic term.");
-    }
-    if (isPackage) {
-      const names = new Set<string>();
-      for (const item of packageItems) {
-        const name = String(item.name).trim().toLowerCase();
-        if (names.has(name)) {
-          throw new Error("Package Fee Setup has duplicated item descriptions. Give each package fee a distinct name before verification.");
-        }
-        names.add(name);
-      }
-    }
-    // Public submissions usually carry a generic remittance category.
-    // Reject ambiguous fee names instead of guessing the assessment category.
-    const matchingSetups = !isPackage ? await tx.collectionSetup.findMany({ where: {
-      organizationId: org.id, academicYear: remit.academicYear,
-      term: remit.term, name: itemDescription,
-    } }) : [];
-    if (matchingSetups.length > 1) {
-      throw new Error("Multiple configured fees share this name. Resolve the category in Fee Setup before verifying.");
-    }
-    const setup = matchingSetups[0] ?? null;
+    } });
+    const selection = selectConfiguredRemittanceFee(periodSetups, {
+      category: remit.category, itemDescription,
+    });
+    const isPackage = selection.kind === "package";
+    const packageItems = selection.kind === "package" ? selection.items : [];
+    const setup = selection.kind === "single" ? selection.setup : null;
     const prior = await tx.collection.findMany({ where: {
       organizationId: org.id, academicYear: remit.academicYear,
       term: remit.term, studentId: student.id,
@@ -192,13 +177,14 @@ export async function verifyOnlineRemittance(
       }
     } else {
       const previous = previouslyPaid(itemDescription);
-      const rate = setup ? toCents(setup.amount) : previous + amountCents;
-      if (setup && previous + amountCents > rate) {
+      if (!setup) throw new Error("A configured Fee Setup item is required.");
+      const rate = toCents(setup.amount);
+      if (previous + amountCents > rate) {
         throw new Error(`Payment exceeds the outstanding ${itemDescription} assessment. Review before verifying.`);
       }
-      entries.push({ name: itemDescription, fund: String(setup?.targetFund || fundAllocation),
+      entries.push({ name: itemDescription, fund: String(setup.targetFund),
         rate, amount: amountCents, balance: Math.max(0, rate - previous - amountCents),
-        category: setup?.category || String(remit.category || "Online Remittance") });
+        category: selection.category });
     }
 
     // Canonicalize fund names and reject missing target fund configurations.
@@ -304,6 +290,7 @@ export async function submitOnlineRemittance(
     particulars: string;
     amount: number;
     proofBase64: string | null;
+    category?: string;
     paymentMode?: string;
     ay: string;
     term: string;
@@ -366,6 +353,7 @@ export async function submitOnlineRemittance(
       paymentChannel: formData.get('paymentChannel') as string,
       referenceNo: formData.get('referenceNo') as string,
       particulars: formData.get('particulars') as string,
+      category: formData.get('category') as string,
       amount: parseFloat(formData.get('amount') as string),
       ay: formData.get('ay') as string,
       term: formData.get('term') as string,
@@ -443,6 +431,15 @@ export async function submitOnlineRemittance(
     if (ledger.activeRollover) {
       throw new Error('The selected term has been closed; new proof submissions are unavailable.');
     }
+    // Resolve the actual fee from this tenant's Fee Setup before storing proof.
+    // Packages MUST contain the selected category, never every package category.
+    const configuredSetups = await tx.collectionSetup.findMany({ where: {
+      organizationId: orgId, academicYear: data.ay, term: data.term,
+    } });
+    const resolvedFee = selectConfiguredRemittanceFee(configuredSetups, {
+      category: String(data.category || ''),
+      itemDescription: String(data.particulars || '').trim(),
+    });
     const duplicate = await tx.onlineRemittance.findFirst({
       where: {
         organizationId: orgId,
@@ -467,8 +464,10 @@ export async function submitOnlineRemittance(
         studentEmail: cleanEmail,
         paymentChannel,
         referenceNumber,
-        category: "Online Remittance",
-        itemDescription: String(data.particulars || "").trim().slice(0, 200),
+        category: resolvedFee.category,
+        itemDescription: isRemittancePackageDescription(data.particulars)
+          ? "Departmental Fee (Full Package)"
+          : resolvedFee.kind === "single" ? resolvedFee.setup.name : String(data.particulars || "").trim().slice(0, 200),
         paymentMode: String(data.paymentMode || "Online").slice(0, 30),
         amountPaid: amount,
         proofUrl: data.proofBase64,
@@ -501,6 +500,7 @@ export async function submitOnlineRemittanceDirect(
     channel: string;
     referenceNo: string;
     collectionType: string;
+    category?: string;
     paymentMode: string;
     amount: number;
     proofBase64: string;
@@ -515,6 +515,7 @@ export async function submitOnlineRemittanceDirect(
     paymentChannel: payload.channel,
     referenceNo: payload.referenceNo,
     particulars: payload.collectionType,
+    category: payload.category,
     amount: payload.amount,
     proofBase64: payload.proofBase64,
     paymentMode: payload.paymentMode,
