@@ -1,13 +1,20 @@
-// Which backend the app talks to. Set in mobile/.env (or the EAS build profile):
-//
-//   EXPO_PUBLIC_API_MODE=mock                 # offline demo on in-memory data
-//   EXPO_PUBLIC_API_URL=http://10.0.2.2:3000/api/mobile   # Android emulator -> host dev server
-//
-// Defaults: the local web app in development, production otherwise.
-
+// Backend configuration. Release builds must never use mock data or plaintext HTTP.
+// Development builds may use an emulator's local HTTP endpoint.
 const PROD_URL = 'https://clear.rupertbulquerin.com/api/mobile';
 const DEV_URL = 'http://localhost:3000/api/mobile';
 
-export const API_MODE: 'http' | 'mock' = process.env.EXPO_PUBLIC_API_MODE === 'mock' ? 'mock' : 'http';
+const configuredMode = process.env.EXPO_PUBLIC_API_MODE;
+const configuredUrl = process.env.EXPO_PUBLIC_API_URL;
+const apiUrl = (configuredUrl || (__DEV__ ? DEV_URL : PROD_URL)).replace(/\/+$/, '');
 
-export const API_URL = (process.env.EXPO_PUBLIC_API_URL || (__DEV__ ? DEV_URL : PROD_URL)).replace(/\/+$/, '');
+if (!__DEV__) {
+  if (configuredMode === 'mock') {
+    throw new Error('CLEAR security policy: mock API is prohibited in release builds.');
+  }
+  if (!/^https:\/\/[^\s/?#]+(?:\/|$)/i.test(apiUrl)) {
+    throw new Error('CLEAR security policy: release API endpoint must use HTTPS.');
+  }
+}
+
+export const API_MODE: 'http' | 'mock' = __DEV__ && configuredMode === 'mock' ? 'mock' : 'http';
+export const API_URL = apiUrl;
