@@ -7,7 +7,9 @@ import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { auth } from '@/auth';
 import { logSystemAction } from '@/lib/logger';
-import { requireTabAccess, isSuperAdminEmail } from '@/lib/permissions';
+import { requireTabAccess, isReservedGlobalAdminEmail } from '@/lib/permissions';
+import { verifyGlobalAdminSession } from '@/lib/super-admin';
+import { assertTenantSessionScope } from '@/lib/tenant-session-scope';
 import { money as roundMoney } from '@/lib/utils';
 import { getPeriodLedger } from './(protected)/realign/ledger';
 
@@ -60,7 +62,6 @@ async function resolveOrganizationId(department: string) {
 
 async function requireOrganizationAccess(organizationId: string) {
   const session = await auth();
-
   const sessionUser = session?.user as {
     id?: string;
     name?: string | null;
@@ -68,18 +69,25 @@ async function requireOrganizationAccess(organizationId: string) {
     email?: string | null;
     role?: string | null;
     organizationId?: string | null;
+    globalAdminId?: string | null;
+    globalAdminVersion?: number | null;
   } | undefined;
 
   const email = String(sessionUser?.email || '').trim().toLowerCase();
-
   if (!email) {
     throw new Error('401 Unauthorized: Session expired or missing email.');
   }
 
-  // Allow configured Super Admin global inspection access.
-  const role = String(sessionUser?.role || '').trim().toLowerCase();
+  // Do not elevate access based only on an email address or a JWT role claim.
+  // Super Admin sessions must be verified against the current global admin record.
+  const validSuperAdmin = Boolean(await verifyGlobalAdminSession({
+    email,
+    role: sessionUser?.role,
+    globalAdminId: sessionUser?.globalAdminId,
+    globalAdminVersion: sessionUser?.globalAdminVersion,
+  }));
 
-  if (isSuperAdminEmail(email) || role === 'superadmin' || role === 'master') {
+  if (validSuperAdmin) {
     return {
       id: sessionUser?.id || 'superadmin',
       organizationId,
@@ -89,6 +97,16 @@ async function requireOrganizationAccess(organizationId: string) {
       status: 'Active',
     };
   }
+
+  // A reserved privileged identity with an invalid admin session is never
+  // allowed to fall back to a tenant membership.
+  if (await isReservedGlobalAdminEmail(email)) {
+    throw new Error('403 Forbidden: Invalid Super Admin session.');
+  }
+
+  // Always scope tenant membership to the requested organization, and reject
+  // a session whose original organization differs from the target tenant.
+  assertTenantSessionScope(sessionUser?.organizationId, organizationId);
 
   const user = await prisma.tenantUser.findFirst({
     where: {
