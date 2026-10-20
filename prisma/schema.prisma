@@ -37,6 +37,7 @@ model Organization {
   realignments                FundRealignment[]
   fundTransfers               FundTransfer[]
   MobileSession               MobileSession[]
+  mobilePaymentIdempotencies MobilePaymentIdempotency[]
   onlineRemittances           OnlineRemittance[]
   penalties                   Penalty[]
   signatories                 Signatory[]
@@ -300,6 +301,7 @@ model TenantUser {
   otpLastRequestedAt DateTime? @db.Timestamptz(3)
   updatedAt          DateTime        @updatedAt @db.Timestamptz(3)
   MobileSession      MobileSession[]
+  mobilePaymentIdempotencies MobilePaymentIdempotency[]
   organization       Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, userId])
@@ -362,6 +364,23 @@ model AuthThrottle {
   lockedUntil DateTime? @db.Timestamptz(3)
   lastSentAt  DateTime? @db.Timestamptz(3)
   updatedAt   DateTime @db.Timestamptz(3)
+}
+
+// Request deduplication for mobile financial writes. A committed receipt is
+// linked to the request inside the same serializable payment transaction.
+model MobilePaymentIdempotency {
+  id             String   @id @default(uuid())
+  organizationId String
+  tenantUserId   String
+  requestKey     String
+  requestHash    String
+  receiptId      String?
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  officer        TenantUser @relation(fields: [tenantUserId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, tenantUserId, requestKey])
+  @@index([organizationId, createdAt])
 }
 
 model MobileSession {
