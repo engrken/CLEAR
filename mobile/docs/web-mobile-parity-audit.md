@@ -46,3 +46,11 @@ For EACH web workflow record:
 - Generate and commit a reproducible Expo dependency lockfile; validate Expo Crypto compatibility.
 - Run backend and Android typechecks, lint, build, and security tests.
 - Keep production Vercel/Neon and Play Console unchanged pending review and approval.
+
+## 2026-10-21 main-branch reconciliation finding (BLOCKER)
+GitHub comparison found main is 115 commits ahead of the Android base branch, with divergent histories. The current web main introduces:
+- `lib/receipt-number.ts` with transaction-scoped receipt advisory locks and server-owned OR allocation.
+- `PaymentRequest` idempotency model and migration `20261020010000_payment_request_idempotency`.
+- Changes to collections, remittances, clearance, penalty workflows, receipt grouping, and financial tests.
+
+The mobile branch currently implements a separate `MobilePaymentIdempotency` model and still takes an officer-entered OR. These designs are **not proven equivalent**. Do not merge both migrations into production or claim parity until a current-main-based integration branch reuses the canonical web OR/idempotency policy and passes tests. PR #40 is only a draft staging PR against the older mobile branch, not a main-ready merge.
