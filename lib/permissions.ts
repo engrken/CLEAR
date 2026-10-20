@@ -4,6 +4,7 @@ import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
 import { isSuperAdminEmail, isReservedGlobalAdminEmail, verifyGlobalAdminSession } from '@/lib/super-admin';
 import { PRESET_ROLE_TABS, parseAllowedTabs } from '@/lib/role-permissions';
+import { assertTenantSessionScope } from '@/lib/tenant-session-scope';
 
 export { isSuperAdminEmail, isReservedGlobalAdminEmail, PRESET_ROLE_TABS, parseAllowedTabs };
 
@@ -63,6 +64,10 @@ async function loadAccess(department: string) {
       allowedTabs: [...ALL_TABS],
     };
   }
+
+  // The signed-in officer's organization must match the requested tenant.
+  // A shared email address across tenant rosters is not an authorization grant.
+  assertTenantSessionScope(sessionUser.organizationId, org.id);
 
   // Role and tab scope MUST come from a currently active tenant database record.
   const member = await prisma.tenantUser.findFirst({
