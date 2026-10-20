@@ -8,7 +8,6 @@
       "policy": "appVersion"
     },
     "orientation": "portrait",
-    "icon": "./assets/images/clear-icon.png",
     "scheme": "clearsys",
     "userInterfaceStyle": "light",
     "ios": {
@@ -22,9 +21,7 @@
     "android": {
       "package": "com.rupertbulquerin.clear",
       "adaptiveIcon": {
-        "backgroundColor": "#0b1329",
-        "foregroundImage": "./assets/images/clear-adaptive-foreground.png",
-        "monochromeImage": "./assets/images/clear-adaptive-monochrome.png"
+        "backgroundColor": "#0b1329"
       },
       "predictiveBackGestureEnabled": false,
       "blockedPermissions": [
@@ -40,17 +37,14 @@
       ]
     },
     "web": {
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "output": "static"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#0b1329",
-          "image": "./assets/images/clear-splash.png",
-          "imageWidth": 96
+          "backgroundColor": "#0b1329"
         }
       ],
       [
