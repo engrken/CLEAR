@@ -29,7 +29,14 @@ export const POST = handler(async (req, { params }: Ctx) => {
   const amountCentavos = requireCentavos(body.amountCentavos, 'Amount');
   const orNumber = requireString(body.orNumber, 'OR number', 60).toUpperCase();
 
-  const result = await recordMobilePayment(org, officer, { studentId, feeId, penaltyId, amountCentavos, orNumber });
+  const requestKey = req.headers.get('idempotency-key');
+  if (requestKey && !/^[a-zA-Z0-9_-]{16,128}$/.test(requestKey)) {
+    throw new ApiFailure(400, 'invalid', 'Invalid payment request identifier.');
+  }
+  const result = await recordMobilePayment(org, officer, {
+    studentId, feeId, penaltyId, amountCentavos, orNumber,
+    ...(requestKey ? { idempotency: { key: requestKey, officerId: officer.id } } : {}),
+  });
   if (!result.firstReceipt) throw new ApiFailure(500, 'server_error', 'The receipt was not created.');
 
   return json(req, {
