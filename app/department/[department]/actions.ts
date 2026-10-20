@@ -9,6 +9,7 @@ import { auth } from '@/auth';
 import { logSystemAction } from '@/lib/logger';
 import { requireTabAccess, isReservedGlobalAdminEmail } from '@/lib/permissions';
 import { verifyGlobalAdminSession } from '@/lib/super-admin';
+import { assertTenantSessionScope } from '@/lib/tenant-session-scope';
 import { money as roundMoney } from '@/lib/utils';
 import { getPeriodLedger } from './(protected)/realign/ledger';
 
@@ -105,10 +106,7 @@ async function requireOrganizationAccess(organizationId: string) {
 
   // Always scope tenant membership to the requested organization, and reject
   // a session whose original organization differs from the target tenant.
-  if (!sessionUser?.organizationId ||
-      sessionUser.organizationId !== organizationId) {
-    throw new Error('403 Forbidden: Session does not belong to this department.');
-  }
+  assertTenantSessionScope(sessionUser?.organizationId, organizationId);
 
   const user = await prisma.tenantUser.findFirst({
     where: {
