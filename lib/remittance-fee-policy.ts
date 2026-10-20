@@ -46,6 +46,9 @@ export function selectConfiguredRemittanceFee(
     const selectedNames = new Set<string>();
     for (const item of items) {
       const nameKey = key(item.name);
+      if (!Number.isFinite(Number(item.amount)) || Number(item.amount) <= 0) {
+        throw new Error("A package Fee Setup item has an invalid rate. Correct the assessment before verification.");
+      }
       if (!nameKey || selectedNames.has(nameKey) ||
           setups.filter(s => key(s.name) === nameKey).length !== 1) {
         throw new Error("Ambiguous package fee descriptions. Reconcile Fee Setup before verification.");
@@ -63,6 +66,9 @@ export function selectConfiguredRemittanceFee(
     throw new Error("Fee Setup contains an ambiguous or duplicate item name. Reconcile categories before verification.");
   }
   const setup = sameName[0];
+  if (!Number.isFinite(Number(setup.amount)) || Number(setup.amount) <= 0) {
+    throw new Error("The configured Fee Setup item must have a positive assessment to accept online payment.");
+  }
   if (categoryKey && categoryKey !== key(setup.category)) {
     throw new Error("Payment category does not match the configured Fee Setup category.");
   }
