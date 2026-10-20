@@ -52,18 +52,6 @@ export default function ClearanceClientView({
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // AUTO-UPDATES AMOUNT WHEN DROPDOWN CHANGES
-  const handleCollectionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const val = e.target.value;
-    setCollectionType(val);
-    if (val === "Other" || val === "Penalty Arrears") {
-      setAmount(0);
-    } else {
-      const matched = feeOptions.find(f => f.name === val);
-      if (matched) setAmount(matched.amount);
-    }
-  };
-
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
