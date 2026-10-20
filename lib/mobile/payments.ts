@@ -19,6 +19,7 @@
 // is today's Manila calendar date, and the fee comes from a CollectionSetup id.
 
 import type { Organization } from '@prisma/client';
+import { createHash } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { ApiFailure } from '@/lib/mobile/http';
@@ -146,6 +147,7 @@ export type MobilePaymentInput = {
   penaltyId?: string;
   amountCentavos: number;
   orNumber: string;
+  idempotency?: { key: string; officerId: string };
 };
 
 export type MobilePaymentLine = {
@@ -257,6 +259,16 @@ export async function recordMobilePayment(
   const postOnce = async () => prisma.$transaction(async (tx) => {
     created = [];
     lineMeta = [];
+    if (input.idempotency) {
+      await tx.mobilePaymentIdempotency.create({ data: {
+        organizationId: org.id,
+        tenantUserId: input.idempotency.officerId,
+        requestKey: input.idempotency.key,
+        requestHash: createHash('sha256').update(JSON.stringify({
+          studentKey, feeId, penaltyId, amountCentavos: input.amountCentavos, orNumber,
+        })).digest('hex'),
+      } });
+    }
     await assertAcademicPeriod(tx, org.id, ay, term);
     const ledger = await getPeriodLedger(tx, org.id, ay, term);
     if (ledger.activeRollover) {
@@ -387,6 +399,15 @@ export async function recordMobilePayment(
       if (index === 0) firstReceiptId = createdReceipt.id;
       created.push(createdReceipt);
       lineMeta.push({ fund: entry.fund, balanceCents: entry.balanceCents });
+    }
+    if (input.idempotency && firstReceiptId) {
+      await tx.mobilePaymentIdempotency.update({
+        where: { organizationId_tenantUserId_requestKey: {
+          organizationId: org.id, tenantUserId: input.idempotency.officerId,
+          requestKey: input.idempotency.key,
+        } },
+        data: { receiptId: firstReceiptId },
+      });
     }
     if (penaltyId) {
       // A receipt has been created above; only now change the penalty balance.
