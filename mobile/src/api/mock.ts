@@ -127,8 +127,9 @@ export const mockApi: ClearApi = {
     const hold = s.studentId.endsWith('0002') || s.studentId.endsWith('0004');
     const officerView = !!session && session.org.subdomain === slug && session.officer.allowedTabs.includes('tab-clearance');
     return {
-      studentName: s.fullName,
-      studentId: s.studentId,
+      // Like the server: public lookups get the status, not the student's identity.
+      studentName: officerView ? s.fullName : null,
+      studentId: officerView ? s.studentId : null,
       status: hold ? 'hold' : 'cleared',
       outstandingCentavos: officerView ? (hold ? 70000 : 0) : null,
       qrToken: hold ? null : `https://clear.rupertbulquerin.com/department/${org.subdomain}/clearance?q=${s.studentId}&sig=demo`,
