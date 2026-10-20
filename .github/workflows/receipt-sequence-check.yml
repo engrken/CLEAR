@@ -45,3 +45,8 @@ jobs:
           SQL
         env:
           PGPASSWORD: postgres
+      - name: Verify parallel sessions issue distinct receipts
+        run: |
+          seq 1 20 | xargs -P 10 -I {} sh -c 'psql -h localhost -U postgres -d postgres -Atc "SELECT nextval('\''clear_receipt_sequence'\'')"'
+        env:
+          PGPASSWORD: postgres
