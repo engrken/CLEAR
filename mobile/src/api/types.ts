@@ -156,7 +156,7 @@ export type ClearApi = {
   getDashboard(s: Session): Promise<DashboardSummary>;
   listLedger(s: Session, filter?: { status?: string; limit?: number }): Promise<LedgerEntry[]>;
   listStudents(s: Session, q?: string): Promise<Student[]>;
-  recordPayment(s: Session, p: { studentId: string; feeId: string; amountCentavos: number; orNumber: string }): Promise<LedgerEntry>;
+  recordPayment(s: Session, p: { studentId: string; feeId: string; amountCentavos: number; orNumber: string; idempotencyKey?: string }): Promise<LedgerEntry>;
   getRemittance(s: Session, id: string): Promise<RemittanceDetail>;
   verifyRemittance(s: Session, id: string, p: { orNumber: string; fundAllocation?: string }): Promise<{ orNumber: string }>;
   invalidateRemittance(s: Session, id: string): Promise<{ ok: true }>;
