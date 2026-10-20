@@ -15,7 +15,6 @@ permissions:
 
 jobs:
   android-debug:
-    if: ${{ hashFiles('mobile/package-lock.json') != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     defaults:
