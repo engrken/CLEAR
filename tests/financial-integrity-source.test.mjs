@@ -88,8 +88,26 @@ test('server payments validate real configured funds', () => {
 
 test('remittance category uses the actual fee setup for collectible posting', () => {
   const remittances = read('app/department/[department]/(protected)/remittances/actions.ts');
-  assert.ok(remittances.includes('category: setup?.category || String(remit.category'));
+  assert.ok(remittances.includes('category: selection.category'));
+  assert.ok(remittances.includes('selectConfiguredRemittanceFee(periodSetups,'));
+  assert.ok(remittances.includes('selectConfiguredRemittanceFee(configuredSetups,'));
+  assert.ok(!remittances.includes('previous + amountCents;'));
   assert.ok(remittances.includes('category: entries[0].category, itemDescription, amountCents'));
+});
+
+test('fund restoration only recreates receipt-backed orphan configurations without changing totals', () => {
+  const setup = read('app/department/[department]/(protected)/setup/actions.ts');
+  assert.ok(setup.includes('const historicReceiptCount = await tx.collection.count('));
+  assert.ok(setup.includes('orphanRestorations.push(row.fundName)'));
+  assert.ok(setup.includes('ledger.totalRemaining * 100'));
+  assert.ok(setup.includes('row.amount !== 0'));
+});
+
+test('public proof input never offers arbitrary fee text', () => {
+  const client = read('app/department/[department]/clearance/ClearanceClientView.tsx');
+  assert.ok(client.includes('formData.append("category", selectedFee.category)'));
+  assert.ok(!client.includes('<option value="Other">'));
+  assert.ok(!client.includes('<option value="Penalty Arrears">'));
 });
 
 test('public payment throttle uses unambiguous timestamptz casts', () => {
