@@ -1,6 +1,9 @@
 name: Android Gradle validation (unsigned)
 
 on:
+  push:
+    branches:
+      - android-parity-integration
   workflow_dispatch:
   pull_request:
     paths:
