@@ -13,10 +13,14 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: clear-android-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   android-debug:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: mobile
@@ -49,7 +53,7 @@ jobs:
       - name: Generate native Android project without publishing
         run: npx expo prebuild --platform android --non-interactive --no-install
       - name: Build unsigned debug APK with Gradle
-        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
+        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace --console=plain --info --max-workers=2
         working-directory: mobile/android
       - name: Upload debug APK for internal validation only
         uses: actions/upload-artifact@v4
