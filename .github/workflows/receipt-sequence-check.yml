@@ -22,3 +22,26 @@ jobs:
           test "$(psql -h localhost -U postgres -d postgres -Atc "SELECT COUNT(DISTINCT n) FROM (SELECT nextval('clear_receipt_sequence') n FROM generate_series(1, 1000)) s")" = "1000"
         env:
           PGPASSWORD: postgres
+      - name: Verify sequence survives rollback without reuse
+        run: |
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE TEMP TABLE receipt_test (or_number bigint PRIMARY KEY);
+          INSERT INTO receipt_test SELECT nextval('clear_receipt_sequence') FROM generate_series(1, 100);
+          DO $$
+          DECLARE before_rollback bigint;
+          DECLARE after_rollback bigint;
+          BEGIN
+            BEGIN
+              before_rollback := nextval('clear_receipt_sequence');
+              RAISE EXCEPTION 'intentional rollback';
+            EXCEPTION WHEN OTHERS THEN
+              NULL;
+            END;
+            after_rollback := nextval('clear_receipt_sequence');
+            IF after_rollback <= before_rollback THEN
+              RAISE EXCEPTION 'sequence value was reused after rollback';
+            END IF;
+          END $$;
+          SQL
+        env:
+          PGPASSWORD: postgres
