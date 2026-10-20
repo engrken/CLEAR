@@ -1,0 +1,84 @@
+name: Authenticated financial concurrency integration
+
+on:
+  pull_request:
+    paths:
+      - 'app/department/**'
+      - 'auth.ts'
+      - 'lib/**'
+      - 'prisma/**'
+      - 'tests/ci-financial-*'
+      - '.github/workflows/financial-actions-integration.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  authenticated-actions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: clear_ci
+          POSTGRES_USER: clear_ci
+          POSTGRES_PASSWORD: clear_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U clear_ci -d clear_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://clear_ci:clear_ci@127.0.0.1:5432/clear_ci?schema=public
+      AUTH_SECRET: clear-ci-only-financial-auth-key-1234567890
+      NEXTAUTH_SECRET: clear-ci-only-financial-auth-key-1234567890
+      AUTH_URL: http://127.0.0.1:3100
+      AUTH_TRUST_HOST: 'true'
+      SUPER_ADMIN_EMAIL: ci-super-admin@example.invalid
+      CLEAR_CI_FINANCE_TEST_ENABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Apply full Prisma migration history to disposable PostgreSQL
+        run: npx prisma migrate deploy
+      - name: Seed synthetic tenant, officer and remittance
+        run: node tests/ci-financial-seed.mjs
+      - name: Generate CI-only route and ephemeral request token
+        run: |
+          mkdir -p app/api/clear-ci-finance
+          cp tests/ci-financial-route.ts app/api/clear-ci-finance/route.ts
+          echo "CLEAR_CI_FINANCE_TEST_TOKEN=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+      - name: Build real Next.js app with CI-only action adapter
+        run: npm run build
+      - name: Run authenticated concurrent cashier and remittance actions
+        run: |
+          set -euo pipefail
+          npm run start -- -H 127.0.0.1 -p 3100 > /tmp/clear-ci-app.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for i in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:3100/api/auth/session >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if test "$ready" -ne 1; then
+            echo "Isolated Next.js server never became ready"
+            tail -n 80 /tmp/clear-ci-app.log
+            exit 1
+          fi
+          node --test tests/ci-financial-actions.test.mjs
+      - name: Confirm CI-only adapter never belongs to repository code
+        run: |
+          test ! -e tests/../app/api/clear-ci-finance/route.ts || test "$CLEAR_CI_FINANCE_TEST_ENABLED" = "1"
+          git ls-files --error-unmatch app/api/clear-ci-finance/route.ts >/dev/null 2>&1 && exit 1 || exit 0
