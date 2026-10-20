@@ -196,3 +196,20 @@ A fresh new look for CLEAR!
 ```
 
 **Submitted (2026-10-19, ~09:56):** 1.1.0 (4), EAS build fff08f9d, went to **production** (full rollout) through the Play Developer API in one edit together with the 8 new phone screenshots (en-US listing). Preview APK of the same code: EAS build 2b458437 (versionCode 4). Managed publishing is off, so it goes live once Google approves.
+
+## 1.1.1 (Ken's privacy and payment fixes)
+
+Built on 1.1.0 plus Ken's updates to PR #18 (2026-10-19, up to 1173bc6). Server side first: VPS revision eb1b5b1.
+
+- Public clearance lookups no longer show the student's name or ID; the result card says "You're cleared!" or "Clearance on hold" instead. Officers still see both. (Since eb1b5b1 the API returns `null` for both on public lookups, so 1.0.x and 1.1.0 show "null" there until users update.)
+- "I paid — send my receipt" prefills the student ID that was typed, since the result no longer returns it.
+- Server only (no app change needed): penalty receipts are filed as Penalty, not Others; verifying a remittance rejects a fund that isn't in the term's ledger; unsettled penalties always block clearance; Manila dates in financial summaries.
+- Play screenshots 02 and 03 retaken without the student's name.
+
+**Play "What's new" (en-US):**
+
+```text
+- Better privacy: checking a clearance no longer shows the student's name or ID to anyone looking it up.
+- Sending a payment receipt fills in the student ID you searched for.
+- Fixes and improvements.
+```
