@@ -226,6 +226,31 @@ export async function recordMobilePayment(
   }
   if (!OR_PATTERN.test(orNumber)) throw new ApiFailure(400, 'invalid', 'Invalid official receipt number.');
 
+  const requestHash = createHash('sha256').update(JSON.stringify({
+    studentKey, feeId, penaltyId, amountCentavos: input.amountCentavos, orNumber,
+  })).digest('hex');
+  const readReplay = async (): Promise<MobilePaymentResult | null> => {
+    if (!input.idempotency) return null;
+    const existing = await prisma.mobilePaymentIdempotency.findUnique({
+      where: { organizationId_tenantUserId_requestKey: {
+        organizationId: org.id, tenantUserId: input.idempotency.officerId,
+        requestKey: input.idempotency.key,
+      } },
+    });
+    if (!existing) return null;
+    if (existing.requestHash !== requestHash) {
+      throw new ApiFailure(409, 'conflict', 'Request identifier belongs to a different payment.');
+    }
+    if (!existing.responseSnapshot) {
+      throw new ApiFailure(409, 'conflict', 'Payment request is still being finalized. Retry shortly.');
+    }
+    const saved = JSON.parse(existing.responseSnapshot) as MobilePaymentResult;
+    saved.firstReceipt.timestamp = new Date(saved.firstReceipt.timestamp);
+    return saved;
+  };
+  const replay = await readReplay();
+  if (replay) return replay;
+
   // The web form sends category + itemDescription; the app sends a fee id.
   // Resolve it to the same pair for the active term. A penalty receipt uses the
   // category and description Ken's Penalty Logs link prefills.
@@ -264,9 +289,7 @@ export async function recordMobilePayment(
         organizationId: org.id,
         tenantUserId: input.idempotency.officerId,
         requestKey: input.idempotency.key,
-        requestHash: createHash('sha256').update(JSON.stringify({
-          studentKey, feeId, penaltyId, amountCentavos: input.amountCentavos, orNumber,
-        })).digest('hex'),
+        requestHash,
       } });
     }
     await assertAcademicPeriod(tx, org.id, ay, term);
@@ -454,6 +477,29 @@ export async function recordMobilePayment(
       details: `OR ${orNumber}: ₱${paid.toFixed(2)} from ${studentName} for ${penaltyId ? `penalty ${penaltyId}` : itemDescription}, across ${entries.length} fund line(s).`,
     } });
     await enqueuePaymentReceipt(tx, { organizationId: org.id, orNumber, officerName, officerEmail: String(officer.email || ''), source: 'COLLECTION' });
+    if (input.idempotency) {
+      const lines: MobilePaymentLine[] = created.map((row, i) => ({
+        id: row.id, orNumber: row.orNumber, itemDescription: row.itemDescription,
+        fundAllocation: lineMeta[i]?.fund ?? '',
+        amountCentavos: toCentavos(row.amountPaid),
+        balanceDueCentavos: lineMeta[i]?.balanceCents ?? 0,
+        paymentType: row.paymentType,
+      }));
+      const response: MobilePaymentResult = {
+        orNumber, studentName, itemDescription: postedDescription,
+        paymentType: actualPaymentType,
+        balanceDueCentavos: Math.round(balanceDue * 100),
+        amountCentavos: lines.reduce((sum, line) => sum + line.amountCentavos, 0),
+        lines, firstReceipt: created[0],
+      };
+      await tx.mobilePaymentIdempotency.update({
+        where: { organizationId_tenantUserId_requestKey: {
+          organizationId: org.id, tenantUserId: input.idempotency.officerId,
+          requestKey: input.idempotency.key,
+        } },
+        data: { responseSnapshot: JSON.stringify(response) },
+      });
+    }
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 20000 });
 
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -461,24 +507,9 @@ export async function recordMobilePayment(
     catch (error: unknown) {
       if ((error as { code?: string })?.code === 'P2034' && attempt < 2) continue;
       if ((error as { code?: string })?.code === 'P2002' && input.idempotency) {
-        const existing = await prisma.mobilePaymentIdempotency.findUnique({
-          where: { organizationId_tenantUserId_requestKey: {
-            organizationId: org.id, tenantUserId: input.idempotency.officerId,
-            requestKey: input.idempotency.key,
-          } },
-        });
-        if (existing) {
-          const hash = createHash('sha256').update(JSON.stringify({
-            studentKey, feeId, penaltyId, amountCentavos: input.amountCentavos, orNumber,
-          })).digest('hex');
-          if (existing.requestHash !== hash) {
-            throw new ApiFailure(409, 'conflict', 'Request identifier belongs to a different payment.');
-          }
-          throw new ApiFailure(409, 'duplicate_request',
-            'This payment was already recorded. Check the ledger before trying again.');
-        }
+        const prior = await readReplay();
+        if (prior) return prior;
       }
-
       throw mapKenError(error);
     }
   }
