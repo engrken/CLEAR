@@ -4,6 +4,7 @@ import * as Crypto from 'expo-crypto';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { api, type ApiError, type FeeItem, type Student } from '@/api';
+import { PAYMENT_WRITES_ENABLED } from '@/api/config';
 import { Avatar, Banner, Button, Icon, Screen, Text, TextField } from '@/components/ui';
 import { isEnrolled } from '@/lib/enrollment';
 import { formatPeso, fromCentavos } from '@/lib/money';
@@ -45,6 +46,10 @@ export default function Collect() {
 
   const submit = async () => {
     if (submittingRef.current) return;
+    if (!PAYMENT_WRITES_ENABLED) {
+      setErrors({ form: 'Payments are temporarily unavailable while the Android accounting integration is being verified. Use the CLEAR web application to record payments.' });
+      return;
+    }
     const e: Record<string, string> = {};
     const pesos = Number(amount.replace(/,/g, ''));
     if (!studentId) e.student = 'Choose the student who paid.';
