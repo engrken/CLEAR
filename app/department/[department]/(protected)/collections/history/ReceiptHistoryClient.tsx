@@ -1,7 +1,7 @@
 "use client";
 import { formatManilaDate } from '@/lib/clear-timezone';
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { clearAlert, clearConfirm } from "@/lib/clear-dialogs";
@@ -11,12 +11,25 @@ type Receipt = { orNumber: string; studentName: string; studentNumber: string;
   date: string; timestamp: string; academicYear: string; term: string;
   encodedBy: string; status: string; total: number; count: number; description: string };
 type Props = { department: string; receipts: Receipt[]; ay: string; term: string;
-  q: string; statusFilter: string; page: number; pageSize: number; total: number; maxPage: number };
+  q: string; exactOr: string; category: string; from: string; to: string;
+  categories: string[]; statusFilter: string; page: number; pageSize: number;
+  total: number; maxPage: number };
 const peso = (n: number) => `₱${n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default function ReceiptHistoryClient(p: Props) {
   const router = useRouter();
   const [search, setSearch] = useState(p.q);
+  const [exactOr, setExactOr] = useState(p.exactOr);
+  const [category, setCategory] = useState(p.category);
+  const [from, setFrom] = useState(p.from);
+  const [to, setTo] = useState(p.to);
+  useEffect(() => {
+    setSearch(p.q);
+    setExactOr(p.exactOr);
+    setCategory(p.category);
+    setFrom(p.from);
+    setTo(p.to);
+  }, [p.q, p.exactOr, p.category, p.from, p.to]);
   const [busy, begin] = useTransition();
   const [selected, setSelected] = useState<string | null>(null);
   const [toStudent, setToStudent] = useState(true);
@@ -25,6 +38,7 @@ export default function ReceiptHistoryClient(p: Props) {
   const navigate = (changes: Record<string, string>) => {
     const qs = new URLSearchParams({
       ay: p.ay || "all", term: p.term || "all", q: p.q,
+      exactOr: p.exactOr, category: p.category, from: p.from, to: p.to,
       status: p.statusFilter, page: String(p.page), size: String(p.pageSize),
       ...changes,
     });
@@ -52,27 +66,64 @@ export default function ReceiptHistoryClient(p: Props) {
   };
   return (
     <>
-      <form className="row g-2 mb-3" onSubmit={(e) => { e.preventDefault(); navigate({ q: search.trim(), page: "1" }); }}>
-        <div className="col-12 col-md-5">
+      <form className="row g-2 mb-3" onSubmit={(e) => {
+        e.preventDefault();
+        navigate({ q: search.trim(), exactOr: exactOr.trim(), category,
+          from, to, page: "1" });
+      }}>
+        <div className="col-12 col-md-4">
           <label className="form-label small fw-semibold">Student name, ID, or OR number</label>
           <input className="form-control" value={search} onChange={e => setSearch(e.target.value)}
             maxLength={80} placeholder="Search student or OR..." aria-label="Search issued receipt history" />
         </div>
         <div className="col-6 col-md-2">
-          <label className="form-label small fw-semibold">Status</label>
-          <select className="form-select" value={p.statusFilter} onChange={e => navigate({ status: e.target.value, page: "1" })}>
-            <option value="all">All</option><option value="valid">Active</option><option value="voided">Voided</option>
+          <label className="form-label small fw-semibold">Exact OR number</label>
+          <input className="form-control" value={exactOr} onChange={e => setExactOr(e.target.value)}
+            maxLength={50} placeholder="e.g. 26-376" aria-label="Filter exact OR number" />
+        </div>
+        <div className="col-6 col-md-3">
+          <label className="form-label small fw-semibold">Category</label>
+          <select className="form-select" value={category} onChange={e => setCategory(e.target.value)}>
+            <option value="">All categories</option>
+            {p.categories.map(value => <option key={value} value={value}>{value}</option>)}
           </select>
         </div>
         <div className="col-6 col-md-2">
-          <label className="form-label small fw-semibold">Rows</label>
-          <select className="form-select" value={p.pageSize} onChange={e => navigate({ size: e.target.value, page: "1" })}>
-            {[10,25,50,100].map(n => <option value={n} key={n}>{n}</option>)}
+          <label className="form-label small fw-semibold">Status</label>
+          <select className="form-select" value={p.statusFilter}
+            onChange={e => navigate({ status: e.target.value, page: "1" })}>
+            <option value="all">All</option>
+            <option value="valid">Valid</option>
+            <option value="voided">Voided</option>
+            <option value="inconsistent">Inconsistent</option>
           </select>
         </div>
-        <div className="col-12 col-md-3 d-flex gap-2 align-items-end">
-          <button className="btn btn-primary flex-grow-1" type="submit"><i className="bi bi-search me-1"/>Search</button>
-          <button className="btn btn-outline-secondary" type="button" onClick={() => { setSearch(""); navigate({ q: "", page: "1" }); }}>Clear</button>
+        <div className="col-6 col-md-1">
+          <label className="form-label small fw-semibold">Rows</label>
+          <select className="form-select" value={p.pageSize}
+            onChange={e => navigate({ size: e.target.value, page: "1" })}>
+            {[10, 25, 50, 100].map(n => <option value={n} key={n}>{n}</option>)}
+          </select>
+        </div>
+        <div className="col-6 col-md-2">
+          <label className="form-label small fw-semibold">Date from</label>
+          <input className="form-control" type="date" value={from}
+            onChange={e => setFrom(e.target.value)} aria-label="Filter from date" />
+        </div>
+        <div className="col-6 col-md-2">
+          <label className="form-label small fw-semibold">Date to</label>
+          <input className="form-control" type="date" value={to}
+            onChange={e => setTo(e.target.value)} aria-label="Filter to date" />
+        </div>
+        <div className="col-12 col-md-4 d-flex gap-2 align-items-end">
+          <button className="btn btn-primary flex-grow-1" type="submit">
+            <i className="bi bi-search me-1"/>Search / Apply Filters
+          </button>
+          <button className="btn btn-outline-secondary" type="button" onClick={() => {
+            setSearch(""); setExactOr(""); setCategory(""); setFrom(""); setTo("");
+            navigate({ q: "", exactOr: "", category: "", from: "", to: "",
+              status: "all", page: "1" });
+          }}>Clear</button>
         </div>
       </form>
       <div className="d-flex flex-wrap justify-content-between align-items-center mb-2 gap-2">
