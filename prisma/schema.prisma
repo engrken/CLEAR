@@ -180,6 +180,7 @@ model Penalty {
   status           String                   @default("Unsettled")
   encodedBy        String?
   organization     Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  @@index([organizationId, studentId, academicYear, term], map: "Penalty_org_student_history_idx")
 }
 
 model CashAdvance {
@@ -487,7 +488,7 @@ model DigitalReceiptDelivery {
   lastError      String?
   sentAt         DateTime? @db.Timestamptz(3)
   createdAt      DateTime     @default(now()) @db.Timestamptz(3)
-  updatedAt      DateTime     @updatedAt @db.Timestamptz(3)
+  updatedAt      DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, map: "DRD_organization_fk")
 
   @@unique([organizationId, eventKey, recipientEmail], map: "DRD_unique_delivery")
@@ -502,7 +503,7 @@ model TransactionEmailPreference {
   receiveParticipantEmails Boolean      @default(true)
   receiveOfficerCopies     Boolean      @default(true)
   createdAt                DateTime     @default(now()) @db.Timestamptz(3)
-  updatedAt                DateTime     @updatedAt @db.Timestamptz(3)
+  updatedAt                DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
   organization             Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, map: "TEP_org_fk")
 
   @@unique([organizationId, email], map: "TEP_org_email_unique")
