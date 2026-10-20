@@ -43,30 +43,10 @@ jobs:
           test "$(psql -h localhost -U postgres -d postgres -Atc "SELECT COUNT(*) FROM \"Organization\" WHERE \"id\" = 'ci-schema-rehearsal-org'")" = "1"
       - name: Assert production-required tables, fields and calendar-time semantics
         run: |
-          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
-          DO $
-          BEGIN
-            IF (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public'
-              AND table_name IN ('AcademicPeriodConfig','AcademicPeriodTransition','ArrearPaymentLink',
-                'PenaltySettlementEvent','DigitalReceiptDelivery','TransactionEmailPreference')) <> 6 THEN
-              RAISE EXCEPTION 'Production-required financial tables are missing';
-            END IF;
-            IF (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='public'
-              AND table_name='Organization' AND column_name IN
-              ('schoolGroup','tier','status','updatedAt','reportSchoolName','reportSchoolAddress',
-               'reportHeaderLeftLogo','reportHeaderRightLogo')) <> 8 THEN
-              RAISE EXCEPTION 'Production-required organization settings are missing';
-            END IF;
-            IF (SELECT data_type FROM information_schema.columns WHERE table_schema='public'
-                AND table_name='Penalty' AND column_name='date') <> 'timestamp without time zone' THEN
-              RAISE EXCEPTION 'Business calendar date was unexpectedly time-zone converted';
-            END IF;
-            IF (SELECT data_type FROM information_schema.columns WHERE table_schema='public'
-                AND table_name='Collection' AND column_name='timestamp') <> 'timestamp with time zone' THEN
-              RAISE EXCEPTION 'Collection audit timestamp must be time-zone aware';
-            END IF;
-          END $;
-          SQL
+          test "$(psql -h localhost -U postgres -d postgres -Atc "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('AcademicPeriodConfig','AcademicPeriodTransition','ArrearPaymentLink','PenaltySettlementEvent','DigitalReceiptDelivery','TransactionEmailPreference')")" = "6"
+          test "$(psql -h localhost -U postgres -d postgres -Atc "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='Organization' AND column_name IN ('schoolGroup','tier','status','updatedAt','reportSchoolName','reportSchoolAddress','reportHeaderLeftLogo','reportHeaderRightLogo')")" = "8"
+          test "$(psql -h localhost -U postgres -d postgres -Atc "SELECT data_type FROM information_schema.columns WHERE table_schema='public' AND table_name='Penalty' AND column_name='date'")" = "timestamp without time zone"
+          test "$(psql -h localhost -U postgres -d postgres -Atc "SELECT data_type FROM information_schema.columns WHERE table_schema='public' AND table_name='Collection' AND column_name='timestamp'")" = "timestamp with time zone"
       - name: Verify both financial migrations recorded
         run: |
           test "$(psql -h localhost -U postgres -d postgres -Atc "SELECT COUNT(*) FROM \"_prisma_migrations\" WHERE migration_name IN ('20261020000000_clear_receipt_sequence', '20261020010000_payment_request_idempotency') AND finished_at IS NOT NULL AND rolled_back_at IS NULL")" = "2"
