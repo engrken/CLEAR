@@ -1,0 +1,141 @@
+name: Receipt sequence database check
+on: pull_request
+jobs:
+  sequence:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply sequence migration
+        run: psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f prisma/migrations/20261020000000_clear_receipt_sequence/migration.sql
+        env:
+          PGPASSWORD: postgres
+      - name: Apply payment request migration
+        run: psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f prisma/migrations/20261020010000_payment_request_idempotency/migration.sql
+        env:
+          PGPASSWORD: postgres
+      - name: Verify tenant-scoped request uniqueness
+        run: |
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO "PaymentRequest" ("id", "organizationId", "requestId", "payloadHash", "orNumber", "outcomeJson")
+          VALUES ('tenant-a', 'a', 'same-request', 'hash-a', 'OR-A', '{}'),
+                 ('tenant-b', 'b', 'same-request', 'hash-b', 'OR-B', '{}');
+          INSERT INTO "PaymentRequest" ("id", "organizationId", "requestId", "payloadHash", "orNumber", "outcomeJson")
+          VALUES ('duplicate', 'a', 'same-request', 'changed', 'OR-C', '{}')
+          ON CONFLICT ("organizationId", "requestId") DO NOTHING;
+          SQL
+          test "$(psql -h localhost -U postgres -d postgres -Atc 'SELECT COUNT(*) FROM "PaymentRequest"')" = "2"
+        env:
+          PGPASSWORD: postgres
+      - name: Check sequence uniqueness
+        run: |
+          test "$(psql -h localhost -U postgres -d postgres -Atc "SELECT COUNT(DISTINCT n) FROM (SELECT nextval('clear_receipt_sequence') n FROM generate_series(1, 1000)) s")" = "1000"
+        env:
+          PGPASSWORD: postgres
+      - name: Verify same-request cashier concurrency has one winner
+        run: |
+          set -euo pipefail
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE TABLE cashier_posting_probe (
+            request_id text NOT NULL,
+            or_number text PRIMARY KEY
+          );
+          SQL
+          pids=()
+          for i in $(seq 1 20); do
+            (
+              psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -qAt -c "
+                WITH accepted AS (
+                  INSERT INTO \"PaymentRequest\" (
+                    \"id\", \"organizationId\", \"requestId\", \"payloadHash\", \"orNumber\", \"outcomeJson\"
+                  ) VALUES (
+                    'parallel-$i', 'parallel-tenant', 'parallel-request-id',
+                    'same-payload-hash', 'OR-RACE-$i', '{}'
+                  )
+                  ON CONFLICT (\"organizationId\", \"requestId\") DO NOTHING
+                  RETURNING \"requestId\", \"orNumber\"
+                ), posted AS (
+                  INSERT INTO cashier_posting_probe (request_id, or_number)
+                  SELECT \"requestId\", \"orNumber\" FROM accepted
+                  RETURNING or_number
+                )
+                SELECT count(*) FROM posted
+              " >"/tmp/cashier-race-$i"
+            ) &
+            pids+=("$!")
+          done
+          for pid in "${pids[@]}"; do wait "$pid"; done
+
+          test "$(psql -h localhost -U postgres -d postgres -Atc "SELECT count(*) FROM \"PaymentRequest\" WHERE \"organizationId\" = 'parallel-tenant' AND \"requestId\" = 'parallel-request-id'")" = "1"
+          test "$(psql -h localhost -U postgres -d postgres -Atc "SELECT count(*) FROM cashier_posting_probe")" = "1"
+          test "$(psql -h localhost -U postgres -d postgres -Atc "SELECT count(*) FROM cashier_posting_probe b JOIN \"PaymentRequest\" r ON b.request_id = r.\"requestId\" AND b.or_number = r.\"orNumber\" WHERE r.\"organizationId\" = 'parallel-tenant'")" = "1"
+          test "$(cat /tmp/cashier-race-* | awk '{s += $1} END {print s+0}')" = "1"
+        env:
+          PGPASSWORD: postgres
+      - name: Verify sequence survives rollback without reuse
+        run: |
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE TEMP TABLE receipt_test (or_number bigint PRIMARY KEY);
+          INSERT INTO receipt_test SELECT nextval('clear_receipt_sequence') FROM generate_series(1, 100);
+          DO $$
+          DECLARE before_rollback bigint;
+          DECLARE after_rollback bigint;
+          BEGIN
+            BEGIN
+              before_rollback := nextval('clear_receipt_sequence');
+              RAISE EXCEPTION 'intentional rollback';
+            EXCEPTION WHEN OTHERS THEN
+              NULL;
+            END;
+            after_rollback := nextval('clear_receipt_sequence');
+            IF after_rollback <= before_rollback THEN
+              RAISE EXCEPTION 'sequence value was reused after rollback';
+            END IF;
+          END $$;
+          SQL
+        env:
+          PGPASSWORD: postgres
+      - name: Verify parallel sessions issue distinct receipts
+        run: |
+          seq 1 20 | xargs -P 10 -I {} sh -c 'psql -h localhost -U postgres -d postgres -Atc "SELECT nextval('\''clear_receipt_sequence'\'')"' | sort -n | uniq -d | tee /tmp/duplicate-or-sequences
+          test ! -s /tmp/duplicate-or-sequences
+        env:
+          PGPASSWORD: postgres
+      - name: Verify transaction rollback removes receipt rows
+        run: |
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE TABLE finance_rollback_probe (receipt_number bigint PRIMARY KEY, amount numeric NOT NULL);
+          BEGIN;
+          INSERT INTO finance_rollback_probe VALUES (nextval('clear_receipt_sequence'), 125.00);
+          ROLLBACK;
+          DO $$
+          BEGIN
+            IF EXISTS (SELECT 1 FROM finance_rollback_probe) THEN
+              RAISE EXCEPTION 'rollback left a partial receipt';
+            END IF;
+          END $$;
+          SQL
+        env:
+          PGPASSWORD: postgres
+      - name: Verify concurrent remittance approval has one winner
+        run: |
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE TABLE remittance_approval_probe (id integer PRIMARY KEY, status text NOT NULL, or_number bigint);
+          INSERT INTO remittance_approval_probe VALUES (1, 'Pending Verification', NULL);
+          SQL
+          for i in $(seq 1 20); do
+            (psql -h localhost -U postgres -d postgres -qAtc "UPDATE remittance_approval_probe SET status = 'Verified', or_number = nextval('clear_receipt_sequence') WHERE id = 1 AND status = 'Pending Verification' RETURNING or_number" > "/tmp/remittance-approval-$i") &
+          done
+          wait
+          cat /tmp/remittance-approval-[0-9]* | sed '/^$/d' > /tmp/remittance-approval-results
+          test "$(wc -l < /tmp/remittance-approval-results)" -eq 1
+          test "$(psql -h localhost -U postgres -d postgres -Atc "SELECT COUNT(*) FROM remittance_approval_probe WHERE status = 'Verified' AND or_number IS NOT NULL")" -eq 1
+        env:
+          PGPASSWORD: postgres

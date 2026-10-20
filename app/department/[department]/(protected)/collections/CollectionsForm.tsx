@@ -5,9 +5,10 @@ import { manilaDateInput, formatManilaLongDate } from '@/lib/clear-timezone';
 import { clearAlert, clearConfirm, clearPrompt } from "@/lib/clear-dialogs";
 
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { fmt, formatHoursAndMinutes } from "@/lib/utils";
-import { recordPayment } from "./actions";
+import { getStudentPaymentCredits, recordPayment } from "./actions";
+import { calculateCollectionBalancePreview } from "@/lib/collection-payment-preview.mjs";
 import { ThemedAlert } from "@/lib/clear-dialogs";
 import { PENALTY_FUND_NAME } from "@/lib/penalty-fund";
 
@@ -40,7 +41,6 @@ export default function CollectionsForm({
   students,
   funds,
   collectionItems,
-  nextOr,
   prefillId,
   penaltyId,
   prefillCategory,
@@ -56,7 +56,6 @@ export default function CollectionsForm({
   students: Student[];
   funds: Fund[];
   collectionItems: CollectionSetup[];
-  nextOr: string;
   prefillId: string;
   penaltyId?: string;
   prefillCategory?: string;
@@ -73,7 +72,7 @@ export default function CollectionsForm({
   }, [collectionItems]);
 
   const [date, setDate] = useState(todayStr);
-  const [orNumber, setOrNumber] = useState(nextOr);
+
 
   const [searchQuery, setSearchQuery] = useState("");
   const [studentId, setStudentId] = useState("");
@@ -86,7 +85,16 @@ export default function CollectionsForm({
   const [paymentType, setPaymentType] = useState("Full Payment");
   const [amountPaid, setAmountPaid] = useState(prefillAmount || "");
   const [fundAllocation, setFundAllocation] = useState("");
+  // Fetch credits for the selected student only, not the full tenant ledger.
+  const [creditSnapshot, setCreditSnapshot] = useState<{
+    studentId: string;
+    credits: Array<{ itemDescription: string; paidCents: number }>;
+  } | null>(null);
+  const [balanceLoading, setBalanceLoading] = useState(false);
+  const [balanceError, setBalanceError] = useState("");
+  const [balanceRefresh, setBalanceRefresh] = useState(0);
 
+  const pendingPayment = useRef<{ signature: string; requestId: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [receiptData, setReceiptData] = useState<any>(null);
 
@@ -117,8 +125,32 @@ export default function CollectionsForm({
   useEffect(() => {
     if (prefillCategory) setCategory(prefillCategory);
     if (prefillDesc) setItemDescription(prefillDesc);
-    if (prefillAmount) setAmountPaid(prefillAmount);
-  }, [prefillCategory, prefillDesc, prefillAmount]);
+  }, [prefillCategory, prefillDesc]);
+
+  useEffect(() => {
+    if (!studentId || penaltyId) {
+      setCreditSnapshot(null);
+      setBalanceLoading(false);
+      setBalanceError("");
+      return;
+    }
+    // Switching students invalidates any in-flight response from the last one.
+    let cancelled = false;
+    setCreditSnapshot(null);
+    setBalanceLoading(true);
+    setBalanceError("");
+    getStudentPaymentCredits(department, { studentId, ay, term })
+      .then((result) => {
+        if (!cancelled) setCreditSnapshot({ studentId, credits: result.credits });
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setBalanceError(error instanceof Error ? error.message : "Unable to load the current balance.");
+        }
+      })
+      .finally(() => { if (!cancelled) setBalanceLoading(false); });
+    return () => { cancelled = true; };
+  }, [department, ay, term, studentId, penaltyId, balanceRefresh]);
 
   // Read the same destination fund shown in Setup Collection Fees.
   // For collectible payments the fee's fund is not an editable field.
@@ -168,20 +200,47 @@ export default function CollectionsForm({
   }, [category, currentCategoryItems, packageItems, prefillDesc, funds, penaltyId, prefilledSetupFee, invalidPrefilledFund]);
 
   const standardRate = useMemo(() => {
-    if (prefillAmount) return parseFloat(prefillAmount) || 0;
+    if (penaltyId) return Number(penaltyState?.balance ?? prefillAmount ?? 0);
     if (itemDescription === DEPARTMENTAL_PACKAGE_NAME) return packageTotal;
     const found = currentCategoryItems.find((item) => item.name === itemDescription);
-    return found ? Number(found.amount || 0) : 0;
-  }, [itemDescription, currentCategoryItems, packageTotal, prefillAmount]);
+    return found ? Number(found.amount || 0) : (parseFloat(prefillAmount || "") || 0);
+  }, [itemDescription, currentCategoryItems, packageTotal, prefillAmount, penaltyId, penaltyState?.balance]);
 
-  useEffect(() => {
-    if ((paymentType === "Full Payment" || paymentType === "Balance") && !prefillAmount) {
-      setAmountPaid(standardRate.toFixed(2));
-    }
-  }, [standardRate, paymentType, prefillAmount]);
-
-  const remainingBalance = Math.max(0, Math.round((standardRate - (parseFloat(amountPaid) || 0)) * 100) / 100);
   const isPenalty = Boolean(penaltyId);
+  const balanceReady = Boolean(studentId) && (isPenalty
+    ? Boolean(penaltyState)
+    : !balanceLoading && !balanceError && creditSnapshot?.studentId === studentId);
+  const balancePreview = useMemo(() => {
+    if (!balanceReady) return null;
+    return calculateCollectionBalancePreview({
+      credits: creditSnapshot?.credits ?? [],
+      itemDescription,
+      standardRate,
+      packageItems: itemDescription === DEPARTMENTAL_PACKAGE_NAME ? packageItems : [],
+      isPenalty,
+      penaltyBalance: penaltyState?.balance ?? null,
+      prefillLimit: !isPenalty && prefillDesc && prefillAmount
+        ? Number(prefillAmount) : null,
+    });
+  }, [balanceReady, creditSnapshot, itemDescription, standardRate, packageItems, isPenalty,
+    penaltyState?.balance, prefillDesc, prefillAmount]);
+
+  // Full/Balance starts at the remaining payable amount, not the original rate.
+  // Partial starts blank rather than inheriting a formerly selected full amount.
+  useEffect(() => {
+    if (!balancePreview) {
+      setAmountPaid("");
+    } else if (paymentType === "Full Payment" || paymentType === "Balance") {
+      setAmountPaid((balancePreview.payableCents / 100).toFixed(2));
+    } else {
+      setAmountPaid("");
+    }
+  }, [studentId, category, itemDescription, paymentType, balancePreview?.payableCents]);
+
+  const paidNowCents = Math.round((Number(amountPaid) || 0) * 100);
+  const remainingBalance = balancePreview
+    ? Math.max(0, (balancePreview.dueCents - paidNowCents) / 100)
+    : 0;
   const cannotPayPenalty = isPenalty && (!penaltyState ||
     /^SETTLED/i.test(penaltyState.status) || /VOID|CANCEL/i.test(penaltyState.status) || penaltyState.balance <= 0);
   const actualPaymentType = remainingBalance === 0 ? "Full Payment" : "Partial Payment";
@@ -234,8 +293,17 @@ export default function CollectionsForm({
       await ThemedAlert.fire({ icon: 'warning', title: 'Student Required', text: 'Please select a valid student.' });
       return;
     }
-    if (paid <= 0) {
-      await ThemedAlert.fire({ icon: 'warning', title: 'Invalid Amount', text: 'Please enter an amount greater than ₱0.00.' });
+    if (!Number.isFinite(paid) || paid <= 0 || !Number.isInteger(paidNowCents) ||
+        Math.abs(paid * 100 - paidNowCents) > 0.000001) {
+      await ThemedAlert.fire({ icon: 'warning', title: 'Invalid Amount', text: 'Please enter a positive amount with no more than two decimal places.' });
+      return;
+    }
+    if (!balanceReady || !balancePreview) {
+      await ThemedAlert.fire({ icon: 'warning', title: 'Balance Unavailable', text: 'Wait for the current outstanding balance before recording payment.' });
+      return;
+    }
+    if (paidNowCents > balancePreview.payableCents) {
+      await ThemedAlert.fire({ icon: 'warning', title: 'Exceeds Outstanding Balance', text: `Amount paid cannot exceed the current payable balance of ${fmt(balancePreview.payableCents / 100)}. Refresh if another officer has already posted a payment.` });
       return;
     }
     if (paid > standardRate) {
@@ -243,27 +311,25 @@ export default function CollectionsForm({
       return;
     }
 
+    if (isSubmitting) return;
+    const requestPayload = {
+      date, studentId, studentName, studentEmail, category, itemDescription,
+      paymentType, standardRate: standardRate || paid, amountPaid: paid,
+      fundAllocation, ay, term, penaltyId: penaltyId || undefined,
+    };
+    const signature = JSON.stringify(requestPayload);
+    if (!pendingPayment.current || pendingPayment.current.signature !== signature) {
+      pendingPayment.current = { signature, requestId: crypto.randomUUID() };
+    }
     setIsSubmitting(true);
     try {
       const result = await recordPayment(department, {
-        orNumber,
-        date,
-        studentId,
-        studentName,
-        studentEmail,
-        category,
-        itemDescription,
-        paymentType,
-        standardRate: standardRate || paid,
-        amountPaid: paid,
-        fundAllocation,
-        ay,
-        term,
-        penaltyId: penaltyId || undefined,
+        ...requestPayload, requestId: pendingPayment.current.requestId,
       });
+      pendingPayment.current = null;
 
       setReceiptData({
-        orNumber,
+        orNumber: result.orNumber,
         date,
         studentId,
         studentName,
@@ -279,14 +345,6 @@ export default function CollectionsForm({
       setStudentName("");
       setStudentEmail("");
 
-      const parts = orNumber.split("-");
-      if (parts.length > 1) {
-        const numPart = parseInt(parts[1].replace(/[^0-9]/g, ""), 10);
-        if (!isNaN(numPart)) {
-          const nextNum = numPart + 1;
-          setOrNumber(`${parts[0]}-${nextNum < 1000 ? String(nextNum).padStart(3, "0") : nextNum}`);
-        }
-      }
 
     } catch (err: any) {
       await ThemedAlert.fire({ icon: 'error', title: 'Transaction Failed', text: err?.message || 'Unknown error occurred.' });
@@ -386,7 +444,7 @@ export default function CollectionsForm({
         </div>
         <div className="col-md-6">
           <label className="form-label text-muted small fw-semibold">OR Number</label>
-          <input type="text" className="form-control bg-body text-body font-monospace border-warning fw-bold" value={orNumber} onChange={(e) => setOrNumber(e.target.value)} required />
+          <div className="form-control bg-body-secondary text-body">Automatically issued after successful payment</div>
         </div>
       </div>
 
@@ -473,6 +531,41 @@ export default function CollectionsForm({
         </div>
       )}
 
+      {studentId && !isPenalty && balanceLoading && (
+        <div className="alert alert-info py-2 small" role="status">
+          Checking previously recorded payments for this student and academic term...
+        </div>
+      )}
+      {studentId && !isPenalty && balanceError && (
+        <div className="alert alert-danger py-2 small" role="alert">
+          Could not verify the current balance: {balanceError}
+          <button type="button" className="btn btn-sm btn-outline-danger ms-2"
+            onClick={() => setBalanceRefresh(v => v + 1)}>Retry balance lookup</button>
+        </div>
+      )}
+      {balancePreview && (
+        <div className="alert alert-info py-2 small mb-2" role="status">
+          {!isPenalty && (
+            <div className="d-flex justify-content-between">
+              <span>Previously credited payments</span>
+              <strong>{fmt(balancePreview.alreadyPaidCents / 100)}</strong>
+            </div>
+          )}
+          <div className="d-flex justify-content-between">
+            <span>{isPenalty ? "Outstanding fine before payment" : "Actual outstanding before payment"}</span>
+            <strong>{fmt(balancePreview.dueCents / 100)}</strong>
+          </div>
+          <div className="d-flex justify-content-between">
+            <span>Maximum payable now</span>
+            <strong>{fmt(balancePreview.payableCents / 100)}</strong>
+          </div>
+          <div className="d-flex justify-content-between fw-bold border-top border-info mt-1 pt-1">
+            <span>Remaining balance after entered payment</span>
+            <span>{fmt(remainingBalance)}</span>
+          </div>
+          <div className="small text-muted mt-1">The server independently validates the final balance at posting time.</div>
+        </div>
+      )}
       <div className="row g-2 mb-2">
         <div className="col-md-4">
           <label className="form-label text-muted small fw-semibold">Payment Mode</label>
@@ -488,7 +581,10 @@ export default function CollectionsForm({
         </div>
         <div className="col-md-4">
           <label className="form-label text-info fw-bold small">Amount Paid Now (₱)</label>
-          <input type="number" step="0.01" min="0" className="form-control bg-body text-body border-info fw-bold text-info" value={amountPaid} onChange={(e) => setAmountPaid(e.target.value)} required />
+          <input type="number" step="0.01" min="0" className="form-control bg-body text-body border-info fw-bold text-info" value={amountPaid} onChange={(e) => setAmountPaid(e.target.value)}
+            max={balancePreview ? balancePreview.payableCents / 100 : undefined}
+            disabled={!balanceReady || !balancePreview || balancePreview.payableCents <= 0 || isSubmitting}
+            required />
         </div>
       </div>
 
@@ -523,7 +619,8 @@ export default function CollectionsForm({
         )}
       </div>
 
-      <button type="submit" className="btn btn-info fw-bold w-100 text-dark" disabled={isSubmitting || closed || cannotPayPenalty || invalidPrefilledFund || !fundAllocation}>
+      <button type="submit" className="btn btn-info fw-bold w-100 text-dark" disabled={isSubmitting || closed || cannotPayPenalty || invalidPrefilledFund || !fundAllocation ||
+          !balanceReady || !balancePreview || balancePreview.payableCents <= 0}>
         {isSubmitting ? "Recording Payment..." : "Post Payment"}
       </button>
     </form>

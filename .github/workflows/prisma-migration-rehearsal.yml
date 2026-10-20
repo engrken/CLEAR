@@ -1,0 +1,54 @@
+name: Prisma migration rehearsal
+on: pull_request
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Disposable GitHub Actions PostgreSQL only — never connect to Neon production.
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres?schema=public
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - name: Install dependencies and Prisma Client
+        run: npm ci
+      - name: Apply the complete migration history
+        run: npx prisma migrate deploy
+      - name: Verify Prisma migration status
+        run: npx prisma migrate status
+      - name: Verify versioned migrations reproduce the current Prisma schema
+        run: npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code
+      - name: Verify additive bridge runs again on a populated disposable database
+        run: |
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO "Organization" ("id","subdomain","name","schoolGroup","tier","status")
+          VALUES ('ci-schema-rehearsal-org','ci-schema-rehearsal','Synthetic migration verification','default-school','Freemium','Active');
+          SQL
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f prisma/migrations/20261020150000_reconcile_production_schema/migration.sql
+          test "$(psql -h localhost -U postgres -d postgres -Atc "SELECT COUNT(*) FROM \"Organization\" WHERE \"id\" = 'ci-schema-rehearsal-org'")" = "1"
+      - name: Assert production-required tables, fields and calendar-time semantics
+        run: |
+          test "$(psql -h localhost -U postgres -d postgres -Atc "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('AcademicPeriodConfig','AcademicPeriodTransition','ArrearPaymentLink','PenaltySettlementEvent','DigitalReceiptDelivery','TransactionEmailPreference')")" = "6"
+          test "$(psql -h localhost -U postgres -d postgres -Atc "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='Organization' AND column_name IN ('schoolGroup','tier','status','updatedAt','reportSchoolName','reportSchoolAddress','reportHeaderLeftLogo','reportHeaderRightLogo')")" = "8"
+          test "$(psql -h localhost -U postgres -d postgres -Atc "SELECT data_type FROM information_schema.columns WHERE table_schema='public' AND table_name='Penalty' AND column_name='date'")" = "timestamp without time zone"
+          test "$(psql -h localhost -U postgres -d postgres -Atc "SELECT data_type FROM information_schema.columns WHERE table_schema='public' AND table_name='Collection' AND column_name='timestamp'")" = "timestamp with time zone"
+      - name: Verify both financial migrations recorded
+        run: |
+          test "$(psql -h localhost -U postgres -d postgres -Atc "SELECT COUNT(*) FROM \"_prisma_migrations\" WHERE migration_name IN ('20261020000000_clear_receipt_sequence', '20261020010000_payment_request_idempotency') AND finished_at IS NOT NULL AND rolled_back_at IS NULL")" = "2"
+          test "$(psql -h localhost -U postgres -d postgres -Atc "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'PaymentRequest'")" = "1"
+          test "$(psql -h localhost -U postgres -d postgres -Atc "SELECT COUNT(*) FROM pg_class WHERE relname = 'clear_receipt_sequence' AND relkind = 'S'")" = "1"

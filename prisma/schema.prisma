@@ -21,10 +21,10 @@ model Organization {
   activeTerm                  String                       @default("1st Sem")
   type                        String                       @default("Department")
   logo                        String?
-  reportSchoolName            String?
+  reportSchoolName            String?                      @db.VarChar(255)
   reportSchoolAddress         String?
-  reportHeaderLeftLogo        String?
-  reportHeaderRightLogo       String?
+  reportHeaderLeftLogo        String?                      @db.VarChar(255)
+  reportHeaderRightLogo       String?                      @db.VarChar(255)
   audits                      Audit[]
   cashAdvances                CashAdvance[]
   cashierRemittances          CashierRemittance[]
@@ -105,6 +105,18 @@ model Fund {
   @@unique([organizationId, academicYear, term, fundName])
 }
 
+model PaymentRequest {
+  id             String   @id @default(cuid())
+  organizationId String
+  requestId      String
+  payloadHash    String
+  orNumber       String
+  outcomeJson    String
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  @@unique([organizationId, requestId])
+  @@index([organizationId, orNumber])
+}
+
 model Collection {
   penaltySettlementEvents PenaltySettlementEvent[]
   id                      String                   @id @default(uuid())
@@ -168,6 +180,7 @@ model Penalty {
   status           String                   @default("Unsettled")
   encodedBy        String?
   organization     Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  @@index([organizationId, studentId, academicYear, term], map: "Penalty_org_student_history_idx")
 }
 
 model CashAdvance {
@@ -475,8 +488,8 @@ model DigitalReceiptDelivery {
   lastError      String?
   sentAt         DateTime? @db.Timestamptz(3)
   createdAt      DateTime     @default(now()) @db.Timestamptz(3)
-  updatedAt      DateTime     @updatedAt @db.Timestamptz(3)
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  updatedAt      DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, map: "DRD_organization_fk")
 
   @@unique([organizationId, eventKey, recipientEmail], map: "DRD_unique_delivery")
   @@index([status, nextAttemptAt], map: "DRD_retry_queue_idx")
@@ -490,8 +503,8 @@ model TransactionEmailPreference {
   receiveParticipantEmails Boolean      @default(true)
   receiveOfficerCopies     Boolean      @default(true)
   createdAt                DateTime     @default(now()) @db.Timestamptz(3)
-  updatedAt                DateTime     @updatedAt @db.Timestamptz(3)
-  organization             Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  updatedAt                DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  organization             Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, map: "TEP_org_fk")
 
   @@unique([organizationId, email], map: "TEP_org_email_unique")
   @@index([organizationId], map: "TEP_org_idx")
@@ -513,7 +526,7 @@ model GlobalSuperAdmin {
   sessionVersion      Int       @default(1)
   lastLoginAt         DateTime? @db.Timestamptz(3)
   createdAt           DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt           DateTime  @updatedAt @db.Timestamptz(3)
+  updatedAt           DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
   @@index([status])
 }
 

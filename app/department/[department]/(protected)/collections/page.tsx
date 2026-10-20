@@ -127,23 +127,6 @@ export default async function CollectionsPage({
       ratePerHour: true, hoursLate: true, status: true },
   }) : null;
 
-  const recentReceipts = await prisma.collection.findMany({
-    where: { organizationId: organization.id, academicYear: ay },
-    select: { orNumber: true },
-  });
-
-  const match = ay.match(/\d{4}/);
-  const yearPrefix = match ? match[0].slice(-2) : "26";
-  let nextOr = `${yearPrefix}-001`;
-
-  const issuedNumbers = recentReceipts.map(c => String(c.orNumber || ""));
-  const maxNum = issuedNumbers.reduce((max, value) => {
-    const match = value.match(new RegExp(`^${yearPrefix}-(\\d+)(?:-P\\d+)?$`, 'i'));
-    return match ? Math.max(max, Number(match[1])) : max;
-  }, 0);
-  const candidate = maxNum + 1;
-  nextOr = `${yearPrefix}-${String(candidate).padStart(3, "0")}`;
-
   return (
     <div className="module card p-3 p-md-4 border-secondary shadow-sm">
       <div className="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
@@ -189,7 +172,6 @@ export default async function CollectionsPage({
         students={students}
         funds={funds}
         collectionItems={collectionSetups}
-        nextOr={nextOr}
         prefillId={linkedCollectible ? linkedCollectible.studentId : linkedPenalty ? (linkedPenalty.studentId || "") : prefillId}
         penaltyId={penaltyId}
         prefillCategory={linkedCollectible ? linkedCollectible.category : linkedPenalty ? "Others" : prefillCategory}

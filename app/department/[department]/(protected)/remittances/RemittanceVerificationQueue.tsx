@@ -5,7 +5,7 @@ import { formatManilaDateTime24 } from '@/lib/clear-timezone';
 import { clearAlert, clearConfirm, clearPrompt } from "@/lib/clear-dialogs";
 
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { fmt } from "@/lib/utils";
 import { ThemedAlert } from "@/lib/clear-dialogs";
@@ -20,6 +20,7 @@ interface OnlineRemittanceItem {
   paymentChannel: string;
   referenceNumber: string;
   itemDescription: string | null;
+  category: string;
   amountPaid: number;
   proofUrl: string | null;
   status: string | null;
@@ -36,7 +37,6 @@ export default function RemittanceVerificationQueue({
   ay,
   term,
   remittances,
-  nextOr,
   funds,
   closed = false,
   canVoid = false,
@@ -45,7 +45,6 @@ export default function RemittanceVerificationQueue({
   ay: string;
   term: string;
   remittances: OnlineRemittanceItem[];
-  nextOr: string;
   funds: Fund[];
   closed?: boolean;
   canVoid?: boolean;
@@ -55,9 +54,7 @@ export default function RemittanceVerificationQueue({
   const [activeProof, setActiveProof] = useState<{ url: string; name: string } | null>(null);
   
   const [verifyingItem, setVerifyingItem] = useState<OnlineRemittanceItem | null>(null);
-  const [orNumber, setOrNumber] = useState(nextOr);
-  useEffect(() => setOrNumber(nextOr), [nextOr]);
-  const [fundAllocation, setFundAllocation] = useState(funds[0]?.fundName || "General Fund (Carried Over)");
+  const [fundAllocation, setFundAllocation] = useState(funds[0]?.fundName || "");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [voidingId, setVoidingId] = useState<string | null>(null);
   const voidVerifiedRemittance = async (item: OnlineRemittanceItem) => {
@@ -90,20 +87,21 @@ export default function RemittanceVerificationQueue({
 
   const handleOpenVerify = (item: OnlineRemittanceItem) => {
     setVerifyingItem(item);
-    setOrNumber(nextOr);
-    setFundAllocation(funds[0]?.fundName || "General Fund (Carried Over)");
+    setFundAllocation(funds[0]?.fundName || "");
   };
 
   const handleVerifySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!verifyingItem) return;
     if (closed) return void clearAlert("This accounting term is closed by a rollover.");
+    if (!fundAllocation || !funds.some(f => f.fundName === fundAllocation)) {
+      return void clearAlert("No configured destination fund is selected for this academic term.");
+    }
 
     setIsSubmitting(true);
     try {
-      await verifyOnlineRemittance(department, {
+      const result = await verifyOnlineRemittance(department, {
         remittanceId: verifyingItem.id,
-        orNumber,
         studentId: verifyingItem.studentId,
         studentName: verifyingItem.studentName,
         particulars: verifyingItem.itemDescription || "Online Payment",
@@ -116,7 +114,7 @@ export default function RemittanceVerificationQueue({
       await ThemedAlert.fire({
         icon: 'success',
         title: 'Remittance Verified',
-        text: `Remittance verified successfully! Official Receipt #${orNumber} issued.`
+        text: `Remittance verified successfully! Official Receipt #${result.orNumber} issued.`
       });
 
       setVerifyingItem(null);
@@ -302,13 +300,14 @@ export default function RemittanceVerificationQueue({
                   <div className="mb-3">
                     <label className="form-label text-muted small fw-semibold">Particulars / Fee</label>
                     <input type="text" className="form-control text-body bg-body-secondary border-secondary" value={verifyingItem.itemDescription || '—'} readOnly />
+                    <div className="form-text small opacity-75">Submitted Fee Category: <strong>{verifyingItem.category || 'Unspecified legacy proof'}</strong></div>
                   </div>
 
                   <hr className="border-secondary opacity-50" />
 
                   <div className="mb-3">
-                    <label className="form-label text-muted small fw-semibold">Assign Official Receipt (OR) Number</label>
-                    <input type="text" className="form-control font-monospace border-success bg-body text-body fw-bold" value={orNumber} onChange={e => setOrNumber(e.target.value)} required />
+                    <label className="form-label text-muted small fw-semibold">Official Receipt (OR) Number</label>
+                    <div className="form-control bg-body-secondary text-body">Automatically issued after verification</div>
                   </div>
 
                   <div className="mb-2">
@@ -318,16 +317,16 @@ export default function RemittanceVerificationQueue({
                       value={fundAllocation} 
                       onChange={e => setFundAllocation(e.target.value)}
                     >
+                      {funds.length === 0 && <option value="">No configured funds</option>}
                       {funds.map(f => <option key={f.id} value={f.fundName}>{f.fundName}</option>)}
-                      <option value="General Fund (Carried Over)">General Fund (Carried Over)</option>
                     </select>
-                    <div className="form-text small opacity-75">Select the fund pool where this payment should be deposited.</div>
+                    <div className="form-text small opacity-75">The server uses configured Fee Setup allocations, not an arbitrary fund. Missing or ambiguous fees and legacy packages without categories cannot be approved.</div>
                   </div>
                   
                 </div>
                 <div className="modal-footer border-secondary bg-body-secondary">
                   <button type="button" className="btn btn-secondary btn-sm" onClick={() => setVerifyingItem(null)}>Cancel</button>
-                  <button type="submit" className="btn btn-success btn-sm fw-bold text-dark" disabled={isSubmitting || closed}>
+                  <button type="submit" className="btn btn-success btn-sm fw-bold text-dark" disabled={isSubmitting || closed || !fundAllocation}>
                     {isSubmitting ? "Issuing OR..." : "Confirm & Issue Official Receipt"}
                   </button>
                 </div>

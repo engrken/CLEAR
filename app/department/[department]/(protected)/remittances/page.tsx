@@ -66,23 +66,10 @@ export default async function RemittancesPage({
     studentId: r.studentId ?? '',
   }));
 
-  const receipts = await prisma.collection.findMany({
-    where: { organizationId: organization.id, academicYear: ay },
-    select: { orNumber: true }
-  });
-
-  const yearPrefix = ay.match(/\d{4}/)?.[0]?.slice(-2) || '26';
-  let nextOr = `${yearPrefix}-001`;
-
-  const used = receipts.map(c => String(c.orNumber || ""));
-  const maxNum = used.reduce((max, value) => {
-    const match = value.match(new RegExp(`^${yearPrefix}-(\\d+)(?:-P\\d+)?$`, 'i'));
-    return match ? Math.max(max, Number(match[1])) : max;
-  }, 0);
-  nextOr = `${yearPrefix}-${String(maxNum + 1).padStart(3, '0')}`;
-  const fundOptions = ledger.funds.filter(f => f.balance >= 0).map(f => ({
-    id: f.name, fundName: f.name
-  }));
+  // Historical ledger buckets are not approved destinations. Every configured
+  // fund remains selectable even if its current net balance is negative:
+  // incoming payments must be able to restore a depleted fund.
+  const fundOptions = funds.map(f => ({ id: f.id, fundName: f.fundName }));
 
   return (
     <div className="module card p-3 p-md-4 border-secondary shadow-sm bg-body text-body">
@@ -96,7 +83,6 @@ export default async function RemittancesPage({
         ay={ay}
         term={term}
         remittances={serialize(remittances)}
-        nextOr={nextOr}
         funds={fundOptions.length > 0 ? fundOptions : funds}
         closed={Boolean(ledger.activeRollover)}
         canVoid={canVoid} 

@@ -178,6 +178,7 @@ export async function saveInitialFunds(
       if (!existingById.has(id)) throw new Error("An existing fund was changed in another session. Refresh Setup.");
     }
     const changes: string[] = [];
+    const orphanRestorations: string[] = [];
     let needsReason = false;
 
     // Validate ALL changes before issuing ANY write.
@@ -200,7 +201,27 @@ export async function saveInitialFunds(
     }
     for (const row of prepared.filter(row => !row.id)) {
       const linked = usage.referenced.get(usage.refKey(academicYear,academicTerm,row.fundName));
-      if (linked) throw new Error(`${row.fundName} already appears in ${linked}, but has no saved Fund row. Reconcile this legacy account before creating it.`);
+      if (linked) {
+        // Restore only a missing Fund configuration for an EXISTING real
+        // ledger account. The existing historical receipts already contribute
+        // to its balance; no opening amount or retroactive reallocation is due.
+        if (row.amount !== 0) {
+          throw new Error(`Historical fund ${row.fundName} can only be restored with a ₱0.00 opening allocation.`);
+        }
+        if (explanation.length < 20) {
+          throw new Error(`Restoring referenced fund ${row.fundName} requires an audit reason of at least 20 characters.`);
+        }
+        const historicReceiptCount = await tx.collection.count({ where: {
+          ...where,
+          fundAllocation: { equals: row.fundName, mode: "insensitive" },
+        } });
+        if (historicReceiptCount === 0) {
+          throw new Error(`Referenced fund ${row.fundName} has no receipt history. Review its ledger and request a separate reconciliation.`);
+        }
+        orphanRestorations.push(row.fundName);
+        changes.push(`RESTORED CONFIGURATION ${row.fundName} (opening ₱0.00; ${historicReceiptCount} existing receipt lines untouched)`);
+        continue;
+      }
       if (activity && row.amount !== 0) {
         throw new Error(`New fund ${row.fundName} must start at ₱0.00 during an active term. Use Realignment to transfer existing funds.`);
       }
@@ -220,7 +241,7 @@ export async function saveInitialFunds(
       return !incoming ? Number(saved.initialAllocation) !== 0 :
         Math.round(incoming.amount * 100) !== Math.round(Number(saved.initialAllocation) * 100);
     });
-    const baselineLedger = activity && openingChanged
+    const baselineLedger = (activity && openingChanged) || orphanRestorations.length > 0
       ? await getPeriodLedger(tx, organization.id, academicYear, academicTerm) : null;
     // Remove unused funds first to free up names, then update by immutable ID.
     for (const saved of existing) {
@@ -243,6 +264,25 @@ export async function saveInitialFunds(
     }
     if (baselineLedger) {
       const ledger = await getPeriodLedger(tx, organization.id, academicYear, academicTerm);
+      if (orphanRestorations.length > 0) {
+        const before = new Map(baselineLedger.funds.map(f => [f.name, Math.round(f.balance * 100)]));
+        const after = new Map(ledger.funds.map(f => [f.name, Math.round(f.balance * 100)]));
+        // Restoring a referenced pool can also create the required system
+        // Penalty Fund with a ZERO opening balance. That harmless new zero
+        // bucket must not cause rejection; all PREEXISTING buckets and the
+        // total must remain identical, and all newly introduced buckets
+        // must have exactly zero balance.
+        const existingBalanceChanged = [...before].some(
+          ([name, amount]) => after.get(name) !== amount
+        );
+        const newNonzeroBalance = [...after].some(
+          ([name, amount]) => !before.has(name) && amount !== 0
+        );
+        if (Math.round(baselineLedger.totalRemaining * 100) !== Math.round(ledger.totalRemaining * 100) ||
+            existingBalanceChanged || newNonzeroBalance) {
+          throw new Error("Restoring this fund configuration would change the existing financial ledger. No changes were saved.");
+        }
+      }
       const previousBalances = new Map(baselineLedger.funds.map(f => [f.name, Math.round(f.balance * 100)]));
       if (ledger.funds.some(f => {
         const now = Math.round(f.balance * 100);
