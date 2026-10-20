@@ -49,7 +49,7 @@ export async function allocateOfficialReceiptNumber(
 ): Promise<string> {
   const result = await tx.$queryRaw<Array<{ receipt_seq: bigint; issued_at: Date }>>`
     SELECT nextval('clear_receipt_sequence'::regclass) AS receipt_seq,
-           CURRENT_TIMESTAMP AS issued_at
+           clock_timestamp() AS issued_at
   `;
   const record = result[0];
   if (!record) throw new Error("Unable to allocate an official receipt number.");
