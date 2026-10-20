@@ -36,3 +36,18 @@ test('receipt form uses server-issued OR number', () => {
   assert.ok(form.includes('orNumber: result.orNumber'));
   assert.ok(!form.includes('setOrNumber'));
 });
+
+test('online remittance approval is atomic and rejects a second reviewer', () => {
+  const source = read('app/department/[department]/(protected)/remittances/actions.ts');
+  assert.ok(source.includes('await withFinancialTransaction(async (tx) => {'));
+  assert.ok(source.includes('await tx.onlineRemittance.updateMany('));
+  assert.ok(source.includes('if (updated.count !== 1)'));
+  assert.ok(source.includes('await tx.collection.create('));
+});
+
+test('collection posting keeps ledger and receipt writes in the same transaction', () => {
+  const source = read('app/department/[department]/(protected)/collections/actions.ts');
+  assert.ok(source.includes('withFinancialTransaction(async (tx) => {'));
+  assert.ok(source.includes('await tx.collection.create('));
+  assert.ok(source.includes('await enqueuePaymentReceipt(tx,'));
+});
