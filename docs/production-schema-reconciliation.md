@@ -4,8 +4,11 @@
 
 ## Source of truth and scope
 
-Production Neon `clear-sys-db`, branch `main` (`br-calm-dew-b3vd1ira`),
-was inspected read-only on 2026-10-20. Its live table columns, PostgreSQL
+Production Neon `clear-sys-db`, original branch ID `br-calm-dew-b3vd1ira`
+(currently named `clear-v24-prod-snapshot-restore-drill-20261020 (1)`),
+was inspected read-only on 2026-10-20. **Identify Production by branch ID**:
+the Neon branch currently named `main` is restored copy
+`br-aged-firefly-b3fcx8f9` and is **not** live Production. Its live table columns, PostgreSQL
 types, defaults, primary/foreign keys and indexes were compared with the
 eight committed Prisma migrations and `prisma/schema.prisma`.
 
@@ -47,7 +50,7 @@ objects already present in Production and staging.
    adding a synthetic record, and checks timestamp type invariants.
 3. Test the bridge migration on a **new Neon branch forked from Production**;
    compare row counts, receipts, important date columns and schema metadata
-   before and after. Never experiment on production main.
+   before and after. Never experiment on the original Production branch.
 4. Repeat staging verification with full application financial workflows
    and check the latest Preview deployment uses staging `DATABASE_URL`.
 5. Validate backups and secure credentials before asking for **separate user
