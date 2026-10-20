@@ -146,6 +146,15 @@ export async function verifyOnlineRemittance(
     const goodPrior = prior.filter(c => !String(c.status || "").toUpperCase().includes("VOID") &&
       !String(c.paymentType || "").toUpperCase().includes("VOID") &&
       !String(c.status || "").toUpperCase().includes("CANCEL"));
+    // Avoid attributing an old package receipt with an unknown or different
+    // category to this category's assessment. The original proof and receipts
+    // remain available for an explicit audited reconciliation.
+    if (isPackage && goodPrior.some(c =>
+      isRemittancePackageDescription(c.itemDescription) &&
+      String(c.category || "").trim().toLowerCase() !== selection.category.trim().toLowerCase()
+    )) {
+      throw new Error("A historical package payment has an ambiguous or different category. Reconcile its allocation before verifying another package proof.");
+    }
     const previouslyPaid = (name: string) => goodPrior.filter(c =>
       String(c.itemDescription || "").trim().toLowerCase() === name.toLowerCase()
     ).reduce((sum, c) => sum + toCents(c.amountPaid), 0);
