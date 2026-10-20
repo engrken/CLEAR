@@ -7,6 +7,7 @@ CREATE TABLE "MobilePaymentIdempotency" (
   "requestKey" TEXT NOT NULL,
   "requestHash" TEXT NOT NULL,
   "receiptId" TEXT,
+  "responseSnapshot" TEXT,
   "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "MobilePaymentIdempotency_pkey" PRIMARY KEY ("id")
 );
