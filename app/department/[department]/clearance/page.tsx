@@ -191,11 +191,19 @@ export default async function ClearancePage({
     historicalByStudent.set(key, [...(historicalByStudent.get(key) || []), debt]);
   }
 
+  // Public proof options are derived from the real Fee Setup, not an
+  // invented 'Other' fee. Package options are explicitly scoped by category.
+  const packageRates = new Map<string, number>();
+  for (const setup of collectionSetups) {
+    if (!setup.isPackage || !Number.isFinite(Number(setup.amount)) || Number(setup.amount) <= 0) continue;
+    packageRates.set(setup.category, (packageRates.get(setup.category) || 0) + money(setup.amount));
+  }
   const feeOptions = [
-    ...(termPkg.total > 0 ? [{ name: 'Departmental Fee (Full Package)', amount: termPkg.total }] : []),
-    ...collectionSetups.map((c) => ({
-      name: c.name,
-      amount: money(c.amount),
+    ...Array.from(packageRates, ([category, amount]) => ({
+      category, name: 'Departmental Fee (Full Package)', amount,
+    })),
+    ...collectionSetups.filter(c => Number(c.amount) > 0).map(c => ({
+      category: c.category, name: c.name, amount: money(c.amount),
     })),
   ];
 
