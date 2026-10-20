@@ -505,7 +505,11 @@ export async function recordMobilePayment(
   for (let attempt = 0; attempt < 3; attempt++) {
     try { await postOnce(); break; }
     catch (error: unknown) {
-      if ((error as { code?: string })?.code === 'P2034' && attempt < 2) continue;
+      if ((error as { code?: string })?.code === 'P2034') {
+        const prior = await readReplay();
+        if (prior) return prior;
+        if (attempt < 2) continue;
+      }
       if ((error as { code?: string })?.code === 'P2002' && input.idempotency) {
         const prior = await readReplay();
         if (prior) return prior;
