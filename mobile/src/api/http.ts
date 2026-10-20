@@ -1,0 +1,107 @@
+// Fetch client for the CLEAR mobile REST API (see the web app's app/api/mobile/**).
+
+import { Platform } from 'react-native';
+
+import { API_URL } from './config';
+import { fallbackMessage } from './errors';
+import { ApiError, type ClearApi, type Session } from './types';
+
+let onUnauthorized: (() => void) | null = null;
+
+/** The session layer registers this to sign out when the server rejects a token. */
+export function setUnauthorizedHandler(fn: (() => void) | null) {
+  onUnauthorized = fn;
+}
+
+type Options = { method?: string; token?: string | null; json?: unknown; form?: FormData; idempotencyKey?: string; query?: Record<string, string | number | undefined> };
+
+async function request<T>(path: string, { method = 'GET', token, json, form, idempotencyKey, query }: Options = {}): Promise<T> {
+  const qs = query
+    ? '?' + Object.entries(query).filter(([, v]) => v !== undefined && v !== '').map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&')
+    : '';
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey;
+  if (token) headers.Authorization = `Bearer ${token}`;
+  if (json !== undefined) headers['Content-Type'] = 'application/json';
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}${qs === '?' ? '' : qs}`, {
+      method,
+      headers,
+      body: form ?? (json !== undefined ? JSON.stringify(json) : undefined),
+    });
+  } catch {
+    throw new ApiError('Can’t reach the CLEAR server. Check your connection and try again.', 'network');
+  }
+
+  if (res.status === 204) return undefined as T;
+  const body = await res.json().catch(() => null);
+  if (!res.ok) {
+    // Usually { error: { code, message } }; also accept { error: 'message', code }.
+    const err = typeof body?.error === 'string' ? { message: body.error, code: body?.code } : body?.error;
+    const code: string = err?.code || (res.status === 429 ? 'rate_limited' : 'server_error');
+    const e = new ApiError(err?.message || fallbackMessage(code, res.status), code, res.status);
+    // A rejected token on an officer call ends the session everywhere.
+    if (res.status === 401 && token) onUnauthorized?.();
+    throw e;
+  }
+  return body as T;
+}
+
+const org = (slug: string) => `/orgs/${encodeURIComponent(slug)}`;
+const as = (s: Session) => ({ token: s.token });
+
+async function proofForm(p: Parameters<ClearApi['submitProof']>[1]) {
+  const form = new FormData();
+  form.append('studentId', p.studentId.trim());
+  form.append('paymentChannel', p.paymentChannel);
+  form.append('referenceNumber', p.referenceNumber.trim());
+  form.append('amountCentavos', String(p.amountCentavos));
+  form.append('itemDescription', p.itemDescription);
+  if (Platform.OS === 'web') {
+    // On web the picker returns a blob: or data: URI; send real bytes.
+    const blob = await (await fetch(p.file.uri)).blob();
+    form.append('proof', blob, p.file.name);
+  } else {
+    // React Native's FormData streams the file from its URI.
+    form.append('proof', { uri: p.file.uri, name: p.file.name, type: p.file.mimeType } as unknown as Blob);
+  }
+  return form;
+}
+
+export const httpApi: ClearApi = {
+  mode: 'http',
+
+  listOrganizations: () => request('/orgs'),
+  getOrganization: (slug) => request(org(slug)),
+  lookupClearance: (slug, q, session) =>
+    request(`${org(slug)}/clearance`, { query: { q: q.trim() }, token: session?.org.subdomain === slug ? session.token : null }),
+  listFeeItems: (slug) => request(`${org(slug)}/fees`),
+  submitProof: async (slug, p) => request(`${org(slug)}/proofs`, { method: 'POST', form: await proofForm(p) }),
+
+  requestCode: (slug, email) => request(`${org(slug)}/auth/request-code`, { method: 'POST', json: { email: email.trim().toLowerCase() } }),
+  verifyCode: (slug, email, code) =>
+    request(`${org(slug)}/auth/verify-code`, { method: 'POST', json: { email: email.trim().toLowerCase(), code } }),
+  restoreSession: async (slug, token) => {
+    const s = await request<Omit<Session, 'token'>>(`${org(slug)}/auth/session`, { token });
+    return { ...s, token };
+  },
+  signOut: async (s) => {
+    try {
+      await request(`${org(s.org.subdomain)}/auth/session`, { method: 'DELETE', ...as(s) });
+    } catch {
+      // Signing out locally still works when the server can't be reached.
+    }
+  },
+
+  getDashboard: (s) => request(`${org(s.org.subdomain)}/dashboard`, as(s)),
+  listLedger: (s, f) => request(`${org(s.org.subdomain)}/ledger`, { ...as(s), query: { status: f?.status, limit: f?.limit } }),
+  listStudents: (s, q) => request(`${org(s.org.subdomain)}/students`, { ...as(s), query: { q } }),
+  recordPayment: (s, p) => request(`${org(s.org.subdomain)}/payments`, { method: 'POST', ...as(s), idempotencyKey: p.idempotencyKey, json: { studentId: p.studentId, feeId: p.feeId, amountCentavos: p.amountCentavos, orNumber: p.orNumber.trim() } }),
+  getRemittance: (s, id) => request(`${org(s.org.subdomain)}/remittances/${encodeURIComponent(id)}`, as(s)),
+  verifyRemittance: (s, id, p) =>
+    request(`${org(s.org.subdomain)}/remittances/${encodeURIComponent(id)}/verify`, { method: 'POST', ...as(s), json: { ...p, orNumber: p.orNumber.trim() } }),
+  invalidateRemittance: (s, id) =>
+    request(`${org(s.org.subdomain)}/remittances/${encodeURIComponent(id)}/invalidate`, { method: 'POST', ...as(s) }),
+};
