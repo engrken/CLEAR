@@ -20,6 +20,7 @@ interface OnlineRemittanceItem {
   paymentChannel: string;
   referenceNumber: string;
   itemDescription: string | null;
+  category: string;
   amountPaid: number;
   proofUrl: string | null;
   status: string | null;
@@ -299,6 +300,7 @@ export default function RemittanceVerificationQueue({
                   <div className="mb-3">
                     <label className="form-label text-muted small fw-semibold">Particulars / Fee</label>
                     <input type="text" className="form-control text-body bg-body-secondary border-secondary" value={verifyingItem.itemDescription || '—'} readOnly />
+                    <div className="form-text small opacity-75">Submitted Fee Category: <strong>{verifyingItem.category || 'Unspecified legacy proof'}</strong></div>
                   </div>
 
                   <hr className="border-secondary opacity-50" />
@@ -318,7 +320,7 @@ export default function RemittanceVerificationQueue({
                       {funds.length === 0 && <option value="">No configured funds</option>}
                       {funds.map(f => <option key={f.id} value={f.fundName}>{f.fundName}</option>)}
                     </select>
-                    <div className="form-text small opacity-75">Select an authorized fund for ad hoc payments. Configured fees and packages use their assigned Fee Setup fund(s).</div>
+                    <div className="form-text small opacity-75">The server uses configured Fee Setup allocations, not an arbitrary fund. Missing or ambiguous fees and legacy packages without categories cannot be approved.</div>
                   </div>
                   
                 </div>
