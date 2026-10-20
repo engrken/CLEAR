@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
-import { encode } from "@auth/core/jwt";
+import { encode } from "next-auth/jwt";
 
 const prisma = new PrismaClient();
 const host = "http://127.0.0.1:3100";
