@@ -48,7 +48,7 @@ export default async function PenaltiesPage({
   const [students, records, ledger, canVoid, canReconcile] = await Promise.all([
     prisma.student.findMany({
       where: { organizationId: organization.id },
-      select: { studentId: true, fullName: true, email: true },
+      select: { id: true, studentId: true, fullName: true, email: true },
       orderBy: { fullName: "asc" },
     }),
     prisma.penalty.findMany({
@@ -69,7 +69,12 @@ export default async function PenaltiesPage({
   // receipt IDs, not by matching arbitrary activity names.
   const ids = penalties.map(p => p.id);
   const references = penalties.map(p => p.penaltyId);
-  const [events, receiptRows, olderArrears, serviceLogs] = await Promise.all([
+  // Penalty.studentId stores the visible student number; Collection.studentId
+  // stores the Student row UUID. Never match historical cash by display name.
+  const studentPkByNumber = new Map(students.map(student => [student.studentId, student.id]));
+  const studentPks = [...new Set(penalties.map(p => studentPkByNumber.get(p.studentId ?? ""))
+    .filter((id): id is string => Boolean(id)))];
+  const [events, receiptRows, olderArrears, serviceLogs, unlinkedReceiptRows] = await Promise.all([
     prisma.penaltySettlementEvent.findMany({
       where: { organizationId: organization.id, penaltyRecordId: { in: ids } },
       include: { receipt: { select: { orNumber: true, status: true, paymentType: true } } },
@@ -89,6 +94,27 @@ export default async function PenaltiesPage({
       action: "SETTLE_PENALTY_SERVICE",
       OR: references.map(reference => ({ details: { contains: reference } })),
     }, orderBy: { timestamp: "asc" }, select: { id: true, timestamp: true, details: true, user: true } }),
+    // Historical receipts such as "Penalty / Fines" do not carry a penalty ID.
+    // Surface as UNLINKED evidence only, never as proof of a particular fine.
+    prisma.collection.findMany({
+      where: {
+        organizationId: organization.id,
+        academicYear: ay,
+        term,
+        studentId: { in: studentPks },
+        penaltySettlementEvents: { none: {} },
+        arrearPaymentLinks: { none: {} },
+        OR: [
+          { category: { contains: "penalty", mode: "insensitive" } },
+          { itemDescription: { contains: "penalty", mode: "insensitive" } },
+          { itemDescription: { contains: "fine", mode: "insensitive" } },
+        ],
+      },
+      select: { id: true, studentId: true, date: true, orNumber: true,
+        amountPaid: true, itemDescription: true, category: true,
+        status: true, paymentType: true, academicYear: true, term: true },
+      orderBy: [{ date: "desc" }, { id: "asc" }],
+    }),
   ]);
 
   type HistoryEntry = {
@@ -168,6 +194,44 @@ export default async function PenaltiesPage({
   }
   for (const rows of Object.values(historyByPenalty)) rows.sort((a, b) => a.date.localeCompare(b.date));
 
+  type UnlinkedReceipt = {
+    id: string; date: string; orNumber: string; amount: number; description: string;
+    category: string; status: string; paymentType: string; accountingPeriod: string;
+  };
+  // A machine-readable penaltyId in the receipt description is already
+  // handled in historyByPenalty. Do not repeat it as an unlinked candidate.
+  const explicitlyMatchedReceiptIds = new Set(receiptRows.map(row => row.id));
+  const candidatesByStudentPk = new Map<string, UnlinkedReceipt[]>();
+  for (const receipt of unlinkedReceiptRows) {
+    if (!receipt.studentId || explicitlyMatchedReceiptIds.has(receipt.id)) continue;
+    const list = candidatesByStudentPk.get(receipt.studentId) ?? [];
+    list.push({
+      id: receipt.id,
+      date: receipt.date.toISOString(),
+      orNumber: receipt.orNumber,
+      amount: Number(receipt.amountPaid),
+      description: receipt.itemDescription,
+      category: receipt.category,
+      status: receipt.status,
+      paymentType: receipt.paymentType,
+      accountingPeriod: `${receipt.term}, ${receipt.academicYear}`,
+    });
+    candidatesByStudentPk.set(receipt.studentId, list);
+  }
+  const unlinkedReceiptsByPenalty: Record<string, UnlinkedReceipt[]> = {};
+  for (const penalty of penalties) {
+    const studentPk = studentPkByNumber.get(penalty.studentId ?? "");
+    // A receipt dated before the assessment cannot be evidence of paying it.
+    // The same later receipt may still cover multiple older fines, so never
+    // convert these suggestions into a penalty-specific settlement.
+    const assessedAt = new Date(penalty.date).getTime();
+    unlinkedReceiptsByPenalty[penalty.id] = studentPk
+      ? (candidatesByStudentPk.get(studentPk) ?? []).filter(
+          receipt => new Date(receipt.date).getTime() >= assessedAt
+        )
+      : [];
+  }
+
   return (
     <div className="module card p-3 p-md-4 border-secondary shadow-sm">
       <h5 className="text-accent mb-2">
@@ -180,6 +244,7 @@ export default async function PenaltiesPage({
       </p>
       <PenaltiesManager
         historyByPenalty={historyByPenalty}
+        unlinkedReceiptsByPenalty={unlinkedReceiptsByPenalty}
         department={cleanDepartment}
         ay={ay}
         term={term}

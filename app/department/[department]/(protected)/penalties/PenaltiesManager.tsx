@@ -49,9 +49,22 @@ type PenaltyHistoryEntry = {
   note: string;
 };
 
+type UnlinkedPenaltyReceipt = {
+  id: string;
+  date: string;
+  orNumber: string;
+  amount: number;
+  description: string;
+  category: string;
+  status: string;
+  paymentType: string;
+  accountingPeriod: string;
+};
+
 export default function PenaltiesManager({
   department,
   historyByPenalty = {},
+  unlinkedReceiptsByPenalty = {},
   ay,
   term,
   students,
@@ -62,6 +75,7 @@ export default function PenaltiesManager({
 }: {
   department: string;
   historyByPenalty?: Record<string, PenaltyHistoryEntry[]>;
+  unlinkedReceiptsByPenalty?: Record<string, UnlinkedPenaltyReceipt[]>;
   ay: string;
   term: string;
   students: Student[];
@@ -739,6 +753,8 @@ export default function PenaltiesManager({
         const active = penalties.find(p => p.id === historyPenaltyId);
         if (!active) return null;
         const rows = historyByPenalty[active.id] || [];
+        const candidateReceipts = unlinkedReceiptsByPenalty[active.id] || [];
+        const hasLinkedSettlement = rows.some(row => row.method !== "ASSESSMENT");
         return (
           <div className="modal fade show d-block" role="dialog" aria-modal="true" tabIndex={-1}
             style={{ backgroundColor: "rgba(0,0,0,0.72)", zIndex: 1070 }}>
@@ -775,6 +791,39 @@ export default function PenaltiesManager({
                       </tbody>
                     </table>
                   </div>
+                  {!hasLinkedSettlement && Number(active.fineAmount) === 0 && (
+                    <div className="alert alert-warning small mt-3">
+                      This fine is marked settled, but no linked settlement entry was found.
+                      Its status alone does not identify which OR paid this assessment.
+                      Verify historical accounting records before any adjustment.
+                    </div>
+                  )}
+                  {candidateReceipts.length > 0 && (
+                    <section className="mt-3" aria-label="Unlinked historical fine receipts">
+                      <h6 className="text-warning mb-1">Unlinked historical penalty/fine receipts</h6>
+                      <p className="small text-muted mb-2">
+                        These receipts belong to the same student and academic period,
+                        but are NOT linked to this particular penalty. They are displayed
+                        for reconciliation only, not counted as settlement or assigned automatically.
+                      </p>
+                      <div className="table-responsive">
+                        <table className="table table-sm table-hover text-body align-middle">
+                          <thead><tr><th>Date</th><th>OR Number</th><th>Description</th><th className="text-end">Receipt amount</th><th>Receipt status</th></tr></thead>
+                          <tbody>
+                            {candidateReceipts.map(receipt => (
+                              <tr key={receipt.id}>
+                                <td>{formatManilaDateTime24(receipt.date)}</td>
+                                <td className="font-monospace fw-semibold">{receipt.orNumber}</td>
+                                <td>{receipt.description}<div className="small text-muted">{receipt.category} · {receipt.accountingPeriod}</div></td>
+                                <td className="text-end">{fmt(receipt.amount)}</td>
+                                <td>{receipt.status}<div className="small text-muted">{receipt.paymentType}</div></td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </section>
+                  )}
                   <p className="small text-muted mb-0">Community-service credits are noncash. Negative values are receipt reversals, not refunds. Legacy events are labeled separately when their structured history was unavailable.</p>
                 </div>
                 <div className="modal-footer border-secondary bg-body-secondary">
