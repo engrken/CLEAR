@@ -11,6 +11,7 @@ test("legacy receipt candidates resolve external student number to same-tenant S
   assert.match(page, /new Map\(students\.map\(student => \[student\.studentId, student\.id\]\)\)/);
   assert.match(page, /studentId: \{ in: studentPks \}/);
   assert.match(page, /organizationId: organization\.id,\s*academicYear: ay,\s*term,/);
+  assert.match(page, /new Date\(receipt\.date\)\.getTime\(\) >= assessedAt/);
 });
 
 test("candidate receipts must lack existing structured settlement and arrears links", () => {
