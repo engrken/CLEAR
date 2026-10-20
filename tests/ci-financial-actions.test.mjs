@@ -45,6 +45,29 @@ test("protected CI-only finance route rejects requests without a real signed ses
   assert.equal(response.status, 401);
 });
 
+test("tenant database membership and permissions override a forged signed-session role", async () => {
+  const { org } = await ciSessionCookie();
+  const viewer = await prisma.tenantUser.create({ data: {
+    organizationId: org.id, userId: "CI-READONLY-OFFICER",
+    fullName: "CI Read-only Officer", username: "ci_readonly_officer",
+    email: "ci-viewer@example.invalid", role: "Viewer", status: "Active",
+    allowedTabs: JSON.stringify(["tab-overview"]),
+  } });
+  // A signed JWT might claim an elevated role after an account was changed.
+  // Financial permissions must always come from the current tenant DB record.
+  const jwt = await encode({
+    secret: process.env.AUTH_SECRET, salt: "authjs.session-token", maxAge: 3600,
+    token: { sub: viewer.id, email: viewer.email, name: viewer.fullName,
+      role: "Admin", department, organizationId: org.id,
+      allowedTabs: ["tab-payment", "tab-remittances"] },
+  });
+  for (const operation of ["cashier", "remittance"]) {
+    const response = await post("authjs.session-token=" + jwt, operation, {});
+    assert.equal(response.status, 409, JSON.stringify(response.body));
+    assert.match(response.body.error, /403 Forbidden|lacks permission/i);
+  }
+});
+
 test("authenticated cashier concurrent identical requests post once, reject altered replay", async () => {
   const { cookie, org } = await ciSessionCookie();
   const id = randomUUID();
@@ -194,7 +217,7 @@ test("cashier refuses ambiguous duplicated fee setups", async () => {
     fundAllocation: "General Fund", ay, term,
   });
   assert.equal(response.status, 409, JSON.stringify(response.body));
-  assert.match(response.body.error, /multiple fee setups/i);
+  assert.match(response.body.error, /duplicated in fee setup/i);
   assert.equal(await prisma.collection.count({ where: { organizationId: org.id } }), prior);
 });
 
