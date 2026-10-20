@@ -27,19 +27,11 @@ jobs:
           INSERT INTO "PaymentRequest" ("id", "organizationId", "requestId", "payloadHash", "orNumber", "outcomeJson")
           VALUES ('tenant-a', 'a', 'same-request', 'hash-a', 'OR-A', '{}'),
                  ('tenant-b', 'b', 'same-request', 'hash-b', 'OR-B', '{}');
-          DO $
-          BEGIN
-            BEGIN
-              INSERT INTO "PaymentRequest" ("id", "organizationId", "requestId", "payloadHash", "orNumber", "outcomeJson")
-              VALUES ('duplicate', 'a', 'same-request', 'changed', 'OR-C', '{}');
-              RAISE EXCEPTION 'duplicate request was accepted';
-            EXCEPTION WHEN unique_violation THEN NULL;
-            END;
-            IF (SELECT COUNT(*) FROM "PaymentRequest") <> 2 THEN
-              RAISE EXCEPTION 'tenant request uniqueness check failed';
-            END IF;
-          END $;
+          INSERT INTO "PaymentRequest" ("id", "organizationId", "requestId", "payloadHash", "orNumber", "outcomeJson")
+          VALUES ('duplicate', 'a', 'same-request', 'changed', 'OR-C', '{}')
+          ON CONFLICT ("organizationId", "requestId") DO NOTHING;
           SQL
+          test "$(psql -h localhost -U postgres -d postgres -Atc 'SELECT COUNT(*) FROM "PaymentRequest"')" = "2"
         env:
           PGPASSWORD: postgres
       - name: Check sequence uniqueness
