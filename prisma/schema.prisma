@@ -375,6 +375,7 @@ model MobilePaymentIdempotency {
   requestKey     String
   requestHash    String
   receiptId      String?
+  responseSnapshot String?
   createdAt      DateTime @default(now()) @db.Timestamptz(3)
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   officer        TenantUser @relation(fields: [tenantUserId], references: [id], onDelete: Cascade)
