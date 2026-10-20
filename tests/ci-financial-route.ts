@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { recordPayment } from "@/app/department/[department]/(protected)/collections/actions";
 import { verifyOnlineRemittance } from "@/app/department/[department]/(protected)/remittances/actions";
+import { saveInitialFunds } from "@/app/department/[department]/(protected)/setup/actions";
 
 export const runtime = "nodejs";
 
@@ -26,6 +27,9 @@ export async function POST(request: Request) {
       result = await recordPayment("ci-financial", body.data);
     } else if (body.operation === "remittance") {
       result = await verifyOnlineRemittance("ci-financial", body.data);
+    } else if (body.operation === "restoreFund") {
+      result = await saveInitialFunds("ci-financial", body.data.ay, body.data.term,
+        body.data.funds, body.data.reason, body.data.snapshot);
     } else {
       return NextResponse.json({ error: "Unknown operation" }, { status: 400 });
     }
