@@ -146,7 +146,7 @@ export async function recordPayment(department: string, data: {
 
     const existing = await tx.collection.findMany({ where: {
       organizationId: org.id, academicYear: ay, term, studentId: student.id,
-    }, select: { itemDescription: true, amountPaid: true, status: true, paymentType: true } });
+    }, select: { category: true, itemDescription: true, amountPaid: true, status: true, paymentType: true } });
     const valid = existing.filter((row) => !String(row.status || "").toUpperCase().includes("VOID") &&
       !String(row.status || "").toUpperCase().includes("CANCEL") &&
       !String(row.paymentType || "").toUpperCase().includes("VOID"));
