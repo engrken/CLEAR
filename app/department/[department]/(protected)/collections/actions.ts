@@ -249,6 +249,22 @@ export async function recordPayment(department: string, data: {
       balanceDue = (remaining - paidCents) / 100;
     }
 
+    // Never create financial allocations in a nonexistent destination fund.
+    // Penalty collection creates its dedicated configured fund above.
+    const configuredFunds = await tx.fund.findMany({
+      where: { organizationId: org.id, academicYear: ay, term },
+      select: { fundName: true },
+    });
+    const canonicalFundNames = new Map(configuredFunds.map(fund =>
+      [fund.fundName.trim().toLowerCase(), fund.fundName]
+    ));
+    for (const entry of entries) {
+      const canonical = canonicalFundNames.get(entry.fund.trim().toLowerCase());
+      if (!canonical) {
+        throw new Error(`Destination fund "${entry.fund}" is not configured for this department and term. Correct Fee Setup before posting.`);
+      }
+      entry.fund = canonical;
+    }
     actualPaymentType = balanceDue === 0 ? "Full Payment" : "Partial Payment";
     if (penaltyId) postedDescription = entries[0]?.name || itemDescription;
     paymentEntries = entries.length;

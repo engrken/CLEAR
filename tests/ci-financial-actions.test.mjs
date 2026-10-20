@@ -119,12 +119,59 @@ test("authenticated simultaneous remittance approval produces one receipt, then 
   assert.equal(receipts.length, 1, "One verified payment may create only one OR");
   assert.equal(receipts[0].amountPaid, 20);
   assert.equal(receipts[0].balanceDue, 90);
+  assert.equal(receipts[0].category, "Membership",
+    "Configured remittance must use the fee category instead of generic Online Remittance");
+  assert.equal(receipts[0].fundAllocation, "General Fund");
   assert.equal(logs.length, 1);
 
   const mismatch = await post(cookie, "remittance", { ...data, amount: 21 });
   assert.equal(mismatch.status, 409);
   assert.match(mismatch.body.error, /does not match/i);
   assert.equal(await prisma.collection.count({ where: { organizationId: org.id, orNumber: firstOr } }), 1);
+});
+
+test("cashier posting rejects a nonexistent target fund", async () => {
+  const { cookie, org } = await ciSessionCookie();
+  const requestId = randomUUID();
+  const before = await prisma.collection.count({ where: { organizationId: org.id } });
+  const data = { requestId, date: "2026-10-20", studentId: "CI-FIN-STUDENT-001",
+    studentName: "CI Synthetic Student", studentEmail: "", category: "Other",
+    itemDescription: "Ad hoc QA Fee", paymentType: "Full Payment",
+    standardRate: 7, amountPaid: 7, fundAllocation: "Unconfigured Fund", ay, term };
+  const response = await post(cookie, "cashier", data);
+  assert.equal(response.status, 409, JSON.stringify(response.body));
+  assert.match(response.body.error, /not configured/i);
+  assert.equal(await prisma.collection.count({ where: { organizationId: org.id } }), before);
+  assert.equal(await prisma.paymentRequest.count({ where: { organizationId: org.id, requestId } }), 0);
+});
+
+test("remittance approval rejects fee setups with missing target funds", async () => {
+  const { cookie, org } = await ciSessionCookie();
+  await prisma.collectionSetup.create({ data: {
+    organizationId: org.id, academicYear: ay, term, category: "Other",
+    name: "Stale Setup Fund Fee", amount: 50,
+    targetFund: "Nonexistent Accounting Pool", isPackage: false,
+  } });
+  const remit = await prisma.onlineRemittance.create({ data: {
+    organizationId: org.id, submissionId: "CI-FIN-REMIT-UNFUNDED",
+    academicYear: ay, term, studentId: "CI-FIN-STUDENT-001",
+    studentName: "CI Synthetic Student", paymentChannel: "GCash",
+    referenceNumber: "CI-FIN-TRANSFER-UNFUNDED", category: "Online Remittance",
+    itemDescription: "Stale Setup Fund Fee", paymentMode: "Online",
+    amountPaid: 15, status: "Pending Verification",
+  } });
+  const before = await prisma.collection.count({ where: { organizationId: org.id } });
+  const response = await post(cookie, "remittance", {
+    remittanceId: remit.id, studentId: remit.studentId,
+    studentName: remit.studentName, particulars: remit.itemDescription,
+    amount: 15, ay, term, fundAllocation: "General Fund",
+  });
+  assert.equal(response.status, 409, JSON.stringify(response.body));
+  assert.match(response.body.error, /unconfigured fund/i);
+  assert.equal(await prisma.collection.count({ where: { organizationId: org.id } }), before);
+  const state = await prisma.onlineRemittance.findUniqueOrThrow({ where: { id: remit.id } });
+  assert.equal(state.status, "Pending Verification");
+  assert.equal(state.orNumber, null);
 });
 
 test.after(async () => {

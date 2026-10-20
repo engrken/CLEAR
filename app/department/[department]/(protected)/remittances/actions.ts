@@ -104,10 +104,17 @@ export async function verifyOnlineRemittance(
     if (ledger.activeRollover) throw new Error("This term has been carried forward and cannot accept verified payments.");
     // Reject arbitrary fund names before posting an official receipt. The
     // same ledger supplies the authorized fund options to the officer UI.
-    if (!ledger.funds.some((fund) => fund.name.trim().toLowerCase() === fundAllocation.toLowerCase())) {
-      throw new Error("Selected fund is not available in this academic term. Refresh the queue.");
+    // Historic ledger buckets are not evidence that a target fund is configured.
+    const configuredFunds = await tx.fund.findMany({
+      where: { organizationId: org.id, academicYear: remit.academicYear, term: remit.term },
+      select: { fundName: true },
+    });
+    const canonicalFundNames = new Map(configuredFunds.map(fund =>
+      [fund.fundName.trim().toLowerCase(), fund.fundName]
+    ));
+    if (!canonicalFundNames.has(fundAllocation.toLowerCase())) {
+      throw new Error("Selected fund is not configured for this academic term. Refresh the queue.");
     }
-    orNumber = await allocateOfficialReceiptNumber(tx, org.id);
 
     const student = await tx.student.findFirst({ where: {
       organizationId: org.id,
@@ -124,10 +131,19 @@ export async function verifyOnlineRemittance(
       organizationId: org.id, academicYear: remit.academicYear, term: remit.term,
       isPackage: true,
     }, orderBy: [{ category: "asc" }, { name: "asc" }] }) : [];
-    const setup = !isPackage ? await tx.collectionSetup.findFirst({ where: {
+    if (isPackage && packageItems.length === 0) {
+      throw new Error("No departmental package fee setup exists for this academic term.");
+    }
+    // Public submissions usually carry a generic remittance category.
+    // Reject ambiguous fee names instead of guessing the assessment category.
+    const matchingSetups = !isPackage ? await tx.collectionSetup.findMany({ where: {
       organizationId: org.id, academicYear: remit.academicYear,
       term: remit.term, name: itemDescription,
-    } }) : null;
+    } }) : [];
+    if (matchingSetups.length > 1) {
+      throw new Error("Multiple configured fees share this name. Resolve the category in Fee Setup before verifying.");
+    }
+    const setup = matchingSetups[0] ?? null;
     const prior = await tx.collection.findMany({ where: {
       organizationId: org.id, academicYear: remit.academicYear,
       term: remit.term, studentId: student.id,
@@ -172,8 +188,20 @@ export async function verifyOnlineRemittance(
       }
       entries.push({ name: itemDescription, fund: String(setup?.targetFund || fundAllocation),
         rate, amount: amountCents, balance: Math.max(0, rate - previous - amountCents),
-        category: String(remit.category || "Online Remittance") });
+        category: setup?.category || String(remit.category || "Online Remittance") });
     }
+
+    // Canonicalize fund names and reject missing target fund configurations.
+    for (const entry of entries) {
+      const canonical = canonicalFundNames.get(entry.fund.trim().toLowerCase());
+      if (!canonical) {
+        throw new Error(`Fee "${entry.name}" targets unconfigured fund "${entry.fund}". Correct Fee Setup before verifying.`);
+      }
+      entry.fund = canonical;
+    }
+    // Allocate the receipt after all known validation so invalid requests
+    // do not waste global sequence values.
+    orNumber = await allocateOfficialReceiptNumber(tx, org.id);
 
     const updated = await tx.onlineRemittance.updateMany({ where: {
       id: remit.id, organizationId: org.id, status: remit.status,
@@ -194,7 +222,7 @@ export async function verifyOnlineRemittance(
     if (!isPackage) {
       await applyPaymentToStudentCollectibles(tx, {
         organizationId: org.id, academicYear: remit.academicYear, term: remit.term,
-        studentId: student.studentId, category: String(remit.category || ""), itemDescription, amountCents,
+        studentId: student.studentId, category: entries[0].category, itemDescription, amountCents,
       });
     }
     await tx.systemLog.create({ data: {
@@ -299,14 +327,14 @@ export async function submitOnlineRemittance(
   const throttleRows = await prisma.$queryRaw<{ failedCount: number }[]>`
     INSERT INTO "AuthThrottle" ("key", "failedCount", "lastSentAt", "updatedAt")
     VALUES (${throttleKey}, 1,
-      (${nowIso}::timestamptz AT TIME ZONE 'UTC'),
-      (${nowIso}::timestamptz AT TIME ZONE 'UTC'))
+      (${nowIso}::timestamptz),
+      (${nowIso}::timestamptz))
     ON CONFLICT ("key") DO UPDATE SET
       "failedCount" = CASE
-        WHEN "AuthThrottle"."lastSentAt" > (${windowStartIso}::timestamptz AT TIME ZONE 'UTC')
+        WHEN "AuthThrottle"."lastSentAt" > (${windowStartIso}::timestamptz)
         THEN "AuthThrottle"."failedCount" + 1 ELSE 1 END,
       "lastSentAt" = CASE
-        WHEN "AuthThrottle"."lastSentAt" > (${windowStartIso}::timestamptz AT TIME ZONE 'UTC')
+        WHEN "AuthThrottle"."lastSentAt" > (${windowStartIso}::timestamptz)
         THEN "AuthThrottle"."lastSentAt" ELSE EXCLUDED."lastSentAt" END,
       "updatedAt" = EXCLUDED."updatedAt"
     RETURNING "failedCount"

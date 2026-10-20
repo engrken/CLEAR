@@ -65,6 +65,24 @@ test('cashier payment requests are durable and safe to retry', () => {
   assert.ok(form.includes('pendingPayment.current.requestId'));
   assert.ok(form.includes('crypto.randomUUID()'));
 });
+test('server payments validate real configured funds', () => {
+  const cashier = read('app/department/[department]/(protected)/collections/actions.ts');
+  const remittances = read('app/department/[department]/(protected)/remittances/actions.ts');
+  assert.ok(cashier.includes('configuredFunds = await tx.fund.findMany('));
+  assert.ok(remittances.includes('configuredFunds = await tx.fund.findMany('));
+});
+
+test('remittance category uses the actual fee setup for collectible posting', () => {
+  const remittances = read('app/department/[department]/(protected)/remittances/actions.ts');
+  assert.ok(remittances.includes('category: setup?.category || String(remit.category'));
+  assert.ok(remittances.includes('category: entries[0].category, itemDescription, amountCents'));
+});
+
+test('public payment throttle uses unambiguous timestamptz casts', () => {
+  const remittances = read('app/department/[department]/(protected)/remittances/actions.ts');
+  assert.ok(!remittances.includes("AT TIME ZONE 'UTC'"));
+});
+
 test('remittance retry verifies original live receipt', () => {
   const source = read('app/department/[department]/(protected)/remittances/actions.ts');
   assert.ok(source.includes('String(remit.status || "").toUpperCase() === "VERIFIED"'));
