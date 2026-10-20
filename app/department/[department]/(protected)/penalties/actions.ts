@@ -302,6 +302,23 @@ export async function reconcileLegacyCashSettlement(department: string, data: {
     if (!/^SETTLED\s*\(CASH PAYMENT/i.test(pen.status || "") || toCentsSafe(pen.fineAmount) !== 0) {
       throw new Error("Only a zero-balance legacy cash-settled penalty may be reconciled here.");
     }
+    // A recorded settlement must NEVER be reopened by the legacy-import
+    // shortcut. This check runs server-side inside the same transaction, even
+    // if the browser is stale or an administrator calls the action directly.
+    const settlementEvent = await tx.penaltySettlementEvent.findFirst({
+      where: { organizationId: org.id, penaltyRecordId: pen.id },
+      select: { id: true },
+    });
+    if (settlementEvent) {
+      throw new Error("This penalty already has a recorded settlement or reversal. Use Transaction History and the formal audit process; it cannot be reopened as an unverified legacy cash status.");
+    }
+    const linkedArrear = await tx.arrearPaymentLink.findFirst({
+      where: { organizationId: org.id, obligationType: "penalty", obligationId: pen.id },
+      select: { id: true },
+    });
+    if (linkedArrear) {
+      throw new Error("This penalty already has linked receipt history. The legacy cash reconciliation shortcut is unavailable.");
+    }
     const maxCents = pen.assessedAmount != null
       ? toCentsSafe(pen.assessedAmount)
       : Math.round(Number(pen.hoursLate) * toCentsSafe(pen.ratePerHour));
