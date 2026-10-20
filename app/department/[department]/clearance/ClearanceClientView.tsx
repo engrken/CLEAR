@@ -24,7 +24,7 @@ export default function ClearanceClientView({
   defaultStudentId: string;
   defaultFullName: string;
   defaultEmail: string;
-  feeOptions: { name: string; amount: number }[]; // <-- UPGRADED
+  feeOptions: { category: string; name: string; amount: number }[];
   packageRate: number;
   closed?: boolean;
 }) {
@@ -35,13 +35,20 @@ export default function ClearanceClientView({
   const [channel, setChannel] = useState("GCash");
   const [referenceNo, setReferenceNo] = useState("");
   
-  // DYNAMIC COLLECTION LOGIC
-  const [collectionType, setCollectionType] = useState(feeOptions[0]?.name || "Departmental Fee (Full Package)");
-  const [customCollectionType, setCustomCollectionType] = useState("");
-  
-  const [paymentModeUI, setPaymentModeUI] = useState("Full Payment"); 
-  const [amount, setAmount] = useState<number>(feeOptions[0]?.amount || packageRate);
-  
+  // The selection includes an explicit Fee Setup category.
+  const [selectedFeeIndex, setSelectedFeeIndex] = useState(0);
+  const selectedFee = feeOptions[selectedFeeIndex];
+  const [paymentModeUI, setPaymentModeUI] = useState("Full Payment");
+  const [amount, setAmount] = useState<number>(feeOptions[0]?.amount ?? packageRate);
+
+  const handleCollectionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const index = Number(e.target.value);
+    const choice = feeOptions[index];
+    if (!choice) return;
+    setSelectedFeeIndex(index);
+    setAmount(choice.amount);
+  };
+
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -76,9 +83,8 @@ export default function ClearanceClientView({
       return void clearAlert("Please complete all required fields and attach a receipt file.");
     }
 
-    const finalParticulars = collectionType === "Other" ? customCollectionType.trim() : collectionType;
-    if (!finalParticulars) {
-      return void clearAlert("Please specify what this payment is for.");
+    if (!selectedFee?.category || !selectedFee.name) {
+      return void clearAlert("Select a configured fee before submitting a payment proof.");
     }
 
     setIsSubmitting(true);
@@ -89,7 +95,8 @@ export default function ClearanceClientView({
       formData.append("email", email);
       formData.append("paymentChannel", channel);
       formData.append("referenceNo", referenceNo);
-      formData.append("particulars", finalParticulars);
+      formData.append("particulars", selectedFee.name);
+      formData.append("category", selectedFee.category);
       formData.append("amount", amount.toString());
       formData.append("ay", ay);
       formData.append("term", term);
@@ -102,7 +109,7 @@ export default function ClearanceClientView({
       setShowProofModal(false);
       setReferenceNo("");
       setProofFile(null);
-      setCustomCollectionType("");
+
     } catch (err: any) {
       void clearAlert("Error: " + err.message);
     } finally {
@@ -169,17 +176,13 @@ export default function ClearanceClientView({
                   <div className="row g-2 mb-3">
                     <div className="col-md-6">
                       <label className="form-label text-muted small fw-semibold">Collection Type / Particulars</label>
-                      <select className="form-select bg-body text-body border-secondary mb-2" value={collectionType} onChange={handleCollectionChange}>
+                      <select className="form-select bg-body text-body border-secondary mb-2" value={selectedFeeIndex} onChange={handleCollectionChange} required>
+                        {feeOptions.length === 0 && <option value="">No payable fees configured</option>}
                         {feeOptions.map((fee, idx) => (
-                          <option key={idx} value={fee.name}>{fee.name}</option>
+                          <option key={`${fee.category}-${fee.name}-${idx}`} value={idx}>{fee.category} — {fee.name}</option>
                         ))}
-                        <option value="Penalty Arrears">Penalty Arrears</option>
-                        <option value="Other">Other (Please specify...)</option>
                       </select>
-                      {/* CONDITIONAL RENDER FOR 'OTHER' */}
-                      {collectionType === "Other" && (
-                        <input type="text" className="form-control bg-body-secondary text-body border-secondary" placeholder="Type specific payment reason..." value={customCollectionType} onChange={e => setCustomCollectionType(e.target.value)} required autoFocus />
-                      )}
+                      <small className="text-muted">Only configured fees are accepted. Penalties and donations need a separate authorized workflow.</small>
                     </div>
                     <div className="col-md-6">
                       <label className="form-label text-muted small fw-semibold">Payment Mode & Amount</label>
@@ -206,7 +209,7 @@ export default function ClearanceClientView({
 
                 <div className="modal-footer border-secondary bg-body-secondary">
                   <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowProofModal(false)}>Cancel</button>
-                  <button type="submit" className="btn btn-success btn-sm fw-bold px-4 text-dark" disabled={isSubmitting || closed}>
+                  <button type="submit" className="btn btn-success btn-sm fw-bold px-4 text-dark" disabled={isSubmitting || closed || !selectedFee}>
                     {isSubmitting ? "Submitting Proof..." : "Submit Payment Proof"}
                   </button>
                 </div>
