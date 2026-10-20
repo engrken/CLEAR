@@ -460,6 +460,25 @@ export async function recordMobilePayment(
     try { await postOnce(); break; }
     catch (error: unknown) {
       if ((error as { code?: string })?.code === 'P2034' && attempt < 2) continue;
+      if ((error as { code?: string })?.code === 'P2002' && input.idempotency) {
+        const existing = await prisma.mobilePaymentIdempotency.findUnique({
+          where: { organizationId_tenantUserId_requestKey: {
+            organizationId: org.id, tenantUserId: input.idempotency.officerId,
+            requestKey: input.idempotency.key,
+          } },
+        });
+        if (existing) {
+          const hash = createHash('sha256').update(JSON.stringify({
+            studentKey, feeId, penaltyId, amountCentavos: input.amountCentavos, orNumber,
+          })).digest('hex');
+          if (existing.requestHash !== hash) {
+            throw new ApiFailure(409, 'conflict', 'Request identifier belongs to a different payment.');
+          }
+          throw new ApiFailure(409, 'duplicate_request',
+            'This payment was already recorded. Check the ledger before trying again.');
+        }
+      }
+
       throw mapKenError(error);
     }
   }
