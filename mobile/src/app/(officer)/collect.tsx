@@ -76,7 +76,7 @@ export default function Collect() {
         await SecureStore.setItemAsync(pendingKey, JSON.stringify(pending));
       }
       const entry = await api.recordPayment(session, { ...draft, idempotencyKey: pending.key });
-      await SecureStore.deleteItemAsync(pendingKey);
+      await SecureStore.deleteItemAsync(pendingKey).catch(() => {});
       setRecorded(`${entry.reference} · ${formatPeso(pesos)} from ${entry.title}`);
       setStudentId(undefined); setFeeId(undefined); setAmount(''); setOrNumber(''); setSearch('');
     } catch (err) {
