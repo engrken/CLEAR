@@ -3,7 +3,7 @@
 
 import { handler, preflight } from '@/lib/mobile/http';
 import { getOrgOr404 } from '@/lib/mobile/data';
-import { listMobileFeeItems } from '@/lib/mobile/payments';
+import { listMobileFeeItems } from '@/lib/mobile/fee-items';
 
 type Ctx = { params: Promise<{ org: string }> };
 
