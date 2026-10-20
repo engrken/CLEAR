@@ -57,7 +57,7 @@ export async function recordPayment(department: string, data: {
   const paid = money(data.amountPaid, "Payment");
   const date = dateOnly(data.date);
   if (!ay || !term || !category || !itemDescription || !data.studentId) {
-    throw new Error("Student, receipt number, category, item, academic year and term are required.");
+    throw new Error("Student, category, item, academic year and term are required.");
   }
 
   let actualPaymentType = "Partial Payment";
