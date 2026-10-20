@@ -271,6 +271,81 @@ test("remittance approval rejects fee setups with missing target funds", async (
   assert.equal(state.orNumber, null);
 });
 
+test("online verification rejects an unconfigured ad hoc fee without allocating OR", async () => {
+  const { cookie, org } = await ciSessionCookie();
+  const remit = await prisma.onlineRemittance.create({ data: {
+    organizationId: org.id, submissionId: "CI-FIN-REMIT-ADHOC",
+    academicYear: ay, term, studentId: "CI-FIN-STUDENT-001",
+    studentName: "CI Synthetic Student", paymentChannel: "Maya",
+    referenceNumber: "CI-ADHOC-UNCONFIGURED", category: "Other",
+    itemDescription: "Unconfigured Donation", paymentMode: "Online",
+    amountPaid: 5, status: "Pending Verification",
+  } });
+  const before = await prisma.collection.count({ where: { organizationId: org.id } });
+  const response = await post(cookie, "remittance", {
+    remittanceId: remit.id, studentId: remit.studentId, studentName: remit.studentName,
+    particulars: remit.itemDescription, amount: 5, ay, term, fundAllocation: "General Fund",
+  });
+  assert.equal(response.status, 409, JSON.stringify(response.body));
+  assert.match(response.body.error, /not configured in Fee Setup/i);
+  assert.equal(await prisma.collection.count({ where: { organizationId: org.id } }), before);
+  const current = await prisma.onlineRemittance.findUniqueOrThrow({ where: { id: remit.id } });
+  assert.equal(current.status, "Pending Verification");
+  assert.equal(current.orNumber, null);
+});
+
+test("old uncategorized package proofs cannot silently consume packages across categories", async () => {
+  const { cookie, org } = await ciSessionCookie();
+  const remit = await prisma.onlineRemittance.create({ data: {
+    organizationId: org.id, submissionId: "CI-FIN-REMIT-PKG-LEGACY",
+    academicYear: ay, term, studentId: "CI-FIN-STUDENT-001",
+    studentName: "CI Synthetic Student", paymentChannel: "GCash",
+    referenceNumber: "CI-LEGACY-PACKAGE", category: "Online Remittance",
+    itemDescription: "Departmental Fee (Full Package)", paymentMode: "Online",
+    amountPaid: 10, status: "Pending Verification",
+  } });
+  const response = await post(cookie, "remittance", {
+    remittanceId: remit.id, studentId: remit.studentId, studentName: remit.studentName,
+    particulars: remit.itemDescription, amount: 10, ay, term, fundAllocation: "General Fund",
+  });
+  assert.equal(response.status, 409, JSON.stringify(response.body));
+  assert.match(response.body.error, /explicitly selected fee category/i);
+  const current = await prisma.onlineRemittance.findUniqueOrThrow({ where: { id: remit.id } });
+  assert.equal(current.status, "Pending Verification");
+  assert.equal(current.orNumber, null);
+});
+
+test("categorized package remittance cannot charge another category", async () => {
+  const { cookie, org } = await ciSessionCookie();
+  await prisma.collectionSetup.create({ data: {
+    organizationId: org.id, academicYear: ay, term, category: "Merchandise",
+    name: "Unrelated Shirt Package", amount: 350, targetFund: "General Fund", isPackage: true,
+  } });
+  const remit = await prisma.onlineRemittance.create({ data: {
+    organizationId: org.id, submissionId: "CI-FIN-REMIT-PKG-CAT",
+    academicYear: ay, term, studentId: "CI-FIN-STUDENT-001",
+    studentName: "CI Synthetic Student", paymentChannel: "GCash",
+    referenceNumber: "CI-CATEGORIZED-PACKAGE", category: "Membership",
+    itemDescription: "Departmental Fee (Full Package)", paymentMode: "Online",
+    amountPaid: 10, status: "Pending Verification",
+  } });
+  const response = await post(cookie, "remittance", {
+    remittanceId: remit.id, studentId: remit.studentId, studentName: remit.studentName,
+    particulars: remit.itemDescription, amount: 10, ay, term, fundAllocation: "General Fund",
+  });
+  assert.equal(response.status, 200, JSON.stringify(response.body));
+  const receiptRows = await prisma.collection.findMany({ where: {
+    organizationId: org.id, orNumber: response.body.result.orNumber,
+  } });
+  assert.equal(receiptRows.length, 1);
+  assert.equal(receiptRows[0].category, "Membership");
+  assert.equal(receiptRows[0].itemDescription, "Membership Fee");
+  assert.equal(receiptRows[0].amountPaid, 10);
+  assert.equal(await prisma.collection.count({ where: {
+    organizationId: org.id, category: "Merchandise",
+  } }), 0);
+});
+
 test.after(async () => {
   await prisma.$disconnect();
 });
