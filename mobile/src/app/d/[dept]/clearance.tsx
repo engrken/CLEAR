@@ -134,7 +134,9 @@ export default function Clearance() {
       <Text variant="caption" color="inkMuted" style={styles.note}>
         {result?.unpaidItems?.length
           ? 'Payment records and receipts stay with your officers. Ask your treasurer if an item looks wrong.'
-          : 'Only your clearance status and total balance are shown here. Itemised records stay with your officers.'}
+          : (result?.outstandingCentavos ?? null) === null
+            ? 'Only your clearance status is shown here. Your balance and records stay with your officers.'
+            : 'Only your clearance status and total balance are shown here. Itemised records stay with your officers.'}
       </Text>
     </Screen>
   );

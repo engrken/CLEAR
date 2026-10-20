@@ -63,7 +63,8 @@ export function ClearanceCard({ studentName, studentId, status, outstanding = nu
     <ResultBlock tone="coral" label="Clearance result: on hold">
       <IconWell icon="exclaim" bg={c.inkBlock} fg={c.coral} size={64} round />
       <Text variant="display" accessibilityRole="header">{studentName ? `Almost there, ${studentName}` : "Clearance on hold"}</Text>
-      <Text variant="bodyStrong" color="coralInk" style={{ fontSize: 15 }}>{studentId ? `${studentId} · On hold` : "On hold"}</Text>
+      {/* Public lookups carry no ID, and the heading already says "on hold". */}
+      {studentId ? <Text variant="bodyStrong" color="coralInk" style={{ fontSize: 15 }}>{`${studentId} · On hold`}</Text> : null}
       {outstanding === null ? (
         <Text variant="body" color="coralDeep">
           {"You still have dues to settle. Ask your treasurer for the amount, or send a GCash or Maya receipt if you've already paid."}

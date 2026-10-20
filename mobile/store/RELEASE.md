@@ -203,6 +203,7 @@ Built on 1.1.0 plus Ken's updates to PR #18 (2026-10-19, up to 1173bc6). Server 
 
 - Public clearance lookups no longer show the student's name or ID; the result card says "You're cleared!" or "Clearance on hold" instead. Officers still see both. (Since eb1b5b1 the API returns `null` for both on public lookups, so 1.0.x and 1.1.0 show "null" there until users update.)
 - "I paid — send my receipt" prefills the student ID that was typed, since the result no longer returns it.
+- Our touch-ups on Ken's change: the on-hold card no longer repeats "On hold" under its heading when there is no ID, and the public footer no longer says the balance is shown.
 - Server only (no app change needed): penalty receipts are filed as Penalty, not Others; verifying a remittance rejects a fund that isn't in the term's ledger; unsettled penalties always block clearance; Manila dates in financial summaries.
 - Play screenshots 02 and 03 retaken without the student's name.
 
