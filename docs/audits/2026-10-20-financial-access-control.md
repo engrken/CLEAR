@@ -6,6 +6,11 @@ Reviewed `app/department/[department]/actions.ts`, `lib/permissions.ts`, `lib/su
 ## Fixed: financial actions privileged-session bypass
 Previously, `requireOrganizationAccess` accepted an email matching `SUPER_ADMIN_EMAIL` or a session role string of `SuperAdmin`/`master` without invoking the central global-admin session verifier. The fix uses `verifyGlobalAdminSession` with the identity and revocation version; rejects reserved admin addresses when their privileged session fails validation; and requires a normal officer session's organization ID to match the financial data's organization ID before checking active tenant membership.
 
+## Final shared-guard follow-up
+Review identified a second tenant-isolation weakness: `lib/permissions.ts` previously resolved active user membership using email in the requested tenant without confirming that the original OTP session was issued for that tenant. This allowed a session for tenant A to be evaluated as a tenant B member when the same email was registered in both organizations.
+
+PR #36 now enforces `assertTenantSessionScope` in both the shared permission checker and the financial-actions helper. Verified global-admin sessions bypass the tenant-only comparison. Four focused tests in `tests/tenant-session-scope.test.mjs` cover matching tenants, cross-tenant reuse, missing/malformed IDs, and mismatched IDs. These focused tests passed in a Node 22 environment on October 20, 2026. Full application rebuild and integration smoke checks against these final changes are still required.
+
 ## Accounting changes
 No ledger math, receipts, official receipt numbering, migration, or stored financial records were modified.
 
