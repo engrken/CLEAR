@@ -221,8 +221,14 @@ export default async function PenaltiesPage({
   const unlinkedReceiptsByPenalty: Record<string, UnlinkedReceipt[]> = {};
   for (const penalty of penalties) {
     const studentPk = studentPkByNumber.get(penalty.studentId ?? "");
+    // A receipt dated before the assessment cannot be evidence of paying it.
+    // The same later receipt may still cover multiple older fines, so never
+    // convert these suggestions into a penalty-specific settlement.
+    const assessedAt = new Date(penalty.date).getTime();
     unlinkedReceiptsByPenalty[penalty.id] = studentPk
-      ? (candidatesByStudentPk.get(studentPk) ?? [])
+      ? (candidatesByStudentPk.get(studentPk) ?? []).filter(
+          receipt => new Date(receipt.date).getTime() >= assessedAt
+        )
       : [];
   }
 
