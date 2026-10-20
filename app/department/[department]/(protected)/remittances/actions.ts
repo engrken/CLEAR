@@ -134,6 +134,16 @@ export async function verifyOnlineRemittance(
     if (isPackage && packageItems.length === 0) {
       throw new Error("No departmental package fee setup exists for this academic term.");
     }
+    if (isPackage) {
+      const names = new Set<string>();
+      for (const item of packageItems) {
+        const name = String(item.name).trim().toLowerCase();
+        if (names.has(name)) {
+          throw new Error("Package Fee Setup has duplicated item descriptions. Give each package fee a distinct name before verification.");
+        }
+        names.add(name);
+      }
+    }
     // Public submissions usually carry a generic remittance category.
     // Reject ambiguous fee names instead of guessing the assessment category.
     const matchingSetups = !isPackage ? await tx.collectionSetup.findMany({ where: {

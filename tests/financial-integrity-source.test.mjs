@@ -65,6 +65,12 @@ test('cashier payment requests are durable and safe to retry', () => {
   assert.ok(form.includes('pendingPayment.current.requestId'));
   assert.ok(form.includes('crypto.randomUUID()'));
 });
+test('fee names cannot be ambiguous across categories in cashier history', () => {
+  const action = read('app/department/[department]/(protected)/collections/actions.ts');
+  assert.ok(action.includes('const categoriesByName = new Map<string, Set<string>>()'));
+  assert.ok(action.includes('Reconcile the historical receipt before posting'));
+});
+
 test('cashier refuses forged fees without a unique configured assessment', () => {
   const action = read('app/department/[department]/(protected)/collections/actions.ts');
   assert.ok(action.includes('const matchingSetups = await tx.collectionSetup.findMany('));

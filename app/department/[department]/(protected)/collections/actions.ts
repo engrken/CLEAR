@@ -158,6 +158,40 @@ export async function recordPayment(department: string, data: {
       organizationId: org.id, academicYear: ay, term, category, isPackage: true,
     }, orderBy: { name: "asc" } });
 
+    // Legacy payment credits are grouped by description. If different real
+    // categories use one fee name, a receipt cannot be reliably attributed to
+    // the proper assessment without explicit reconciliation. Fail closed.
+    if (!String(data.penaltyId || "").trim()) {
+      const namesToCheck = new Set((itemDescription === PACKAGE_NAME
+        ? [PACKAGE_NAME, ...packageItems.map(item => String(item.name))]
+        : [itemDescription]).map(name => name.trim().toLowerCase()));
+      const configuredInPeriod = await tx.collectionSetup.findMany({
+        where: { organizationId: org.id, academicYear: ay, term },
+        select: { name: true, category: true },
+      });
+      const categoriesByName = new Map<string, Set<string>>();
+      const countsByCategoryAndName = new Map<string, number>();
+      for (const setup of configuredInPeriod) {
+        const nameKey = setup.name.trim().toLowerCase();
+        if (!namesToCheck.has(nameKey)) continue;
+        const catKey = setup.category.trim().toLowerCase();
+        const categories = categoriesByName.get(nameKey) ?? new Set<string>();
+        categories.add(catKey);
+        categoriesByName.set(nameKey, categories);
+        const identity = catKey + "\u0000" + nameKey;
+        countsByCategoryAndName.set(identity, (countsByCategoryAndName.get(identity) ?? 0) + 1);
+      }
+      if ([...categoriesByName.values()].some(categories => categories.size > 1) ||
+          [...countsByCategoryAndName.values()].some(count => count > 1)) {
+        throw new Error("This fee description is duplicated in Fee Setup. Give each fee a unique name before posting.");
+      }
+      if (valid.some(row => namesToCheck.has(String(row.itemDescription).trim().toLowerCase()) &&
+          String(row.category).trim().toLowerCase() !== category.toLowerCase() &&
+          String(row.category).trim().toLowerCase() !== "online remittance")) {
+        throw new Error("An existing receipt with this fee name belongs to a different category. Reconcile the historical receipt before posting.");
+      }
+    }
+
     type PaymentEntry = { name: string; fund: string; rateCents: number; paidCents: number; balanceCents: number };
     const entries: PaymentEntry[] = [];
     const paidCents = toCents(paid);

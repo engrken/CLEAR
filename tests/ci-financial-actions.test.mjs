@@ -198,6 +198,27 @@ test("cashier refuses ambiguous duplicated fee setups", async () => {
   assert.equal(await prisma.collection.count({ where: { organizationId: org.id } }), prior);
 });
 
+test("cashier rejects the same fee name reused across different categories", async () => {
+  const { cookie, org } = await ciSessionCookie();
+  await prisma.collectionSetup.createMany({ data: [
+    { organizationId: org.id, academicYear: ay, term, category: "Science",
+      name: "Cross Category Fee", amount: 100, targetFund: "General Fund", isPackage: false },
+    { organizationId: org.id, academicYear: ay, term, category: "Engineering",
+      name: "Cross Category Fee", amount: 150, targetFund: "General Fund", isPackage: false },
+  ] });
+  const before = await prisma.collection.count({ where: { organizationId: org.id } });
+  const response = await post(cookie, "cashier", {
+    requestId: randomUUID(), date: "2026-10-20",
+    studentId: "CI-FIN-STUDENT-001", studentName: "CI Synthetic Student",
+    studentEmail: "", category: "Science", itemDescription: "Cross Category Fee",
+    paymentType: "Full Payment", standardRate: 100,
+    amountPaid: 100, fundAllocation: "General Fund", ay, term,
+  });
+  assert.equal(response.status, 409, JSON.stringify(response.body));
+  assert.match(response.body.error, /duplicated in fee setup/i);
+  assert.equal(await prisma.collection.count({ where: { organizationId: org.id } }), before);
+});
+
 test("remittance approval rejects fee setups with missing target funds", async () => {
   const { cookie, org } = await ciSessionCookie();
   await prisma.collectionSetup.create({ data: {
