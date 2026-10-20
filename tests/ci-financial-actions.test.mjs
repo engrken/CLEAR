@@ -346,6 +346,71 @@ test("categorized package remittance cannot charge another category", async () =
   } }), 0);
 });
 
+test("audited restoration of a receipt-backed missing Fund keeps every balance unchanged", async () => {
+  const { cookie, org } = await ciSessionCookie();
+  const student = await prisma.student.findFirstOrThrow({ where: { organizationId: org.id } });
+  const targetFund = "CI Legacy FCUSR Pool";
+  await prisma.collectionSetup.create({ data: {
+    organizationId: org.id, academicYear: ay, term, category: "Departmental Fee",
+    name: "CI Legacy FCUSR Activity", amount: 100, targetFund, isPackage: true,
+  } });
+  await prisma.collection.create({ data: {
+    organizationId: org.id, academicYear: ay, term,
+    date: new Date("2026-10-20T12:00:00Z"), studentId: student.id,
+    studentName: student.fullName, orNumber: "CI-LEGACY-FUND-001",
+    category: "Departmental Fee", itemDescription: "CI Legacy FCUSR Activity",
+    paymentType: "Full Payment", standardRate: 100, amountPaid: 100,
+    balanceDue: 0, fundAllocation: targetFund, status: "Valid", encodedBy: "CI Legacy",
+  } });
+  const existing = await prisma.fund.findMany({
+    where: { organizationId: org.id, academicYear: ay, term }, orderBy: { fundName: "asc" },
+  });
+  const snapshot = existing.map(f => ({ id: f.id, fundName: f.fundName, amount: f.initialAllocation }));
+  const funds = [
+    ...snapshot.map(f => ({ ...f })),
+    { fundName: targetFund, amount: 0 },
+  ];
+  const before = await prisma.collection.aggregate({
+    where: { organizationId: org.id, fundAllocation: targetFund },
+    _count: { _all: true }, _sum: { amountPaid: true },
+  });
+
+  const nonZero = await post(cookie, "restoreFund", {
+    ay, term, snapshot,
+    funds: [...snapshot, { fundName: targetFund, amount: 100 }],
+    reason: "Attempt to seed a funded historical pool",
+  });
+  assert.equal(nonZero.status, 409, JSON.stringify(nonZero.body));
+  assert.match(nonZero.body.error, /zero|₱0.00/i);
+
+  const noReason = await post(cookie, "restoreFund", {
+    ay, term, snapshot, funds, reason: "short",
+  });
+  assert.equal(noReason.status, 409, JSON.stringify(noReason.body));
+  assert.match(noReason.body.error, /audit reason/i);
+
+  const result = await post(cookie, "restoreFund", {
+    ay, term, snapshot, funds,
+    reason: "Restore original historical receipt-backed pool with zero opening.",
+  });
+  assert.equal(result.status, 200, JSON.stringify(result.body));
+  const restored = await prisma.fund.findFirstOrThrow({
+    where: { organizationId: org.id, academicYear: ay, term, fundName: targetFund },
+  });
+  assert.equal(restored.initialAllocation, 0);
+  assert.equal(restored.currentBalance, 0);
+  const after = await prisma.collection.aggregate({
+    where: { organizationId: org.id, fundAllocation: targetFund },
+    _count: { _all: true }, _sum: { amountPaid: true },
+  });
+  assert.deepEqual(after, before, "Legacy receipt rows and paid totals remain unchanged");
+  const log = await prisma.systemLog.findFirst({
+    where: { organizationId: org.id, action: "SETUP_FUNDS" },
+    orderBy: { timestamp: "desc" },
+  });
+  assert.match(log?.details || "", /RESTORED CONFIGURATION CI Legacy FCUSR Pool/i);
+});
+
 test.after(async () => {
   await prisma.$disconnect();
 });
