@@ -11,3 +11,4 @@ jobs:
       - run: npm ci
       - run: npm run test:finance
       - run: npx tsc --noEmit
+      - run: npm run build
