@@ -65,6 +65,14 @@ test('cashier payment requests are durable and safe to retry', () => {
   assert.ok(form.includes('pendingPayment.current.requestId'));
   assert.ok(form.includes('crypto.randomUUID()'));
 });
+test('cashier refuses forged fees without a unique configured assessment', () => {
+  const action = read('app/department/[department]/(protected)/collections/actions.ts');
+  assert.ok(action.includes('const matchingSetups = await tx.collectionSetup.findMany('));
+  assert.ok(action.includes('matchingSetups.length !== 1'));
+  assert.ok(action.includes('const rateCents = toCents(setup.amount)'));
+  assert.ok(!action.includes('toCents(money(data.standardRate, "Standard rate"))'));
+});
+
 test('server payments validate real configured funds', () => {
   const cashier = read('app/department/[department]/(protected)/collections/actions.ts');
   const remittances = read('app/department/[department]/(protected)/remittances/actions.ts');

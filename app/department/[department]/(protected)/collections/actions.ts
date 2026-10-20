@@ -233,16 +233,24 @@ export async function recordPayment(department: string, data: {
       if (/^Penalty Fine\s*(?:\[|:)/i.test(itemDescription) || /^penalt(?:y|ies)$/i.test(category)) {
         throw new Error("Penalty payments must start from Penalty Logs → Pay in Cash and include the penalty reference.");
       }
-      // Trust the configured rate/fund instead of editable client input when there is a matching setup.
-      const setup = await tx.collectionSetup.findFirst({ where: {
+      // The cashier UI only offers configured fee items. Enforce the same
+      // policy on the server, not on editable client-provided fee details.
+      const matchingSetups = await tx.collectionSetup.findMany({ where: {
         organizationId: org.id, academicYear: ay, term, category,
         name: itemDescription,
       } });
-      const rateCents = setup ? toCents(setup.amount) : toCents(money(data.standardRate, "Standard rate"));
+      if (matchingSetups.length !== 1) {
+        throw new Error(matchingSetups.length === 0
+          ? "This fee is not configured in Fee Setup for this department and term."
+          : "Multiple fee setups match this category and item. Resolve the duplicate in Fee Setup before posting.");
+      }
+      const setup = matchingSetups[0];
+      const rateCents = toCents(setup.amount);
+      if (rateCents <= 0) throw new Error("Configured fee rate must be positive before accepting payments.");
       const previous = prevFor(itemDescription);
       const remaining = Math.max(0, rateCents - previous);
       if (paidCents > remaining) throw new Error(`Payment exceeds the remaining due of ₱${(remaining / 100).toFixed(2)}.`);
-      const fund = String(setup?.targetFund || fundAllocation).trim();
+      const fund = String(setup.targetFund || "").trim();
       if (!fund || fund === "Multiple Funds (Package Split)") throw new Error("Choose a valid destination fund.");
       entries.push({ name: itemDescription, fund, rateCents, paidCents,
         balanceCents: remaining - paidCents });

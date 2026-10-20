@@ -143,6 +143,11 @@ test("authenticated simultaneous remittance approval produces one receipt, then 
 test("cashier posting rejects a nonexistent target fund", async () => {
   const { cookie, org } = await ciSessionCookie();
   const requestId = randomUUID();
+  await prisma.collectionSetup.create({ data: {
+    organizationId: org.id, academicYear: ay, term, category: "Other",
+    name: "Ad hoc QA Fee", amount: 7,
+    targetFund: "Unconfigured Fund", isPackage: false,
+  } });
   const before = await prisma.collection.count({ where: { organizationId: org.id } });
   const data = { requestId, date: "2026-10-20", studentId: "CI-FIN-STUDENT-001",
     studentName: "CI Synthetic Student", studentEmail: "", category: "Other",
@@ -153,6 +158,44 @@ test("cashier posting rejects a nonexistent target fund", async () => {
   assert.match(response.body.error, /not configured/i);
   assert.equal(await prisma.collection.count({ where: { organizationId: org.id } }), before);
   assert.equal(await prisma.paymentRequest.count({ where: { organizationId: org.id, requestId } }), 0);
+});
+
+test("cashier rejects a fabricated client fee even when the destination fund exists", async () => {
+  const { cookie, org } = await ciSessionCookie();
+  const requestId = randomUUID();
+  const priorReceipts = await prisma.collection.count({ where: { organizationId: org.id } });
+  const response = await post(cookie, "cashier", {
+    requestId, date: "2026-10-20", studentId: "CI-FIN-STUDENT-001",
+    studentName: "CI Synthetic Student", studentEmail: "",
+    category: "Client-Forged", itemDescription: "Fee Without Setup",
+    paymentType: "Full Payment", standardRate: 25000,
+    amountPaid: 25000, fundAllocation: "General Fund", ay, term,
+  });
+  assert.equal(response.status, 409, JSON.stringify(response.body));
+  assert.match(response.body.error, /not configured in fee setup/i);
+  assert.equal(await prisma.collection.count({ where: { organizationId: org.id } }), priorReceipts);
+  assert.equal(await prisma.paymentRequest.count({ where: { organizationId: org.id, requestId } }), 0);
+});
+
+test("cashier refuses ambiguous duplicated fee setups", async () => {
+  const { cookie, org } = await ciSessionCookie();
+  const feeName = "Duplicated QA Fee";
+  await prisma.collectionSetup.createMany({ data: [1, 2].map(n => ({
+    organizationId: org.id, academicYear: ay, term,
+    category: "Other", name: feeName, amount: n * 40,
+    targetFund: "General Fund", isPackage: false,
+  })) });
+  const prior = await prisma.collection.count({ where: { organizationId: org.id } });
+  const response = await post(cookie, "cashier", {
+    requestId: randomUUID(), date: "2026-10-20", studentId: "CI-FIN-STUDENT-001",
+    studentName: "CI Synthetic Student", studentEmail: "", category: "Other",
+    itemDescription: feeName, paymentType: "Partial Payment",
+    standardRate: 80, amountPaid: 15,
+    fundAllocation: "General Fund", ay, term,
+  });
+  assert.equal(response.status, 409, JSON.stringify(response.body));
+  assert.match(response.body.error, /multiple fee setups/i);
+  assert.equal(await prisma.collection.count({ where: { organizationId: org.id } }), prior);
 });
 
 test("remittance approval rejects fee setups with missing target funds", async () => {
