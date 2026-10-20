@@ -3,6 +3,7 @@
 "use client";
 import { manilaDateInput, formatManilaDateTime24 } from '@/lib/clear-timezone';
 import { clearAlert, clearConfirm, clearPrompt } from "@/lib/clear-dialogs";
+import { canOfferLegacyCashReconciliation } from "@/lib/penalty-reconciliation-eligibility";
 
 
 import { useState, useMemo } from "react";
@@ -640,7 +641,7 @@ export default function PenaltiesManager({
                                     style={{ fontSize: "0.75rem" }} onClick={() => setHistoryPenaltyId(p.id)}>
                                     Transaction History
                                   </button>
-                                  {canReconcile && !periodClosed && /^SETTLED\s*\(CASH PAYMENT/i.test(p.status || "") && Number(p.fineAmount) === 0 && (
+                                  {canOfferLegacyCashReconciliation(p, historyByPenalty[p.id], canReconcile, periodClosed) && (
                                     <button type="button" className="btn btn-outline-warning btn-xs py-1 w-100 small"
                                       onClick={() => void handleReconcileLegacyCash(p)}>
                                       Reconcile Old Cash Status
