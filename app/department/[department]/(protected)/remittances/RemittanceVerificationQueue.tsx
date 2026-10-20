@@ -53,7 +53,7 @@ export default function RemittanceVerificationQueue({
   const [activeProof, setActiveProof] = useState<{ url: string; name: string } | null>(null);
   
   const [verifyingItem, setVerifyingItem] = useState<OnlineRemittanceItem | null>(null);
-  const [fundAllocation, setFundAllocation] = useState(funds[0]?.fundName || "General Fund (Carried Over)");
+  const [fundAllocation, setFundAllocation] = useState(funds[0]?.fundName || "");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [voidingId, setVoidingId] = useState<string | null>(null);
   const voidVerifiedRemittance = async (item: OnlineRemittanceItem) => {
@@ -86,13 +86,16 @@ export default function RemittanceVerificationQueue({
 
   const handleOpenVerify = (item: OnlineRemittanceItem) => {
     setVerifyingItem(item);
-    setFundAllocation(funds[0]?.fundName || "General Fund (Carried Over)");
+    setFundAllocation(funds[0]?.fundName || "");
   };
 
   const handleVerifySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!verifyingItem) return;
     if (closed) return void clearAlert("This accounting term is closed by a rollover.");
+    if (!fundAllocation || !funds.some(f => f.fundName === fundAllocation)) {
+      return void clearAlert("No configured destination fund is selected for this academic term.");
+    }
 
     setIsSubmitting(true);
     try {
@@ -312,16 +315,16 @@ export default function RemittanceVerificationQueue({
                       value={fundAllocation} 
                       onChange={e => setFundAllocation(e.target.value)}
                     >
+                      {funds.length === 0 && <option value="">No configured funds</option>}
                       {funds.map(f => <option key={f.id} value={f.fundName}>{f.fundName}</option>)}
-                      <option value="General Fund (Carried Over)">General Fund (Carried Over)</option>
                     </select>
-                    <div className="form-text small opacity-75">Select the fund pool where this payment should be deposited.</div>
+                    <div className="form-text small opacity-75">Select an authorized fund for ad hoc payments. Configured fees and packages use their assigned Fee Setup fund(s).</div>
                   </div>
                   
                 </div>
                 <div className="modal-footer border-secondary bg-body-secondary">
                   <button type="button" className="btn btn-secondary btn-sm" onClick={() => setVerifyingItem(null)}>Cancel</button>
-                  <button type="submit" className="btn btn-success btn-sm fw-bold text-dark" disabled={isSubmitting || closed}>
+                  <button type="submit" className="btn btn-success btn-sm fw-bold text-dark" disabled={isSubmitting || closed || !fundAllocation}>
                     {isSubmitting ? "Issuing OR..." : "Confirm & Issue Official Receipt"}
                   </button>
                 </div>

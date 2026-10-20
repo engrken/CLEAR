@@ -30,6 +30,13 @@ try {
       category: "Membership", name: "Membership Fee", amount: 150,
       targetFund: "General Fund", isPackage: true },
   });
+  // A real student-assessment marker must be reduced by both cashier and
+  // online remittance receipts within their respective transactions.
+  await prisma.collectible.create({
+    data: { organizationId: org.id, academicYear: ay, term,
+      category: "Membership", headcount: 1, balanceDue: 150,
+      status: "Unpaid|SID:CI-FIN-STUDENT-001|ITEM:Membership%20Fee" },
+  });
   await prisma.onlineRemittance.create({
     data: { organizationId: org.id, submissionId: "CI-FIN-REMIT-001",
       academicYear: ay, term, studentId: "CI-FIN-STUDENT-001",

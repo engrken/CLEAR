@@ -78,6 +78,11 @@ test("authenticated cashier concurrent identical requests post once, reject alte
   assert.equal(receipts.length, 1, "No extra posted receipts from concurrent identical requests");
   assert.equal(receipts[0].amountPaid, 40);
   assert.equal(receipts[0].balanceDue, 110);
+  const assessedAfterCashier = await prisma.collectible.findFirstOrThrow({
+    where: { organizationId: org.id, category: "Membership" },
+  });
+  assert.equal(assessedAfterCashier.balanceDue, 110,
+    "Cashier receipt must reduce the actual student assessment inside its transaction");
   assert.equal(requests.length, 1);
   assert.equal(requests[0].orNumber, firstOr);
   assert.ok(deliveries.length <= 1, "One maximum digital receipt per intended test officer");
@@ -122,6 +127,11 @@ test("authenticated simultaneous remittance approval produces one receipt, then 
   assert.equal(receipts[0].category, "Membership",
     "Configured remittance must use the fee category instead of generic Online Remittance");
   assert.equal(receipts[0].fundAllocation, "General Fund");
+  const assessedAfterRemittance = await prisma.collectible.findFirstOrThrow({
+    where: { organizationId: org.id, category: "Membership" },
+  });
+  assert.equal(assessedAfterRemittance.balanceDue, 90,
+    "Verified remittance must reduce the matched student assessment rather than leaving a phantom due");
   assert.equal(logs.length, 1);
 
   const mismatch = await post(cookie, "remittance", { ...data, amount: 21 });

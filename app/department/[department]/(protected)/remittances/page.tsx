@@ -66,9 +66,12 @@ export default async function RemittancesPage({
     studentId: r.studentId ?? '',
   }));
 
-  const fundOptions = ledger.funds.filter(f => f.balance >= 0).map(f => ({
-    id: f.name, fundName: f.name
-  }));
+  // A historic ledger bucket can exist without a configured Fund row.
+  // Only show official configured destinations in the approval dialog.
+  const fundOptions = funds.filter(f => ledger.funds.some(balance =>
+    balance.name.trim().toLowerCase() === f.fundName.trim().toLowerCase() &&
+    balance.balance >= 0
+  )).map(f => ({ id: f.id, fundName: f.fundName }));
 
   return (
     <div className="module card p-3 p-md-4 border-secondary shadow-sm bg-body text-body">
