@@ -267,9 +267,19 @@ export async function saveInitialFunds(
       if (orphanRestorations.length > 0) {
         const before = new Map(baselineLedger.funds.map(f => [f.name, Math.round(f.balance * 100)]));
         const after = new Map(ledger.funds.map(f => [f.name, Math.round(f.balance * 100)]));
+        // Restoring a referenced pool can also create the required system
+        // Penalty Fund with a ZERO opening balance. That harmless new zero
+        // bucket must not cause rejection; all PREEXISTING buckets and the
+        // total must remain identical, and all newly introduced buckets
+        // must have exactly zero balance.
+        const existingBalanceChanged = [...before].some(
+          ([name, amount]) => after.get(name) !== amount
+        );
+        const newNonzeroBalance = [...after].some(
+          ([name, amount]) => !before.has(name) && amount !== 0
+        );
         if (Math.round(baselineLedger.totalRemaining * 100) !== Math.round(ledger.totalRemaining * 100) ||
-            before.size !== after.size ||
-            [...before].some(([name, amount]) => after.get(name) !== amount)) {
+            existingBalanceChanged || newNonzeroBalance) {
           throw new Error("Restoring this fund configuration would change the existing financial ledger. No changes were saved.");
         }
       }
