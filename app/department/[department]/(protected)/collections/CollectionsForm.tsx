@@ -5,7 +5,7 @@ import { manilaDateInput, formatManilaLongDate } from '@/lib/clear-timezone';
 import { clearAlert, clearConfirm, clearPrompt } from "@/lib/clear-dialogs";
 
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { fmt, formatHoursAndMinutes } from "@/lib/utils";
 import { recordPayment } from "./actions";
 import { ThemedAlert } from "@/lib/clear-dialogs";
@@ -85,6 +85,7 @@ export default function CollectionsForm({
   const [amountPaid, setAmountPaid] = useState(prefillAmount || "");
   const [fundAllocation, setFundAllocation] = useState("");
 
+  const pendingPayment = useRef<{ signature: string; requestId: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [receiptData, setReceiptData] = useState<any>(null);
 
@@ -241,23 +242,22 @@ export default function CollectionsForm({
       return;
     }
 
+    if (isSubmitting) return;
+    const requestPayload = {
+      date, studentId, studentName, studentEmail, category, itemDescription,
+      paymentType, standardRate: standardRate || paid, amountPaid: paid,
+      fundAllocation, ay, term, penaltyId: penaltyId || undefined,
+    };
+    const signature = JSON.stringify(requestPayload);
+    if (!pendingPayment.current || pendingPayment.current.signature !== signature) {
+      pendingPayment.current = { signature, requestId: crypto.randomUUID() };
+    }
     setIsSubmitting(true);
     try {
       const result = await recordPayment(department, {
-        date,
-        studentId,
-        studentName,
-        studentEmail,
-        category,
-        itemDescription,
-        paymentType,
-        standardRate: standardRate || paid,
-        amountPaid: paid,
-        fundAllocation,
-        ay,
-        term,
-        penaltyId: penaltyId || undefined,
+        ...requestPayload, requestId: pendingPayment.current.requestId,
       });
+      pendingPayment.current = null;
 
       setReceiptData({
         orNumber: result.orNumber,

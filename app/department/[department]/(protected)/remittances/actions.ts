@@ -7,7 +7,7 @@ import { requireTabAccess } from '@/lib/permissions';
 import { revalidatePath } from 'next/cache';
 import { headers } from 'next/headers';
 import { withFinancialTransaction } from '@/lib/financial-transaction';
-import { allocateOfficialReceiptNumber, receiptNumberConflictWhere } from "@/lib/receipt-number";
+import { allocateOfficialReceiptNumber } from "@/lib/receipt-number";
 import { randomUUID, createHash } from 'node:crypto';
 import { getPeriodLedger, toCents } from '../realign/ledger';
 import { assertAcademicPeriod } from '@/lib/academic-period-guard';
@@ -79,6 +79,18 @@ export async function verifyOnlineRemittance(
       id: data.remittanceId, organizationId: org.id,
     } });
     if (!remit) throw new Error("Online submission was not found in this organization.");
+    if (String(remit.status || "").toUpperCase() === "VERIFIED" && remit.orNumber) {
+      const prior = await tx.collection.findFirst({ where: {
+        organizationId: org.id, orNumber: remit.orNumber, status: "Valid",
+      }, select: { id: true } });
+      if (!prior) throw new Error("This remittance was reviewed but its receipt is no longer valid.");
+      if (remit.academicYear !== data.ay || remit.term !== data.term ||
+          String(remit.studentId || "").trim() !== String(data.studentId || "").trim()) {
+        throw new Error("Previously verified remittance does not match this request.");
+      }
+      orNumber = remit.orNumber;
+      return;
+    }
     if (!["PENDING", "PENDING VERIFICATION"].includes(String(remit.status || "").toUpperCase())) {
       throw new Error("This submission was already reviewed. Refresh the queue.");
     }
@@ -161,8 +173,6 @@ export async function verifyOnlineRemittance(
         category: String(remit.category || "Online Remittance") });
     }
 
-    const existingOr = await tx.collection.findFirst({ where: receiptNumberConflictWhere(org.id, orNumber), select: { id: true } });
-    if (existingOr) throw new Error(`Official receipt ${orNumber} or its package lines already exist.`);
     const updated = await tx.onlineRemittance.updateMany({ where: {
       id: remit.id, organizationId: org.id, status: remit.status,
     }, data: { status: "Verified", reviewedBy: officerName, orNumber } });

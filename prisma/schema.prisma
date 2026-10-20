@@ -105,6 +105,18 @@ model Fund {
   @@unique([organizationId, academicYear, term, fundName])
 }
 
+model PaymentRequest {
+  id             String   @id @default(cuid())
+  organizationId String
+  requestId      String
+  payloadHash    String
+  orNumber       String
+  outcomeJson    String
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  @@unique([organizationId, requestId])
+  @@index([organizationId, orNumber])
+}
+
 model Collection {
   penaltySettlementEvents PenaltySettlementEvent[]
   id                      String                   @id @default(uuid())

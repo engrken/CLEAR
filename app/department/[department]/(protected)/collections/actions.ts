@@ -1,4 +1,5 @@
 "use server";
+import { createHash } from "node:crypto";
 import { parseClearAccountingDate } from '@/lib/clear-timezone';
 
 import { prisma } from "@/lib/prisma";
@@ -6,7 +7,7 @@ import { requireTabAccess } from "@/lib/permissions";
 import { enqueuePaymentReceipt, scheduleDigitalReceiptDispatch } from "@/lib/digital-receipts";
 import { revalidatePath } from "next/cache";
 import { withFinancialTransaction } from "@/lib/financial-transaction";
-import { allocateOfficialReceiptNumber } from "@/lib/receipt-number";
+import { allocateOfficialReceiptNumber, lockReceiptNumber } from "@/lib/receipt-number";
 import { getPeriodLedger, toCents } from "../realign/ledger";
 import { applyPaymentToStudentCollectibles } from "../collectibles/due-link";
 import { PENALTY_FUND_NAME } from "@/lib/penalty-fund";
@@ -36,7 +37,7 @@ function escapeHtml(value: unknown): string {
 }
 
 export async function recordPayment(department: string, data: {
-  orNumber?: string; date: string; studentId: string; studentName: string;
+  requestId: string; orNumber?: string; date: string; studentId: string; studentName: string;
   studentEmail?: string; category: string; itemDescription: string;
   paymentType: string; standardRate: number; amountPaid: number;
   fundAllocation: string; ay: string; term: string; penaltyId?: string;
@@ -52,10 +53,21 @@ export async function recordPayment(department: string, data: {
   const term = String(data.term || "").trim();
   const category = String(data.category || "").trim();
   const itemDescription = String(data.itemDescription || "").trim();
+  const requestId = String(data.requestId || "").trim();
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId)) {
+    throw new Error("A valid payment request ID is required.");
+  }
   let orNumber = "";
   const fundAllocation = String(data.fundAllocation || "").trim();
   const paid = money(data.amountPaid, "Payment");
   const date = dateOnly(data.date);
+  const payloadHash = createHash("sha256").update(JSON.stringify({
+    ay, term, category, itemDescription, fundAllocation,
+    studentId: String(data.studentId || "").trim().toLowerCase(),
+    date: date.toISOString().slice(0, 10), amountCents: toCents(paid),
+    standardRateCents: toCents(Number(data.standardRate || 0)),
+    penaltyId: String(data.penaltyId || "").trim(),
+  })).digest("hex");
   if (!ay || !term || !category || !itemDescription || !data.studentId) {
     throw new Error("Student, category, item, academic year and term are required.");
   }
@@ -68,6 +80,21 @@ export async function recordPayment(department: string, data: {
   let postedDescription = itemDescription;
 
   const postOnce = async () => withFinancialTransaction(async (tx) => {
+    await lockReceiptNumber(tx, org.id, "REQ-" + requestId.toUpperCase());
+    const priorRequest = await tx.paymentRequest.findUnique({
+      where: { organizationId_requestId: { organizationId: org.id, requestId } },
+    });
+    if (priorRequest) {
+      if (priorRequest.payloadHash !== payloadHash) throw new Error("Payment request ID was reused with different payment details.");
+      const liveReceipt = await tx.collection.findFirst({ where: {
+        organizationId: org.id, orNumber: priorRequest.orNumber, status: "Valid",
+      }, select: { id: true } });
+      if (!liveReceipt) throw new Error("This payment was posted but its receipt is now voided or invalid. Contact the auditor.");
+      return JSON.parse(priorRequest.outcomeJson) as {
+        success: true; orNumber: string; balanceDue: number; paymentEntries: number;
+        paymentType: string; itemDescription: string;
+      };
+    }
     await assertAcademicPeriod(tx, org.id, ay, term);
     const ledger = await getPeriodLedger(tx, org.id, ay, term);
     if (ledger.activeRollover) throw new Error("This academic term is closed by a carry-over. Reverse the rollover before recording payments.");
@@ -252,15 +279,21 @@ export async function recordPayment(department: string, data: {
       details: `OR ${orNumber}: ₱${paid.toFixed(2)} from ${studentName} for ${penaltyId ? `penalty ${penaltyId}` : itemDescription}, across ${entries.length} fund line(s).`,
     } });
     await enqueuePaymentReceipt(tx, { organizationId: org.id, orNumber, officerName, officerEmail: String(officer.email || ""), source: "COLLECTION" });
+    const outcome = { success: true as const, orNumber, balanceDue, paymentEntries,
+      paymentType: actualPaymentType, itemDescription: postedDescription };
+    await tx.paymentRequest.create({ data: {
+      organizationId: org.id, requestId, payloadHash, orNumber, outcomeJson: JSON.stringify(outcome),
+    } });
+    return outcome;
   });
 
-  await postOnce();
+  const committed = await postOnce();
 
   // Digital receipts are delivered from the transactional outbox after commit.
-  scheduleDigitalReceiptDispatch(org.id, `payment:${orNumber}`);
+  scheduleDigitalReceiptDispatch(org.id, `payment:${committed.orNumber}`);
   for (const part of ["collections", "penalties", "clearance", "realign", "summary", "reports", "cashier-remittance", "collectibles"]) {
     revalidatePath(`/department/${cleanDepartment}/${part}`);
   }
   revalidatePath(`/department/${cleanDepartment}`);
-  return { success: true, orNumber, balanceDue, paymentEntries, paymentType: actualPaymentType, itemDescription: postedDescription };
+  return committed;
 }

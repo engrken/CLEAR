@@ -51,3 +51,22 @@ test('collection posting keeps ledger and receipt writes in the same transaction
   assert.ok(source.includes('await tx.collection.create('));
   assert.ok(source.includes('await enqueuePaymentReceipt(tx,'));
 });
+
+test('cashier payment requests are durable and safe to retry', () => {
+  const action = read('app/department/[department]/(protected)/collections/actions.ts');
+  const form = read('app/department/[department]/(protected)/collections/CollectionsForm.tsx');
+  const schema = read('prisma/schema.prisma');
+  assert.ok(schema.includes('model PaymentRequest {'));
+  assert.ok(schema.includes('@@unique([organizationId, requestId])'));
+  assert.ok(action.includes('await tx.paymentRequest.findUnique('));
+  assert.ok(action.includes('priorRequest.payloadHash !== payloadHash'));
+  assert.ok(action.includes('await tx.paymentRequest.create('));
+  assert.ok(action.includes('if (!liveReceipt)'));
+  assert.ok(form.includes('pendingPayment.current.requestId'));
+  assert.ok(form.includes('crypto.randomUUID()'));
+});
+test('remittance retry verifies original live receipt', () => {
+  const source = read('app/department/[department]/(protected)/remittances/actions.ts');
+  assert.ok(source.includes('String(remit.status || "").toUpperCase() === "VERIFIED"'));
+  assert.ok(source.includes('if (!prior) throw new Error('));
+});
