@@ -57,7 +57,6 @@ export async function recordPayment(department: string, data: {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId)) {
     throw new Error("A valid payment request ID is required.");
   }
-  let orNumber = "";
   const fundAllocation = String(data.fundAllocation || "").trim();
   const paid = money(data.amountPaid, "Payment");
   const date = dateOnly(data.date);
@@ -72,14 +71,15 @@ export async function recordPayment(department: string, data: {
     throw new Error("Student, category, item, academic year and term are required.");
   }
 
-  let actualPaymentType = "Partial Payment";
-  let balanceDue = 0;
-  let studentName = "";
-  let studentEmail = "";
-  let paymentEntries = 0;
-  let postedDescription = itemDescription;
-
+  // State belongs to one transaction attempt; Serializable retries must not
+  // inherit values from an attempt that was rolled back.
   const postOnce = async () => withFinancialTransaction(async (tx) => {
+    let orNumber = "";
+    let actualPaymentType = "Partial Payment";
+    let balanceDue = 0;
+    let studentName = "";
+    let paymentEntries = 0;
+    let postedDescription = itemDescription;
     await lockReceiptNumber(tx, org.id, "REQ-" + requestId.toUpperCase());
     const priorRequest = await tx.paymentRequest.findUnique({
       where: { organizationId_requestId: { organizationId: org.id, requestId } },
@@ -107,7 +107,6 @@ export async function recordPayment(department: string, data: {
     });
     if (!student) throw new Error("Student is not registered in this department.");
     studentName = student.fullName;
-    studentEmail = String(student.email || "").trim();
 
     orNumber = await allocateOfficialReceiptNumber(tx, org.id);
 

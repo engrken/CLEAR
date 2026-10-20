@@ -85,7 +85,9 @@ export async function verifyOnlineRemittance(
       }, select: { id: true } });
       if (!prior) throw new Error("This remittance was reviewed but its receipt is no longer valid.");
       if (remit.academicYear !== data.ay || remit.term !== data.term ||
-          String(remit.studentId || "").trim() !== String(data.studentId || "").trim()) {
+          String(remit.studentId || "").trim().toLowerCase() !== String(data.studentId || "").trim().toLowerCase() ||
+          toCents(remit.amountPaid) !== toCents(data.amount) ||
+          String(remit.itemDescription || "Online Payment").trim() !== String(data.particulars || "").trim()) {
         throw new Error("Previously verified remittance does not match this request.");
       }
       orNumber = remit.orNumber;
