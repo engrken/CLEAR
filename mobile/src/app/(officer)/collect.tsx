@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { api, type ApiError, type FeeItem, type Student } from '@/api';
@@ -23,6 +23,8 @@ export default function Collect() {
   const [orNumber, setOrNumber] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  // Synchronous guard: state updates alone do not prevent rapid double taps.
+  const submittingRef = useRef(false);
   const [recorded, setRecorded] = useState<string>();
 
   const enrolled = (students.data ?? []).filter((s) => isEnrolled(s.enrollmentStatus));
@@ -36,6 +38,7 @@ export default function Collect() {
   };
 
   const submit = async () => {
+    if (submittingRef.current) return;
     const e: Record<string, string> = {};
     const pesos = Number(amount.replace(/,/g, ''));
     if (!studentId) e.student = 'Choose the student who paid.';
@@ -45,6 +48,7 @@ export default function Collect() {
     setErrors(e);
     if (Object.keys(e).length) return;
 
+    submittingRef.current = true;
     setBusy(true);
     try {
       const entry = await api.recordPayment(session, {
@@ -60,6 +64,7 @@ export default function Collect() {
       else if (e.code === 'overpayment') setErrors({ amount: e.message });
       else setErrors({ form: e.message });
     } finally {
+      submittingRef.current = false;
       setBusy(false);
     }
   };
