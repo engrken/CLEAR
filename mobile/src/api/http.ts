@@ -2,7 +2,7 @@
 
 import { Platform } from 'react-native';
 
-import { API_URL } from './config';
+import { API_URL, PAYMENT_WRITES_ENABLED } from './config';
 import { fallbackMessage } from './errors';
 import { ApiError, type ClearApi, type Session } from './types';
 
@@ -98,10 +98,10 @@ export const httpApi: ClearApi = {
   getDashboard: (s) => request(`${org(s.org.subdomain)}/dashboard`, as(s)),
   listLedger: (s, f) => request(`${org(s.org.subdomain)}/ledger`, { ...as(s), query: { status: f?.status, limit: f?.limit } }),
   listStudents: (s, q) => request(`${org(s.org.subdomain)}/students`, { ...as(s), query: { q } }),
-  recordPayment: (s, p) => request(`${org(s.org.subdomain)}/payments`, { method: 'POST', ...as(s), idempotencyKey: p.idempotencyKey, json: { studentId: p.studentId, feeId: p.feeId, amountCentavos: p.amountCentavos, orNumber: p.orNumber.trim() } }),
+  recordPayment: (s, p) => PAYMENT_WRITES_ENABLED ? request(`${org(s.org.subdomain)}/payments`, { method: 'POST', ...as(s), idempotencyKey: p.idempotencyKey, json: { studentId: p.studentId, feeId: p.feeId, amountCentavos: p.amountCentavos, orNumber: p.orNumber.trim() } }) : Promise.reject(new ApiError('Payment posting is disabled until Android financial parity is verified.', 'unavailable')),
   getRemittance: (s, id) => request(`${org(s.org.subdomain)}/remittances/${encodeURIComponent(id)}`, as(s)),
-  verifyRemittance: (s, id, p) =>
-    request(`${org(s.org.subdomain)}/remittances/${encodeURIComponent(id)}/verify`, { method: 'POST', ...as(s), json: { ...p, orNumber: p.orNumber.trim() } }),
-  invalidateRemittance: (s, id) =>
-    request(`${org(s.org.subdomain)}/remittances/${encodeURIComponent(id)}/invalidate`, { method: 'POST', ...as(s) }),
+  verifyRemittance: (s, id, p) => PAYMENT_WRITES_ENABLED ?
+    request(`${org(s.org.subdomain)}/remittances/${encodeURIComponent(id)}/verify`, { method: 'POST', ...as(s), json: { ...p, orNumber: p.orNumber.trim() } }) : Promise.reject(new ApiError('Remittance verification is disabled until Android financial parity is verified.', 'unavailable')),
+  invalidateRemittance: (s, id) => PAYMENT_WRITES_ENABLED ?
+    request(`${org(s.org.subdomain)}/remittances/${encodeURIComponent(id)}/invalidate`, { method: 'POST', ...as(s) }) : Promise.reject(new ApiError('Remittance invalidation is disabled until Android financial parity is verified.', 'unavailable')),
 };
