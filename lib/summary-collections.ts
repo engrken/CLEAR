@@ -38,11 +38,22 @@ function isVoided(row: SummaryReceipt): boolean {
   return /VOID|CANCEL/i.test(String(row.status || "") + " " + String(row.paymentType || ""));
 }
 
+const PENALTY_SUMMARY_LABEL = "Penalty / Fines";
+
+/** All historic penalty receipt formats share ONE presentation group.
+ * This is display-only: the original receipt category, OR and allocated fund
+ * remain authoritative in the ledger, and are never rewritten here.
+ */
+function isPenaltyItem(description: string): boolean {
+  return /^Penalty\s*\/\s*Fines$/i.test(description) ||
+    /^Penalty Fine(?:\s*\[[^\]]*\])?(?::|$)/i.test(description);
+}
+
 function displayItemName(description: string, fallbackCategory: string): string {
   const desc = description.trim();
-  // Historic receipt descriptions can contain individual penalty reference IDs.
-  // The summary aggregates by type and must not expose those identifiers.
-  if (/^Penalty Fine\s*\[[^\]]*\]/i.test(desc)) return "Penalty / Fines";
+  // The summary aggregates historical cash settlement descriptions by type,
+  // not by penalty ID, so names and references are not exposed to the client.
+  if (isPenaltyItem(desc)) return PENALTY_SUMMARY_LABEL;
   // Do not expose student names/IDs embedded in legacy arrears item labels.
   const arrears = /^Arrears:\s*(.+?)\s+-\s+.+\([^)]*\)\s*$/i.exec(desc);
   if (arrears) return "Arrears: " + arrears[1].trim();
@@ -92,18 +103,14 @@ export function itemizeCollectionsForSummary(
 
     const description = String(receipt.itemDescription || "").trim();
     const receiptCategory = String(receipt.category || "").trim();
-    let category = /^Penalty Fine(?:\s*\[|:)/i.test(description) ||
+    let category = isPenaltyItem(description) ||
       /^Penalty(?:\s*\/\s*Fines)?$/i.test(receiptCategory)
-      ? "Penalty"
+      ? PENALTY_SUMMARY_LABEL
       : (configuredCategories.has(receiptCategory.toLowerCase())
         ? receiptCategory
         : feeByName.get(description.toLowerCase()) || receiptCategory || "Other Collections");
 
     if (/^Departmental Fee Package/i.test(description)) category = "Departmental Fee";
-    if (receiptCategory.toLowerCase() === "others" && description.toLowerCase() === "penalty / fines") {
-      category = "Penalty / Fines";
-    }
-    if (/\[PEN-|^Penalty Fine/i.test(category)) category = "Penalty";
 
     const key = String(receipt.studentId || receipt.studentName || "").trim().toLowerCase();
 
