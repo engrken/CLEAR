@@ -39,6 +39,46 @@ jobs:
           test "$(psql -h localhost -U postgres -d postgres -Atc "SELECT COUNT(DISTINCT n) FROM (SELECT nextval('clear_receipt_sequence') n FROM generate_series(1, 1000)) s")" = "1000"
         env:
           PGPASSWORD: postgres
+      - name: Verify same-request cashier concurrency has one winner
+        run: |
+          set -euo pipefail
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE TABLE cashier_posting_probe (
+            request_id text NOT NULL,
+            or_number text PRIMARY KEY
+          );
+          SQL
+          pids=()
+          for i in $(seq 1 20); do
+            (
+              psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -qAt -c "
+                WITH accepted AS (
+                  INSERT INTO \"PaymentRequest\" (
+                    \"id\", \"organizationId\", \"requestId\", \"payloadHash\", \"orNumber\", \"outcomeJson\"
+                  ) VALUES (
+                    'parallel-$i', 'parallel-tenant', 'parallel-request-id',
+                    'same-payload-hash', 'OR-RACE-$i', '{}'
+                  )
+                  ON CONFLICT (\"organizationId\", \"requestId\") DO NOTHING
+                  RETURNING \"requestId\", \"orNumber\"
+                ), posted AS (
+                  INSERT INTO cashier_posting_probe (request_id, or_number)
+                  SELECT \"requestId\", \"orNumber\" FROM accepted
+                  RETURNING or_number
+                )
+                SELECT count(*) FROM posted
+              " >"/tmp/cashier-race-$i"
+            ) &
+            pids+=("$!")
+          done
+          for pid in "${pids[@]}"; do wait "$pid"; done
+
+          test "$(psql -h localhost -U postgres -d postgres -Atc "SELECT count(*) FROM \"PaymentRequest\" WHERE \"organizationId\" = 'parallel-tenant' AND \"requestId\" = 'parallel-request-id'")" = "1"
+          test "$(psql -h localhost -U postgres -d postgres -Atc "SELECT count(*) FROM cashier_posting_probe")" = "1"
+          test "$(psql -h localhost -U postgres -d postgres -Atc "SELECT count(*) FROM cashier_posting_probe b JOIN \"PaymentRequest\" r ON b.request_id = r.\"requestId\" AND b.or_number = r.\"orNumber\" WHERE r.\"organizationId\" = 'parallel-tenant'")" = "1"
+          test "$(cat /tmp/cashier-race-* | awk '{s += $1} END {print s+0}')" = "1"
+        env:
+          PGPASSWORD: postgres
       - name: Verify sequence survives rollback without reuse
         run: |
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
