@@ -51,3 +51,19 @@ jobs:
           test ! -s /tmp/duplicate-or-sequences
         env:
           PGPASSWORD: postgres
+      - name: Verify transaction rollback removes receipt rows
+        run: |
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE TABLE finance_rollback_probe (receipt_number bigint PRIMARY KEY, amount numeric NOT NULL);
+          BEGIN;
+          INSERT INTO finance_rollback_probe VALUES (nextval('clear_receipt_sequence'), 125.00);
+          ROLLBACK;
+          DO $$
+          BEGIN
+            IF EXISTS (SELECT 1 FROM finance_rollback_probe) THEN
+              RAISE EXCEPTION 'rollback left a partial receipt';
+            END IF;
+          END $$;
+          SQL
+        env:
+          PGPASSWORD: postgres
