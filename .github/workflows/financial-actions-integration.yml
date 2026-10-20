@@ -49,18 +49,10 @@ jobs:
         run: npm ci
       - name: Apply full Prisma migration history to disposable PostgreSQL
         run: npx prisma migrate deploy
-      - name: Report any drift between migration history and Prisma schema
-        run: |
-          npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --script > /tmp/clear-ci-schema-drift.sql
-          if test -s /tmp/clear-ci-schema-drift.sql; then
-            echo "The committed migration history does not yet reconstruct the current schema."
-            sed -n '1,120p' /tmp/clear-ci-schema-drift.sql
-          fi
-      - name: Reconcile disposable CI fixture to current application schema
-        # Existing Neon environments already have pre-v2.4 schema additions.
-        # This is NEVER run against staging or production and is NOT a
-        # substitute for reconciling the committed migration history.
-        run: npx prisma db push --skip-generate
+      - name: Require the complete migration history to match the application schema
+        # Never silently patch the disposable database with prisma db push.
+        # Failing here catches missing migrations before concurrency tests run.
+        run: npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code
       - name: Seed synthetic tenant, officer and remittance
         run: node tests/ci-financial-seed.mjs
       - name: Generate CI-only route and ephemeral request token
