@@ -84,7 +84,7 @@ test("legacy per-student penalty references are not shown as item names", () => 
     receipt({ category: "Penalty", itemDescription: "Penalty Fine [PEN-000012]", studentId: "s2", amountPaid: 8 }),
   ], setups);
   assert.deepEqual(result, [{
-    category: "Penalty",
+    category: "Penalty / Fines",
     items: [{ name: "Penalty / Fines", count: 2, amount: 20 }],
   }]);
 });
@@ -100,4 +100,36 @@ test("receipt sums reconcile over normal fee, merchandise, fines and carry-over"
   const result = itemizeCollectionsForSummary(rows, setups);
   assert.equal(allCents(result), Math.round(rows.reduce((sum, x) => sum + x.amountPaid, 0) * 100));
   assert.equal(result.length, 4);
+});
+
+test("the two restored PHP 50 penalty receipts and legacy PHP 442 receipt form one category and item", () => {
+  const sourceRows = [
+    receipt({ studentId: "de-leon", category: "Others",
+      itemDescription: "Penalty Fine [PEN-20260906-150021]: ASEAN", amountPaid: 50 }),
+    receipt({ studentId: "cabanban-john", category: "Others",
+      itemDescription: "Penalty Fine [PEN-20260906-145750]: ASEAN", amountPaid: 50 }),
+    receipt({ studentId: "cabanban-jay", category: "Others",
+      itemDescription: "Penalty / Fines", amountPaid: 442 }),
+  ];
+  const result = itemizeCollectionsForSummary(sourceRows, setups);
+  assert.deepEqual(result, [{
+    category: "Penalty / Fines",
+    items: [{ name: "Penalty / Fines", count: 3, amount: 542 }],
+  }]);
+  assert.equal(allCents(result), 54200);
+  assert.equal(JSON.stringify(result).includes("PEN-20260906"), false);
+});
+
+test("penalty group combines same student across separate ORs without double counting student", () => {
+  const result = itemizeCollectionsForSummary([
+    receipt({ studentId: "s1", category: "Penalty", itemDescription: "Penalty Fine [PEN-1]: ASEAN", amountPaid: 50 }),
+    receipt({ studentId: "s1", category: "Others", itemDescription: "Penalty / Fines", amountPaid: 120 }),
+    receipt({ studentId: "s2", category: "Others", itemDescription: "Penalty Fine: School activity", amountPaid: 25 }),
+    receipt({ studentId: "s3", category: "Others", itemDescription: "Unrelated donation", amountPaid: 30 }),
+  ], setups);
+  assert.deepEqual(result, [
+    { category: "Others", items: [{ name: "Unrelated donation", count: 1, amount: 30 }] },
+    { category: "Penalty / Fines", items: [{ name: "Penalty / Fines", count: 2, amount: 195 }] },
+  ]);
+  assert.equal(allCents(result), 22500);
 });
