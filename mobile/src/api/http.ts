@@ -113,6 +113,11 @@ export const httpApi: ClearApi = {
     }
   },
   getGlobalOverview: (session) => request('/global/overview', { token: session.token }),
+  listManagedTenants: (session) => request('/global/provisions', { token: session.token }),
+  provisionTenant: (session, payload) =>
+    request('/global/provisions', { token: session.token, method: 'POST', json: payload }),
+  manageTenant: (session, payload) =>
+    request('/global/provisions/manage', { token: session.token, method: 'POST', json: payload }),
   getGlobalTenantDashboard: (s, slug) => request(`/global/orgs/${encodeURIComponent(slug)}/dashboard`, { token: s.token }),
   listGlobalTenantStudents: (s, slug, q) => request(`/global/orgs/${encodeURIComponent(slug)}/students`, { token: s.token, query: { q } }),
   listGlobalTenantLedger: (s, slug) => request(`/global/orgs/${encodeURIComponent(slug)}/ledger`, { token: s.token }),
