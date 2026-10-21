@@ -7,7 +7,7 @@ import { PAYMENT_WRITES_ENABLED } from '@/api/config';
 import { Avatar, Banner, Button, Icon, Screen, Text, TextField } from '@/components/ui';
 import { isEnrolled } from '@/lib/enrollment';
 import { formatPeso, fromCentavos } from '@/lib/money';
-import { useOfficerSession } from '@/lib/session';
+import { useOfficerSession, useSession } from '@/lib/session';
 import { TAB_BAR_SPACE } from '@/lib/tab-bar';
 import { useAsync } from '@/lib/use-async';
 import { radius, spacing, useTheme } from '@/theme';
@@ -15,8 +15,15 @@ import { radius, spacing, useTheme } from '@/theme';
 /** Record an in-person payment and issue an OR number. */
 export default function Collect() {
   const session = useOfficerSession();
-  const students = useAsync<Student[]>(() => api.listStudents(session), session.token);
-  const fees = useAsync<FeeItem[]>(() => api.listFeeItems(session.org.subdomain), session.token);
+  const { can } = useSession();
+  const students = useAsync<Student[]>(
+    () => PAYMENT_WRITES_ENABLED && can('tab-payment') ? api.listStudents(session) : Promise.resolve([]),
+    session.token + ':payment:' + PAYMENT_WRITES_ENABLED
+  );
+  const fees = useAsync<FeeItem[]>(
+    () => PAYMENT_WRITES_ENABLED && can('tab-payment') ? api.listFeeItems(session.org.subdomain) : Promise.resolve([]),
+    session.token + ':payment-fees:' + PAYMENT_WRITES_ENABLED
+  );
 
   const [search, setSearch] = useState('');
   const [studentId, setStudentId] = useState<string>();
@@ -105,6 +112,18 @@ export default function Collect() {
       <Text variant="title" accessibilityRole="header" style={styles.heading}>Record a payment</Text>
     </View>
   );
+
+  if (!can('tab-payment') || !PAYMENT_WRITES_ENABLED) {
+    return (
+      <Screen edges={['top']} header={header} bottomInset={TAB_BAR_SPACE}>
+        <Banner tone={!can('tab-payment') ? 'danger' : 'info'} title={!can('tab-payment') ? 'Permission required' : 'Payment posting is paused'}>
+          {!can('tab-payment')
+            ? 'Your saved department permissions do not include payment collection.'
+            : 'Your role includes payment collection, but the Android accounting and official receipt service is not ready. Use the audited CLEAR web application for payments.'}
+        </Banner>
+      </Screen>
+    );
+  }
 
   return (
     <Screen edges={['top']} header={header} bottomInset={TAB_BAR_SPACE}>
