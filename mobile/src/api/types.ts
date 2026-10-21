@@ -54,6 +54,7 @@ export type GlobalOverview = {
     activeTerm: string;
     studentsCount: number;
     officersCount: number;
+    activeRoles?: Array<{ role: string; count: number }>;
   }>;
   globalAdmins: { active: number; pending: number };
 };
