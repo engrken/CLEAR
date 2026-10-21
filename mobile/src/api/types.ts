@@ -59,6 +59,47 @@ export type GlobalOverview = {
   globalAdmins: { active: number; pending: number };
 };
 
+export type SubscriptionTier = 'Freemium' | 'Pro' | 'Corporate';
+export type OrganizationStatus = 'Active' | 'Inactive' | 'Archived';
+export type CalendarMode = 'Semester' | 'Trimester' | 'FullYear';
+export type ManagedTenant = {
+  id: string;
+  subdomain: string;
+  name: string;
+  schoolGroup: string;
+  tier: SubscriptionTier;
+  status: OrganizationStatus;
+  type: 'Department' | 'Organization';
+  activeAy: string;
+  activeTerm: string;
+  createdAt: string;
+  studentsCount: number;
+  collectionsCount: number;
+  officersCount: number;
+};
+export type NewTenant = {
+  name: string;
+  subdomain: string;
+  schoolGroup: string;
+  tier: SubscriptionTier;
+  type: 'Department' | 'Organization';
+  initialAcademicYear: string;
+  calendarMode: CalendarMode;
+  includeSummer: boolean;
+  adminName: string;
+  adminEmail: string;
+  adminUsername?: string;
+  confirmation: string;
+};
+export type ProvisionResult = {
+  success: boolean;
+  organizationId: string;
+  department: string;
+  academicYear: string;
+  activeTerm: string;
+  message: string;
+};
+
 /** Global superadmin tenant view: never an officer session or mutation grant. */
 export type GlobalTenantDashboard = {
   organization: Organization & { status: string };
@@ -186,6 +227,11 @@ export type ClearApi = {
   restoreGlobalSession(token: string): Promise<GlobalSession>;
   signOutGlobal(session: GlobalSession): Promise<void>;
   getGlobalOverview(session: GlobalSession): Promise<GlobalOverview>;
+  listManagedTenants(session: GlobalSession): Promise<ManagedTenant[]>;
+  provisionTenant(session: GlobalSession, payload: NewTenant): Promise<ProvisionResult>;
+  manageTenant(session: GlobalSession, payload: {
+    organizationId: string; action: 'status' | 'tier' | 'group'; value: string; confirmation: string;
+  }): Promise<{ success: boolean; organization: string }>;
   /** Read-only across ALL tenants, including inactive or archived, as on web. */
   getGlobalTenantDashboard(session: GlobalSession, slug: string): Promise<GlobalTenantDashboard>;
   listGlobalTenantStudents(session: GlobalSession, slug: string, q?: string): Promise<Student[]>;
