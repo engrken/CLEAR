@@ -6,6 +6,7 @@
 
 import { NextResponse } from 'next/server';
 import { DomainError } from '@/lib/errors';
+import { isMobileRequestAllowed } from '@/lib/mobile/production-readonly';
 
 export class ApiFailure extends Error {
   constructor(public status: number, public code: string, message: string) {
@@ -68,6 +69,12 @@ function toFailure(err: unknown): ApiFailure {
 export function handler<Ctx>(fn: (req: Request, ctx: Ctx) => Promise<unknown>) {
   return async (req: Request, ctx: Ctx) => {
     try {
+      if (!isMobileRequestAllowed(req.method, new URL(req.url).pathname, {
+        vercelEnv: process.env.VERCEL_ENV,
+        gitRef: process.env.VERCEL_GIT_COMMIT_REF,
+      })) {
+        throw new ApiFailure(403, 'read_only', 'Mobile access is read-only. Use the CLEAR web application for transactions.');
+      }
       const out = await fn(req, ctx);
       if (out instanceof Response) {
         for (const [k, v] of Object.entries(corsHeaders(req))) out.headers.set(k, v);

@@ -4,11 +4,28 @@ const PROD_URL = 'https://clearsys.vercel.app/api/mobile';
 // Integration branch safety gate: payment writes must not be enabled until
 // the canonical web transaction service has been ported and verified.
 export const PAYMENT_WRITES_ENABLED = false;
+// The next live-data viewer has no tenant administration or student proof writes.
+// Keep this fail-closed independently of role, APK environment and UI navigation.
+export const MOBILE_BUSINESS_WRITES_ENABLED = false;
 const DEV_URL = 'http://localhost:3000/api/mobile';
 
 const configuredMode = process.env.EXPO_PUBLIC_API_MODE;
 const configuredUrl = process.env.EXPO_PUBLIC_API_URL;
 const apiUrl = (configuredUrl || (__DEV__ ? DEV_URL : PROD_URL)).replace(/\/+$/, '');
+
+// A separately identified internal Production viewer APK cannot silently inherit
+// the Preview API alias or a third-party endpoint from EAS/project variables.
+// Existing preview builds remain pointed to their intentionally isolated backend.
+const releaseKind = process.env.EXPO_PUBLIC_CLEAR_RELEASE_KIND;
+if (releaseKind === 'live-readonly-internal') {
+  if (__DEV__ || configuredMode === 'mock' || apiUrl !== PROD_URL) {
+    throw new Error('CLEAR live viewer release must use the pinned Production HTTPS API.');
+  }
+  if (PAYMENT_WRITES_ENABLED !== false || MOBILE_BUSINESS_WRITES_ENABLED !== false) {
+    throw new Error('CLEAR live viewer may not enable business transactions.');
+  }
+}
+
 
 if (!__DEV__) {
   if (configuredMode === 'mock') {

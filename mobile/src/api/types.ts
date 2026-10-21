@@ -106,6 +106,25 @@ export type GlobalTenantDashboard = {
   dashboard: DashboardSummary;
 };
 
+/** Live, tenant-scoped metadata for an authenticated administrator only. */
+export type TenantPortalStatus = {
+  organization: {
+    subdomain: string;
+    name: string;
+    type: string;
+    status: OrganizationStatus;
+    tier: SubscriptionTier;
+    schoolGroup: string;
+    activeAy: string;
+    activeTerm: string;
+  };
+  studentsCount: number;
+  officersCount: number;
+  currentTermCollectionsCount: number;
+  mode: 'read_only';
+  asOf: string;
+};
+
 export type ClearanceResult = {
   /** Hidden on anonymous public lookups; present for authorized officers. */
   studentName: string | null;
@@ -212,6 +231,11 @@ export type ClearApi = {
   listOrganizations(): Promise<Organization[]>;
   getOrganization(org: string): Promise<Organization>;
   lookupClearance(org: string, query: string, session?: Session | null): Promise<ClearanceResult>;
+  /** Student-only registered-email OTP; the server never reveals membership. */
+  requestStudentClearanceCode(org: string, studentId: string, email: string): Promise<{ message: string }>;
+  verifyStudentClearanceCode(org: string, studentId: string, email: string, code: string): Promise<{ token: string; expiresAt: string }>;
+  getOwnClearance(org: string, studentToken: string): Promise<ClearanceResult>;
+  revokeStudentClearance(org: string, studentToken: string): Promise<void>;
   listFeeItems(org: string): Promise<FeeItem[]>;
   submitProof(org: string, p: ProofSubmission): Promise<{ submissionId: string }>;
   // sign-in
@@ -238,6 +262,7 @@ export type ClearApi = {
   listGlobalTenantLedger(session: GlobalSession, slug: string): Promise<LedgerEntry[]>;
   listGlobalTenantRemittances(session: GlobalSession, slug: string): Promise<LedgerEntry[]>;
   // officer
+  getTenantPortal(s: Session): Promise<TenantPortalStatus>;
   getDashboard(s: Session): Promise<DashboardSummary>;
   listLedger(s: Session, filter?: { status?: string; limit?: number }): Promise<LedgerEntry[]>;
   /** Accessible to tab-remittances even without tab-overview. */

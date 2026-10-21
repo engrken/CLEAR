@@ -2,7 +2,7 @@
 
 import { Platform } from 'react-native';
 
-import { API_URL, PAYMENT_WRITES_ENABLED } from './config';
+import { API_URL, MOBILE_BUSINESS_WRITES_ENABLED, PAYMENT_WRITES_ENABLED } from './config';
 import { fallbackMessage } from './errors';
 import { ApiError, type ClearApi, type GlobalSession, type Session } from './types';
 
@@ -43,7 +43,9 @@ async function request<T>(path: string, { method = 'GET', token, json, form, ide
     const code: string = err?.code || (res.status === 429 ? 'rate_limited' : 'server_error');
     const e = new ApiError(err?.message || fallbackMessage(code, res.status), code, res.status);
     // A rejected token on an officer call ends the session everywhere.
-    if (res.status === 401 && token) onUnauthorized?.();
+    // A student clearance OTP token is independent from an officer/global login.
+    // Its expiry must not sign an unrelated officer out of the application.
+    if (res.status === 401 && token && !token.startsWith('clrs_')) onUnauthorized?.();
     throw e;
   }
   return body as T;
@@ -77,8 +79,27 @@ export const httpApi: ClearApi = {
   getOrganization: (slug) => request(org(slug)),
   lookupClearance: (slug, q, session) =>
     request(`${org(slug)}/clearance`, { query: { q: q.trim() }, token: session?.org.subdomain === slug ? session.token : null }),
+  requestStudentClearanceCode: (slug, studentId, email) =>
+    request(`${org(slug)}/clearance/auth/request-code`, {
+      method: 'POST', json: { studentId: studentId.trim(), email: email.trim().toLowerCase() },
+    }),
+  verifyStudentClearanceCode: (slug, studentId, email, code) =>
+    request(`${org(slug)}/clearance/auth/verify-code`, {
+      method: 'POST', json: { studentId: studentId.trim(), email: email.trim().toLowerCase(), code: code.trim() },
+    }),
+  getOwnClearance: (slug, studentToken) =>
+    request(`${org(slug)}/clearance`, { token: studentToken }),
+  revokeStudentClearance: async (slug, studentToken) => {
+    try {
+      await request(`${org(slug)}/clearance/auth/session`, { method: 'DELETE', token: studentToken });
+    } catch {
+      // A short-lived student token is also discarded locally on exit.
+    }
+  },
   listFeeItems: (slug) => request(`${org(slug)}/fees`),
-  submitProof: async (slug, p) => request(`${org(slug)}/proofs`, { method: 'POST', form: await proofForm(p) }),
+  submitProof: async (slug, p) => MOBILE_BUSINESS_WRITES_ENABLED ?
+    request(`${org(slug)}/proofs`, { method: 'POST', form: await proofForm(p) }) :
+    Promise.reject(new ApiError('Receipt submissions are unavailable in the read-only viewer.', 'read_only')),
 
   requestCode: (slug, email) => request(`${org(slug)}/auth/request-code`, { method: 'POST', json: { email: email.trim().toLowerCase() } }),
   verifyCode: (slug, email, code) =>
@@ -114,15 +135,18 @@ export const httpApi: ClearApi = {
   },
   getGlobalOverview: (session) => request('/global/overview', { token: session.token }),
   listManagedTenants: (session) => request('/global/provisions', { token: session.token }),
-  provisionTenant: (session, payload) =>
-    request('/global/provisions', { token: session.token, method: 'POST', json: payload }),
-  manageTenant: (session, payload) =>
-    request('/global/provisions/manage', { token: session.token, method: 'POST', json: payload }),
+  provisionTenant: (session, payload) => MOBILE_BUSINESS_WRITES_ENABLED ?
+    request('/global/provisions', { token: session.token, method: 'POST', json: payload }) :
+    Promise.reject(new ApiError('Tenant provisioning is unavailable in the read-only viewer.', 'read_only')),
+  manageTenant: (session, payload) => MOBILE_BUSINESS_WRITES_ENABLED ?
+    request('/global/provisions/manage', { token: session.token, method: 'POST', json: payload }) :
+    Promise.reject(new ApiError('Tenant changes are unavailable in the read-only viewer.', 'read_only')),
   getGlobalTenantDashboard: (s, slug) => request(`/global/orgs/${encodeURIComponent(slug)}/dashboard`, { token: s.token }),
   listGlobalTenantStudents: (s, slug, q) => request(`/global/orgs/${encodeURIComponent(slug)}/students`, { token: s.token, query: { q } }),
   listGlobalTenantLedger: (s, slug) => request(`/global/orgs/${encodeURIComponent(slug)}/ledger`, { token: s.token }),
   listGlobalTenantRemittances: (s, slug) => request(`/global/orgs/${encodeURIComponent(slug)}/remittances`, { token: s.token }),
 
+  getTenantPortal: (s) => request(`${org(s.org.subdomain)}/portal`, as(s)),
   getDashboard: (s) => request(`${org(s.org.subdomain)}/dashboard`, as(s)),
   listLedger: (s, f) => request(`${org(s.org.subdomain)}/ledger`, { ...as(s), query: { status: f?.status, limit: f?.limit } }),
   listPendingRemittances: (s) => request(`${org(s.org.subdomain)}/remittances/pending`, as(s)),

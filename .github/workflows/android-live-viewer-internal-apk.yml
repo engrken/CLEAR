@@ -1,0 +1,113 @@
+name: CLEAR Android internal Production viewer QA APK (build only)
+
+# Manual, approved internal QA build ONLY. Never deploys backend, performs
+# financial writes, distributes to users, or submits to Google Play.
+#
+# Runs from default main only AFTER server-side read-only protections have
+# been reviewed/merged and Production deployment+database identity verified.
+# Physical-device QA is deliberately NOT a build prerequisite: it happens
+# after the built APK is verified and installed on controlled test devices.
+on:
+  workflow_dispatch:
+    inputs:
+      deployed_production_sha:
+        description: 'Exact Vercel Production commit SHA independently confirmed (must equal checked-out main SHA)'
+        type: string
+        required: true
+      production_database_mapping_verified:
+        description: 'Vercel Production runtime DATABASE_URL verified against approved Neon primary (no credentials pasted)'
+        type: boolean
+        required: true
+      qa_build_confirmation:
+        description: 'Type BUILD_QA_APK_ONLY — no release or distribution'
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  statuses: read
+
+jobs:
+  internal-qa-apk:
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      inputs.production_database_mapping_verified &&
+      inputs.qa_build_confirmation == 'BUILD_QA_APK_ONLY'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Require exact independently verified Production web backend revision
+        env:
+          APPROVED_SHA: ${{ inputs.deployed_production_sha }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$APPROVED_SHA" =~ ^[0-9a-f]{40}$ ]] || [ "$APPROVED_SHA" != "$GITHUB_SHA" ]; then
+            echo "::error::Production deployed SHA must exactly match approved checked-out main SHA."
+            exit 1
+          fi
+      - name: Require GitHub-recorded successful Vercel deployment status for this SHA
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          node --input-type=module <<'CHECK_DEPLOYMENT'
+          const uri = `https://api.github.com/repos/${process.env.REPO}/commits/${process.env.COMMIT_SHA}/status`;
+          const result = await fetch(uri, {
+            headers: {
+              Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+              Accept: 'application/vnd.github+json',
+              'X-GitHub-Api-Version': '2022-11-28',
+            },
+            signal: AbortSignal.timeout(15_000),
+          });
+          if (!result.ok) {
+            console.error('Cannot verify GitHub deployment status. No APK build queued.');
+            process.exit(1);
+          }
+          const value = await result.json();
+          if (!(value.statuses || []).some(s => s.context === 'Vercel' && s.state === 'success')) {
+            console.error('Exact checked-out commit has no successful Vercel status. No APK build queued.');
+            process.exit(1);
+          }
+          console.log('Successful Vercel GitHub status confirmed for exact approved commit.');
+          console.log('Still require separate human Vercel Production DATABASE_URL attestation.');
+          CHECK_DEPLOYMENT
+      - name: Require internal build token (do not print)
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::error::EXPO_TOKEN secret is missing. No APK build queued."
+            exit 1
+          fi
+      - name: Require pinned Production endpoint and deny business writes
+        run: node scripts/verify-live-viewer.mjs
+      - name: Reconcile mobile lockfile in disposable CI runner
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Install locked Android packages
+        run: npm ci
+      - name: Verify Android types and all guarded routes
+        run: npm run typecheck
+      - name: Install EAS CLI (only after all local checks pass)
+        run: npm install --global eas-cli
+      - name: Queue restricted internal QA APK on Expo
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          eas build --platform android --profile live-readonly-internal --non-interactive --no-wait
+      - name: Distinguish queued build from verified and distributed APK
+        run: |
+          echo "Internal QA build was queued, NOT necessarily completed."
+          echo "Inspect Expo EAS build completion, signing and packaged API URL."
+          echo "Device QA, authorized real email OTP, and all role/tenant tests happen NEXT."
+          echo "Never publish, submit, or distribute to users from this workflow."
