@@ -1,0 +1,77 @@
+name: CLEAR Android Production read-only internal APK (approval only)
+
+# This workflow is intentionally NOT invoked on pushes or pull requests.
+# It becomes runnable only from default main after approved merge, and does
+# NOT perform Vercel deployment, Production data writes or Google Play submit.
+on:
+  workflow_dispatch:
+    inputs:
+      approved_deployment_sha:
+        description: 'Exact SHA currently deployed on Vercel Production, independently verified'
+        required: true
+        type: string
+      prod_database_verified:
+        description: 'I checked Vercel Production DATABASE_URL resolves to approved Neon primary branch (never paste secret)'
+        required: true
+        type: boolean
+      security_and_device_qa_approved:
+        description: 'Student email OTP, JIECEP officer/admin/global, tenant isolation and physical Android device QA passed'
+        required: true
+        type: boolean
+      release_confirmation:
+        description: 'Type INTERNAL_READ_ONLY_APK (no Google Play publication)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  signed-internal-apk:
+    if: github.ref == 'refs/heads/main' && inputs.prod_database_verified && inputs.security_and_device_qa_approved && inputs.release_confirmation == 'INTERNAL_READ_ONLY_APK'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Require Production web backend is the exact approved source revision
+        env:
+          APPROVED_SHA: ${{ inputs.approved_deployment_sha }}
+        run: |
+          set -euo pipefail
+          test "$APPROVED_SHA" = "$GITHUB_SHA" || {
+            echo "::error::Backend Production SHA must equal reviewed checked-out code; deploy/verify the same SHA first."
+            exit 1
+          }
+      - name: Require Expo EAS token (do not print)
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::error::Missing EXPO_TOKEN secret; no build was started."
+            exit 1
+          fi
+      - name: Fail closed on endpoint and business-write profile checks
+        run: node scripts/verify-live-viewer.mjs
+      - name: Install mobile package dependencies
+        run: npm ci
+      - name: Verify Android TypeScript
+        run: npm run typecheck
+      - name: Queue signed internal QA APK, not Google Play upload
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          eas --version >/dev/null 2>&1 || npm install --global eas-cli
+          eas build --platform android --profile live-readonly-internal --non-interactive --no-wait
+      - name: Manual verification reminder
+        run: |
+          echo "A queued EAS build is NOT a completed APK. Verify the Expo build status,"
+          echo "inspect packaged API URL and write-disabling flags, then install on test devices."
+          echo "Do not publish any APK to unreviewed users or submit to Google Play."
