@@ -41,6 +41,9 @@ jobs:
         run: |
           node -e "const a=require('./eas.json'); const p=a.build.preview; if(p.distribution!=='internal'||p.android.buildType!=='apk'||p.env.EXPO_PUBLIC_API_URL!=='https://clearsys-git-android-parity-integration-kentbsece-7567.vercel.app/api/mobile'){process.exit(1)}"
           node -e "const fs=require('fs'); if(!fs.readFileSync('src/api/config.ts','utf8').includes('PAYMENT_WRITES_ENABLED = false')){process.exit(1)}"
+      - name: Require current Global Superadmin tenant selector
+        run: |
+          node -e "const fs=require('fs'); for(const p of ['src/app/global/tenant/[org].tsx','../lib/mobile/global-tenant.ts','../app/api/mobile/global/orgs/[org]/dashboard/route.ts']){if(!fs.existsSync(p)){console.error('Missing expected global tenant read-only source');process.exit(1)}}"
       - name: Reconcile mobile lockfile in disposable CI workspace
         run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
       - name: Install Expo dependencies
