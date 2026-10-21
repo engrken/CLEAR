@@ -31,6 +31,7 @@ export default function More() {
   const router = useRouter();
   const { c } = useTheme();
   const [showWebOnly, setShowWebOnly] = useState(false);
+  const isTenantAdmin = ['admin', 'administrator', 'master'].includes(String(session.officer.role).trim().toLowerCase());
   const modules = grantedModules(session.officer.allowedTabs);
   const available = modules.filter((m) => m.availability === 'available' || m.availability === 'review-only');
   const paused = modules.filter((m) => m.availability === 'paused');
@@ -75,6 +76,11 @@ export default function More() {
         </View>
       </View>
 
+      {isTenantAdmin ? (
+        <Button block variant="secondary" icon="people" onPress={() => router.push('/officer/tenant-portal')}>
+          My tenant portal (read-only)
+        </Button>
+      ) : null}
       <Button
         block
         variant="secondary"
