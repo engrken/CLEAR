@@ -9,6 +9,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 
+import { MOBILE_BUSINESS_WRITES_ENABLED } from '@/api/config';
 import { SessionProvider, useSession } from '@/lib/session';
 import { ThemeProvider, useTheme } from '@/theme';
 
@@ -55,7 +56,9 @@ function Navigator() {
         <Stack.Screen name="index" />
         <Stack.Screen name="d/[dept]/index" />
         <Stack.Screen name="d/[dept]/clearance" />
-        <Stack.Screen name="d/[dept]/submit-proof" />
+        <Stack.Protected guard={MOBILE_BUSINESS_WRITES_ENABLED} redirectTo="/">
+          <Stack.Screen name="d/[dept]/submit-proof" />
+        </Stack.Protected>
 
         {/* Global admins and department officers have independent authentication. */}
         <Stack.Protected guard={!session} redirectTo="/home">
@@ -82,7 +85,9 @@ function Navigator() {
           <Stack.Screen name="global/index" />
           <Stack.Screen name="global/tenant/[org]" />
           <Stack.Screen name="global/provisions/index" />
-          <Stack.Screen name="global/provisions/new" />
+          <Stack.Protected guard={MOBILE_BUSINESS_WRITES_ENABLED} redirectTo="/global/provisions">
+            <Stack.Screen name="global/provisions/new" />
+          </Stack.Protected>
           <Stack.Screen name="global/provisions/[id]" />
         </Stack.Protected>
       </Stack>
