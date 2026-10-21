@@ -19,7 +19,7 @@
       "distribution": "internal",
       "environment": "preview",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://clearsys.vercel.app/api/mobile"
+        "EXPO_PUBLIC_API_URL": "https://clearsys-9034380b7-kentbsece-7567.vercel.app/api/mobile"
       },
       "android": {
         "buildType": "apk"
