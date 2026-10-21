@@ -1,0 +1,31 @@
+name: Android Preview API smoke (read-only)
+
+on:
+  push:
+    branches:
+      - android-parity-integration
+    paths:
+      - 'app/api/mobile/**'
+      - 'lib/mobile/**'
+      - 'scripts/ci/mobile-preview-smoke.mjs'
+      - '.github/workflows/android-preview-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-preview-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  preview-api:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check Preview reachability and anonymous auth boundaries
+        run: node scripts/ci/mobile-preview-smoke.mjs
