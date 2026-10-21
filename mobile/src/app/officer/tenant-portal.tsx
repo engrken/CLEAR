@@ -25,7 +25,7 @@ export default function TenantPortal() {
     <Screen
       edges={['top', 'bottom']}
       header={<BackHeader title="Tenant portal" onBack={() => router.back()} />}>
-      <Banner tone="info" title="Live production view · Read-only">
+      <Banner tone="info" title="Live tenant data · Read-only">
         These figures are served by CLEAR with your active tenant permissions.
         Payments, approvals, provisioning and other transactions are unavailable here.
       </Banner>
