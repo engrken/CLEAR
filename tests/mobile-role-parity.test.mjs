@@ -71,3 +71,27 @@ test('no Android role can enable financial writes by its permissions alone', () 
   assert.match(http, /verifyRemittance: \(s, id, p\) => PAYMENT_WRITES_ENABLED/);
   assert.match(http, /invalidateRemittance: \(s, id\) => PAYMENT_WRITES_ENABLED/);
 });
+
+test('JIECEP officer path explicitly offers the separate global OTP sign-in', () => {
+  const portal = source('mobile/src/app/d/[dept]/index.tsx');
+  const officerLogin = source('mobile/src/app/d/[dept]/sign-in.tsx');
+  const officerSettings = source('mobile/src/app/(officer)/more.tsx');
+  const globalPage = source('mobile/src/app/global/index.tsx');
+  assert.match(portal, /router\.push\('\/global\/sign-in'\)/);
+  assert.match(portal, /globalSession\s*\?/);
+  assert.match(portal, /pathname: '\/global\/tenant\/\[org\]'/);
+  assert.match(officerLogin, /Sign in as Global Superadmin/);
+  assert.match(officerSettings, /Sign in as Global Superadmin/);
+  assert.match(globalPage, /Open tenant \(read-only\)/);
+});
+
+test('every mobile global tenant route separately revalidates global admin and allows GET only', () => {
+  const guard = source('lib/mobile/global-tenant.ts');
+  assert.match(guard, /requireGlobalMobileAdmin\(req\)/);
+  for (const name of ['dashboard', 'students', 'ledger', 'remittances']) {
+    const route = source(`app/api/mobile/global/orgs/[org]/${name}/route.ts`);
+    assert.match(route, /requireGlobalMobileTenant\(req, slug\)/);
+    assert.match(route, /export const GET/);
+    assert.doesNotMatch(route, /export const (?:POST|PUT|PATCH|DELETE)/);
+  }
+});
