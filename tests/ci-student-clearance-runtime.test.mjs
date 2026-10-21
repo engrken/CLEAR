@@ -18,6 +18,7 @@ const fixture = {
   tenantA: 'ci-student-auth-first', tenantB: 'ci-student-auth-second',
   a: { id: 'ci-private-a', studentId: 'CI-ONLY-A-007', email: 'ci-a@example.invalid' },
   b: { id: 'ci-private-b', studentId: 'CI-ONLY-B-008', email: 'ci-b@example.invalid' },
+  c: { id: 'ci-private-c', studentId: 'CI-ONLY-C-009', email: 'ci-c@example.invalid' },
 };
 let app;
 let output = '';
@@ -50,6 +51,8 @@ async function seed() {
     organizationId: fixture.tenantA, fullName: 'Synthetic Student A', yearLevel: '1st Year' } });
   await prisma.student.create({ data: { ...fixture.b,
     organizationId: fixture.tenantB, fullName: 'Synthetic Student B', yearLevel: '2nd Year' } });
+  await prisma.student.create({ data: { ...fixture.c,
+    organizationId: fixture.tenantA, fullName: 'Synthetic Student C', yearLevel: '3rd Year' } });
 }
 
 async function issueSyntheticCode(org, student, code, expired = false) {
@@ -86,7 +89,7 @@ test('student-only OTP, reuse, guesses, tenant/period isolation, minimal status,
   try {
     await seed();
     await start();
-    const { tenantA, tenantB, a, b } = fixture;
+    const { tenantA, tenantB, a, b, c: studentC } = fixture;
 
     const anonymous = await request(tenantA, '/clearance?q=' + encodeURIComponent(a.studentId));
     assert.equal(anonymous.status, 401, 'school ID without an officer token cannot search');
@@ -131,12 +134,23 @@ test('student-only OTP, reuse, guesses, tenant/period isolation, minimal status,
 
     const crossTenant = await request(tenantB, '/clearance', 'GET', undefined, good.body.token);
     assert.equal(crossTenant.status, 401, 'student token from tenant A cannot read tenant B');
-    const bypass = await request(tenantA, '/clearance?q=' + b.studentId, 'GET', undefined, good.body.token);
-    assert.equal(bypass.status, 401, 'student token must never become an officer roster token');
+    const bypass = await request(tenantA, '/clearance?q=' + studentC.studentId, 'GET', undefined, good.body.token);
+    assert.equal(bypass.status, 401, 'student token must never reveal another student in its own tenant');
 
     const revoked = await request(tenantA, '/clearance/auth/session', 'DELETE', undefined, good.body.token);
     assert.equal(revoked.status, 204);
     assert.equal((await request(tenantA, '/clearance', 'GET', undefined, good.body.token)).status, 401);
+
+    await issueSyntheticCode(tenantA, a, '222222');
+    const renewed = await request(tenantA, '/clearance/auth/verify-code', 'POST', {
+      studentId: a.studentId, email: a.email, code: '222222',
+    });
+    assert.equal(renewed.status, 200, 'fresh OTP issues a fresh student session');
+    await prisma.organization.update({
+      where: { id: tenantA }, data: { activeTerm: '2nd Sem' },
+    });
+    assert.equal((await request(tenantA, '/clearance', 'GET', undefined, renewed.body.token)).status, 401,
+      'academic period rollover invalidates existing student credentials');
 
     await issueSyntheticCode(tenantB, b, '654321', true);
     const expired = await request(tenantB, '/clearance/auth/verify-code', 'POST', {
