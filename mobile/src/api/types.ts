@@ -37,6 +37,24 @@ export type Officer = {
 /** A bearer token bound to one officer in one org; lasts 7 days. */
 export type Session = { token: string; officer: Officer; org: Organization; expiresAt: string };
 
+/** Global administrators are not department officers and have no implicit tenant permissions. */
+export type GlobalAdmin = { id: string; fullName: string; email: string; role: 'SuperAdmin' };
+export type GlobalSession = { token: string; admin: GlobalAdmin; expiresAt: string };
+export type GlobalOverview = {
+  generatedAt: string;
+  organizations: Array<{
+    subdomain: string;
+    name: string;
+    type: string;
+    status: string;
+    activeAy: string;
+    activeTerm: string;
+    studentsCount: number;
+    officersCount: number;
+  }>;
+  globalAdmins: { active: number; pending: number };
+};
+
 export type ClearanceResult = {
   /** Hidden on anonymous public lookups; present for authorized officers. */
   studentName: string | null;
@@ -152,6 +170,12 @@ export type ClearApi = {
   /** Re-validates a stored token; throws ApiError('unauthorized') when it is no longer good. */
   restoreSession(org: string, token: string): Promise<Session>;
   signOut(session: Session): Promise<void>;
+  // global superadmin — separate OTP policy, session and read-only overview.
+  requestGlobalCode(email: string): Promise<{ message: string }>;
+  verifyGlobalCode(email: string, code: string): Promise<GlobalSession>;
+  restoreGlobalSession(token: string): Promise<GlobalSession>;
+  signOutGlobal(session: GlobalSession): Promise<void>;
+  getGlobalOverview(session: GlobalSession): Promise<GlobalOverview>;
   // officer
   getDashboard(s: Session): Promise<DashboardSummary>;
   listLedger(s: Session, filter?: { status?: string; limit?: number }): Promise<LedgerEntry[]>;
