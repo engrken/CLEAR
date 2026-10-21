@@ -77,6 +77,23 @@ export const httpApi: ClearApi = {
   getOrganization: (slug) => request(org(slug)),
   lookupClearance: (slug, q, session) =>
     request(`${org(slug)}/clearance`, { query: { q: q.trim() }, token: session?.org.subdomain === slug ? session.token : null }),
+  requestStudentClearanceCode: (slug, studentId, email) =>
+    request(`${org(slug)}/clearance/auth/request-code`, {
+      method: 'POST', json: { studentId: studentId.trim(), email: email.trim().toLowerCase() },
+    }),
+  verifyStudentClearanceCode: (slug, studentId, email, code) =>
+    request(`${org(slug)}/clearance/auth/verify-code`, {
+      method: 'POST', json: { studentId: studentId.trim(), email: email.trim().toLowerCase(), code: code.trim() },
+    }),
+  getOwnClearance: (slug, studentToken) =>
+    request(`${org(slug)}/clearance`, { token: studentToken }),
+  revokeStudentClearance: async (slug, studentToken) => {
+    try {
+      await request(`${org(slug)}/clearance/auth/session`, { method: 'DELETE', token: studentToken });
+    } catch {
+      // A short-lived student token is also discarded locally on exit.
+    }
+  },
   listFeeItems: (slug) => request(`${org(slug)}/fees`),
   submitProof: async (slug, p) => MOBILE_BUSINESS_WRITES_ENABLED ?
     request(`${org(slug)}/proofs`, { method: 'POST', form: await proofForm(p) }) :
