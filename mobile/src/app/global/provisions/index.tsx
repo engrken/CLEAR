@@ -3,6 +3,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { api, type ManagedTenant } from '@/api';
+import { MOBILE_BUSINESS_WRITES_ENABLED } from '@/api/config';
 import { BackHeader, Banner, Button, Card, Screen, Text, TextField } from '@/components/ui';
 import { useGlobalSession } from '@/lib/session';
 import { useAsync } from '@/lib/use-async';
@@ -28,7 +29,7 @@ export default function TenantManagement() {
   return (
     <Screen edges={['top','bottom']} header={<BackHeader title="Tenant management" onBack={() => router.replace('/global')} />}>
       <Banner tone="info" title="Global Superadmin portal">
-        Review every tenant and its school group, subscription tier and status. Changes are audited. Permanent deletion and financial operations are not available on Android.
+        Review every tenant and its school group, subscription tier and status. This live-data viewer cannot change tenants, financial records or administrative settings.
       </Banner>
       <View style={styles.metrics}>
         <Card style={styles.metric}>
@@ -40,7 +41,11 @@ export default function TenantManagement() {
           <Text variant="headline">{totals.inactive}</Text>
         </Card>
       </View>
-      <Button block icon="plus" onPress={() => router.push('/global/provisions/new')}>Provision new tenant</Button>
+      {MOBILE_BUSINESS_WRITES_ENABLED ? (
+        <Button block icon="plus" onPress={() => router.push('/global/provisions/new')}>Provision new tenant</Button>
+      ) : (
+        <Banner tone="info" title="View only">Tenant provisioning and management are disabled in this release.</Banner>
+      )}
       <TextField label="Find tenant, group or tier" value={search} onChangeText={setSearch} placeholder="JIECEP, default-school, Pro..." autoCapitalize="none" autoCorrect={false} />
       {tenants.error ? <Banner tone="danger" title="Could not load tenants">{tenants.error.message}</Banner> : null}
       {tenants.loading && !tenants.data ? <ActivityIndicator color={c.cobalt} /> : null}
@@ -76,7 +81,7 @@ export default function TenantManagement() {
                 pathname: '/global/provisions/[id]', params: { id: org.id },
               })}
               style={[styles.action, { backgroundColor: c.soft }]}>
-              <Text variant="bodySm">Manage tenant</Text>
+              <Text variant="bodySm">View tenant status</Text>
             </Pressable>
           </View>
         </Card>
