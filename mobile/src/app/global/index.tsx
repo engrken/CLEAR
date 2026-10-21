@@ -28,8 +28,17 @@ export default function GlobalDashboard() {
       </View>
 
       <Banner tone="info" title="Global Superadmin · read-only Android access">
-        Open any tenant below to view its financial overview, student roster, activity and pending remittances. Changes, financial posting, provisioning and official receipts remain on the audited web portal.
+        Use tenant management to provision and manage organizations. Open any tenant to review its financial overview, student roster, activity and remittances. Financial transactions remain disabled on Android.
       </Banner>
+
+      <View style={{ gap: spacing[2] }}>
+        <Button block icon="shield" onPress={() => router.push('/global/provisions')}>
+          Tenant management portal
+        </Button>
+        <Button block variant="secondary" icon="plus" onPress={() => router.push('/global/provisions/new')}>
+          Provision new tenant
+        </Button>
+      </View>
 
       {overview.error ? (
         <Banner tone="danger" title="Unable to load overview">{overview.error.message}</Banner>
