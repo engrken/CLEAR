@@ -38,10 +38,12 @@ function sourceFingerprint(req: Request) {
   // Vercel overwrites incoming forwarding headers. Only use the platform's
   // proxy-reported client IP in that environment (never a raw caller-provided
   // X-Forwarded-For elsewhere). The per-identity throttle is independent.
+  // Trust only Vercel's platform-managed client address. A caller-supplied
+  // X-Real-IP or multi-hop/ambiguous address must NEVER mint a new rate bucket.
   const forwarded = process.env.VERCEL === '1'
-    ? req.headers.get('x-vercel-forwarded-for') || req.headers.get('x-real-ip')
+    ? req.headers.get('x-vercel-forwarded-for')
     : null;
-  const candidate = forwarded?.split(',')[0]?.trim() || '';
+  const candidate = forwarded && !forwarded.includes(',') ? forwarded.trim() : '';
   const ip = isIP(candidate) ? candidate : 'unknown';
   return digest('source', ip);
 }

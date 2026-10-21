@@ -91,6 +91,25 @@ test('student-only OTP, reuse, guesses, tenant/period isolation, minimal status,
     await start();
     const { tenantA, tenantB, a, b, c: studentC } = fixture;
 
+    // Route middleware is the authoritative read-only boundary. Test the live
+    // handlers, not only the pure allowlist, against disposable PostgreSQL.
+    const financialPost = await request(tenantA, '/proofs', 'POST', {
+      studentId: a.studentId, amountCentavos: 10000,
+    });
+    assert.equal(financialPost.status, 403, 'anonymous proof upload cannot reach business writes');
+    assert.equal(financialPost.body?.error?.code, 'read_only');
+    const tenantProvision = await fetch(root + '/api/mobile/global/provisions', {
+      method: 'POST', signal: AbortSignal.timeout(15_000),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Forbidden synthetic tenant' }),
+    });
+    assert.equal(tenantProvision.status, 403, 'global tenant provisioning fails closed');
+    assert.equal((await tenantProvision.json()).error?.code, 'read_only');
+    const anonymousPortal = await request(tenantA, '/portal');
+    assert.equal(anonymousPortal.status, 401, 'admin portal requires an active tenant credential');
+    const anonymousLedger = await request(tenantA, '/ledger');
+    assert.equal(anonymousLedger.status, 401, 'ledger is never anonymous');
+
     const anonymous = await request(tenantA, '/clearance?q=' + encodeURIComponent(a.studentId));
     assert.equal(anonymous.status, 401, 'school ID without an officer token cannot search');
     assert.match(anonymous.cache || '', /no-store/);
