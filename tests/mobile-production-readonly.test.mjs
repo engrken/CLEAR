@@ -77,3 +77,22 @@ test('clearance never certifies a student when historical obligations cannot be 
   assert.match(body, /throw new Error\('Historical obligations could not be verified/);
   assert.doesNotMatch(body, /return \[\]/);
 });
+
+test('tenant administrator portal is server-guarded, tenant-bound and GET-only', () => {
+  const route = read('app/api/mobile/orgs/[org]/portal/route.ts');
+  assert.match(route, /requireMobileOfficer\(req, slug, null\)/);
+  assert.match(route, /isAdminRole\(officer\.role\)/);
+  assert.match(route, /ApiFailure\(403, 'forbidden'/);
+  assert.match(route, /organizationId: org\.id/);
+  assert.match(route, /export const GET/);
+  assert.doesNotMatch(route, /export const (?:POST|PUT|PATCH|DELETE)/);
+  assert.match(route, /mode: 'read_only'/);
+
+  const api = read('mobile/src/api/http.ts');
+  assert.match(api, /getTenantPortal: \(s\) => request\(\x60\$\{org\(s\.org\.subdomain\)\}\/portal\x60, as\(s\)\)/);
+  const root = read('mobile/src/app/_layout.tsx');
+  assert.match(root, /name="officer\/tenant-portal"/);
+  const more = read('mobile/src/app/(officer)/more.tsx');
+  assert.match(more, /isTenantAdmin/);
+  assert.match(more, /My tenant portal \(read-only\)/);
+});
