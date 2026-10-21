@@ -72,9 +72,18 @@ export default function OfficerTabs() {
     <Tabs
       tabBar={(props) => <FloatingTabBar {...(props as unknown as BarProps)} />}
       screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: c.canvas } }}>
-      {TABS.map((t) => (
-        <Tabs.Screen key={t.name} name={t.name} options={{ title: t.title, href: t.allowed(can) ? undefined : null }} />
-      ))}
+      {/* Router guards block deep links too; hiding the tab bar alone is insufficient. */}
+      <Tabs.Screen name="home" options={{ title: 'Home' }} />
+      <Tabs.Protected guard={can('tab-payment')}>
+        <Tabs.Screen name="collect" options={{ title: 'Collect' }} />
+      </Tabs.Protected>
+      <Tabs.Protected guard={can('tab-remittances')}>
+        <Tabs.Screen name="verify" options={{ title: 'Verify' }} />
+      </Tabs.Protected>
+      <Tabs.Protected guard={can('tab-students') || can('tab-payment')}>
+        <Tabs.Screen name="students" options={{ title: 'Students' }} />
+      </Tabs.Protected>
+      <Tabs.Screen name="more" options={{ title: 'More' }} />
     </Tabs>
   );
 }
