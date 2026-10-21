@@ -157,6 +157,89 @@ test('student-only OTP, reuse, guesses, tenant/period isolation, minimal status,
     await start();
     const { tenantA, tenantB, a, b, c: studentC } = fixture;
 
+    // Real bearer-token/Prisma authorization checks for officer, tenant admin
+    // and global admin. Everything is synthetic and runs only on CI's PostgreSQL.
+    const officer = await prisma.tenantUser.create({
+      data: { id: 'ci-officer-only', organizationId: tenantA, userId: 'CI-OFFICER',
+        fullName: 'Synthetic Officer', username: 'ci-officer', email: 'ci-officer@example.invalid',
+        role: 'officer', allowedTabs: JSON.stringify(['tab-students']), status: 'Active' },
+    });
+    const admin = await prisma.tenantUser.create({
+      data: { id: 'ci-admin-only', organizationId: tenantA, userId: 'CI-ADMIN',
+        fullName: 'Synthetic Admin', username: 'ci-admin', email: 'ci-admin@example.invalid',
+        role: 'admin', allowedTabs: '[]', status: 'Active' },
+    });
+    async function officerToken(user) {
+      const token = 'clr_' + crypto.randomBytes(32).toString('base64url');
+      await prisma.mobileSession.create({
+        data: { id: crypto.randomUUID(),
+          tokenHash: crypto.createHash('sha256').update(token).digest('hex'),
+          tenantUserId: user.id, organizationId: user.organizationId,
+          expiresAt: new Date(Date.now() + 60 * 60_000) },
+      });
+      return token;
+    }
+    const officerBearer = await officerToken(officer);
+    const adminBearer = await officerToken(admin);
+    const officerRoster = await request(tenantA, '/students', 'GET', undefined, officerBearer);
+    assert.equal(officerRoster.status, 200, 'officer with student permission can view own tenant roster');
+    assert.equal((await request(tenantA, '/dashboard', 'GET', undefined, officerBearer)).status, 403,
+      'officer without overview tab cannot access dashboard');
+    assert.equal((await request(tenantA, '/portal', 'GET', undefined, officerBearer)).status, 403,
+      'ordinary officer can never access tenant-admin portal');
+    assert.equal((await request(tenantB, '/students', 'GET', undefined, officerBearer)).status, 403,
+      'officer bearer token cannot cross the tenant boundary');
+    const tenantPortal = await request(tenantA, '/portal', 'GET', undefined, adminBearer);
+    assert.equal(tenantPortal.status, 200, 'real tenant administrator can read own portal');
+    assert.equal(tenantPortal.body?.mode, 'read_only');
+    assert.equal(tenantPortal.body?.organization?.subdomain, tenantA);
+    assert.equal((await request(tenantB, '/portal', 'GET', undefined, adminBearer)).status, 403,
+      'tenant administrator cannot inspect another tenant');
+    assert.equal((await request(tenantA, '/proofs', 'POST',
+      { studentId: a.studentId, amountCentavos: 10000 }, adminBearer)).status, 403,
+      'authenticated tenant administrator cannot create payment proofs through mobile');
+
+    const globalToken = 'clrg_' + crypto.randomBytes(32).toString('base64url');
+    await prisma.globalMobileSession.create({
+      data: { tokenHash: crypto.createHash('sha256').update(globalToken).digest('hex'),
+        adminEmail: 'ci-superadmin@example.invalid',
+        globalAdminId: 'bootstrap', globalAdminVersion: 1,
+        expiresAt: new Date(Date.now() + 60 * 60_000) },
+    });
+    const globalView = await fetch(root + '/api/mobile/global/overview', {
+      signal: AbortSignal.timeout(15_000), headers: { Authorization: 'Bearer ' + globalToken },
+    });
+    assert.equal(globalView.status, 200, 'verified global superadmin can view all tenants');
+    const allOrgs = (await globalView.json()).organizations;
+    assert.deepEqual(allOrgs.map(o => o.subdomain).sort(), [tenantA, tenantB].sort());
+    const globalOtherTenant = await fetch(root + '/api/mobile/global/orgs/' + tenantB + '/students', {
+      signal: AbortSignal.timeout(15_000), headers: { Authorization: 'Bearer ' + globalToken },
+    });
+    assert.equal(globalOtherTenant.status, 200, 'global admin can view a different tenant through global routes');
+    assert.equal((await request(tenantA, '/portal', 'GET', undefined, globalToken)).status, 401,
+      'global admin token must never impersonate a tenant administrator');
+    const officerGlobal = await fetch(root + '/api/mobile/global/overview', {
+      signal: AbortSignal.timeout(15_000), headers: { Authorization: 'Bearer ' + officerBearer },
+    });
+    assert.equal(officerGlobal.status, 401, 'tenant officer token cannot become global admin');
+    await prisma.globalMobileSession.update({
+      where: { tokenHash: crypto.createHash('sha256').update(globalToken).digest('hex') },
+      data: { revokedAt: new Date() },
+    });
+    const revokedGlobal = await fetch(root + '/api/mobile/global/overview', {
+      signal: AbortSignal.timeout(15_000), headers: { Authorization: 'Bearer ' + globalToken },
+    });
+    assert.equal(revokedGlobal.status, 401, 'global session revocation takes effect immediately');
+    await prisma.tenantUser.update({ where: { id: officer.id }, data: { status: 'Inactive' } });
+    assert.equal((await request(tenantA, '/students', 'GET', undefined, officerBearer)).status, 401,
+      'deactivated officer has no further roster access');
+    await prisma.mobileSession.updateMany({
+      where: { tenantUserId: admin.id }, data: { revokedAt: new Date() },
+    });
+    assert.equal((await request(tenantA, '/portal', 'GET', undefined, adminBearer)).status, 401,
+      'revoked tenant administrator session has no portal access');
+
+
     // Route middleware is the authoritative read-only boundary. Test the live
     // handlers, not only the pure allowlist, against disposable PostgreSQL.
     const financialPost = await request(tenantA, '/proofs', 'POST', {
