@@ -10,6 +10,7 @@ import crypto from 'node:crypto';
 import Link from 'next/link';
 import Image from 'next/image';
 import ClearanceClientView from './ClearanceClientView';
+import StudentClearanceInquiry from './StudentClearanceInquiry';
 import ClearanceManager from './ClearanceManager';
 import DataPrivacyModal from '../components/DataPrivacyModal';
 import { Metadata } from 'next';
@@ -172,6 +173,27 @@ export default async function ClearancePage({
   const session = await auth();
   const hasSession = Boolean(session?.user);
   const isOfficer = hasSession ? await checkOfficerClearanceAccess(cleanDepartment) : false;
+
+  // Opt-in privacy cutover, OFF by default. A school ID/email in an anonymous
+  // URL is not identity proof; never read or render a student's private status.
+  // Signed third-party certificate verification (?q=...&sig=...) is separate
+  // and deliberately preserved pending a reviewed certificate policy.
+  if (!isOfficer && !sigParam && process.env.CLEAR_PUBLIC_CLEARANCE_REQUIRE_OTP === 'true') {
+    return (
+      <div className="d-flex flex-column min-vh-100 bg-body-tertiary text-body">
+        {!hasSession && <PublicHeader organizationName={organization.name} />}
+        <main className="flex-grow-1 p-3 p-md-5 mx-auto w-100" style={{ maxWidth: '760px' }}>
+          <StudentClearanceInquiry
+            department={cleanDepartment}
+            organizationName={organization.name}
+            academicYear={organization.activeAy}
+            term={organization.activeTerm}
+          />
+        </main>
+      </div>
+    );
+  }
+
 
   // 🚀 SECURITY FIX (F30): Compute termPkg directly from collectionSetup without invoking internal treasury engine
   const collectionSetups = await prisma.collectionSetup.findMany({
