@@ -57,6 +57,14 @@ export default function Gateway() {
         </Pressable>
       ))}
 
+      <Button
+        block
+        variant="secondary"
+        icon="shield"
+        onPress={() => router.push('/global/sign-in')}>
+        Global administrator sign-in
+      </Button>
+
       <View style={styles.spacer} />
 
       <View style={styles.note}>
