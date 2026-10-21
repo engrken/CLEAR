@@ -255,16 +255,18 @@ export function evaluateStudentObligations(
 }
 
 /**
- * listHistoricalDebts (lib/student-arrears.ts) for one student. It throws when any
- * academic year it compares is malformed (academicYearStart); then arrears are
- * left out rather than failing the whole lookup.
+ * listHistoricalDebts (lib/student-arrears.ts) for one student. Historical
+ * obligations are part of the live clearance decision: if they cannot be
+ * evaluated, fail closed rather than incorrectly marking a debtor cleared.
  */
 export async function loadHistoricalDebts(organizationId: string, ay: string, term: string, studentId?: string) {
   try {
     return await listHistoricalDebts(prisma, organizationId, ay, term, studentId);
-  } catch (err) {
-    console.error('[clearance] previous-period arrears could not be evaluated:', err);
-    return [];
+  } catch {
+    // An empty result would falsely certify some unpaid students as cleared.
+    // Do not log identifiers or student/financial rows here.
+    console.error('[clearance] historical obligations unavailable; refusing to certify clearance');
+    throw new Error('Historical obligations could not be verified. Clearance cannot be confirmed.');
   }
 }
 
