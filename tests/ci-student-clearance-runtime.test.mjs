@@ -26,6 +26,7 @@ const digest = (label, value) => crypto.createHmac('sha256', process.env.AUTH_SE
 
 async function request(slug, route, method = 'GET', json, token) {
   const response = await fetch(root + '/api/mobile/orgs/' + slug + route, {
+    signal: AbortSignal.timeout(15_000),
     method,
     headers: {
       ...(json ? { 'Content-Type': 'application/json' } : {}),
@@ -65,7 +66,7 @@ async function issueSyntheticCode(org, student, code, expired = false) {
 }
 
 async function start() {
-  app = spawn('npm', ['run', 'start', '--', '-H', '127.0.0.1', '-p', '3112'], {
+  app = spawn(process.execPath, ['node_modules/next/dist/bin/next', 'start', '-H', '127.0.0.1', '-p', '3112'], {
     env: process.env, stdio: ['ignore', 'pipe', 'pipe'],
   });
   app.stdout.on('data', v => { output += v.toString(); });
@@ -73,7 +74,7 @@ async function start() {
   for (let n = 0; n < 60; n++) {
     if (app.exitCode !== null) break;
     try {
-      const res = await fetch(root + '/api/mobile/health');
+      const res = await fetch(root + '/api/mobile/health', { signal: AbortSignal.timeout(2_000) });
       if (res.status < 500) return;
     } catch { /* booting */ }
     await new Promise(resolve => setTimeout(resolve, 500));
@@ -81,7 +82,7 @@ async function start() {
   throw new Error('Synthetic Next.js test server did not start: ' + output.slice(-1400));
 }
 
-test('student-only OTP, reuse, guesses, tenant/period isolation, minimal status, session revoke', async () => {
+test('student-only OTP, reuse, guesses, tenant/period isolation, minimal status, session revoke', { timeout: 120_000 }, async () => {
   try {
     await seed();
     await start();
@@ -162,4 +163,4 @@ test('student-only OTP, reuse, guesses, tenant/period isolation, minimal status,
     if (app) app.kill('SIGTERM');
     await prisma.$disconnect();
   }
-}, { timeout: 120_000 });
+});
