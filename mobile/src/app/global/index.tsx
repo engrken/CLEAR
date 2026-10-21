@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import { api } from '@/api';
@@ -10,6 +10,7 @@ import { spacing, useTheme } from '@/theme';
 
 export default function GlobalDashboard() {
   const global = useGlobalSession();
+  const router = useRouter();
   const { signOut } = useSession();
   const { c } = useTheme();
   const overview = useAsync(() => api.getGlobalOverview(global), global.token);
@@ -27,7 +28,7 @@ export default function GlobalDashboard() {
       </View>
 
       <Banner tone="info" title="Global Superadmin · read-only Android access">
-        Your global role is separate from departmental roles. You can review organizations and role counts; provisioning, account suspension, impersonation, financial changes and official receipts remain in the audited web portal.
+        Open any tenant below to view its financial overview, student roster, activity and pending remittances. Changes, financial posting, provisioning and official receipts remain on the audited web portal.
       </Banner>
 
       {overview.error ? (
@@ -65,6 +66,16 @@ export default function GlobalDashboard() {
                   {org.status} · {org.activeAy} · {org.activeTerm}
                 </Text>
                 <Text variant="bodySm">{org.studentsCount} students · {org.officersCount} officers</Text>
+                <Button
+                  block
+                  variant="secondary"
+                  size="sm"
+                  onPress={() => router.push({
+                    pathname: '/global/tenant/[org]',
+                    params: { org: org.subdomain },
+                  })}>
+                  Open tenant (read-only)
+                </Button>
                 {org.activeRoles?.length ? (
                   <View style={{ gap: 4 }}>
                     <Text variant="caption" color="inkMuted">Active department roles (not global administrator grants)</Text>
