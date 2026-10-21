@@ -540,3 +540,21 @@ model GlobalAdminAudit {
   @@index([createdAt])
   @@index([targetEmail, createdAt])
 }
+
+/// Revocable global-superadmin bearer sessions. They are deliberately separate
+/// from department MobileSession records and never grant tenant permissions.
+model GlobalMobileSession {
+  id                   String    @id @default(uuid())
+  tokenHash            String    @unique
+  adminEmail           String
+  globalAdminId        String
+  globalAdminVersion   Int
+  createdAt            DateTime  @default(now()) @db.Timestamptz(3)
+  expiresAt            DateTime  @db.Timestamptz(3)
+  lastUsedAt           DateTime  @default(now()) @db.Timestamptz(3)
+  revokedAt            DateTime? @db.Timestamptz(3)
+  userAgent            String?
+
+  @@index([adminEmail])
+  @@index([expiresAt])
+}
