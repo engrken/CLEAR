@@ -3,6 +3,7 @@
 // collection or tenant business tables. All business data access remains GET-only.
 import 'server-only';
 import crypto from 'node:crypto';
+import { isIP } from 'node:net';
 import type { Organization, Student } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { sendEmail } from '@/lib/mailer';
@@ -34,12 +35,15 @@ function sessionIdentifier(token: string) {
   return 'clear-student:session:' + crypto.createHash('sha256').update(token).digest('hex');
 }
 function sourceFingerprint(req: Request) {
-  // Source is supplementary abuse protection, never an authentication factor.
-  // The per-identity budgets below remain enforced even if proxy IP headers
-  // are absent or spoofed.
-  const forwarded = req.headers.get('x-forwarded-for');
-  const ip = forwarded?.split(',').map(v => v.trim()).filter(Boolean).pop() || 'unknown';
-  return digest('source', ip.slice(0, 120));
+  // Vercel overwrites incoming forwarding headers. Only use the platform's
+  // proxy-reported client IP in that environment (never a raw caller-provided
+  // X-Forwarded-For elsewhere). The per-identity throttle is independent.
+  const forwarded = process.env.VERCEL === '1'
+    ? req.headers.get('x-vercel-forwarded-for') || req.headers.get('x-real-ip')
+    : null;
+  const candidate = forwarded?.split(',')[0]?.trim() || '';
+  const ip = isIP(candidate) ? candidate : 'unknown';
+  return digest('source', ip);
 }
 function validInputs(studentId: string, email: string) {
   return studentId.length > 0 && studentId.length <= 80 &&
