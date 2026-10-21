@@ -77,7 +77,7 @@ export default function Portal() {
             pathname: '/global/tenant/[org]',
             params: { org: o.subdomain },
           })}>
-          Open {o.name} as Global Superadmin
+          {`Open ${o.name} as Global Superadmin`}
         </Button>
       ) : (
         <>
