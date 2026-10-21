@@ -25,6 +25,7 @@ on:
 
 permissions:
   contents: read
+  statuses: read
 
 jobs:
   internal-qa-apk:
@@ -53,6 +54,34 @@ jobs:
             echo "::error::Production deployed SHA must exactly match approved checked-out main SHA."
             exit 1
           fi
+      - name: Require GitHub-recorded successful Vercel deployment status for this SHA
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          node --input-type=module <<'CHECK_DEPLOYMENT'
+          const uri = `https://api.github.com/repos/${process.env.REPO}/commits/${process.env.COMMIT_SHA}/status`;
+          const result = await fetch(uri, {
+            headers: {
+              Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+              Accept: 'application/vnd.github+json',
+              'X-GitHub-Api-Version': '2022-11-28',
+            },
+            signal: AbortSignal.timeout(15_000),
+          });
+          if (!result.ok) {
+            console.error('Cannot verify GitHub deployment status. No APK build queued.');
+            process.exit(1);
+          }
+          const value = await result.json();
+          if (!(value.statuses || []).some(s => s.context === 'Vercel' && s.state === 'success')) {
+            console.error('Exact checked-out commit has no successful Vercel status. No APK build queued.');
+            process.exit(1);
+          }
+          console.log('Successful Vercel GitHub status confirmed for exact approved commit.');
+          console.log('Still require separate human Vercel Production DATABASE_URL attestation.');
+          CHECK_DEPLOYMENT
       - name: Require internal build token (do not print)
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}

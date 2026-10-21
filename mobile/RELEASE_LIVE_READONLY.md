@@ -35,7 +35,7 @@ against the Preview backend; do not repoint its Vercel alias.
    mobile API read-only method guards are deployed and responder is HTTPS.
 4. **Only then** use GitHub Actions → `CLEAR Android internal Production
    viewer QA APK (build only)` → Run workflow on `main`. Provide:
-   exact approved Production-deployed 40-character SHA; true only for the
+   exact approved Production-deployed 40-character SHA (the workflow additionally checks GitHub's Vercel success status for that exact commit); true only for the
    independently verified Vercel database mapping; and the literal
    `BUILD_QA_APK_ONLY`.
 5. The workflow verifies the pinned API and disabled financial/tenant mutations,

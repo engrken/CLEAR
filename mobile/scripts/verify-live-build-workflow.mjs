@@ -8,6 +8,8 @@ assert.match(workflow, /github\.ref == 'refs\/heads\/main'/, 'Require reviewed m
 assert.match(workflow, /inputs\.production_database_mapping_verified/, 'Require Vercel/Neon mapping confirmation');
 assert.match(workflow, /inputs\.qa_build_confirmation == 'BUILD_QA_APK_ONLY'/, 'Require literal QA-only approval');
 assert.match(workflow, /deployed_production_sha/, 'Require exact deployed server SHA');
+assert.match(workflow, /statuses: read/, 'Read only commit statuses');
+assert.match(workflow, /s.context === 'Vercel' && s.state === 'success'/, 'Require successful official Vercel commit status');
 assert.match(workflow, /\$APPROVED_SHA" != "\$GITHUB_SHA"/, 'Require matching deployed/checked-out SHA');
 assert.doesNotMatch(workflow, /security_and_device_qa_approved|physical_device_qa_approved|all_role_qa_passed/, 'Device QA follows the QA APK build');
 assert.match(workflow, /--profile live-readonly-internal --non-interactive --no-wait/, 'Queue only internal QA APK');
