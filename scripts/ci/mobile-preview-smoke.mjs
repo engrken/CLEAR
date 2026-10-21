@@ -60,4 +60,17 @@ for (const [name, path] of [
     assert.equal(value?.error?.code, 'unauthorized', `${name}: incorrect auth rejection`);
   });
 }
+// Web Global Superadmin can inspect any tenant, but only with its independent
+// authenticated session. A missing bearer must fail before tenant discovery.
+for (const [name, part] of [
+  ['Global tenant financial overview', 'dashboard'],
+  ['Global tenant students', 'students'],
+  ['Global tenant activity', 'ledger'],
+  ['Global tenant pending remittances', 'remittances'],
+]) {
+  await probe(`${name} denies anonymous users`, `/api/mobile/global/orgs/${slug}/${part}`, 401, (value) => {
+    assert.equal(value?.error?.code, 'unauthorized', `${name}: missing global auth rejection`);
+  });
+}
+
 console.log('PASS Preview reachable; public reads work and protected endpoints reject unauthenticated access. No financial/student details printed or changed.');
