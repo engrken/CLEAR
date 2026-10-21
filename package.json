@@ -9,7 +9,7 @@
     "lint": "eslint",
     "postinstall": "prisma generate",
     "test:time": "node --experimental-strip-types --test tests/clear-timezone.test.mjs",
-    "test:finance": "node --experimental-strip-types --test tests/financial-integrity*.test.mjs tests/remittance-fee-policy.test.mjs tests/summary-collections.test.mjs tests/summary-penalties.test.mjs"
+    "test:finance": "node --experimental-strip-types --test tests/financial-integrity*.test.mjs tests/remittance-fee-policy.test.mjs tests/summary-collections.test.mjs tests/summary-penalties.test.mjs tests/financial-engine-parity.test.mjs"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.3",
