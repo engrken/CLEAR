@@ -3,7 +3,7 @@
     "name": "CLEAR",
     "slug": "clear-mobile",
     "owner": "rupert2133s-team",
-    "version": "1.1.1",
+    "version": "1.2.0",
     "runtimeVersion": {
       "policy": "appVersion"
     },
