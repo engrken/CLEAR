@@ -12,7 +12,7 @@ export default function Portal() {
   const { dept } = useLocalSearchParams<{ dept: string }>();
   const router = useRouter();
   const { c } = useTheme();
-  const { session } = useSession();
+  const { session, globalSession } = useSession();
   const org = useAsync(() => api.getOrganization(dept), dept);
 
   if (org.loading && !org.data) {
@@ -68,18 +68,37 @@ export default function Portal() {
       {signedInHere ? (
         <Text variant="bodySm" color="inkMuted" style={styles.signedIn}>{`Signed in as ${session!.officer.fullName}.`}</Text>
       ) : null}
-      <Button
-        block
-        variant="secondary"
-        icon="shield"
-        onPress={() =>
-          signedInHere ? router.replace('/home') : router.push({ pathname: '/d/[dept]/sign-in', params: { dept } })
-        }>
-        {signedInHere ? 'Open officer workspace' : 'Officer sign-in'}
-      </Button>
-      <Button block variant="ghost" icon="shield" onPress={() => router.push('/global/sign-in')}>
-        Global Superadmin sign-in — access any tenant
-      </Button>
+      {globalSession ? (
+        <Button
+          block
+          variant="secondary"
+          icon="shield"
+          onPress={() => router.push({
+            pathname: '/global/tenant/[org]',
+            params: { org: o.subdomain },
+          })}>
+          Open {o.name} as Global Superadmin
+        </Button>
+      ) : (
+        <>
+          <Button
+            block
+            variant="secondary"
+            icon="shield"
+            onPress={() => signedInHere
+              ? router.replace('/home')
+              : router.push({ pathname: '/d/[dept]/sign-in', params: { dept } })}>
+            {signedInHere ? 'Open officer workspace' : 'Officer sign-in'}
+          </Button>
+          <Button
+            block
+            variant="ghost"
+            icon="shield"
+            onPress={() => router.push('/global/sign-in')}>
+            Global Superadmin sign-in — access any tenant
+          </Button>
+        </>
+      )}
     </Screen>
   );
 }
