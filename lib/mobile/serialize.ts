@@ -9,8 +9,6 @@ import { effectiveTabs } from '@/lib/roles';
 export const toCentavos = (pesos: unknown) => Math.round((Number(pesos) || 0) * 100);
 export const toPesos = (centavos: number) => Math.round(centavos) / 100;
 
-const ROLES = new Set(['admin', 'treasurer', 'auditor', 'viewer']);
-
 export function toOrganization(org: Pick<Organization, 'subdomain' | 'name' | 'type' | 'logo' | 'activeAy' | 'activeTerm'>) {
   return {
     subdomain: org.subdomain,
@@ -23,13 +21,16 @@ export function toOrganization(org: Pick<Organization, 'subdomain' | 'name' | 't
 }
 
 export function toOfficer(user: Pick<TenantUser, 'id' | 'fullName' | 'email' | 'role' | 'allowedTabs'>) {
-  const raw = String(user.role || '').trim().toLowerCase();
-  const role = ['master', 'administrator'].includes(raw) ? 'admin' : ROLES.has(raw) ? raw : 'viewer';
+  // Preserve the actual database role label. Some tenant accounts have the
+  // name 'superadmin' with explicit department tabs; they are NOT global admins.
+  // Only lib/mobile/global-session.ts can issue global-mobile authorization.
+  const role = String(user.role || 'viewer').trim().toLowerCase() || 'viewer';
   return {
     id: user.id,
     fullName: user.fullName,
     email: user.email,
     role,
+    scope: 'department' as const,
     allowedTabs: effectiveTabs(user.role, user.allowedTabs),
   };
 }
