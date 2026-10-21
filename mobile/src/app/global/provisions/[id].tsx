@@ -3,6 +3,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { api, type OrganizationStatus, type SubscriptionTier } from '@/api';
+import { MOBILE_BUSINESS_WRITES_ENABLED } from '@/api/config';
 import { BackHeader, Banner, Button, Card, Screen, Text, TextField } from '@/components/ui';
 import { useGlobalSession } from '@/lib/session';
 import { useAsync } from '@/lib/use-async';
@@ -65,6 +66,40 @@ export default function ManageTenant() {
     } finally {
       setBusy(false);
     }
+  }
+
+  if (!MOBILE_BUSINESS_WRITES_ENABLED) {
+    return (
+      <Screen edges={['top', 'bottom']}
+        header={<BackHeader title="Tenant status" onBack={() => router.replace('/global/provisions')} />}>
+        <Banner tone="info" title="Read-only tenant status">
+          This viewer cannot modify tenant status, subscription tiers, school groups or records.
+        </Banner>
+        {tenants.loading && !tenants.data ? <ActivityIndicator color={c.cobalt} /> : null}
+        {tenants.error ? <Banner tone="danger" title="Unable to load tenant">{tenants.error.message}</Banner> : null}
+        {tenants.data && !org ? <Banner tone="danger" title="Tenant unavailable">This tenant was not found.</Banner> : null}
+        {org ? (
+          <Card>
+            <View style={styles.section}>
+              <Text variant="headline">{org.name}</Text>
+              <Text variant="bodySm" color="inkMuted">{org.subdomain} · {org.type}</Text>
+              <Text variant="bodyStrong">Status: {org.status}</Text>
+              <Text variant="bodySm">Subscription tier: {org.tier}</Text>
+              <Text variant="bodySm">School group: {org.schoolGroup}</Text>
+              <Text variant="bodySm">Active period: {org.activeAy} · {org.activeTerm}</Text>
+              <Text variant="caption" color="inkMuted">
+                {org.studentsCount} students · {org.collectionsCount} collection entries · {org.officersCount} officers
+              </Text>
+            </View>
+          </Card>
+        ) : null}
+        {org ? <Button block variant="secondary" onPress={() => router.push({
+          pathname: '/global/tenant/[org]', params: { org: org.subdomain },
+        })}>Open tenant overview</Button> : null}
+        <Button block variant="secondary" onPress={reload}>Refresh live status</Button>
+        <Button block variant="ghost" onPress={() => router.replace('/global/provisions')}>Back to tenants</Button>
+      </Screen>
+    );
   }
 
   return (
