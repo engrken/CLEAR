@@ -1,6 +1,14 @@
 name: CLEAR Android EAS preview APK
 
 on:
+  # Branch-only one-time dispatch via a workflow-file push: GitHub does not
+  # expose manual dispatch for workflows absent from the default branch.
+  # Subsequent ordinary code pushes do NOT trigger EAS builds.
+  push:
+    branches:
+      - android-parity-integration
+    paths:
+      - '.github/workflows/android-eas-preview.yml'
   workflow_dispatch:
 
 permissions:
@@ -8,6 +16,7 @@ permissions:
 
 jobs:
   eas-preview:
+    if: github.ref == 'refs/heads/android-parity-integration'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
@@ -28,6 +37,12 @@ jobs:
             echo "::error::Add an Expo access token as the EXPO_TOKEN GitHub Actions secret."
             exit 1
           fi
+      - name: Guard isolated Preview APK configuration
+        run: |
+          node -e "const a=require('./eas.json'); const p=a.build.preview; if(p.distribution!=='internal'||p.android.buildType!=='apk'||p.env.EXPO_PUBLIC_API_URL!=='https://clearsys-git-android-parity-integration-kentbsece-7567.vercel.app/api/mobile'){process.exit(1)}"
+          node -e "const fs=require('fs'); if(!fs.readFileSync('src/api/config.ts','utf8').includes('PAYMENT_WRITES_ENABLED = false')){process.exit(1)}"
+      - name: Reconcile mobile lockfile in disposable CI workspace
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
       - name: Install Expo dependencies
         run: npm ci
       - name: Check TypeScript
