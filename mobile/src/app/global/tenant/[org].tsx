@@ -161,7 +161,7 @@ export default function GlobalTenantReadOnly() {
           ) : null}
         </>
       )}
-      <Button block variant="secondary" onPress={refresh}>Refresh {section}</Button>
+      <Button block variant="secondary" onPress={refresh}>{`Refresh ${section}`}</Button>
       <Button block variant="ghost" onPress={() => router.replace('/global')}>Back to all tenants</Button>
     </Screen>
   );
