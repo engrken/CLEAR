@@ -37,6 +37,12 @@ async function probe(name, path, expected, validate) {
   return body;
 }
 
+await probe('Isolated Preview environment and global session schema', '/api/mobile/health', 200, (value) => {
+  assert.equal(value?.status, 'ready');
+  assert.equal(value?.deployment, 'preview');
+  assert.equal(value?.branch, 'android-parity-integration');
+  assert.equal(value?.globalSessionSchema, 'ready');
+});
 const orgs = await probe('Public department directory', '/api/mobile/orgs', 200, (value) => {
   assert.ok(Array.isArray(value), 'directory must be a JSON array');
   assert.ok(value.length > 0, 'Preview should have at least one active test department');
@@ -48,6 +54,7 @@ await probe('Department metadata', `/api/mobile/orgs/${slug}`, 200);
 await probe('Public fee list', `/api/mobile/orgs/${slug}/fees`, 200);
 for (const [name, path] of [
   ['Global overview denies anonymous users', '/api/mobile/global/overview'],
+  ['Global provisioning directory denies anonymous users', '/api/mobile/global/provisions'],
   ['Global session denies anonymous users', '/api/mobile/global/auth/session'],
   ['Global tenant overview denies anonymous users', `/api/mobile/global/orgs/${slug}/dashboard`],
   ['Global tenant students deny anonymous users', `/api/mobile/global/orgs/${slug}/students`],
