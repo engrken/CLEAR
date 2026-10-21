@@ -44,6 +44,9 @@ jobs:
       - name: Require current Global Superadmin tenant selector
         run: |
           node -e "const fs=require('fs'); for(const p of ['src/app/global/tenant/[org].tsx','../lib/mobile/global-tenant.ts','../app/api/mobile/global/orgs/[org]/dashboard/route.ts']){if(!fs.existsSync(p)){console.error('Missing expected global tenant read-only source');process.exit(1)}}"
+      - name: Require direct JIECEP Global Superadmin sign-in route
+        run: |
+          node -e "const fs=require('fs'); const p=fs.readFileSync('src/app/d/[dept]/index.tsx','utf8'); const l=fs.readFileSync('src/app/d/[dept]/sign-in.tsx','utf8'); const m=fs.readFileSync('src/app/(officer)/more.tsx','utf8'); if(!p.includes('Open ${o.name} as Global Superadmin')||!p.includes('global/tenant/[org]')||!l.includes('Sign in as Global Superadmin')||!m.includes('Sign in as Global Superadmin')){console.error('Global admin JIECEP route missing');process.exit(1)}"
       - name: Reconcile mobile lockfile in disposable CI workspace
         run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
       - name: Install Expo dependencies
