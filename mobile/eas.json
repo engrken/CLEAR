@@ -37,6 +37,18 @@
       "android": {
         "buildType": "app-bundle"
       }
+    },
+    "live-readonly-internal": {
+      "distribution": "internal",
+      "environment": "production",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://clearsys.vercel.app/api/mobile",
+        "EXPO_PUBLIC_CLEAR_RELEASE_KIND": "live-readonly-internal"
+      },
+      "android": {
+        "buildType": "apk"
+      },
+      "autoIncrement": true
     }
   },
   "submit": {

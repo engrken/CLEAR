@@ -1,0 +1,31 @@
+name: Android internal live-viewer release preflight
+
+on:
+  pull_request:
+    paths:
+      - 'mobile/eas.json'
+      - 'mobile/src/api/config.ts'
+      - 'mobile/src/api/http.ts'
+      - 'mobile/app.json'
+      - 'mobile/scripts/verify-live-viewer.mjs'
+      - '.github/workflows/android-live-viewer-preflight.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-viewer-config:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify separately pinned live read-only APK configuration
+        run: node mobile/scripts/verify-live-viewer.mjs
+      - name: Confirm no Expo/EAS tokens required by this preflight
+        run: |
+          test -f mobile/eas.json
+          test -f mobile/app.json

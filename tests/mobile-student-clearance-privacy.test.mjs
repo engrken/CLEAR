@@ -62,6 +62,15 @@ test('student OTP UI never sends arbitrary student ID as its authenticated clear
   assert.match(ui, /revokeStudentClearance/);
   assert.match(ui, /officerMode/);
   assert.match(http, /getOwnClearance: \(slug, studentToken\)/);
+  assert.match(http, /res\.status === 401 && token && !token\.startsWith\('clrs_'\)/);
   assert.match(http, /request\(\x60\$\{org\(slug\)\}\/clearance\x60, \{ token: studentToken \}\)/);
   assert.match(ui, /status === 'hold' && MOBILE_BUSINESS_WRITES_ENABLED/);
+});
+
+test('OTP source throttle cannot be evaded with a caller-supplied IP header or multiple hops', () => {
+  const source = read('lib/mobile/student-clearance-auth.ts');
+  assert.match(source, /req\.headers\.get\('x-vercel-forwarded-for'\)/);
+  assert.match(source, /!forwarded\.includes\(','\)/);
+  assert.match(source, /isIP\(candidate\) \? candidate : 'unknown'/);
+  assert.doesNotMatch(source, /req\.headers\.get\('x-real-ip'\)|forwarded\?\.split\(','\)\[0\]/);
 });

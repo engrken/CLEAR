@@ -13,6 +13,20 @@ const configuredMode = process.env.EXPO_PUBLIC_API_MODE;
 const configuredUrl = process.env.EXPO_PUBLIC_API_URL;
 const apiUrl = (configuredUrl || (__DEV__ ? DEV_URL : PROD_URL)).replace(/\/+$/, '');
 
+// A separately identified internal Production viewer APK cannot silently inherit
+// the Preview API alias or a third-party endpoint from EAS/project variables.
+// Existing preview builds remain pointed to their intentionally isolated backend.
+const releaseKind = process.env.EXPO_PUBLIC_CLEAR_RELEASE_KIND;
+if (releaseKind === 'live-readonly-internal') {
+  if (__DEV__ || configuredMode === 'mock' || apiUrl !== PROD_URL) {
+    throw new Error('CLEAR live viewer release must use the pinned Production HTTPS API.');
+  }
+  if (PAYMENT_WRITES_ENABLED !== false || MOBILE_BUSINESS_WRITES_ENABLED !== false) {
+    throw new Error('CLEAR live viewer may not enable business transactions.');
+  }
+}
+
+
 if (!__DEV__) {
   if (configuredMode === 'mock') {
     throw new Error('CLEAR security policy: mock API is prohibited in release builds.');

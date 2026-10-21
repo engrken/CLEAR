@@ -3,6 +3,7 @@
 // collection or tenant business tables. All business data access remains GET-only.
 import 'server-only';
 import crypto from 'node:crypto';
+import { isIP } from 'node:net';
 import type { Organization, Student } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { sendEmail } from '@/lib/mailer';
@@ -34,12 +35,17 @@ function sessionIdentifier(token: string) {
   return 'clear-student:session:' + crypto.createHash('sha256').update(token).digest('hex');
 }
 function sourceFingerprint(req: Request) {
-  // Source is supplementary abuse protection, never an authentication factor.
-  // The per-identity budgets below remain enforced even if proxy IP headers
-  // are absent or spoofed.
-  const forwarded = req.headers.get('x-forwarded-for');
-  const ip = forwarded?.split(',').map(v => v.trim()).filter(Boolean).pop() || 'unknown';
-  return digest('source', ip.slice(0, 120));
+  // Vercel overwrites incoming forwarding headers. Only use the platform's
+  // proxy-reported client IP in that environment (never a raw caller-provided
+  // X-Forwarded-For elsewhere). The per-identity throttle is independent.
+  // Trust only Vercel's platform-managed client address. A caller-supplied
+  // X-Real-IP or multi-hop/ambiguous address must NEVER mint a new rate bucket.
+  const forwarded = process.env.VERCEL === '1'
+    ? req.headers.get('x-vercel-forwarded-for')
+    : null;
+  const candidate = forwarded && !forwarded.includes(',') ? forwarded.trim() : '';
+  const ip = isIP(candidate) ? candidate : 'unknown';
+  return digest('source', ip);
 }
 function validInputs(studentId: string, email: string) {
   return studentId.length > 0 && studentId.length <= 80 &&
@@ -87,6 +93,10 @@ export async function requestStudentClearanceCode(
   const sourceAllowed = await spendBudget('clear-student:send-source:' + sourceFingerprint(req), 30, 0, now);
   const accountAllowed = await spendBudget('clear-student:send-account:' + identity, 5, 60_000, now);
   if (!sourceAllowed || !accountAllowed) return { message: GENERIC_SENT };
+  const guessLock = await prisma.authThrottle.findUnique({
+    where: { key: guessKey(identity) }, select: { lockedUntil: true },
+  });
+  if (guessLock?.lockedUntil && guessLock.lockedUntil > now) return { message: GENERIC_SENT };
 
   const student = await prisma.student.findFirst({
     where: {
@@ -254,7 +264,11 @@ export async function requireStudentClearanceSession(
   return { id: student.id, studentId: student.studentId };
 }
 
-export async function revokeStudentClearanceSession(req: Request) {
+export async function revokeStudentClearanceSession(
+  req: Request, org: Pick<Organization, 'id' | 'activeAy' | 'activeTerm'>
+) {
+  // Session must belong to this active tenant before revocation.
+  await requireStudentClearanceSession(req, org);
   const token = readToken(req);
   await prisma.verificationToken.deleteMany({ where: { identifier: sessionIdentifier(token) } });
 }

@@ -43,7 +43,9 @@ async function request<T>(path: string, { method = 'GET', token, json, form, ide
     const code: string = err?.code || (res.status === 429 ? 'rate_limited' : 'server_error');
     const e = new ApiError(err?.message || fallbackMessage(code, res.status), code, res.status);
     // A rejected token on an officer call ends the session everywhere.
-    if (res.status === 401 && token) onUnauthorized?.();
+    // A student clearance OTP token is independent from an officer/global login.
+    // Its expiry must not sign an unrelated officer out of the application.
+    if (res.status === 401 && token && !token.startsWith('clrs_')) onUnauthorized?.();
     throw e;
   }
   return body as T;
