@@ -1,4 +1,5 @@
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Banner, Button, Card, Icon, Screen, Text } from '@/components/ui';
@@ -26,10 +27,11 @@ const initials = (name: string) =>
 
 export default function More() {
   const session = useOfficerSession();
-  const { signOut } = useSession();
+  const { signOut, refreshPermissions } = useSession();
   const router = useRouter();
   const { c } = useTheme();
   const modules = grantedModules(session.officer.allowedTabs);
+  useFocusEffect(useCallback(() => { void refreshPermissions(); }, [refreshPermissions]));
 
   return (
     <Screen edges={['top']} bottomInset={TAB_BAR_SPACE} contentStyle={{ paddingTop: 18, gap: 14 }}>
