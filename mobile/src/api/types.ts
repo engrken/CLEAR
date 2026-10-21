@@ -231,6 +231,11 @@ export type ClearApi = {
   listOrganizations(): Promise<Organization[]>;
   getOrganization(org: string): Promise<Organization>;
   lookupClearance(org: string, query: string, session?: Session | null): Promise<ClearanceResult>;
+  /** Student-only registered-email OTP; the server never reveals membership. */
+  requestStudentClearanceCode(org: string, studentId: string, email: string): Promise<{ message: string }>;
+  verifyStudentClearanceCode(org: string, studentId: string, email: string, code: string): Promise<{ token: string; expiresAt: string }>;
+  getOwnClearance(org: string, studentToken: string): Promise<ClearanceResult>;
+  revokeStudentClearance(org: string, studentToken: string): Promise<void>;
   listFeeItems(org: string): Promise<FeeItem[]>;
   submitProof(org: string, p: ProofSubmission): Promise<{ submissionId: string }>;
   // sign-in
