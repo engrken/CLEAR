@@ -23,13 +23,16 @@ export type TermLabel =
   | 'Full Year'
   | (string & {});
 
-export type Role = 'admin' | 'treasurer' | 'auditor' | 'viewer';
+/** Tenant database role. Labels are preserved; a tenant 'superadmin' is NOT global. */
+export type Role = 'admin' | 'administrator' | 'master' | 'treasurer' | 'auditor' | 'viewer' | 'superadmin' | (string & {});
 
 export type Officer = {
   id: string;
   fullName: string;
   email: string;
   role: Role;
+  /** Explicit tenant scope, never a global-administrator authorization grant. */
+  scope?: 'department';
   /** Effective permission tab IDs (admins get all), as in lib/permissions.ts. */
   allowedTabs: string[];
 };
@@ -179,6 +182,8 @@ export type ClearApi = {
   // officer
   getDashboard(s: Session): Promise<DashboardSummary>;
   listLedger(s: Session, filter?: { status?: string; limit?: number }): Promise<LedgerEntry[]>;
+  /** Accessible to tab-remittances even without tab-overview. */
+  listPendingRemittances(s: Session): Promise<LedgerEntry[]>;
   listStudents(s: Session, q?: string): Promise<Student[]>;
   recordPayment(s: Session, p: { studentId: string; feeId: string; amountCentavos: number; orNumber: string; idempotencyKey?: string }): Promise<LedgerEntry>;
   getRemittance(s: Session, id: string): Promise<RemittanceDetail>;
