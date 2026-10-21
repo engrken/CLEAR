@@ -74,6 +74,7 @@ function Navigator() {
 
         <Stack.Protected guard={!!globalSession && !session} redirectTo="/">
           <Stack.Screen name="global/index" />
+          <Stack.Screen name="global/tenant/[org]" />
         </Stack.Protected>
       </Stack>
     </NavThemeProvider>
