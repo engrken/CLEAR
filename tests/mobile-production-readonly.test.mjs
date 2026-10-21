@@ -96,3 +96,21 @@ test('tenant administrator portal is server-guarded, tenant-bound and GET-only',
   assert.match(more, /isTenantAdmin/);
   assert.match(more, /My tenant portal \(read-only\)/);
 });
+
+test('Android live viewer cannot invoke proof, payment or tenant changes', () => {
+  const config = read('mobile/src/api/config.ts');
+  assert.match(config, /export const PAYMENT_WRITES_ENABLED = false;/);
+  assert.match(config, /export const MOBILE_BUSINESS_WRITES_ENABLED = false;/);
+  const client = read('mobile/src/api/http.ts');
+  for (const method of ['submitProof', 'provisionTenant', 'manageTenant']) {
+    assert.match(client, new RegExp(method + ':.*MOBILE_BUSINESS_WRITES_ENABLED'));
+  }
+  const layout = read('mobile/src/app/_layout.tsx');
+  assert.match(layout, /Stack\.Protected guard=\{MOBILE_BUSINESS_WRITES_ENABLED\}/);
+  const student = read('mobile/src/app/d/[dept]/clearance.tsx');
+  assert.match(student, /status === 'hold' && MOBILE_BUSINESS_WRITES_ENABLED/);
+  const globalIndex = read('mobile/src/app/global/provisions/index.tsx');
+  assert.match(globalIndex, /MOBILE_BUSINESS_WRITES_ENABLED/);
+  const globalDetail = read('mobile/src/app/global/provisions/[id].tsx');
+  assert.match(globalDetail, /if \(!MOBILE_BUSINESS_WRITES_ENABLED\)/);
+});
