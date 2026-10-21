@@ -13,6 +13,8 @@ type MobileEnvironment = {
 
 const GLOBAL_OTP = /^\/api\/mobile\/global\/auth\/(?:request-code|verify-code)$/;
 const OFFICER_OTP = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/auth\/(?:request-code|verify-code)$/;
+const STUDENT_OTP = /^\\/api\\/mobile\\/orgs\\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\/student-auth\\/(?:request-code|verify-code)$/;
+const STUDENT_LOGOUT = /^\\/api\\/mobile\\/orgs\\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\/student-auth\\/session$/;
 const GLOBAL_LOGOUT = '/api/mobile/global/auth/session';
 const OFFICER_LOGOUT = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/auth\/session$/;
 
@@ -32,8 +34,8 @@ export function isMobileRequestAllowed(
   if (verb === 'GET' || verb === 'HEAD' || verb === 'OPTIONS') return true;
 
   // Login and logout are identity/session operations, not business transactions.
-  if (verb === 'POST' && (GLOBAL_OTP.test(path) || OFFICER_OTP.test(path))) return true;
-  if (verb === 'DELETE' && (path === GLOBAL_LOGOUT || OFFICER_LOGOUT.test(path))) return true;
+  if (verb === 'POST' && (GLOBAL_OTP.test(path) || OFFICER_OTP.test(path) || STUDENT_OTP.test(path))) return true;
+  if (verb === 'DELETE' && (path === GLOBAL_LOGOUT || OFFICER_LOGOUT.test(path) || STUDENT_LOGOUT.test(path))) return true;
 
   // Do not broaden this gate based on a user-supplied role, header or body.
   if (

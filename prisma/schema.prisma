@@ -37,6 +37,8 @@ model Organization {
   realignments                FundRealignment[]
   fundTransfers               FundTransfer[]
   MobileSession               MobileSession[]
+  studentOtpChallenges        StudentOtpChallenge[]
+  studentReadSessions         StudentReadSession[]
   onlineRemittances           OnlineRemittance[]
   penalties                   Penalty[]
   signatories                 Signatory[]
@@ -73,6 +75,8 @@ model Student {
   collections    Collection[]
   enrollments    Enrollment[]
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  studentOtpChallenge StudentOtpChallenge?
+  studentReadSessions StudentReadSession[]
 
   @@unique([organizationId, studentId])
 }
@@ -557,4 +561,40 @@ model GlobalMobileSession {
 
   @@index([adminEmail])
   @@index([expiresAt])
+}
+
+ 
+// OTP is scoped to a single existing roster student. No student data is copied.
+model StudentOtpChallenge {
+  id             String       @id @default(uuid())
+  organizationId String
+  studentId      String       @unique
+  codeHash       String
+  expiresAt      DateTime     @db.Timestamptz(3)
+  attempts       Int          @default(0)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  student        Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  @@index([organizationId])
+}
+
+model StudentReadSession {
+  id             String       @id @default(uuid())
+  organizationId String
+  studentId      String
+  tokenHash      String       @unique
+  academicYear   String
+  term           String
+  expiresAt      DateTime     @db.Timestamptz(3)
+  revokedAt      DateTime?    @db.Timestamptz(3)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  student        Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  @@index([organizationId, studentId], map: "StudentReadSession_org_student_idx")
+}
+
+model StudentAuthBudget {
+  key         String   @id
+  windowStart DateTime @db.Timestamptz(3)
+  used        Int      @default(0)
 }
