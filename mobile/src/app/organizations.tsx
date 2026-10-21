@@ -4,7 +4,7 @@ import { useCallback } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { api } from '@/api';
-import { BackHeader, Banner, Button, ColorHeader, Icon, OrgMark, Screen, Text } from '@/components/ui';
+import { Banner, Button, ColorHeader, Icon, OrgMark, Screen, Text } from '@/components/ui';
 import { useAsync } from '@/lib/use-async';
 import { spacing, useTheme } from '@/theme';
 
