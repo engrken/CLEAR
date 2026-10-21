@@ -22,14 +22,22 @@ Read-only is **business-data read-only**: issuing/verifying email OTP codes, ses
 - `lib/clearance.ts` now **fails closed** if historical debt evaluation fails. Missing historical arrears must never silently produce a false `cleared` result.
 - The Android client still has `PAYMENT_WRITES_ENABLED = false`. Do not remove it or open payment/proof/verification write endpoints.
 
-## Verified Neon observation (read-only SQL, 2026-10-22)
+## Production migration outcome (2026-10-22)
+
+The previously missing `GlobalMobileSession` migration `20261021173000_global_mobile_sessions` was **completed on primary** in a guarded atomic Neon database transaction at `2026-10-21T22:36:09.837Z`, with the checksum of the exact current migration file recorded in Prisma's migration ledger. A current user-created Production snapshot `snap-hidden-surf-b3vur7bb` and verified recovery clone `br-shy-glade-b3i6cbf9` preceded this operation.
+
+Postchecks: **10/10 committed migrations** recorded; global session table created empty with four total indexes; schema is identical to rehearsal; all 11 business tables matched their exact pre-migration fingerprints; 3 organizations, 104 students, 495 collection rows and ₱125,251 collections gross remained unchanged. No financial writes occurred.
+
+**Still STOP on release/merge:** verified Vercel runtime Production database environment mapping, SMTP delivery, authorized end-to-end device QA, signed APK production endpoint and formal reviewer sign-off. The migration alone neither enables Production Android access nor fixes the public web lookup issue #50. Do not run this migration again or issue a Production app release without these gates.
+
+## Original Neon inspection before migration (historical)
 
 Project `clear-sys-db`, **primary** Neon branch `br-calm-dew-b3vd1ira`:
 - `Organization`, `Student`, `MobileSession`, `_prisma_migrations` exist.
 - `GlobalMobileSession` does **not** exist, and migration `20261021173000_global_mobile_sessions` is not recorded.
 - Aggregate counts at inspection: 3 organizations and 104 students. No individual records were inspected or changed.
 
-**Stop gate:** Do not claim that Production Global Superadmin mobile sign-in works until the Vercel Production `DATABASE_URL` is confirmed to target the intended Neon database branch; the migration is reviewed against current Production, backed up, rehearsed on an isolated Neon branch, explicitly approved for Production, executed and verified. NEVER use `prisma db push` to force Production schema compatibility. Do not run migration or modify Production via this PR.
+**Release stop gate (after successful migration):** Do not claim Production Global Superadmin mobile sign-in works until the Vercel Production `DATABASE_URL` is independently confirmed to target the intended Neon database branch and real auth/device QA passes. The migration, current backup and schema verification have now been completed. NEVER use `prisma db push` to force Production schema compatibility. Do not run migration or modify Production via this PR.
 
 ## Student-clearance privacy and release stop gate
 
@@ -47,7 +55,7 @@ An aggregate-only Production readiness query found 104 student records, 94 with 
 
 1. Review/merge this PR after green `test:mobile-roles`, finance tests, root/mobile TypeScript, isolated Next.js build and migration rehearsal. Test tenant-admin vs ordinary-officer denial; one-tenant vs different-tenant token rejection; revoked/offboarded users; global vs officer credentials.
 2. Verify Vercel Production deployment SHA == approved `main` commit, and the Production database host/branch via environment metadata without revealing credentials. Preview data is **not** Production.
-3. Resolve the missing `GlobalMobileSession` migration using a separate explicitly approved migration runbook; never migrate or create real accounts as a convenience test.
+3. Verify the newly applied `GlobalMobileSession` table, exact committed migration checksum and 10/10 migration status; do not reapply the already completed migration or create real accounts as a convenience test.
 4. On Production, anonymously test protected GET endpoints (401 JSON), tenant-admin denied officer tokens (403), and business write routes (403 `read_only`). Avoid real POSTs that would change user financial/tenant records; only exercise the method guard on isolated staging and via static tests before Production.
 5. Confirm TLS/HTTPS, secure bearer storage, OTP delivery policy, sensitive-response caching disabled, audit logs and backup/recovery readiness.
 6. Do not repoint the currently queued 1.2.0 Preview APK to Production by changing Vercel aliases. For a new live-data internal APK, set the correct explicit HTTPS Production base URL in a separately reviewed EAS build profile and verify the packaged endpoint, role-based UI and disabled mutations before distribution.

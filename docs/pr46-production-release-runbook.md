@@ -1,10 +1,20 @@
 # CLEAR — production read-only release runbook (2026-10-22)
 
-**Status: NOT AUTHORIZED FOR PRODUCTION CUTOVER.** This runbook prepares an
-auditable rollout; none of its Production migration or deployment actions are
-implicit merge consequences. The canonical web finance ledger stays writable
+**Status: Global mobile session Production SCHEMA MIGRATION COMPLETED; APP RELEASE STILL BLOCKED.** This runbook preserves the pre-migration checks and records the later verified outcome. App rollout, mobile login QA, merging PRs and APK publication are not implied by a successful schema migration. The canonical web finance ledger stays writable
 only under existing, authorized web roles. Android financial/tenant **business
 mutations remain disabled for every actor**.
+
+## Verified production migration outcome — 2026-10-22 (current)
+
+- Owner-authorized Production schema migration applied transactionally at **2026-10-21 22:36:09.837 UTC** to Neon's default/primary branch `br-calm-dew-b3vd1ira`, database `neondb`, project `wandering-wind-73071792`.
+- Applied **exact GitHub file** `prisma/migrations/20261021173000_global_mobile_sessions/migration.sql` (blob `5a4346520558e3488dfcc3061bd1b22741e5cc79`), with its SHA-256 checksum `b88ea9110e57be81bc0caca174ddb536d19a94334814d03ed5b41a25f9e716e8` recorded in `_prisma_migrations` in the same database transaction. Migration marked finished, not rolled back; **10/10 committed migrations now recorded**. No `prisma db push` performed.
+- New `GlobalMobileSession` has **zero rows**, a primary key and **three expected indexes**. Its schema exactly matches isolated rehearsal `br-plain-base-b36kng96` (empty schema diff).
+- **All 11 existing business-data tables were unchanged before/after by exact row-count and full-row aggregate fingerprint checks**: Organization, Student, Collection, CollectionSetup, Collectible, Penalty, PenaltySettlementEvent, CashAdvance, CashierRemittance, OnlineRemittance and DigitalReceiptDelivery. The Production totals remained **3 organizations / 104 students / 495 Collection rows / ₱125,251 recorded gross**.
+- User-created up-to-date Production recovery snapshot `snap-hidden-surf-b3vur7bb`, created `2026-10-21T22:28:57Z`, was confirmed before applying schema DDL. Separately, untouched current recovery clone `br-shy-glade-b3i6cbf9` was verified schema- and record-identical with Production **before** migration. These two are the rollback references; do not restore over active Production automatically.
+- The Android Preview branch has the same `GlobalMobileSession` table layout/indexes but stores a **different prior checksum** for this migration (`b3ec8f925c0a81aff434a7b10b0d588b6866fb8fc4e4c9b2ac6f03c2da3f9925`). This suggests its original applied migration file differed from the current file. Track/reconcile Preview migration-history drift before any Preview migration synchronization. The newly applied Production checksum **matches current GitHub source exactly**.
+- **Still blocked:** independently verifying Vercel's actual Production `DATABASE_URL` from the Vercel app, real SMTP and device QA, signed build endpoint/permissions, public-web clearance disclosure policy and formal PR/release review. Do not merge draft PRs or distribute an APK solely because the database table exists. The Production website and app code were not redeployed as part of this schema change.
+
+The following sections document the earlier baseline and procedural safeguards; any “migration pending” statements below describe the state **before** the successful operation recorded above.
 
 ## Pinned code and dependencies
 
@@ -24,7 +34,7 @@ mutations remain disabled for every actor**.
   (verified students/registered email) and [#50](https://github.com/engrken/CLEAR/issues/50)
   (public web enumeration and signed URL/third-party QR leakage).
 
-## Confirmed Neon facts (read-only inspection)
+## Pre-migration Neon observations (historical)
 
 - Project `wandering-wind-73071792` (`clear-sys-db`); current primary
   `br-calm-dew-b3vd1ira` (database `neondb`).
