@@ -4,7 +4,7 @@ import { Platform } from 'react-native';
 
 import { API_URL, PAYMENT_WRITES_ENABLED } from './config';
 import { fallbackMessage } from './errors';
-import { ApiError, type ClearApi, type Session } from './types';
+import { ApiError, type ClearApi, type GlobalSession, type Session } from './types';
 
 let onUnauthorized: (() => void) | null = null;
 
@@ -94,6 +94,25 @@ export const httpApi: ClearApi = {
       // Signing out locally still works when the server can't be reached.
     }
   },
+
+  requestGlobalCode: (email) => request('/global/auth/request-code', {
+    method: 'POST', json: { email: email.trim().toLowerCase() },
+  }),
+  verifyGlobalCode: (email, code) => request('/global/auth/verify-code', {
+    method: 'POST', json: { email: email.trim().toLowerCase(), code },
+  }),
+  restoreGlobalSession: async (token) => {
+    const session = await request<Omit<GlobalSession, 'token'>>('/global/auth/session', { token });
+    return { ...session, token };
+  },
+  signOutGlobal: async (session) => {
+    try {
+      await request('/global/auth/session', { token: session.token, method: 'DELETE' });
+    } catch {
+      // Local sign-out still clears the secure-store token while offline.
+    }
+  },
+  getGlobalOverview: (session) => request('/global/overview', { token: session.token }),
 
   getDashboard: (s) => request(`${org(s.org.subdomain)}/dashboard`, as(s)),
   listLedger: (s, f) => request(`${org(s.org.subdomain)}/ledger`, { ...as(s), query: { status: f?.status, limit: f?.limit } }),
