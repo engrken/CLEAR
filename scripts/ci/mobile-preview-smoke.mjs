@@ -49,6 +49,10 @@ await probe('Public fee list', `/api/mobile/orgs/${slug}/fees`, 200);
 for (const [name, path] of [
   ['Global overview denies anonymous users', '/api/mobile/global/overview'],
   ['Global session denies anonymous users', '/api/mobile/global/auth/session'],
+  ['Global tenant overview denies anonymous users', `/api/mobile/global/orgs/${slug}/dashboard`],
+  ['Global tenant students deny anonymous users', `/api/mobile/global/orgs/${slug}/students`],
+  ['Global tenant ledger denies anonymous users', `/api/mobile/global/orgs/${slug}/ledger`],
+  ['Global tenant remittances deny anonymous users', `/api/mobile/global/orgs/${slug}/remittances`],
   ['Officer session denies anonymous users', `/api/mobile/orgs/${slug}/auth/session`],
   ['Financial overview denies anonymous users', `/api/mobile/orgs/${slug}/dashboard`],
   ['Ledger denies anonymous users', `/api/mobile/orgs/${slug}/ledger`],
