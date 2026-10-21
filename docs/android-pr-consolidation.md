@@ -42,3 +42,17 @@ npm run typecheck
 ```
 
 When Vercel allows another Preview deploy, validate OTP, revocation, tenant scoping, every role and module grant, denial of global tokens on tenant endpoints, and read-only financial totals on the isolated Neon Android Preview branch. Do not turn on financial writes or merge into `main` until independently approved.
+
+## Preview deployment retry after Vercel plan upgrade (2026-10-21)
+
+The repository owner requested a fresh **Preview-only** deployment attempt of
+`android-parity-integration` after upgrading the Vercel plan. This documentation
+commit is intentionally used as a GitHub push to re-trigger the existing Vercel
+Git integration; it makes **no API, Prisma, Expo, or financial behavior changes**.
+
+Expected deployment target: branch-specific Preview URL
+`https://clearsys-git-android-parity-integration-kentbsece-7567.vercel.app`.
+The Vercel branch-specific `DATABASE_URL` must remain scoped to the isolated
+Neon Android Preview branch. Check Vercel's deployment status and the
+`/api/mobile/orgs` read endpoint after the build. Do not merge to `main`,
+deploy Production, or enable Android financial writes as part of this retry.
