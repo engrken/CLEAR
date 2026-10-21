@@ -47,6 +47,10 @@ jobs:
       - name: Require direct JIECEP Global Superadmin sign-in route
         run: |
           node -e "const fs=require('fs'); const p=fs.readFileSync('src/app/d/[dept]/index.tsx','utf8'); const l=fs.readFileSync('src/app/d/[dept]/sign-in.tsx','utf8'); const m=fs.readFileSync('src/app/(officer)/more.tsx','utf8'); if(!p.includes('as Global Superadmin')||!p.includes('global/tenant/[org]')||!l.includes('Sign in as Global Superadmin')||!m.includes('Sign in as Global Superadmin')){console.error('Global admin JIECEP route missing');process.exit(1)}"
+      - name: Verify Release 1.2.0 and Global Superadmin provisioning pages
+        run: |
+          node -e "const a=require('./app.json'); const e=require('./eas.json'); if(a.expo.version!=='1.2.0'||e.build.preview.autoIncrement!==true) process.exit(1);"
+          node -e "const fs=require('fs'); for(const p of ['src/app/global/provisions/index.tsx','src/app/global/provisions/new.tsx','src/app/global/provisions/[id].tsx','../app/api/mobile/global/provisions/route.ts','../lib/provisioning/core.ts']) { if(!fs.existsSync(p)) { console.error('Missing Release 1 provisioning source');process.exit(1) } }"
       - name: Reconcile mobile lockfile in disposable CI workspace
         run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
       - name: Install Expo dependencies
