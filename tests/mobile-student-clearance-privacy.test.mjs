@@ -62,6 +62,7 @@ test('student OTP UI never sends arbitrary student ID as its authenticated clear
   assert.match(ui, /revokeStudentClearance/);
   assert.match(ui, /officerMode/);
   assert.match(http, /getOwnClearance: \(slug, studentToken\)/);
+  assert.match(http, /res\.status === 401 && token && !token\.startsWith\('clrs_'\)/);
   assert.match(http, /request\(\x60\$\{org\(slug\)\}\/clearance\x60, \{ token: studentToken \}\)/);
   assert.match(ui, /status === 'hold' && MOBILE_BUSINESS_WRITES_ENABLED/);
 });
