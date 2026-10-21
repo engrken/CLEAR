@@ -1,4 +1,5 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { AppState } from 'react-native';
 
 import { api, ApiError, setUnauthorizedHandler, type GlobalSession, type Session } from '@/api';
 import { deleteItem, getItem, setItem } from './secure-storage';
@@ -13,6 +14,7 @@ type Ctx = {
   signIn: (s: Session) => Promise<void>;
   signInGlobal: (s: GlobalSession) => Promise<void>;
   signOut: () => Promise<void>;
+  refreshPermissions: () => Promise<void>;
   can: (tab: string) => boolean;
 };
 
@@ -22,6 +24,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [globalSession, setGlobalSession] = useState<GlobalSession | null>(null);
   const [restoring, setRestoring] = useState(true);
+  const current = useRef<{ officer: Session | null; global: GlobalSession | null }>({
+    officer: null, global: null,
+  });
+  const refreshInFlight = useRef(false);
+  current.current = { officer: session, global: globalSession };
 
   const clear = useCallback(async () => {
     setSession(null);
@@ -84,6 +91,44 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return () => setUnauthorizedHandler(null);
   }, [clear]);
 
+  /** Fresh role/tabs always come from the server; client grants are never authority. */
+  const refreshPermissions = useCallback(async () => {
+    if (refreshInFlight.current) return;
+    const { officer, global } = current.current;
+    if (!officer && !global) return;
+    refreshInFlight.current = true;
+    try {
+      if (global) {
+        // Global privilege must never be restored or extended while offline.
+        const fresh = await api.restoreGlobalSession(global.token);
+        if (current.current.global?.token === global.token) {
+          await setItem(GLOBAL_KEY, JSON.stringify(fresh));
+          setGlobalSession(fresh);
+        }
+      } else if (officer) {
+        const fresh = await api.restoreSession(officer.org.subdomain, officer.token);
+        if (current.current.officer?.token === officer.token) {
+          await setItem(OFFICER_KEY, JSON.stringify(fresh));
+          setSession(fresh);
+        }
+      }
+    } catch (e) {
+      const rejected = e instanceof ApiError && (e.status === 401 || e.status === 403);
+      // Offline and expired global sessions fail closed. Tenant API authorization
+      // is still checked on every protected server request.
+      if (rejected || global) await clear();
+    } finally {
+      refreshInFlight.current = false;
+    }
+  }, [clear]);
+
+  useEffect(() => {
+    const listener = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void refreshPermissions();
+    });
+    return () => listener.remove();
+  }, [refreshPermissions]);
+
   const value = useMemo<Ctx>(() => ({
     session,
     globalSession,
@@ -109,8 +154,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (officer) await api.signOut(officer);
       if (admin) await api.signOutGlobal(admin);
     },
+    refreshPermissions,
     can: (tab) => !!session && session.officer.allowedTabs.includes(tab),
-  }), [session, globalSession, restoring, clear]);
+  }), [session, globalSession, restoring, clear, refreshPermissions]);
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }
