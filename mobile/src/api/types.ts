@@ -59,6 +59,12 @@ export type GlobalOverview = {
   globalAdmins: { active: number; pending: number };
 };
 
+/** Global superadmin tenant view: never an officer session or mutation grant. */
+export type GlobalTenantDashboard = {
+  organization: Organization & { status: string };
+  dashboard: DashboardSummary;
+};
+
 export type ClearanceResult = {
   /** Hidden on anonymous public lookups; present for authorized officers. */
   studentName: string | null;
@@ -180,6 +186,11 @@ export type ClearApi = {
   restoreGlobalSession(token: string): Promise<GlobalSession>;
   signOutGlobal(session: GlobalSession): Promise<void>;
   getGlobalOverview(session: GlobalSession): Promise<GlobalOverview>;
+  /** Read-only across ALL tenants, including inactive or archived, as on web. */
+  getGlobalTenantDashboard(session: GlobalSession, slug: string): Promise<GlobalTenantDashboard>;
+  listGlobalTenantStudents(session: GlobalSession, slug: string, q?: string): Promise<Student[]>;
+  listGlobalTenantLedger(session: GlobalSession, slug: string): Promise<LedgerEntry[]>;
+  listGlobalTenantRemittances(session: GlobalSession, slug: string): Promise<LedgerEntry[]>;
   // officer
   getDashboard(s: Session): Promise<DashboardSummary>;
   listLedger(s: Session, filter?: { status?: string; limit?: number }): Promise<LedgerEntry[]>;
