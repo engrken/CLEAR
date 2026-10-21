@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import { api, type ApiError, type RemittanceDetail } from '@/api';
+import { PAYMENT_WRITES_ENABLED } from '@/api/config';
 import {
   Avatar, BackHeader, Banner, Button, Icon, Money, Screen, StatusPill, SuccessScreen, Text, TextField, toneFor,
 } from '@/components/ui';
@@ -45,7 +46,7 @@ function Review({ id }: { id: string }) {
   const findNext = () => {
     setNext(undefined);
     api
-      .listLedger(session, { status: 'Pending Verification' })
+      .listPendingRemittances(session)
       .then((list) => {
         const rest = list.filter((x) => x.id !== id);
         setPendingCount(rest.length);
@@ -148,7 +149,7 @@ function Review({ id }: { id: string }) {
       header={<BackHeader title={TITLE} />}
       contentStyle={{ gap: 12 }}
       footer={
-        reviewed ? null : confirmInvalidate ? (
+        reviewed || !PAYMENT_WRITES_ENABLED ? null : confirmInvalidate ? (
           <View style={{ gap: spacing[2] }}>
             <Text variant="bodySm" color="dangerInk">
               Invalidate {l.reference} for {l.title}? The student must resubmit.
@@ -169,6 +170,11 @@ function Review({ id }: { id: string }) {
           </View>
         )
       }>
+      {!PAYMENT_WRITES_ENABLED && !reviewed ? (
+        <Banner tone="info" title="Review-only access">
+          You can inspect this proof, but issuing an official receipt or invalidating a remittance is disabled until Android financial integrity has been verified.
+        </Banner>
+      ) : null}
       {formError ? <Banner tone="danger" title="Couldn’t save the review">{formError}</Banner> : null}
 
       <View style={[styles.summary, { backgroundColor: reviewed ? c.soft : c.sunTint }]}>
@@ -208,7 +214,7 @@ function Review({ id }: { id: string }) {
         </View>
       )}
 
-      {reviewed ? null : (
+      {reviewed || !PAYMENT_WRITES_ENABLED ? null : (
         <TextField
           label="OR number you’re issuing"
           value={orNumber}
