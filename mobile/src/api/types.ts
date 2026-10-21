@@ -106,6 +106,25 @@ export type GlobalTenantDashboard = {
   dashboard: DashboardSummary;
 };
 
+/** Live, tenant-scoped metadata for an authenticated administrator only. */
+export type TenantPortalStatus = {
+  organization: {
+    subdomain: string;
+    name: string;
+    type: string;
+    status: OrganizationStatus;
+    tier: SubscriptionTier;
+    schoolGroup: string;
+    activeAy: string;
+    activeTerm: string;
+  };
+  studentsCount: number;
+  officersCount: number;
+  currentTermCollectionsCount: number;
+  mode: 'read_only';
+  asOf: string;
+};
+
 export type ClearanceResult = {
   /** Hidden on anonymous public lookups; present for authorized officers. */
   studentName: string | null;
@@ -238,6 +257,7 @@ export type ClearApi = {
   listGlobalTenantLedger(session: GlobalSession, slug: string): Promise<LedgerEntry[]>;
   listGlobalTenantRemittances(session: GlobalSession, slug: string): Promise<LedgerEntry[]>;
   // officer
+  getTenantPortal(s: Session): Promise<TenantPortalStatus>;
   getDashboard(s: Session): Promise<DashboardSummary>;
   listLedger(s: Session, filter?: { status?: string; limit?: number }): Promise<LedgerEntry[]>;
   /** Accessible to tab-remittances even without tab-overview. */
