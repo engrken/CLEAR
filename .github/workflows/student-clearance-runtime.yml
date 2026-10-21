@@ -44,6 +44,11 @@ jobs:
       AUTH_TRUST_HOST: 'true'
       SUPER_ADMIN_EMAIL: ci-superadmin@example.invalid
       CLEAR_CI_STUDENT_AUTH_TEST_ENABLED: '1'
+      SMTP_HOST: 127.0.0.1
+      SMTP_PORT: '2525'
+      SMTP_USER: ci-only-student-auth
+      SMTP_PASSWORD: ci-only-not-a-real-password
+      MAIL_FROM: CLEAR CI <ci-clear@example.invalid>
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

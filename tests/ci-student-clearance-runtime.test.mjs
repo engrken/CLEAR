@@ -4,6 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
+import { createServer } from 'node:net';
 import { PrismaClient } from '@prisma/client';
 
 const sandbox = process.env.CLEAR_CI_STUDENT_AUTH_TEST_ENABLED === '1' &&
@@ -22,6 +23,70 @@ const fixture = {
 };
 let app;
 let output = '';
+let smtpServer;
+const smtpSockets = new Set();
+const mailMessages = [];
+
+// Minimal local SMTP server: exercises the REAL Nodemailer transport and API
+// without using an external provider, credentials or real student identities.
+async function startLocalSmtp() {
+  smtpServer = createServer(socket => {
+    smtpSockets.add(socket);
+    socket.on('close', () => smtpSockets.delete(socket));
+    socket.on('error', () => {});
+    socket.setEncoding('utf8');
+    socket.write('220 ci-clear.test ESMTP ready\r\n');
+    let buffer = '';
+    let recording = false;
+    let body = [];
+    let recipient = '';
+    socket.on('data', chunk => {
+      buffer += chunk;
+      while (buffer.includes('\n')) {
+        const idx = buffer.indexOf('\n');
+        const line = buffer.slice(0, idx).replace(/\r$/, '');
+        buffer = buffer.slice(idx + 1);
+        if (recording) {
+          if (line === '.') {
+            mailMessages.push({ recipient, content: body.join('\n') });
+            recording = false;
+            body = [];
+            socket.write('250 2.0.0 synthetic mail accepted\r\n');
+          } else body.push(line.startsWith('..') ? line.slice(1) : line);
+          continue;
+        }
+        if (/^EHLO\s/i.test(line) || /^HELO\s/i.test(line)) {
+          socket.write('250-ci-clear.test\r\n250 AUTH PLAIN\r\n');
+        } else if (/^AUTH PLAIN\s/i.test(line)) {
+          socket.write('235 2.7.0 synthetic SMTP authenticated\r\n');
+        } else if (/^MAIL FROM:/i.test(line)) {
+          recipient = '';
+          socket.write('250 2.1.0 OK\r\n');
+        } else if (/^RCPT TO:/i.test(line)) {
+          recipient = line.slice('RCPT TO:'.length).replace(/[<>]/g, '').trim().toLowerCase();
+          socket.write('250 2.1.5 OK\r\n');
+        } else if (/^DATA$/i.test(line)) {
+          recording = true;
+          socket.write('354 End data with <CR><LF>.<CR><LF>\r\n');
+        } else if (/^QUIT$/i.test(line)) {
+          socket.end('221 2.0.0 Bye\r\n');
+        } else if (/^RSET$/i.test(line) || /^NOOP$/i.test(line)) {
+          socket.write('250 2.0.0 OK\r\n');
+        } else {
+          socket.write('500 unsupported synthetic SMTP command\r\n');
+        }
+      }
+    });
+  });
+  await new Promise((resolve, reject) => {
+    smtpServer.once('error', reject);
+    smtpServer.listen(2525, '127.0.0.1', () => {
+      smtpServer.removeListener('error', reject);
+      resolve();
+    });
+  });
+}
+
 const digest = (label, value) => crypto.createHmac('sha256', process.env.AUTH_SECRET)
   .update('mobile-student:' + label + ':' + value).digest('hex');
 
@@ -88,6 +153,7 @@ async function start() {
 test('student-only OTP, reuse, guesses, tenant/period isolation, minimal status, session revoke', { timeout: 120_000 }, async () => {
   try {
     await seed();
+    await startLocalSmtp();
     await start();
     const { tenantA, tenantB, a, b, c: studentC } = fixture;
 
@@ -120,6 +186,38 @@ test('student-only OTP, reuse, guesses, tenant/period isolation, minimal status,
     assert.equal(nonexistent.status, 200);
     assert.match(nonexistent.body?.message || '', /If the student ID and registered email match/);
     assert.ok(!('studentId' in nonexistent.body));
+
+    // Real request-code -> Nodemailer -> local SMTP -> real verification ->
+    // own-record query. Never print plaintext OTP to CI logs.
+    assert.equal(mailMessages.length, 0, 'unknown student must not cause email delivery');
+    const wrongTenantCode = await request(tenantB, '/clearance/auth/request-code', 'POST', {
+      studentId: studentC.studentId, email: studentC.email,
+    });
+    assert.equal(wrongTenantCode.status, 200, 'wrong-tenant request must be generic');
+    assert.equal(mailMessages.length, 0, 'wrong-tenant student must never be emailed');
+    const sent = await request(tenantA, '/clearance/auth/request-code', 'POST', {
+      studentId: studentC.studentId, email: studentC.email,
+    });
+    assert.equal(sent.status, 200, 'existing student gets same generic acknowledgment');
+    assert.equal(sent.body?.message, nonexistent.body?.message, 'response cannot disclose account existence');
+    assert.equal(mailMessages.length, 1, 'real server sent exactly one synthetic OTP email');
+    assert.equal(mailMessages[0].recipient, studentC.email,
+      'send only to the registered address');
+    assert.match(mailMessages[0].content, /CLEAR Student Clearance/);
+    const codeFromEmail = /\\b(\\d{6})\\b/.exec(mailMessages[0].content)?.[1];
+    assert.match(codeFromEmail || '', /^\\d{6}$/, 'synthetic SMTP captured a real six-digit OTP');
+    const verifiedFromEmail = await request(tenantA, '/clearance/auth/verify-code', 'POST', {
+      studentId: studentC.studentId, email: studentC.email, code: codeFromEmail,
+    });
+    assert.equal(verifiedFromEmail.status, 200, 'real email code must issue a short-lived student session');
+    const privateResponse = await request(tenantA, '/clearance', 'GET', undefined, verifiedFromEmail.body.token);
+    assert.equal(privateResponse.status, 200, 'student email credentials must read own status');
+    assert.equal(privateResponse.body.studentId, null);
+    assert.equal(privateResponse.body.studentName, null);
+    assert.equal(privateResponse.body.outstandingCentavos, null);
+    assert.equal((await request(tenantB, '/clearance', 'GET', undefined, verifiedFromEmail.body.token)).status, 401);
+    assert.equal((await request(tenantA, '/clearance/auth/session', 'DELETE', undefined, verifiedFromEmail.body.token)).status, 204);
+
 
     const identifier = await issueSyntheticCode(tenantA, a, '123456');
     const bad = await request(tenantA, '/clearance/auth/verify-code', 'POST', {
@@ -195,6 +293,8 @@ test('student-only OTP, reuse, guesses, tenant/period isolation, minimal status,
     assert.ok(lock?.lockedUntil && lock.lockedUntil > new Date());
   } finally {
     if (app) app.kill('SIGTERM');
+    for (const s of smtpSockets) s.destroy();
+    if (smtpServer?.listening) await new Promise(resolve => smtpServer.close(resolve));
     await prisma.$disconnect();
   }
 });
