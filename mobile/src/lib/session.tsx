@@ -89,12 +89,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     globalSession,
     restoring,
     signIn: async (officerSession) => {
+      if (globalSession) await api.signOutGlobal(globalSession);
       await deleteItem(GLOBAL_KEY);
       setGlobalSession(null);
       await setItem(OFFICER_KEY, JSON.stringify(officerSession));
       setSession(officerSession);
     },
     signInGlobal: async (adminSession) => {
+      if (session) await api.signOut(session);
       await deleteItem(OFFICER_KEY);
       setSession(null);
       await setItem(GLOBAL_KEY, JSON.stringify(adminSession));
