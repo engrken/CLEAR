@@ -26,7 +26,7 @@ jobs:
         working-directory: mobile
     env:
       CI: '1'
-      EXPO_PUBLIC_API_URL: https://clear.rupertbulquerin.com/api/mobile
+      EXPO_PUBLIC_API_URL: https://clearsys.vercel.app/api/mobile
     steps:
       - name: Free runner disk space before native build
         run: |
