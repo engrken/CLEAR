@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { api, type ClearanceResult, type Organization, type UnpaidItem } from '@/api';
+import { MOBILE_BUSINESS_WRITES_ENABLED } from '@/api/config';
 import { BackHeader, Button, ClearanceCard, Icon, OrgChip, Screen, Text, type UnpaidLine } from '@/components/ui';
 import { fromCentavos } from '@/lib/money';
 import { useSession } from '@/lib/session';
@@ -122,7 +123,7 @@ export default function Clearance() {
 
       <View style={styles.spacer} />
 
-      {result && org.data && result.status === 'hold' ? (
+      {result && org.data && result.status === 'hold' && MOBILE_BUSINESS_WRITES_ENABLED ? (
         <Button
           block
           icon="upload"
