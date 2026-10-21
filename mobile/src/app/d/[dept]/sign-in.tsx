@@ -1,4 +1,4 @@
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -18,6 +18,7 @@ const RESEND_AFTER = 60; // the server sends at most one code per 60 s (and 10 a
  */
 export default function SignIn() {
   const { dept } = useLocalSearchParams<{ dept: string }>();
+  const router = useRouter();
   const { signIn } = useSession();
   const org = useAsync<Organization>(() => api.getOrganization(dept), dept);
 
@@ -101,6 +102,12 @@ export default function SignIn() {
           helper={`Treasurers, auditors and admins of ${orgName ?? 'this department'}.`}
           error={error}
         />
+        <Banner tone="info" title="Global Superadmin?">
+          Global administrators use their own OTP sign-in and can select JIECEP or any other tenant afterward.
+        </Banner>
+        <Button block variant="secondary" icon="shield" onPress={() => router.push('/global/sign-in')}>
+          Sign in as Global Superadmin
+        </Button>
         {api.mode === 'mock' ? (
           <Banner tone="info" title="Offline demo">
             Sign in as admin, treasurer, auditor or viewer@{dept}.local.
@@ -139,6 +146,12 @@ export default function SignIn() {
       />
       <View style={styles.links}>
         <ResendPill seconds={cooldown} disabled={cooldown > 0 || busy} onPress={send} />
+        <Button
+          variant="secondary"
+          size="sm"
+          onPress={() => router.push('/global/sign-in')}>
+          Use Global Superadmin OTP instead
+        </Button>
         <Button
           variant="secondary"
           size="sm"
