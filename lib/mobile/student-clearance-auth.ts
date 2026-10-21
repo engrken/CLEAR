@@ -87,6 +87,10 @@ export async function requestStudentClearanceCode(
   const sourceAllowed = await spendBudget('clear-student:send-source:' + sourceFingerprint(req), 30, 0, now);
   const accountAllowed = await spendBudget('clear-student:send-account:' + identity, 5, 60_000, now);
   if (!sourceAllowed || !accountAllowed) return { message: GENERIC_SENT };
+  const guessLock = await prisma.authThrottle.findUnique({
+    where: { key: guessKey(identity) }, select: { lockedUntil: true },
+  });
+  if (guessLock?.lockedUntil && guessLock.lockedUntil > now) return { message: GENERIC_SENT };
 
   const student = await prisma.student.findFirst({
     where: {
@@ -254,7 +258,11 @@ export async function requireStudentClearanceSession(
   return { id: student.id, studentId: student.studentId };
 }
 
-export async function revokeStudentClearanceSession(req: Request) {
+export async function revokeStudentClearanceSession(
+  req: Request, org: Pick<Organization, 'id' | 'activeAy' | 'activeTerm'>
+) {
+  // Session must belong to this active tenant before revocation.
+  await requireStudentClearanceSession(req, org);
   const token = readToken(req);
   await prisma.verificationToken.deleteMany({ where: { identifier: sessionIdentifier(token) } });
 }
