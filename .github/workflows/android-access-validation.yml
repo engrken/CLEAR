@@ -7,6 +7,16 @@ on:
     paths:
       - 'app/api/mobile/global/**'
       - 'lib/mobile/**'
+      - 'lib/clearance.ts'
+      - 'mobile/src/**'
+      - 'tests/mobile-*.test.mjs'
+      - 'package.json'
+      - '.github/workflows/android-access-validation.yml'
+  pull_request:
+    paths:
+      - 'app/api/mobile/**'
+      - 'lib/mobile/**'
+      - 'lib/clearance.ts'
       - 'mobile/src/**'
       - 'tests/mobile-*.test.mjs'
       - 'package.json'
