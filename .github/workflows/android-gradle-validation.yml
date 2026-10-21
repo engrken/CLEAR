@@ -1,14 +1,23 @@
 name: Android Gradle validation (unsigned)
 
+# Full native builds are expensive. The access/typecheck workflow checks
+# mobile/src changes on every push; run Gradle for native/dependency changes
+# or on explicit internal APK validation requests.
 on:
   push:
     branches:
       - android-parity-integration
+    paths: &native_build_inputs
+      - 'mobile/package.json'
+      - 'mobile/package-lock.json'
+      - 'mobile/app.json'
+      - 'mobile/assets/**'
+      - 'mobile/plugins/**'
+      - 'mobile/android/**'
+      - 'mobile/.native-build-request'
   workflow_dispatch:
   pull_request:
-    paths:
-      - 'mobile/**'
-      - '.github/workflows/android-gradle-validation.yml'
+    paths: *native_build_inputs
 
 permissions:
   contents: read
