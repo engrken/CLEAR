@@ -1,11 +1,9 @@
-import { Image } from 'expo-image';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { setStatusBarStyle } from 'expo-status-bar';
 import { useCallback } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { api } from '@/api';
-import fcuSeal from '@/assets/images/fcu-seal.png';
 import { Banner, Button, ColorHeader, Icon, OrgMark, Screen, Text } from '@/components/ui';
 import { PRIVACY_URL, openWebPage } from '@/lib/links';
 import { useAsync } from '@/lib/use-async';
@@ -62,7 +60,6 @@ export default function Gateway() {
       <View style={styles.spacer} />
 
       <View style={styles.note}>
-        <Image source={fcuSeal} alt="Filamer Christian University seal" style={styles.seal} contentFit="contain" />
         <Text variant="caption" color="inkMuted" style={styles.noteText}>
           Not an official Filamer Christian University app. Your data is processed under the Data Privacy Act of 2012
           (RA 10173).
@@ -90,7 +87,6 @@ const styles = StyleSheet.create({
   orgText: { flex: 1, minWidth: 0, gap: 2 },
   spacer: { flex: 1, minHeight: spacing[2] },
   note: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], paddingHorizontal: spacing[2] },
-  seal: { width: 32, height: 32 },
   noteText: { flex: 1, fontSize: 12, lineHeight: 17 },
   privacy: { alignSelf: 'center', minHeight: 48 },
 });
