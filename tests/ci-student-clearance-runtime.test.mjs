@@ -145,7 +145,8 @@ test('student-only OTP, reuse, guesses, tenant/period isolation, minimal status,
     assert.equal(expired.status, 400, 'expired OTP cannot be consumed');
 
     await issueSyntheticCode(tenantB, b, '654321');
-    for (let n = 0; n < 5; n++) {
+    // The earlier expired-code verification already spent one of five guesses.
+    for (let n = 0; n < 4; n++) {
       const guess = await request(tenantB, '/clearance/auth/verify-code', 'POST', {
         studentId: b.studentId, email: b.email, code: String(100000 + n),
       });
