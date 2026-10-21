@@ -26,8 +26,8 @@ export default function GlobalDashboard() {
         <Text variant="bodySm" color="inkMuted">{global.admin.fullName} · {global.admin.email}</Text>
       </View>
 
-      <Banner tone="info" title="Read-only Android preview">
-        Global overview is available. Provisioning, account suspension, impersonation, financial changes and official receipt actions remain in the audited web portal.
+      <Banner tone="info" title="Global Superadmin · read-only Android access">
+        Your global role is separate from departmental roles. You can review organizations and role counts; provisioning, account suspension, impersonation, financial changes and official receipts remain in the audited web portal.
       </Banner>
 
       {overview.error ? (
@@ -65,6 +65,16 @@ export default function GlobalDashboard() {
                   {org.status} · {org.activeAy} · {org.activeTerm}
                 </Text>
                 <Text variant="bodySm">{org.studentsCount} students · {org.officersCount} officers</Text>
+                {org.activeRoles?.length ? (
+                  <View style={{ gap: 4 }}>
+                    <Text variant="caption" color="inkMuted">Active department roles (not global administrator grants)</Text>
+                    {org.activeRoles.map((entry) => (
+                      <Text key={entry.role} variant="bodySm" color="inkMuted">
+                        {entry.role}: {entry.count}
+                      </Text>
+                    ))}
+                  </View>
+                ) : null}
               </View>
             </Card>
           ))}
