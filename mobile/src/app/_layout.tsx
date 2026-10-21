@@ -67,6 +67,8 @@ function Navigator() {
 
         <Stack.Protected guard={!!session && !globalSession} redirectTo="/">
           <Stack.Screen name="(officer)" />
+        </Stack.Protected>
+        <Stack.Protected guard={!!session && !globalSession && !!session.officer.allowedTabs.includes('tab-remittances')} redirectTo="/">
           <Stack.Screen name="officer/verify/[id]" />
         </Stack.Protected>
 
