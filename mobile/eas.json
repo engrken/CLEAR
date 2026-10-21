@@ -19,7 +19,7 @@
       "distribution": "internal",
       "environment": "preview",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://clear.rupertbulquerin.com/api/mobile"
+        "EXPO_PUBLIC_API_URL": "https://clearsys.vercel.app/api/mobile"
       },
       "android": {
         "buildType": "apk"
@@ -29,7 +29,7 @@
       "environment": "production",
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://clear.rupertbulquerin.com/api/mobile"
+        "EXPO_PUBLIC_API_URL": "https://clearsys.vercel.app/api/mobile"
       },
       "android": {
         "buildType": "app-bundle"
