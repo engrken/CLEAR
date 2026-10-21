@@ -11,7 +11,7 @@ const SESSION_ENDED = 'Your global administrator session has ended. Sign in agai
 const hashToken = (token: string) => crypto.createHash('sha256').update(token).digest('hex');
 
 function bearerToken(req: Request) {
-  const match = /^Bearer\\s+(clrg_[A-Za-z0-9_-]{30,160})$/.exec(
+  const match = /^Bearer\s+(clrg_[A-Za-z0-9_-]{30,160})$/.exec(
     (req.headers.get('authorization') || '').trim()
   );
   return match?.[1] ?? null;
