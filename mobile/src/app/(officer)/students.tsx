@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ActivityIndicator, StyleSheet, TextInput, View } from 'react-native';
 
 import { api, type Student } from '@/api';
-import { Avatar, Icon, Screen, StatusPill, Text, type Tone } from '@/components/ui';
+import { Avatar, Banner, Icon, Screen, StatusPill, Text, type Tone } from '@/components/ui';
 import { enrollmentLabel, isEnrolled } from '@/lib/enrollment';
 import { useOfficerSession } from '@/lib/session';
 import { TAB_BAR_SPACE } from '@/lib/tab-bar';
@@ -55,15 +55,18 @@ export default function Students() {
         />
       </View>
 
+      {students.error ? (
+        <Banner tone="danger" title="Couldn't load student roster">{students.error.message}</Banner>
+      ) : null}
       {students.loading && !students.data ? (
         <ActivityIndicator color={c.cobalt} />
-      ) : (
+      ) : students.data ? (
         <View style={{ gap: 6 }}>
           {list.map((s) => (
             <RosterRow key={s.id} student={s} />
           ))}
         </View>
-      )}
+      ) : null}
     </Screen>
   );
 }
