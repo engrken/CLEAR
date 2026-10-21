@@ -33,7 +33,7 @@ export default function RootLayout() {
 
 function Navigator() {
   const { c } = useTheme();
-  const { session, restoring } = useSession();
+  const { session, globalSession, restoring } = useSession();
 
   // Keep the splash up until fonts are in and any stored session is re-checked.
   useEffect(() => {
@@ -57,14 +57,19 @@ function Navigator() {
         <Stack.Screen name="d/[dept]/clearance" />
         <Stack.Screen name="d/[dept]/submit-proof" />
 
-        {/* Guards drive auth navigation: signing in sends sign-in to /home, signing out sends officer screens to /. */}
-        <Stack.Protected guard={!session} redirectTo="/home">
+        {/* Global admins and department officers have independent authentication. */}
+        <Stack.Protected guard={!session && !globalSession} redirectTo={globalSession ? '/global' : '/home'}>
           <Stack.Screen name="d/[dept]/sign-in" />
+          <Stack.Screen name="global/sign-in" />
         </Stack.Protected>
 
-        <Stack.Protected guard={!!session} redirectTo="/">
+        <Stack.Protected guard={!!session && !globalSession} redirectTo="/">
           <Stack.Screen name="(officer)" />
           <Stack.Screen name="officer/verify/[id]" />
+        </Stack.Protected>
+
+        <Stack.Protected guard={!!globalSession && !session} redirectTo="/">
+          <Stack.Screen name="global/index" />
         </Stack.Protected>
       </Stack>
     </NavThemeProvider>
