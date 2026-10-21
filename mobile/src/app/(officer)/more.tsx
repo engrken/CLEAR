@@ -1,5 +1,5 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Banner, Button, Card, Icon, Screen, Text } from '@/components/ui';
@@ -15,9 +15,9 @@ const LINKS = [
 ];
 
 const state: Record<MobileAvailability, string> = {
-  available: 'Android: Read-only',
-  'review-only': 'Android: Review-only',
-  paused: 'Android: Temporarily disabled',
+  available: 'Read-only',
+  'review-only': 'Review-only',
+  paused: 'Temporarily disabled',
   'web-only': 'Web only',
 };
 
@@ -30,11 +30,38 @@ export default function More() {
   const { signOut, refreshPermissions } = useSession();
   const router = useRouter();
   const { c } = useTheme();
+  const [showWebOnly, setShowWebOnly] = useState(false);
   const modules = grantedModules(session.officer.allowedTabs);
+  const available = modules.filter((m) => m.availability === 'available' || m.availability === 'review-only');
+  const paused = modules.filter((m) => m.availability === 'paused');
+  const webOnly = modules.filter((m) => m.availability === 'web-only');
   useFocusEffect(useCallback(() => { void refreshPermissions(); }, [refreshPermissions]));
 
+  const moduleRow = (m: (typeof modules)[number]) => (
+    <Card key={m.tab} style={styles.module}>
+      <View style={{ gap: 3 }}>
+        <View style={styles.moduleTitle}>
+          <Text variant="bodyStrong" style={{ flex: 1 }}>{m.name}</Text>
+          <Text variant="caption" color="inkMuted">{state[m.availability]}</Text>
+        </View>
+        <Text variant="bodySm" color="inkMuted">{m.detail}</Text>
+        {m.tab === 'tab-clearance' ? (
+          <Button size="sm" variant="secondary" onPress={() => router.push({
+            pathname: '/d/[dept]/clearance',
+            params: { dept: session.org.subdomain },
+          })}>
+            Open clearance lookup
+          </Button>
+        ) : null}
+      </View>
+    </Card>
+  );
+
   return (
-    <Screen edges={['top']} bottomInset={TAB_BAR_SPACE} contentStyle={{ paddingTop: 18, gap: 14 }}>
+    <Screen
+      edges={['top']}
+      bottomInset={TAB_BAR_SPACE + spacing[8]}
+      contentStyle={{ paddingTop: 18, gap: 12 }}>
       <View style={[styles.profile, { backgroundColor: c.inkBlock }]}>
         <View style={[styles.profileAvatar, { backgroundColor: c.sun }]}>
           <Text variant="headline" style={{ fontSize: 18, lineHeight: 22 }}>{initials(session.officer.fullName)}</Text>
@@ -48,37 +75,41 @@ export default function More() {
         </View>
       </View>
 
-      <Banner tone="info" title="Your web-assigned role and permissions">
-        This list reflects the effective permissions returned by CLEAR's server.
-        A department role named superadmin is not the same as a Global Superadmin.
-        Financial posting remains disabled on Android for every role.
+      <Button block variant="secondary" onPress={() => void signOut()}>Sign out</Button>
+      <Banner tone="info" title="Your web-assigned permissions">
+        Modules are based on your current department role and web assignments. Global Superadmin sign-in is separate. Android financial posting is disabled for every role.
       </Banner>
 
-      <Text variant="headline" accessibilityRole="header">Assigned modules ({modules.length})</Text>
+      <Text variant="headline" accessibilityRole="header">Available on Android ({available.length})</Text>
+      {available.map(moduleRow)}
+      {!available.length ? <Text variant="bodySm" color="inkMuted">No modules assigned for Android viewing.</Text> : null}
 
-      {modules.length === 0 ? (
-        <Banner tone="warning" title="No assigned modules">
-          Contact your department administrator to configure your permissions on the web.
-        </Banner>
-      ) : (
-        modules.map((module) => (
-          <Card key={module.tab} style={{ paddingVertical: 14, paddingHorizontal: 16 }}>
-            <View style={{ gap: 4 }}>
-              <Text variant="bodyStrong">{module.name}</Text>
-              <Text variant="caption" color="inkMuted">{state[module.availability]}</Text>
-              <Text variant="bodySm" color="inkMuted">{module.detail}</Text>
-              {module.tab === 'tab-clearance' ? (
-                <Button size="sm" variant="secondary" onPress={() => router.push({
-                  pathname: '/d/[dept]/clearance',
-                  params: { dept: session.org.subdomain },
-                })}>
-                  Open clearance lookup
-                </Button>
-              ) : null}
+      {paused.length ? (
+        <>
+          <Text variant="headline" accessibilityRole="header">Temporarily disabled ({paused.length})</Text>
+          {paused.map(moduleRow)}
+        </>
+      ) : null}
+
+      {webOnly.length ? (
+        <>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ expanded: showWebOnly }}
+            accessibilityLabel={showWebOnly ? 'Hide web-only modules' : 'Show web-only modules'}
+            onPress={() => setShowWebOnly((v) => !v)}
+            style={[styles.expand, { backgroundColor: c.soft }]}>
+            <View style={{ flex: 1, gap: 3 }}>
+              <Text variant="bodyStrong">Web-only modules ({webOnly.length})</Text>
+              <Text variant="bodySm" color="inkMuted">
+                {showWebOnly ? 'Tap to hide these modules' : 'Tap to view your assigned web modules'}
+              </Text>
             </View>
-          </Card>
-        ))
-      )}
+            <Icon name={showWebOnly ? 'chevronDown' : 'forward'} size={20} color="ink" />
+          </Pressable>
+          {showWebOnly ? webOnly.map(moduleRow) : null}
+        </>
+      ) : null}
 
       <Text variant="headline" accessibilityRole="header">Account and privacy</Text>
       {LINKS.map((link) => (
@@ -92,8 +123,6 @@ export default function More() {
           <Icon name="forward" size={16} color="ink" />
         </Pressable>
       ))}
-
-      <Button variant="secondary" block onPress={() => void signOut()}>Sign out</Button>
     </Screen>
   );
 }
@@ -105,6 +134,12 @@ const styles = StyleSheet.create({
   },
   profileAvatar: {
     width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center',
+  },
+  module: { paddingVertical: 12, paddingHorizontal: 16 },
+  moduleTitle: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  expand: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingVertical: 18, paddingHorizontal: 16, borderRadius: radius.lg,
   },
   link: {
     flexDirection: 'row', alignItems: 'center', gap: spacing[3],
