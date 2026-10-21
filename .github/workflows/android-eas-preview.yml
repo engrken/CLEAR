@@ -1,0 +1,65 @@
+name: CLEAR Android EAS preview APK
+
+on:
+  # Branch-only one-time dispatch via a workflow-file push: GitHub does not
+  # expose manual dispatch for workflows absent from the default branch.
+  # Subsequent ordinary code pushes do NOT trigger EAS builds.
+  push:
+    branches:
+      - android-parity-integration
+    paths:
+      - '.github/workflows/android-eas-preview.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  eas-preview:
+    if: github.ref == 'refs/heads/android-parity-integration'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Require Expo token
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::error::Add an Expo access token as the EXPO_TOKEN GitHub Actions secret."
+            exit 1
+          fi
+      - name: Guard isolated Preview APK configuration
+        run: |
+          node -e "const a=require('./eas.json'); const p=a.build.preview; if(p.distribution!=='internal'||p.android.buildType!=='apk'||p.env.EXPO_PUBLIC_API_URL!=='https://clearsys-git-android-parity-integration-kentbsece-7567.vercel.app/api/mobile'){process.exit(1)}"
+          node -e "const fs=require('fs'); if(!fs.readFileSync('src/api/config.ts','utf8').includes('PAYMENT_WRITES_ENABLED = false')){process.exit(1)}"
+      - name: Require current Global Superadmin tenant selector
+        run: |
+          node -e "const fs=require('fs'); for(const p of ['src/app/global/tenant/[org].tsx','../lib/mobile/global-tenant.ts','../app/api/mobile/global/orgs/[org]/dashboard/route.ts']){if(!fs.existsSync(p)){console.error('Missing expected global tenant read-only source');process.exit(1)}}"
+      - name: Require direct JIECEP Global Superadmin sign-in route
+        run: |
+          node -e "const fs=require('fs'); const p=fs.readFileSync('src/app/d/[dept]/index.tsx','utf8'); const l=fs.readFileSync('src/app/d/[dept]/sign-in.tsx','utf8'); const m=fs.readFileSync('src/app/(officer)/more.tsx','utf8'); if(!p.includes('as Global Superadmin')||!p.includes('global/tenant/[org]')||!l.includes('Sign in as Global Superadmin')||!m.includes('Sign in as Global Superadmin')){console.error('Global admin JIECEP route missing');process.exit(1)}"
+      - name: Verify Release 1.2.0 and Global Superadmin provisioning pages
+        run: |
+          node -e "const a=require('./app.json'); const e=require('./eas.json'); if(a.expo.version!=='1.2.0'||e.build.preview.autoIncrement!==true) process.exit(1);"
+          node -e "const fs=require('fs'); for(const p of ['src/app/global/provisions/index.tsx','src/app/global/provisions/new.tsx','src/app/global/provisions/[id].tsx','../app/api/mobile/global/provisions/route.ts','../lib/provisioning/core.ts']) { if(!fs.existsSync(p)) { console.error('Missing Release 1 provisioning source');process.exit(1) } }"
+      - name: Reconcile mobile lockfile in disposable CI workspace
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Install Expo dependencies
+        run: npm ci
+      - name: Check TypeScript
+        run: npm run typecheck
+      - name: Configure EAS CLI
+        run: npm install --global eas-cli
+      - name: Queue internal preview APK on Expo EAS
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: eas build --platform android --profile preview --non-interactive --no-wait

@@ -1,0 +1,70 @@
+{
+  "expo": {
+    "name": "CLEAR",
+    "slug": "clear-mobile",
+    "owner": "rupert2133s-team",
+    "version": "1.2.0",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "orientation": "portrait",
+    "scheme": "clearsys",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "bundleIdentifier": "com.rupertbulquerin.clear",
+      "buildNumber": "1",
+      "supportsTablet": false,
+      "config": {
+        "usesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.rupertbulquerin.clear",
+      "adaptiveIcon": {
+        "backgroundColor": "#0b1329"
+      },
+      "predictiveBackGestureEnabled": false,
+      "blockedPermissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "com.google.android.gms.permission.AD_ID"
+      ]
+    },
+    "web": {
+      "output": "static"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0b1329"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "CLEAR uses your photos to attach GCash or Maya receipt screenshots.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
+      "expo-secure-store"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "cfbb6ff9-bf5b-4776-9ec6-0def41a11cb1"
+      }
+    }
+  }
+}

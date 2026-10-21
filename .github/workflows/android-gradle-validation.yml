@@ -1,0 +1,98 @@
+name: Android Gradle validation (unsigned)
+
+# Full native builds are expensive. The access/typecheck workflow checks
+# mobile/src changes on every push; run Gradle for native/dependency changes
+# or on explicit internal APK validation requests.
+on:
+  push:
+    branches:
+      - android-parity-integration
+    paths:
+      - 'mobile/package.json'
+      - 'mobile/package-lock.json'
+      - 'mobile/app.json'
+      - 'mobile/assets/**'
+      - 'mobile/plugins/**'
+      - 'mobile/android/**'
+      - 'mobile/.native-build-request'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'mobile/package.json'
+      - 'mobile/package-lock.json'
+      - 'mobile/app.json'
+      - 'mobile/assets/**'
+      - 'mobile/plugins/**'
+      - 'mobile/android/**'
+      - 'mobile/.native-build-request'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: clear-android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android-debug:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      CI: '1'
+      EXPO_PUBLIC_API_URL: https://clearsys-git-android-parity-integration-kentbsece-7567.vercel.app/api/mobile
+    steps:
+      # The job's default working directory is mobile/; it does not exist
+      # until the repository has been checked out.
+      - uses: actions/checkout@v4
+      - name: Free runner disk space before native build
+        run: |
+          df -h /
+          # Keep Android NDK and CMake: React Native's native modules require
+          # them, and deleting them forces redownloads or causes Gradle errors.
+          sudo rm -rf /usr/share/dotnet /usr/local/share/powershell /opt/ghc /usr/local/lib/android/sdk/system-images || true
+          docker system prune -af || true
+          df -h /
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Check officer and global-administrator role parity
+        working-directory: .
+        run: node --experimental-strip-types --test tests/mobile-role-parity.test.mjs
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Use Android SDK preinstalled on GitHub runner
+        run: |
+          test -n "$ANDROID_HOME"
+          test -d "$ANDROID_HOME/platform-tools"
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "Using SDK at $ANDROID_HOME"
+      - name: Reconcile dependency lockfile in disposable CI workspace
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Install pinned Expo dependencies
+        run: npm ci
+      - name: Check TypeScript
+        run: npm run typecheck
+      - name: Generate native Android project without publishing
+        run: npx expo prebuild --platform android --non-interactive --no-install
+      - name: Build unsigned debug APK with Gradle
+        env:
+          ORG_GRADLE_PROJECT_reactNativeArchitectures: arm64-v8a
+        run: |
+          df -h /
+          ./gradlew :app:assembleDebug --no-daemon --max-workers=2 --stacktrace
+          df -h /
+        working-directory: mobile/android
+      - name: Upload debug APK for internal validation only
+        uses: actions/upload-artifact@v4
+        with:
+          name: clear-android-debug-unverified
+          path: mobile/android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 7
