@@ -1,36 +1,39 @@
-name: CLEAR Android Production read-only internal APK (approval only)
+name: CLEAR Android internal Production viewer QA APK (build only)
 
-# This workflow is intentionally NOT invoked on pushes or pull requests.
-# It becomes runnable only from default main after approved merge, and does
-# NOT perform Vercel deployment, Production data writes or Google Play submit.
+# Manual, approved internal QA build ONLY. Never deploys backend, performs
+# financial writes, distributes to users, or submits to Google Play.
+#
+# Runs from default main only AFTER server-side read-only protections have
+# been reviewed/merged and Production deployment+database identity verified.
+# Physical-device QA is deliberately NOT a build prerequisite: it happens
+# after the built APK is verified and installed on controlled test devices.
 on:
   workflow_dispatch:
     inputs:
-      approved_deployment_sha:
-        description: 'Exact SHA currently deployed on Vercel Production, independently verified'
-        required: true
+      deployed_production_sha:
+        description: 'Exact Vercel Production commit SHA independently confirmed (must equal checked-out main SHA)'
         type: string
-      prod_database_verified:
-        description: 'I checked Vercel Production DATABASE_URL resolves to approved Neon primary branch (never paste secret)'
         required: true
+      production_database_mapping_verified:
+        description: 'Vercel Production runtime DATABASE_URL verified against approved Neon primary (no credentials pasted)'
         type: boolean
-      security_and_device_qa_approved:
-        description: 'Student email OTP, JIECEP officer/admin/global, tenant isolation and physical Android device QA passed'
         required: true
-        type: boolean
-      release_confirmation:
-        description: 'Type INTERNAL_READ_ONLY_APK (no Google Play publication)'
-        required: true
+      qa_build_confirmation:
+        description: 'Type BUILD_QA_APK_ONLY — no release or distribution'
         type: string
+        required: true
 
 permissions:
   contents: read
 
 jobs:
-  signed-internal-apk:
-    if: github.ref == 'refs/heads/main' && inputs.prod_database_verified && inputs.security_and_device_qa_approved && inputs.release_confirmation == 'INTERNAL_READ_ONLY_APK'
+  internal-qa-apk:
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      inputs.production_database_mapping_verified &&
+      inputs.qa_build_confirmation == 'BUILD_QA_APK_ONLY'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     defaults:
       run:
         working-directory: mobile
@@ -41,37 +44,41 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: mobile/package-lock.json
-      - name: Require Production web backend is the exact approved source revision
+      - name: Require exact independently verified Production web backend revision
         env:
-          APPROVED_SHA: ${{ inputs.approved_deployment_sha }}
+          APPROVED_SHA: ${{ inputs.deployed_production_sha }}
         run: |
           set -euo pipefail
-          test "$APPROVED_SHA" = "$GITHUB_SHA" || {
-            echo "::error::Backend Production SHA must equal reviewed checked-out code; deploy/verify the same SHA first."
+          if ! [[ "$APPROVED_SHA" =~ ^[0-9a-f]{40}$ ]] || [ "$APPROVED_SHA" != "$GITHUB_SHA" ]; then
+            echo "::error::Production deployed SHA must exactly match approved checked-out main SHA."
             exit 1
-          }
-      - name: Require Expo EAS token (do not print)
+          fi
+      - name: Require internal build token (do not print)
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
           if [ -z "$EXPO_TOKEN" ]; then
-            echo "::error::Missing EXPO_TOKEN secret; no build was started."
+            echo "::error::EXPO_TOKEN secret is missing. No APK build queued."
             exit 1
           fi
-      - name: Fail closed on endpoint and business-write profile checks
+      - name: Require pinned Production endpoint and deny business writes
         run: node scripts/verify-live-viewer.mjs
-      - name: Install mobile package dependencies
+      - name: Reconcile mobile lockfile in disposable CI runner
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Install locked Android packages
         run: npm ci
-      - name: Verify Android TypeScript
+      - name: Verify Android types and all guarded routes
         run: npm run typecheck
-      - name: Queue signed internal QA APK, not Google Play upload
+      - name: Install EAS CLI (only after all local checks pass)
+        run: npm install --global eas-cli
+      - name: Queue restricted internal QA APK on Expo
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
-          eas --version >/dev/null 2>&1 || npm install --global eas-cli
           eas build --platform android --profile live-readonly-internal --non-interactive --no-wait
-      - name: Manual verification reminder
+      - name: Distinguish queued build from verified and distributed APK
         run: |
-          echo "A queued EAS build is NOT a completed APK. Verify the Expo build status,"
-          echo "inspect packaged API URL and write-disabling flags, then install on test devices."
-          echo "Do not publish any APK to unreviewed users or submit to Google Play."
+          echo "Internal QA build was queued, NOT necessarily completed."
+          echo "Inspect Expo EAS build completion, signing and packaged API URL."
+          echo "Device QA, authorized real email OTP, and all role/tenant tests happen NEXT."
+          echo "Never publish, submit, or distribute to users from this workflow."

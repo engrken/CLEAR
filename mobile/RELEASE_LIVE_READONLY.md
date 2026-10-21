@@ -19,47 +19,56 @@ against the Preview backend; do not repoint its Vercel alias.
   `MOBILE_BUSINESS_WRITES_ENABLED=false`. All financial/posting/tenant mutation
   endpoints must remain 403 at the API even for a Global Superadmin.
 
-## Before queuing ANY Production-connected internal APK
+## Two separate approval gates — no circular dependency
 
-1. Merge the reviewed and CI-passing PR #46 and (for native landing) the
-   separately reviewed PR #49, after validating merge order. Verify final
-   `main` equals the SHA deployed by **Vercel Production**.
-2. A Vercel administrator independently checks the actual runtime Production
-   `DATABASE_URL` host/project/database against Neon default/primary branch
-   `br-calm-dew-b3vd1ira`; do not paste passwords into a PR/chat. Neon's
-   linked Production endpoint restriction is supporting evidence only.
-3. Confirm `GlobalMobileSession` schema migration is applied (it was verified
-   complete on 2026-10-22), app code and API permissions are deployed and
-   SMTP sends codes to authorized test identities. No student-ID-only bypass.
-4. Use synthetic identity data or explicitly authorized controlled test accounts
-   to verify tenant officer permissions, own-tenant portal, independent global
-   admin session, student-own clearance, offline/errors, revoked tokens and
-   device screen layouts. No production accounting data may be modified.
-5. The manual GitHub Actions workflow
-   `android-live-viewer-internal-apk.yml` requires the confirmed deployed SHA,
-   explicit Production mapping/QA approvals, literal confirmation and an
-   existing `EXPO_TOKEN` GitHub secret. Its `--no-wait` step **only queues** an
-   Expo EAS build. A separate Expo build completion, signature and on-device
-   verification are required before distribution.
+### Gate A: Queue one internal QA APK (before physical phone testing)
 
-For local source verification (does not contact or modify backend):
+1. Review and merge the server's read-only protections (PR #46) and native
+   landing UI (PR #49), in that order. Verify **Vercel Production deployment**
+   has completed for the exact approved merged `main` SHA. Merely passing
+   Preview CI or a GitHub deployment badge does not prove Production database
+   identity.
+2. A Vercel administrator independently checks **runtime Production**
+   `DATABASE_URL` host/database against Neon's primary
+   `br-calm-dew-b3vd1ira`. Do not publish a connection string or credentials.
+3. Confirm `GlobalMobileSession` migration 10/10 exists (already done),
+   mobile API read-only method guards are deployed and responder is HTTPS.
+4. **Only then** use GitHub Actions → `CLEAR Android internal Production
+   viewer QA APK (build only)` → Run workflow on `main`. Provide:
+   exact approved Production-deployed 40-character SHA; true only for the
+   independently verified Vercel database mapping; and the literal
+   `BUILD_QA_APK_ONLY`.
+5. The workflow verifies the pinned API and disabled financial/tenant mutations,
+   runs TypeScript, then invokes `eas build --platform android --profile
+   live-readonly-internal --non-interactive --no-wait` with the existing
+   `EXPO_TOKEN` secret. This **queues** an internal APK; manually confirm
+   signing, version, Expo build result and packaged endpoint before installing
+   on authorized QA phones. No Google Play submission, publication or
+   automatic distribution occurs.
+
+**Physical-device QA is NOT required to queue the QA APK.** Requiring it
+before a build would prevent testing and has deliberately been removed.
+
+### Gate B: Approve any distribution (after controlled QA)
+
+Test using registered student and authorized officer/admin identities on real
+devices; document results of the matrix below, OTP email delivery, session
+expiry, per-tenant role scoping, offline behavior, verified HTTPS endpoint,
+and server 403 responses to all mobile business mutations. Review remaining
+privacy and licensing issues separately. Only after independent security
+sign-off may a future, separately approved release distribute an APK beyond
+the explicitly authorized QA team. **There is no such distribution workflow
+in this PR.**
+
+For source-only preflight (does not connect to Production):
 
 ```powershell
 cd mobile
 node scripts/verify-live-viewer.mjs
+node scripts/verify-live-build-workflow.mjs
 npm ci
 npm run typecheck
 ```
-
-Only after all release gates pass, the approved manual build command is:
-
-```powershell
-cd mobile
-eas build --platform android --profile live-readonly-internal
-```
-
-Do not run this merely because the profile exists. Never substitute
-`--profile preview` for a Production live-data APK.
 
 ## Device QA matrix (all must pass)
 
@@ -73,5 +82,4 @@ Do not run this merely because the profile exists. Never substitute
 | All actors | Posting payments, proof submission, tenant provisioning and remittance approval disabled |
 | App/network | Splash, landing page, organizational selection, back navigation, 401/403/error handling, offline retry, HTTPS only |
 
-**Current blockers:** Vercel-side Production env attestation and real email
-delivery/physical device QA are external to GitHub's isolated CI checks.
+**Current Gate A blocker:** Independent Vercel-side Production runtime database attestation and exact Production deployment SHA verification. **Gate B blockers (AFTER building):** authorized real email delivery, physical device QA, security and distribution approval; these cannot be asserted from isolated CI.

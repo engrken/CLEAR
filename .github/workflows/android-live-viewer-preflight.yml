@@ -9,6 +9,9 @@ on:
       - 'mobile/app.json'
       - 'mobile/scripts/verify-live-viewer.mjs'
       - '.github/workflows/android-live-viewer-preflight.yml'
+      - '.github/workflows/android-live-viewer-internal-apk.yml'
+      - 'mobile/scripts/verify-live-build-workflow.mjs'
+      - 'mobile/RELEASE_LIVE_READONLY.md'
   workflow_dispatch:
 
 permissions:
@@ -25,6 +28,8 @@ jobs:
           node-version: '22'
       - name: Verify separately pinned live read-only APK configuration
         run: node mobile/scripts/verify-live-viewer.mjs
+      - name: Verify QA-before-device workflow cannot distribute or deploy
+        run: node mobile/scripts/verify-live-build-workflow.mjs
       - name: Confirm no Expo/EAS tokens required by this preflight
         run: |
           test -f mobile/eas.json
