@@ -77,6 +77,17 @@ export const httpApi: ClearApi = {
   getOrganization: (slug) => request(org(slug)),
   lookupClearance: (slug, q, session) =>
     request(`${org(slug)}/clearance`, { query: { q: q.trim() }, token: session?.org.subdomain === slug ? session.token : null }),
+  requestStudentCode: (slug, email) => request(`${org(slug)}/student-auth/request-code`, {
+    method: 'POST', json: { email: email.trim().toLowerCase() },
+  }),
+  verifyStudentCode: (slug, email, code) => request(`${org(slug)}/student-auth/verify-code`, {
+    method: 'POST', json: { email: email.trim().toLowerCase(), code },
+  }),
+  getMyStudentClearance: (slug, token) => request(`${org(slug)}/student-auth/session`, { token }),
+  revokeStudentSession: async (slug, token) => {
+    try { await request(`${org(slug)}/student-auth/session`, { method: 'DELETE', token }); }
+    catch { /* Token also expires on server within 10 minutes. */ }
+  },
   listFeeItems: (slug) => request(`${org(slug)}/fees`),
   submitProof: async (slug, p) => MOBILE_BUSINESS_WRITES_ENABLED ?
     request(`${org(slug)}/proofs`, { method: 'POST', form: await proofForm(p) }) :

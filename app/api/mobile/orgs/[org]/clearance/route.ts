@@ -7,6 +7,7 @@ import { ApiFailure, handler, preflight, publicBaseUrl } from '@/lib/mobile/http
 import { getOrgOr404 } from '@/lib/mobile/data';
 import { optionalMobileOfficer } from '@/lib/mobile/session';
 import { toCentavos } from '@/lib/mobile/serialize';
+import { studentIdentityEnabled } from '@/lib/mobile/student-policy';
 import { clearanceVerifyPath, getStudentClearance } from '@/lib/clearance';
 
 type Ctx = { params: Promise<{ org: string }> };
@@ -19,12 +20,17 @@ export const GET = handler(async (req, { params }: Ctx) => {
   if (!q) throw new ApiFailure(400, 'invalid', 'Enter a student ID or email.');
   if (q.length > 120) throw new ApiFailure(400, 'invalid', 'That search is too long.');
 
+  // Once student-private viewer is enabled, anonymous single-ID lookup
+  // must not bypass verified student ownership on mobile.
+  const officer = await optionalMobileOfficer(req, slug, 'tab-clearance');
+  if (studentIdentityEnabled() && !officer) {
+    throw new ApiFailure(401, 'unauthorized', 'Verify your registered student email to view clearance.');
+  }
   const result = await getStudentClearance(org.id, q, org.activeAy, org.activeTerm);
   if (!result) {
     throw new ApiFailure(404, 'not_found', 'No student with that ID or email is on this department’s roster.');
   }
 
-  const officer = await optionalMobileOfficer(req, slug, 'tab-clearance');
   const outstanding = result.unpaidItems.reduce((sum, i) => sum + toCentavos(i.balanceDue), 0);
 
   return {

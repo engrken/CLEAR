@@ -7,6 +7,8 @@ export const PAYMENT_WRITES_ENABLED = false;
 // The next live-data viewer has no tenant administration or student proof writes.
 // Keep this fail-closed independently of role, APK environment and UI navigation.
 export const MOBILE_BUSINESS_WRITES_ENABLED = false;
+// Separate opt-in APK gate. Student OTP remains server-disabled until approved.
+export const STUDENT_PRIVATE_CLEARANCE_ENABLED = process.env.EXPO_PUBLIC_STUDENT_PRIVATE_CLEARANCE_ENABLED === 'true';
 const DEV_URL = 'http://localhost:3000/api/mobile';
 
 const configuredMode = process.env.EXPO_PUBLIC_API_MODE;

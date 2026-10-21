@@ -2,6 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { api } from '@/api';
+import { STUDENT_PRIVATE_CLEARANCE_ENABLED, MOBILE_BUSINESS_WRITES_ENABLED } from '@/api/config';
 import { BackHeader, Banner, Button, IconWell, OrgMark, Screen, TermChip, Text, type IconName } from '@/components/ui';
 import { useSession } from '@/lib/session';
 import { useAsync } from '@/lib/use-async';
@@ -45,14 +46,14 @@ export default function Portal() {
       <Choice
         icon="qr"
         title="Check my clearance"
-        body="See if you’re cleared and get your QR code"
+        body={STUDENT_PRIVATE_CLEARANCE_ENABLED ? 'Verify your registered email to view your clearance privately' : 'Check your clearance status'}
         bg="mint"
         bodyColor="mintInk"
         wellBg={c.inkBlock}
         wellFg={c.mint}
-        onPress={() => router.push({ pathname: '/d/[dept]/clearance', params: { dept } })}
+        onPress={() => router.push({ pathname: STUDENT_PRIVATE_CLEARANCE_ENABLED ? '/d/[dept]/student-verify' : '/d/[dept]/clearance', params: { dept } })}
       />
-      <Choice
+      {MOBILE_BUSINESS_WRITES_ENABLED ? <Choice
         icon="upload"
         title="I paid by GCash or Maya"
         body="Upload the receipt for checking"
@@ -61,7 +62,7 @@ export default function Portal() {
         wellBg={c.sun}
         wellFg={c.ink}
         onPress={() => router.push({ pathname: '/d/[dept]/submit-proof', params: { dept } })}
-      />
+      /> : null}
 
       <View style={styles.spacer} />
 

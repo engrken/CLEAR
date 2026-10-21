@@ -125,6 +125,10 @@ export type TenantPortalStatus = {
   asOf: string;
 };
 
+/** Private student token is short-lived, stored only in screen memory. */
+export type StudentVerificationSession = { token: string; expiresAt: string };
+export type StudentSelfClearance = { status: 'cleared' | 'hold'; ay: string; term: TermLabel; qrToken: null; mode: 'student_private' };
+
 export type ClearanceResult = {
   /** Hidden on anonymous public lookups; present for authorized officers. */
   studentName: string | null;
@@ -231,6 +235,10 @@ export type ClearApi = {
   listOrganizations(): Promise<Organization[]>;
   getOrganization(org: string): Promise<Organization>;
   lookupClearance(org: string, query: string, session?: Session | null): Promise<ClearanceResult>;
+  requestStudentCode(org: string, email: string): Promise<{ message: string }>;
+  verifyStudentCode(org: string, email: string, code: string): Promise<StudentVerificationSession>;
+  getMyStudentClearance(org: string, token: string): Promise<StudentSelfClearance>;
+  revokeStudentSession(org: string, token: string): Promise<void>;
   listFeeItems(org: string): Promise<FeeItem[]>;
   submitProof(org: string, p: ProofSubmission): Promise<{ submissionId: string }>;
   // sign-in

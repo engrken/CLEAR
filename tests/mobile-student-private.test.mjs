@@ -60,3 +60,17 @@ test('student-private response is identity-bound, minimal and feature gated', ()
   const route = read('app/api/mobile/orgs/[org]/student-auth/session/route.ts');
   assert.doesNotMatch(route, /searchParams|body\.studentId|body\.email/);
 });
+
+test('private student feature disables anonymous mobile clearance lookup after activation', () => {
+  const route = read('app/api/mobile/orgs/[org]/clearance/route.ts');
+  assert.match(route, /studentIdentityEnabled\(\) && !officer/);
+  assert.ok(route.indexOf('studentIdentityEnabled() && !officer') < route.indexOf('getStudentClearance(org.id, q'));
+  const screen = read('mobile/src/app/d/[dept]/student-verify.tsx');
+  assert.match(screen, /verifyStudentCode/);
+  assert.match(screen, /getMyStudentClearance/);
+  assert.doesNotMatch(screen, /lookupClearance\(/);
+  const portal = read('mobile/src/app/d/[dept]/index.tsx');
+  assert.match(portal, /STUDENT_PRIVATE_CLEARANCE_ENABLED/);
+  const layout = read('mobile/src/app/_layout.tsx');
+  assert.match(layout, /name="d\/\[dept\]\/student-verify"/);
+});

@@ -9,7 +9,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 
-import { MOBILE_BUSINESS_WRITES_ENABLED } from '@/api/config';
+import { MOBILE_BUSINESS_WRITES_ENABLED, STUDENT_PRIVATE_CLEARANCE_ENABLED } from '@/api/config';
 import { SessionProvider, useSession } from '@/lib/session';
 import { ThemeProvider, useTheme } from '@/theme';
 
@@ -56,6 +56,9 @@ function Navigator() {
         <Stack.Screen name="index" />
         <Stack.Screen name="d/[dept]/index" />
         <Stack.Screen name="d/[dept]/clearance" />
+        <Stack.Protected guard={STUDENT_PRIVATE_CLEARANCE_ENABLED} redirectTo="/">
+          <Stack.Screen name="d/[dept]/student-verify" />
+        </Stack.Protected>
         <Stack.Protected guard={MOBILE_BUSINESS_WRITES_ENABLED} redirectTo="/">
           <Stack.Screen name="d/[dept]/submit-proof" />
         </Stack.Protected>
