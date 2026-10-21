@@ -6,7 +6,7 @@
 
 | Actor | Permitted read | Server authorization | Business mutations |
 |---|---|---|---|
-| Student | Their own clearance state + period + secure verification | Requires a separate student identity-verification gate before calling this production-ready; existing public single-identifier lookup is **not proof of identity** | DENY |
+| Student | Their own clearance state + period + secure verification | Registered-email OTP + a revocable, tenant- and period-bound, 10-minute student credential; must pass isolated tests before Production | DENY |
 | Officer | Tenant-scoped roster, ledger, pending proofs, summary according to assigned tab grants | Live `MobileSession`, active `TenantUser`, active organization, tenant match, allowed tab | DENY |
 | Tenant admin | Own tenant metadata/status/tier/group, active-period counts and authorized officer modules | Same officer/session tenant checks **plus** actual `admin`/`administrator`/`master` database role | DENY |
 | Global Superadmin | Read any tenant (including inactive/archived) and global overview | Independent `GlobalMobileSession` with revalidated live global registry membership/session version | DENY |
@@ -31,17 +31,17 @@ Project `clear-sys-db`, **primary** Neon branch `br-calm-dew-b3vd1ira`:
 
 **Stop gate:** Do not claim that Production Global Superadmin mobile sign-in works until the Vercel Production `DATABASE_URL` is confirmed to target the intended Neon database branch; the migration is reviewed against current Production, backed up, rehearsed on an isolated Neon branch, explicitly approved for Production, executed and verified. NEVER use `prisma db push` to force Production schema compatibility. Do not run migration or modify Production via this PR.
 
-## Student-clearance privacy stop gate
+## Student-clearance privacy and release stop gate
 
-The existing public web/mobile clearance flow accepts only a school ID **or** registered email. That is a lookup key, not authentication, and can expose whether an account exists or is on clearance hold. Current public mobile responses hide student name, itemized arrears and outstanding amounts, but QR verification URLs may contain school IDs.
+The **staged** mobile route no longer returns an anonymous clearance decision for an arbitrary ID/email: `GET /api/mobile/orgs/[org]/clearance?q=...` requires a live tenant officer with `tab-clearance`, while a student GET without a query requires a student-only bearer credential.
 
-Before advertising student clearance as a secure **own-record** Production feature, implement and test:
-1. Student identity verification (prefer registered-email OTP with durable request/guess budgets and non-enumerating responses), and a short-lived student-specific read credential.
-2. Exact tenant + student binding, anti-enumeration/error-equivalence, rate limiting, minimal clearance status response, safe QR verification behavior, `no-store` headers and absence of student IDs/emails/financial details in analytics/logs.
-3. Live financial reconciliation parity against the canonical web clearance algorithm (active package, historical liabilities, penalties, remittances, voids, closed-period rules), with synthetic isolated fixtures and fail-closed failure cases.
-4. Public and student-authenticated tests; ensure unauthenticated users cannot enumerate student existence or access balances.
+The new mobile student flow requires both an exact school ID **and** the email registered for that student in the selected tenant. The server returns a generic OTP request message, issues six-digit purpose-HMAC hashed codes with five-minute expiration, bounds attempts with persistent `AuthThrottle` records, consumes each code once, and exchanges it for a revocable 10-minute random token stored by digest in namespaced `VerificationToken` records. The token maps to exactly one database student/tenant/academic period. The student response contains only `cleared`/`hold` and period metadata; it suppresses names, IDs, arrears, balances, and QR paths that embed student IDs. `Cache-Control: no-store` is applied.
 
-Do not call the current public lookup private/self-service until those gates pass. Existing web clearance remains governed by the web application's own public disclosure policy; this PR does not silently change that contract.
+**This is proposed code, not certified for live Production.** It must pass runtime tests using synthetic enrolled accounts on an isolated Neon clone: correct/wrong/expired/reused OTP; admission limits; account and source throttling; student A vs student B; officer/global credential separation; tenant and academic period boundary; revocation; historical penalties, voids and arrears. Review the AuthThrottle/VerificationToken reuse and SMTP delivery before deployment, and confirm the exact app/Server version pair.
+
+An aggregate-only Production readiness query found 104 student records, 94 with a plausible email and **10 without registered email**. The latter need supervised tenant-admin identity verification and registered-email backfill through authorized web workflows; there is deliberately **no** bypass using an unverified student number.
+
+**Separate web privacy concern:** the existing public web clearance page still permits lookup by an ID or email. That is an existing public disclosure policy and is not silently changed by this mobile PR. Review it independently for enumeration, status sensitivity and rate limiting before claiming end-to-end private clearance.
 
 ## Before any Production rollout
 
