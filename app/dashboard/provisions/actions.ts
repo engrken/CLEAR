@@ -12,36 +12,7 @@ import { provisionEntityWithTierCore, updateOrganizationTierCore, updateOrganiza
 export type SubscriptionTier = 'Freemium' | 'Pro' | 'Corporate';
 export type OrganizationStatus = 'Active' | 'Inactive' | 'Archived';
 
-const TIERS: SubscriptionTier[] = ['Freemium', 'Pro', 'Corporate'];
-const STATUSES: OrganizationStatus[] = ['Active', 'Inactive', 'Archived'];
-const GROUP_LIMIT: Record<SubscriptionTier, number> = {
-  Freemium: 2,
-  Pro: 10,
-  Corporate: Number.MAX_SAFE_INTEGER,
-};
-const IDENTIFIER = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
-const RESERVED_SLUGS = new Set([
-  'api', 'dashboard', 'department', 'admin', 'www', 'localhost', 'login', 'auth',
-]);
 const normal = (v: unknown) => String(v ?? '').trim();
-
-function assertTier(value: unknown): SubscriptionTier {
-  if (!TIERS.includes(value as SubscriptionTier)) throw new Error('Invalid subscription tier.');
-  return value as SubscriptionTier;
-}
-
-function assertStatus(value: unknown): OrganizationStatus {
-  if (!STATUSES.includes(value as OrganizationStatus)) throw new Error('Invalid organization status.');
-  return value as OrganizationStatus;
-}
-
-function assertIdentifier(value: unknown, description: string): string {
-  const cleaned = normal(value).toLowerCase();
-  if (!IDENTIFIER.test(cleaned)) {
-    throw new Error(`${description} must use lowercase letters, numbers and internal hyphens (1–63 characters).`);
-  }
-  return cleaned;
-}
 
 function assertOrgId(id: unknown): string {
   const result = normal(id);
@@ -68,13 +39,6 @@ function handleDbError(error: unknown): never {
     if (error.code === 'P2003') throw new Error('This organization has related records that prevent deletion. Archive it instead.');
   }
   throw error;
-}
-
-/** Every grouped entity shares one tier, so count the whole group before changing tiers. */
-function checkGroupLimit(count: number, tier: SubscriptionTier, group: string) {
-  if (count > GROUP_LIMIT[tier]) {
-    throw new Error(`School group '${group}' has ${count} entities, exceeding the ${tier} allowance of ${GROUP_LIMIT[tier]}. Upgrade the tier or move entities first.`);
-  }
 }
 
 /** Shared provisioning core: the web and mobile apply the same checks. */
