@@ -2,7 +2,7 @@
 
 import { Platform } from 'react-native';
 
-import { API_URL, PAYMENT_WRITES_ENABLED } from './config';
+import { API_URL, MOBILE_BUSINESS_WRITES_ENABLED, PAYMENT_WRITES_ENABLED } from './config';
 import { fallbackMessage } from './errors';
 import { ApiError, type ClearApi, type GlobalSession, type Session } from './types';
 
@@ -78,7 +78,9 @@ export const httpApi: ClearApi = {
   lookupClearance: (slug, q, session) =>
     request(`${org(slug)}/clearance`, { query: { q: q.trim() }, token: session?.org.subdomain === slug ? session.token : null }),
   listFeeItems: (slug) => request(`${org(slug)}/fees`),
-  submitProof: async (slug, p) => request(`${org(slug)}/proofs`, { method: 'POST', form: await proofForm(p) }),
+  submitProof: async (slug, p) => MOBILE_BUSINESS_WRITES_ENABLED ?
+    request(`${org(slug)}/proofs`, { method: 'POST', form: await proofForm(p) }) :
+    Promise.reject(new ApiError('Receipt submissions are unavailable in the read-only viewer.', 'read_only')),
 
   requestCode: (slug, email) => request(`${org(slug)}/auth/request-code`, { method: 'POST', json: { email: email.trim().toLowerCase() } }),
   verifyCode: (slug, email, code) =>
@@ -114,10 +116,12 @@ export const httpApi: ClearApi = {
   },
   getGlobalOverview: (session) => request('/global/overview', { token: session.token }),
   listManagedTenants: (session) => request('/global/provisions', { token: session.token }),
-  provisionTenant: (session, payload) =>
-    request('/global/provisions', { token: session.token, method: 'POST', json: payload }),
-  manageTenant: (session, payload) =>
-    request('/global/provisions/manage', { token: session.token, method: 'POST', json: payload }),
+  provisionTenant: (session, payload) => MOBILE_BUSINESS_WRITES_ENABLED ?
+    request('/global/provisions', { token: session.token, method: 'POST', json: payload }) :
+    Promise.reject(new ApiError('Tenant provisioning is unavailable in the read-only viewer.', 'read_only')),
+  manageTenant: (session, payload) => MOBILE_BUSINESS_WRITES_ENABLED ?
+    request('/global/provisions/manage', { token: session.token, method: 'POST', json: payload }) :
+    Promise.reject(new ApiError('Tenant changes are unavailable in the read-only viewer.', 'read_only')),
   getGlobalTenantDashboard: (s, slug) => request(`/global/orgs/${encodeURIComponent(slug)}/dashboard`, { token: s.token }),
   listGlobalTenantStudents: (s, slug, q) => request(`/global/orgs/${encodeURIComponent(slug)}/students`, { token: s.token, query: { q } }),
   listGlobalTenantLedger: (s, slug) => request(`/global/orgs/${encodeURIComponent(slug)}/ledger`, { token: s.token }),
