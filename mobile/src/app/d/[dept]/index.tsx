@@ -77,6 +77,9 @@ export default function Portal() {
         }>
         {signedInHere ? 'Open officer workspace' : 'Officer sign-in'}
       </Button>
+      <Button block variant="ghost" icon="shield" onPress={() => router.push('/global/sign-in')}>
+        Global Superadmin sign-in — access any tenant
+      </Button>
     </Screen>
   );
 }
