@@ -5,22 +5,32 @@ import { prisma } from '@/lib/prisma';
 
 export const GET = handler(async (req: Request) => {
   await requireGlobalMobileAdmin(req);
-  const [orgs, adminCounts] = await Promise.all([
+  const [orgs, adminCounts, officerRoles] = await Promise.all([
     prisma.organization.findMany({
       select: {
-        subdomain: true, name: true, type: true, status: true, activeAy: true, activeTerm: true,
+        id: true, subdomain: true, name: true, type: true, status: true, activeAy: true, activeTerm: true,
         _count: { select: { students: true, tenantUsers: true } },
       },
       orderBy: [{ name: 'asc' }],
     }),
     prisma.globalSuperAdmin.groupBy({ by: ['status'], _count: { _all: true } }),
+    prisma.tenantUser.groupBy({
+      by: ['organizationId', 'role'],
+      where: { status: 'Active' },
+      _count: { _all: true },
+    }),
   ]);
   return {
     generatedAt: new Date().toISOString(),
-    organizations: orgs.map(({ _count, ...org }) => ({
+    organizations: orgs.map(({ _count, id, ...org }) => ({
       ...org,
       studentsCount: _count.students,
       officersCount: _count.tenantUsers,
+      // Role names are labels from TenantUser, not system-wide privileges.
+      activeRoles: officerRoles
+        .filter((r) => r.organizationId === id)
+        .map((r) => ({ role: r.role, count: r._count._all }))
+        .sort((a, b) => a.role.localeCompare(b.role)),
     })),
     globalAdmins: {
       active: adminCounts.find((g) => g.status === 'Active')?._count._all ?? 0,
