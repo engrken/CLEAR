@@ -204,8 +204,8 @@ test('student-only OTP, reuse, guesses, tenant/period isolation, minimal status,
     assert.equal(mailMessages[0].recipient, studentC.email,
       'send only to the registered address');
     assert.match(mailMessages[0].content, /CLEAR Student Clearance/);
-    const codeFromEmail = /\\b(\\d{6})\\b/.exec(mailMessages[0].content)?.[1];
-    assert.match(codeFromEmail || '', /^\\d{6}$/, 'synthetic SMTP captured a real six-digit OTP');
+    const codeFromEmail = /\b(\d{6})\b/.exec(mailMessages[0].content)?.[1];
+    assert.match(codeFromEmail || '', /^\d{6}$/, 'synthetic SMTP captured a real six-digit OTP');
     const verifiedFromEmail = await request(tenantA, '/clearance/auth/verify-code', 'POST', {
       studentId: studentC.studentId, email: studentC.email, code: codeFromEmail,
     });
