@@ -58,8 +58,10 @@ function Navigator() {
         <Stack.Screen name="d/[dept]/submit-proof" />
 
         {/* Global admins and department officers have independent authentication. */}
-        <Stack.Protected guard={!session && !globalSession} redirectTo={globalSession ? '/global' : '/home'}>
+        <Stack.Protected guard={!session} redirectTo="/home">
           <Stack.Screen name="d/[dept]/sign-in" />
+        </Stack.Protected>
+        <Stack.Protected guard={!globalSession} redirectTo="/global">
           <Stack.Screen name="global/sign-in" />
         </Stack.Protected>
 
