@@ -26,7 +26,7 @@ jobs:
         working-directory: mobile
     env:
       CI: '1'
-      EXPO_PUBLIC_API_URL: https://clearsys.vercel.app/api/mobile
+      EXPO_PUBLIC_API_URL: https://clearsys-git-android-parity-integration-kentbsece-7567.vercel.app/api/mobile
     steps:
       - name: Free runner disk space before native build
         run: |
@@ -65,7 +65,7 @@ jobs:
         run: |
           df -h /
           ./gradlew :app:assembleDebug --no-daemon --max-workers=2 --stacktrace
-          df -h / --console=plain --info --max-workers=2
+          df -h /
         working-directory: mobile/android
       - name: Upload debug APK for internal validation only
         uses: actions/upload-artifact@v4
