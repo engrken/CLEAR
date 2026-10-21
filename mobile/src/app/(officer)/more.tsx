@@ -75,6 +75,16 @@ export default function More() {
         </View>
       </View>
 
+      <Button
+        block
+        variant="secondary"
+        icon="shield"
+        onPress={() => router.push('/global/sign-in')}>
+        Sign in as Global Superadmin
+      </Button>
+      <Text variant="caption" color="inkMuted">
+        Uses a separate Global Superadmin OTP. You can open JIECEP or another tenant after verification.
+      </Text>
       <Button block variant="secondary" onPress={() => void signOut()}>Sign out</Button>
       <Banner tone="info" title="Your web-assigned permissions">
         Modules are based on your current department role and web assignments. Global Superadmin sign-in is separate. Android financial posting is disabled for every role.
