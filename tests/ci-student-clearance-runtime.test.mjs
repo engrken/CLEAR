@@ -1,0 +1,165 @@
+// Real HTTP + Prisma integration checks against a disposable PostgreSQL service.
+// Synthetic identities only. This script refuses to run outside its CI sandbox.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
+import { spawn } from 'node:child_process';
+import { PrismaClient } from '@prisma/client';
+
+const sandbox = process.env.CLEAR_CI_STUDENT_AUTH_TEST_ENABLED === '1' &&
+  /(?:localhost|127\.0\.0\.1):5432\/student_ci(?:\?|$)/.test(process.env.DATABASE_URL || '') &&
+  process.env.AUTH_URL === 'http://127.0.0.1:3112' &&
+  process.env.AUTH_SECRET?.startsWith('ci-only-student-clearance-');
+if (!sandbox) throw new Error('REFUSING student security tests outside isolated CI database');
+
+const prisma = new PrismaClient();
+const root = 'http://127.0.0.1:3112';
+const fixture = {
+  tenantA: 'ci-student-auth-first', tenantB: 'ci-student-auth-second',
+  a: { id: 'ci-private-a', studentId: 'CI-ONLY-A-007', email: 'ci-a@example.invalid' },
+  b: { id: 'ci-private-b', studentId: 'CI-ONLY-B-008', email: 'ci-b@example.invalid' },
+};
+let app;
+let output = '';
+const digest = (label, value) => crypto.createHmac('sha256', process.env.AUTH_SECRET)
+  .update('mobile-student:' + label + ':' + value).digest('hex');
+
+async function request(slug, route, method = 'GET', json, token) {
+  const response = await fetch(root + '/api/mobile/orgs/' + slug + route, {
+    method,
+    headers: {
+      ...(json ? { 'Content-Type': 'application/json' } : {}),
+      ...(token ? { Authorization: 'Bearer ' + token } : {}),
+      'x-vercel-forwarded-for': '192.0.2.77',
+    },
+    body: json ? JSON.stringify(json) : undefined,
+  });
+  return { status: response.status, body: await response.json().catch(() => null),
+    cache: response.headers.get('cache-control') };
+}
+
+async function seed() {
+  for (const id of [fixture.tenantA, fixture.tenantB]) {
+    await prisma.organization.create({
+      data: { id, subdomain: id, name: 'Synthetic ' + id, status: 'Active',
+        activeAy: 'A.Y. CI-ONLY-2026', activeTerm: '1st Sem' },
+    });
+  }
+  await prisma.student.create({ data: { ...fixture.a,
+    organizationId: fixture.tenantA, fullName: 'Synthetic Student A', yearLevel: '1st Year' } });
+  await prisma.student.create({ data: { ...fixture.b,
+    organizationId: fixture.tenantB, fullName: 'Synthetic Student B', yearLevel: '2nd Year' } });
+}
+
+async function issueSyntheticCode(org, student, code, expired = false) {
+  const identity = digest('identity', [org, student.studentId.toLowerCase(), student.email].join(':'));
+  const identifier = 'clear-student:otp:' + identity;
+  await prisma.verificationToken.upsert({
+    where: { identifier }, create: { identifier,
+      token: digest('otp', identity + ':' + code),
+      expires: new Date(Date.now() + (expired ? -10_000 : 5 * 60_000)) },
+    update: { token: digest('otp', identity + ':' + code),
+      expires: new Date(Date.now() + (expired ? -10_000 : 5 * 60_000)) },
+  });
+  return identifier;
+}
+
+async function start() {
+  app = spawn('npm', ['run', 'start', '--', '-H', '127.0.0.1', '-p', '3112'], {
+    env: process.env, stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  app.stdout.on('data', v => { output += v.toString(); });
+  app.stderr.on('data', v => { output += v.toString(); });
+  for (let n = 0; n < 60; n++) {
+    if (app.exitCode !== null) break;
+    try {
+      const res = await fetch(root + '/api/mobile/health');
+      if (res.status < 500) return;
+    } catch { /* booting */ }
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
+  throw new Error('Synthetic Next.js test server did not start: ' + output.slice(-1400));
+}
+
+test('student-only OTP, reuse, guesses, tenant/period isolation, minimal status, session revoke', async () => {
+  try {
+    await seed();
+    await start();
+    const { tenantA, tenantB, a, b } = fixture;
+
+    const anonymous = await request(tenantA, '/clearance?q=' + encodeURIComponent(a.studentId));
+    assert.equal(anonymous.status, 401, 'school ID without an officer token cannot search');
+    assert.match(anonymous.cache || '', /no-store/);
+
+    const nonexistent = await request(tenantA, '/clearance/auth/request-code', 'POST', {
+      studentId: 'CI-NO-ACCOUNT', email: 'ci-nobody@example.invalid',
+    });
+    assert.equal(nonexistent.status, 200);
+    assert.match(nonexistent.body?.message || '', /If the student ID and registered email match/);
+    assert.ok(!('studentId' in nonexistent.body));
+
+    const identifier = await issueSyntheticCode(tenantA, a, '123456');
+    const bad = await request(tenantA, '/clearance/auth/verify-code', 'POST', {
+      studentId: a.studentId, email: a.email, code: '123457',
+    });
+    assert.equal(bad.status, 400, 'wrong OTP is denied');
+
+    const good = await request(tenantA, '/clearance/auth/verify-code', 'POST', {
+      studentId: a.studentId, email: a.email, code: '123456',
+    });
+    assert.equal(good.status, 200, JSON.stringify(good.body));
+    assert.match(good.body?.token || '', /^clrs_[A-Za-z0-9_-]+$/);
+    assert.ok(!('studentId' in good.body));
+    assert.equal(await prisma.verificationToken.findUnique({ where: { identifier } }), null);
+
+    const replay = await request(tenantA, '/clearance/auth/verify-code', 'POST', {
+      studentId: a.studentId, email: a.email, code: '123456',
+    });
+    assert.notEqual(replay.status, 200, 'OTP cannot be reused');
+
+    const mine = await request(tenantA, '/clearance', 'GET', undefined, good.body.token);
+    assert.equal(mine.status, 200, JSON.stringify(mine.body));
+    assert.ok(['cleared', 'hold'].includes(mine.body?.status));
+    assert.equal(mine.body.studentId, null);
+    assert.equal(mine.body.studentName, null);
+    assert.equal(mine.body.outstandingCentavos, null);
+    assert.equal(mine.body.unpaidItems, null);
+    assert.equal(mine.body.qrToken, null);
+    assert.match(mine.cache || '', /no-store/);
+    assert.equal(mine.body.ay, 'A.Y. CI-ONLY-2026');
+
+    const crossTenant = await request(tenantB, '/clearance', 'GET', undefined, good.body.token);
+    assert.equal(crossTenant.status, 401, 'student token from tenant A cannot read tenant B');
+    const bypass = await request(tenantA, '/clearance?q=' + b.studentId, 'GET', undefined, good.body.token);
+    assert.equal(bypass.status, 401, 'student token must never become an officer roster token');
+
+    const revoked = await request(tenantA, '/clearance/auth/session', 'DELETE', undefined, good.body.token);
+    assert.equal(revoked.status, 204);
+    assert.equal((await request(tenantA, '/clearance', 'GET', undefined, good.body.token)).status, 401);
+
+    await issueSyntheticCode(tenantB, b, '654321', true);
+    const expired = await request(tenantB, '/clearance/auth/verify-code', 'POST', {
+      studentId: b.studentId, email: b.email, code: '654321',
+    });
+    assert.equal(expired.status, 400, 'expired OTP cannot be consumed');
+
+    await issueSyntheticCode(tenantB, b, '654321');
+    for (let n = 0; n < 5; n++) {
+      const guess = await request(tenantB, '/clearance/auth/verify-code', 'POST', {
+        studentId: b.studentId, email: b.email, code: String(100000 + n),
+      });
+      assert.equal(guess.status, 400, 'wrong guesses stay denied');
+    }
+    const locked = await request(tenantB, '/clearance/auth/verify-code', 'POST', {
+      studentId: b.studentId, email: b.email, code: '654321',
+    });
+    assert.equal(locked.status, 429, 'correct OTP cannot bypass per-account guess lock');
+
+    const lockKey = 'clear-student:guess:' + digest('identity', [tenantB, b.studentId.toLowerCase(), b.email].join(':'));
+    const lock = await prisma.authThrottle.findUnique({ where: { key: lockKey } });
+    assert.ok(lock?.lockedUntil && lock.lockedUntil > new Date());
+  } finally {
+    if (app) app.kill('SIGTERM');
+    await prisma.$disconnect();
+  }
+}, { timeout: 120_000 });

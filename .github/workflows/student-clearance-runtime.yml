@@ -1,0 +1,62 @@
+name: Student clearance runtime security (isolated database)
+
+on:
+  pull_request:
+    paths:
+      - 'app/api/mobile/**'
+      - 'lib/mobile/**'
+      - 'lib/clearance.ts'
+      - 'lib/student-arrears.ts'
+      - 'prisma/**'
+      - 'tests/ci-student-clearance-runtime.test.mjs'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/student-clearance-runtime.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  student-auth-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: student_ci
+          POSTGRES_PASSWORD: student_ci
+          POSTGRES_DB: student_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U student_ci -d student_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Ephemeral GitHub Actions container. NEVER use Production Neon here.
+      DATABASE_URL: postgresql://student_ci:student_ci@127.0.0.1:5432/student_ci?schema=public
+      AUTH_SECRET: ci-only-student-clearance-strong-test-secret-2026
+      NEXTAUTH_SECRET: ci-only-student-clearance-strong-test-secret-2026
+      AUTH_URL: http://127.0.0.1:3112
+      AUTH_TRUST_HOST: 'true'
+      SUPER_ADMIN_EMAIL: ci-superadmin@example.invalid
+      CLEAR_CI_STUDENT_AUTH_TEST_ENABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies / generate Prisma Client
+        run: npm ci
+      - name: Apply only the committed full migration history
+        run: npx prisma migrate deploy
+      - name: Ensure no schema drift (never prisma db push)
+        run: npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code
+      - name: Build real Next.js API
+        run: npm run build
+      - name: Test real student authentication against isolated synthetic records
+        run: node --test tests/ci-student-clearance-runtime.test.mjs
