@@ -17,7 +17,7 @@ export default function VerifyQueue() {
   const session = useOfficerSession();
   const router = useRouter();
   const { c } = useTheme();
-  const queue = useAsync(() => api.listLedger(session, { status: 'Pending Verification' }), session.token);
+  const queue = useAsync(() => api.listPendingRemittances(session), session.token);
   const { reload } = queue;
   useFocusEffect(useCallback(() => { reload(); }, [reload]));
 
@@ -37,11 +37,12 @@ export default function VerifyQueue() {
           Match each receipt with the GCash or Maya account, then issue an OR. Verifying emails the OR to the student.
         </Text>
       </View>
-      {!queue.data ? (
+      {queue.error ? <Banner tone="danger" title="Couldn't load pending proofs">{queue.error.message}</Banner> : null}
+      {!queue.data && queue.loading ? (
         <ActivityIndicator color={c.accent} />
-      ) : queue.data.length === 0 ? (
+      ) : queue.data?.length === 0 ? (
         <Banner tone="success" title="All caught up">No payment proofs are waiting.</Banner>
-      ) : (
+      ) : queue.data ? (
         <View style={styles.list}>
           {queue.data.map((l) => (
             <QueueRow
@@ -51,7 +52,7 @@ export default function VerifyQueue() {
             />
           ))}
         </View>
-      )}
+      ) : null}
     </Screen>
   );
 }
