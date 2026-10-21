@@ -72,6 +72,12 @@ function Navigator() {
           <Stack.Screen name="officer/verify/[id]" />
         </Stack.Protected>
 
+        <Stack.Protected
+          guard={!!session && !globalSession && ['admin', 'administrator', 'master'].includes(String(session?.officer.role || '').toLowerCase())}
+          redirectTo="/">
+          <Stack.Screen name="officer/tenant-portal" />
+        </Stack.Protected>
+
         <Stack.Protected guard={!!globalSession && !session} redirectTo="/">
           <Stack.Screen name="global/index" />
           <Stack.Screen name="global/tenant/[org]" />
