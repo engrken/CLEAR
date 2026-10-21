@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AppState } from 'react-native';
 
 import { api, ApiError, setUnauthorizedHandler, type GlobalSession, type Session } from '@/api';
@@ -28,7 +28,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     officer: null, global: null,
   });
   const refreshInFlight = useRef(false);
-  current.current = { officer: session, global: globalSession };
+  // Keep the callback's session reference current after commit, not during render.
+  useLayoutEffect(() => {
+    current.current = { officer: session, global: globalSession };
+  }, [session, globalSession]);
 
   const clear = useCallback(async () => {
     setSession(null);
