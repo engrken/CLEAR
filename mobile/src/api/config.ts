@@ -4,6 +4,9 @@ const PROD_URL = 'https://clearsys.vercel.app/api/mobile';
 // Integration branch safety gate: payment writes must not be enabled until
 // the canonical web transaction service has been ported and verified.
 export const PAYMENT_WRITES_ENABLED = false;
+// The next live-data viewer has no tenant administration or student proof writes.
+// Keep this fail-closed independently of role, APK environment and UI navigation.
+export const MOBILE_BUSINESS_WRITES_ENABLED = false;
 const DEV_URL = 'http://localhost:3000/api/mobile';
 
 const configuredMode = process.env.EXPO_PUBLIC_API_MODE;
