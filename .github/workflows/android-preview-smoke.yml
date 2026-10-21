@@ -9,6 +9,12 @@ on:
       - 'lib/mobile/**'
       - 'scripts/ci/mobile-preview-smoke.mjs'
       - '.github/workflows/android-preview-smoke.yml'
+  pull_request:
+    paths:
+      - 'app/api/mobile/**'
+      - 'lib/mobile/**'
+      - 'scripts/ci/mobile-preview-smoke.mjs'
+      - '.github/workflows/android-preview-smoke.yml'
   workflow_dispatch:
 
 permissions:
