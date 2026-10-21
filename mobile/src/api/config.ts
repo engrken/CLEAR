@@ -1,6 +1,6 @@
 // Backend configuration. Release builds must never use mock data or plaintext HTTP.
 // Development builds may use an emulator's local HTTP endpoint.
-const PROD_URL = 'https://clear.rupertbulquerin.com/api/mobile';
+const PROD_URL = 'https://clearsys.vercel.app/api/mobile';
 // Integration branch safety gate: payment writes must not be enabled until
 // the canonical web transaction service has been ported and verified.
 export const PAYMENT_WRITES_ENABLED = false;
