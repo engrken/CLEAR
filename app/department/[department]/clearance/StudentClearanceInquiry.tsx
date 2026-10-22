@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 
 type Stage = 'identity' | 'code' | 'result';
 type StudentClearance = {
-  status: 'cleared' | 'hold';
+  status: 'cleared' | 'hold' | 'not_enrolled';
   ay: string;
   term: string;
   studentName: null;
@@ -128,7 +128,7 @@ export default function StudentClearanceInquiry({
       });
       if (!response.ok) throw new Error(friendlyError(response.status));
       const privateResult: StudentClearance = await response.json();
-      if (!['cleared', 'hold'].includes(privateResult.status) ||
+      if (!['cleared', 'hold', 'not_enrolled'].includes(privateResult.status) ||
         privateResult.studentName !== null || privateResult.unpaidItems !== null ||
         privateResult.studentId !== null || privateResult.outstandingCentavos !== null ||
         privateResult.qrToken !== null) throw new Error('Verification response could not be validated.');
@@ -225,8 +225,8 @@ export default function StudentClearanceInquiry({
       {stage === 'result' && result && (
         <div role="status" aria-live="polite">
           <div className={'alert ' + (result.status === 'cleared' ? 'alert-success' : 'alert-warning')}>
-            <strong>{result.status === 'cleared' ? 'CLEARED' : 'CLEARANCE ON HOLD'}</strong>
-            <p className="mb-0">As of {result.term} ({result.ay})</p>
+            <strong>{result.status === 'cleared' ? 'CLEARED' : result.status === 'not_enrolled' ? 'NOT ENROLLED THIS TERM' : 'CLEARANCE ON HOLD'}</strong>
+            <p className="mb-0">As of {result.term} ({result.ay}){result.status === 'not_enrolled' ? ' — no new mandatory package fee applies' : ''}</p>
           </div>
           <p className="small text-muted">
             Only your status is displayed. Ask an authorized officer for payment details or a signed clearance certificate.
