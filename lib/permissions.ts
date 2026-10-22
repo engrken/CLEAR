@@ -91,6 +91,11 @@ function buildUser(a: Access) {
   };
 }
 
+/** Tenant membership is revalidated on every request, without requiring an unrelated module. */
+export async function requireTenantMember(department: string) {
+  return buildUser(await loadAccess(department));
+}
+
 /** Always supply department; never authorize based only on caller-provided organization IDs. */
 export async function requireTabAccess(requiredTab: string, department: string) {
   if (!ALL_TABS.has(requiredTab)) throw new Error('403 Forbidden: Unknown module permission.');
