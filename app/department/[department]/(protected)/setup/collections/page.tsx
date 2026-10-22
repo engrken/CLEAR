@@ -5,6 +5,7 @@ import { getPeriodLedger } from '../../realign/ledger';
 import { revalidatePath } from 'next/cache';
 import type { Metadata } from 'next';
 import { assertAcademicPeriod } from '@/lib/academic-period-guard';
+import ConfirmedFeeActionForm from './ConfirmedFeeActionForm';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Collection Fee Setup | CLEAR System' };
@@ -267,7 +268,7 @@ export default async function CollectionSetupPage({ params, searchParams }: {
       ) : null}
 
       <div className="card p-3 mb-4 border-secondary bg-body">
-        <form action={addCollectionItem} className="row g-3">
+        <ConfirmedFeeActionForm action={addCollectionItem} mode="create" className="row g-3">
           <div className="col-md-3">
             <label className="form-label" htmlFor="fee-category">Category</label>
             <input id="fee-category" name="category" className="form-control" maxLength={120}
@@ -311,7 +312,7 @@ export default async function CollectionSetupPage({ params, searchParams }: {
               </div>
             )}
           </div>
-        </form>
+        </ConfirmedFeeActionForm>
         {funds.length === 0 && (
           <p className="small text-warning mt-2 mb-0">
             Create this term's funds in Organization Setup before adding a fee.
@@ -339,14 +340,14 @@ export default async function CollectionSetupPage({ params, searchParams }: {
                     <td>{fee.targetFund}</td>
                     <td>{fee.isPackage ? 'Mandatory Package' : 'Standalone'}</td>
                     <td>
-                      <form action={deleteItem.bind(null, fee.id)}>
+                      <ConfirmedFeeActionForm action={deleteItem.bind(null, fee.id)} mode="delete" description={`${fee.category} / ${fee.name} · ₱${fee.amount.toFixed(2)} · ${term} (${ay})`}>
                         <button type="submit" className="btn btn-sm btn-outline-danger"
                           disabled={Boolean(reason)}
                           title={reason || 'Delete unused collection fee'}
                           aria-label={`Delete ${fee.name}`}>
                           <i className="bi bi-trash" />
                         </button>
-                      </form>
+                      </ConfirmedFeeActionForm>
                       {reason && <span className="text-secondary small ms-2" title={reason}>Protected</span>}
                     </td>
                   </tr>
