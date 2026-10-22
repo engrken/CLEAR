@@ -1,100 +1,180 @@
-import { useFocusEffect, useRouter } from 'expo-router';
-import { setStatusBarStyle } from 'expo-status-bar';
-import { useCallback } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { Pressable, StyleSheet, View } from 'react-native';
 
-import { api } from '@/api';
-import { Banner, Button, ColorHeader, Icon, OrgMark, Screen, Text } from '@/components/ui';
+import { Button, Icon, IconWell, Screen, Text, type IconName } from '@/components/ui';
 import { PRIVACY_URL, openWebPage } from '@/lib/links';
-import { useAsync } from '@/lib/use-async';
-import { spacing, useTheme } from '@/theme';
+import { useSession } from '@/lib/session';
+import { radius, spacing, useTheme } from '@/theme';
 
-/** Gateway: pick the department or organization to enter. */
-export default function Gateway() {
+/**
+ * Native welcome page inspired by the CLEAR web landing page.
+ * All entry points remain navigational: access checks live in protected routes
+ * and server APIs, never in these public-facing cards.
+ */
+export default function Welcome() {
   const router = useRouter();
   const { c } = useTheme();
-  const orgs = useAsync(() => api.listOrganizations(), 'orgs');
+  const { session, globalSession } = useSession();
+  const signedIn = !!session || !!globalSession;
 
-  // Light status-bar icons over the cobalt header; every other screen is dark on white.
-  useFocusEffect(
-    useCallback(() => {
-      setStatusBarStyle('light');
-      return () => setStatusBarStyle('dark');
-    }, [])
-  );
+  const openOrganizations = () => router.push('/organizations');
+  const openWorkspace = () => {
+    if (globalSession) router.push('/global');
+    else if (session) router.push('/home');
+    else openOrganizations();
+  };
 
   return (
-    <Screen
-      edges={['bottom']}
-      contentStyle={styles.content}
-      header={
-        <ColorHeader
-          tone="cobalt"
-          brand
-          back={false}
-          title="Which department are you in?"
-          body="Students check clearance and send payment proof. Officers sign in to manage the ledger."
-        />
-      }>
-      {orgs.error ? <Banner tone="danger" title="Couldn’t load departments">{orgs.error.message}</Banner> : null}
-      {orgs.loading && !orgs.data ? <ActivityIndicator color={c.cobalt} style={{ paddingVertical: spacing[4] }} /> : null}
+    <Screen contentStyle={styles.content}>
+      <View style={styles.brand}>
+        <IconWell icon="shield" bg={c.cobaltTint} fg={c.cobalt} size={44} />
+        <View style={styles.brandText}>
+          <Text variant="headline">CLEAR System</Text>
+          <Text variant="caption" color="inkMuted" style={styles.brandSubtitle}>
+            CENTRALIZED LIQUIDATION OF EXPENSES & AUDIT RECORDS
+          </Text>
+        </View>
+      </View>
 
-      {orgs.data?.map((org, i) => (
-        <Pressable
-          key={org.subdomain}
-          accessibilityRole="button"
-          onPress={() => router.push({ pathname: '/d/[dept]', params: { dept: org.subdomain } })}
-          style={({ pressed }) => [
-            styles.org,
-            { backgroundColor: i === 0 ? c.cobaltTint : c.soft, opacity: pressed ? 0.8 : 1 },
-          ]}>
-          <OrgMark name={org.name} logoUri={org.logoUrl} size={52} tone={i % 2 === 1 ? 'sun' : 'cobalt'} />
-          <View style={styles.orgText}>
-            <Text variant="bodyStrong" numberOfLines={2} style={{ fontSize: 17 }}>{org.name}</Text>
-            <Text variant="caption" color="inkMuted">{org.type} · {org.activeTerm}</Text>
-          </View>
-          <Icon name="forward" size={18} color="ink" />
-        </Pressable>
-      ))}
+      <View style={[styles.hero, { backgroundColor: c.inkBlock }]}>
+        <View pointerEvents="none" style={[styles.halo, { backgroundColor: c.cobalt }]} />
+        <View style={[styles.heroTag, { backgroundColor: c.cobalt }]}>
+          <Icon name="shield" size={15} tint="#FFFFFF" />
+          <Text variant="caption" style={styles.tagText}>SECURE CAMPUS PORTAL</Text>
+        </View>
+        <Text variant="display" accessibilityRole="header" style={styles.heroTitle}>
+          Financial accountability & campus clearance.
+        </Text>
+        <Text variant="body" style={styles.heroBody}>
+          One place to find your organization, inquire about clearance, and view the information your role is authorized to see.
+        </Text>
+        <Button block variant="light" icon="arrowRight" onPress={openWorkspace}>
+          {signedIn ? 'Open my workspace' : 'Enter organization portal'}
+        </Button>
+        <View style={styles.heroFoot}>
+          <Icon name="shield" size={15} tint={c.onCobaltMuted} />
+          <Text variant="caption" style={styles.heroFootText}>
+            Role-scoped access · Read-only Android viewer
+          </Text>
+        </View>
+      </View>
 
-      <Button
-        block
-        variant="secondary"
-        icon="shield"
-        onPress={() => router.push('/global/sign-in')}>
-        Global administrator sign-in
-      </Button>
-
-      <View style={styles.spacer} />
-
-      <View style={styles.note}>
-        <Text variant="caption" color="inkMuted" style={styles.noteText}>
-          Not an official Filamer Christian University app. Your data is processed under the Data Privacy Act of 2012
-          (RA 10173).
+      <View style={styles.intro}>
+        <Text variant="title">Choose how to enter</Text>
+        <Text variant="bodySm" color="inkMuted">
+          Select your path. Your organization and verified permissions determine the information you can access.
         </Text>
       </View>
 
-      <Button variant="ghost" size="sm" style={styles.privacy} onPress={() => openWebPage(PRIVACY_URL)}>
-        Privacy policy
-      </Button>
+      <View style={styles.cards}>
+        <AccessCard
+          icon="qr"
+          title="Students"
+          description="Find your organization and start a clearance inquiry."
+          onPress={openOrganizations}
+        />
+        <AccessCard
+          icon="people"
+          title="Officers"
+          description="Sign in with your registered officer email."
+          onPress={session ? openWorkspace : openOrganizations}
+        />
+        <AccessCard
+          icon="bank"
+          title="Tenant administrators"
+          description="Review your own tenant portal after authorized sign-in."
+          onPress={session ? openWorkspace : openOrganizations}
+        />
+        <AccessCard
+          icon="shield"
+          title="Global Superadmin"
+          description="Access the global overview and authorized tenants."
+          onPress={() => router.push(globalSession ? '/global' : '/global/sign-in')}
+        />
+      </View>
+
+      <View style={[styles.highlights, { backgroundColor: c.soft }]}>
+        <Text variant="headline">Built for academic accountability</Text>
+        <Feature icon="search" title="Clearance inquiry" body="Student record access is subject to identity and privacy safeguards." />
+        <Feature icon="shield" title="Tenant isolation" body="Officer and administrator views follow their assigned permissions." />
+        <Feature icon="receipt" title="Financial transparency" body="Authorized users can review records without posting transactions." />
+      </View>
+
+      <View style={styles.footer}>
+        <Text variant="caption" color="inkMuted" style={styles.disclaimer}>
+          Independent CLEAR application; not an official Filamer Christian University app. Personal data is handled in accordance with the Data Privacy Act of 2012 (RA 10173).
+        </Text>
+        <Button variant="ghost" size="sm" onPress={() => void openWebPage(PRIVACY_URL)}>
+          Privacy policy
+        </Button>
+      </View>
     </Screen>
   );
 }
 
+function AccessCard({ icon, title, description, onPress }: {
+  icon: IconName;
+  title: string;
+  description: string;
+  onPress: () => void;
+}) {
+  const { c } = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityHint={description}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.accessCard,
+        { backgroundColor: c.ground, borderColor: c.border, opacity: pressed ? 0.75 : 1 },
+      ]}>
+      <IconWell icon={icon} bg={c.cobaltTint} fg={c.cobalt} size={48} />
+      <View style={styles.accessText}>
+        <Text variant="bodyStrong">{title}</Text>
+        <Text variant="bodySm" color="inkMuted">{description}</Text>
+      </View>
+      <Icon name="forward" size={18} color="inkMuted" />
+    </Pressable>
+  );
+}
+
+function Feature({ icon, title, body }: {
+  icon: IconName;
+  title: string;
+  body: string;
+}) {
+  return (
+    <View style={styles.feature}>
+      <Icon name={icon} size={22} color="cobalt" />
+      <View style={styles.featureText}>
+        <Text variant="bodyStrong">{title}</Text>
+        <Text variant="bodySm" color="inkMuted">{body}</Text>
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  content: { flexGrow: 1, paddingTop: 20, gap: 10 },
-  org: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    minHeight: 80,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 24,
-  },
-  orgText: { flex: 1, minWidth: 0, gap: 2 },
-  spacer: { flex: 1, minHeight: spacing[2] },
-  note: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], paddingHorizontal: spacing[2] },
-  noteText: { flex: 1, fontSize: 12, lineHeight: 17 },
-  privacy: { alignSelf: 'center', minHeight: 48 },
+  content: { gap: spacing[4], paddingTop: spacing[4], paddingBottom: spacing[8] },
+  brand: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], paddingHorizontal: spacing[1], paddingBottom: spacing[1] },
+  brandText: { flex: 1, minWidth: 0, gap: 1 },
+  brandSubtitle: { fontSize: 9, lineHeight: 13, letterSpacing: 0.4 },
+  hero: { borderRadius: radius.xl, padding: spacing[6], gap: spacing[5], overflow: 'hidden' },
+  halo: { position: 'absolute', width: 230, height: 230, borderRadius: 115, top: -120, right: -100, opacity: 0.6 },
+  heroTag: { flexDirection: 'row', alignSelf: 'flex-start', alignItems: 'center', borderRadius: radius.pill, gap: 8, paddingHorizontal: 12, paddingVertical: 8 },
+  tagText: { color: '#FFFFFF', fontSize: 11, letterSpacing: 0.6 },
+  heroTitle: { color: '#FFFFFF', fontSize: 37, lineHeight: 40 },
+  heroBody: { color: '#DDE2FF', lineHeight: 24 },
+  heroFoot: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  heroFootText: { color: '#DDE2FF', fontSize: 12, flexShrink: 1 },
+  intro: { gap: spacing[2], paddingHorizontal: spacing[1], paddingTop: spacing[2] },
+  cards: { gap: spacing[3] },
+  accessCard: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], borderWidth: 1, borderRadius: radius.md, padding: spacing[4], minHeight: 86 },
+  accessText: { flex: 1, minWidth: 0, gap: 3 },
+  highlights: { borderRadius: radius.lg, gap: spacing[4], padding: spacing[5] },
+  feature: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing[3] },
+  featureText: { flex: 1, gap: 3 },
+  footer: { alignItems: 'center', gap: spacing[2], paddingVertical: spacing[2] },
+  disclaimer: { textAlign: 'center', fontSize: 12, lineHeight: 18 },
 });

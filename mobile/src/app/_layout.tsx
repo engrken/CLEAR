@@ -54,6 +54,7 @@ function Navigator() {
         // Bright Campus screens draw their own headers (back button, chips, coloured blocks).
         screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.canvas } }}>
         <Stack.Screen name="index" />
+        <Stack.Screen name="organizations" />
         <Stack.Screen name="d/[dept]/index" />
         <Stack.Screen name="d/[dept]/clearance" />
         <Stack.Protected guard={MOBILE_BUSINESS_WRITES_ENABLED} redirectTo="/">
