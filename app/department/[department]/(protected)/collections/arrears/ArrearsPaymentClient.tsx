@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { recordHistoricalArrearPayment } from "./actions";
 import { ThemedAlert } from "@/lib/clear-dialogs";
+import { confirmCommittedChange } from '@/lib/clear-dialogs';
 import type { HistoricalDebt } from "@/lib/student-arrears";
 
 export default function ArrearsPaymentClient({ department, ay, term, studentId, debts }:
@@ -18,6 +19,12 @@ export default function ArrearsPaymentClient({ department, ay, term, studentId, 
   const item = debts.find(d => d.obligationId === selected);
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (busy || !item) return;
+    if (!await confirmCommittedChange({
+      action: 'Confirm historical arrears payment',
+      target: `${studentId} · ${item.itemDescription} · ₱${Number(amount).toFixed(2)} · OR ${orNumber}`,
+      consequence: `This records a payment toward an assessed debt from ${item.originAY} ${item.originTerm}. The receipt is linked to the original obligation.`,
+      confirmText: 'Post Historical Payment',
+    })) return;
     setBusy(true); setMessage("");
     try {
       const result = await recordHistoricalArrearPayment(department, {
