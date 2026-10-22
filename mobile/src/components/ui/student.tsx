@@ -18,7 +18,7 @@ type ClearanceProps = {
   orgName?: string;
   studentName: string;
   studentId: string;
-  status: 'cleared' | 'hold';
+  status: 'cleared' | 'hold' | 'not_enrolled';
   /** Pesos due; null on public lookups, which show status only. */
   outstanding?: number | null;
   /** Signed, organization-bound token from the API. Never built on the device. */
@@ -54,6 +54,38 @@ export function ClearanceCard({ studentName, studentId, status, outstanding = nu
             <Text variant="bodySm" color="inkMuted">{"It's checked live against the department ledger."}</Text>
           </View>
         </View>
+        <TermChip ay={ay} term={term} onColor />
+      </ResultBlock>
+    );
+  }
+
+  if (status === 'not_enrolled') {
+    return (
+      <ResultBlock tone="sunTint" label="Clearance result: not enrolled for this term">
+        <IconWell icon="shield" bg={c.inkBlock} fg={c.sun} size={64} round />
+        <Text variant="display" accessibilityRole="header">Not enrolled for this term</Text>
+        <Text variant="body">
+          No new mandatory-package fee applies without current-term enrollment. Previously assessed dues, if any, are still payable.
+        </Text>
+        {outstanding !== null && outstanding > 0 ? (
+          <View style={{ gap: 2 }}>
+            <Text variant="label">Other outstanding obligations</Text>
+            <Money value={outstanding} size="xl" tone="danger" />
+          </View>
+        ) : null}
+        {items ? (
+          <View style={[styles.inset, styles.items]} accessibilityLabel="Previously assessed or other unpaid items">
+            {items.map((it, i) => (
+              <View key={`${it.label}-${it.period ?? ''}-${i}`} style={styles.item}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text variant="bodyStrong">{it.label}</Text>
+                  {it.period ? <Text variant="caption" color="inkMuted">{it.period}</Text> : null}
+                </View>
+                <Money value={it.amount} size="sm" />
+              </View>
+            ))}
+          </View>
+        ) : null}
         <TermChip ay={ay} term={term} onColor />
       </ResultBlock>
     );
