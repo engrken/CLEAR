@@ -58,8 +58,8 @@ function Navigator() {
 
   // Keep the splash up until fonts are in and any stored session is re-checked.
   useEffect(() => {
-    if (!restoring) SplashScreen.hideAsync();
-  }, [restoring]);
+    if (!restoring && privacyReady) void SplashScreen.hideAsync();
+  }, [restoring, privacyReady]);
 
   const navTheme = {
     ...DefaultTheme,
