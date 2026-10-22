@@ -267,6 +267,14 @@ export default async function ClearancePage({
 
   const termPkg = buildTermPackage(collectionSetups, term);
 
+  // Directory membership is not term enrollment. Require an explicit Enrolled
+  // record for this tenant/AY/term before assessing the package or issuing QR.
+  const termEnrolledRows = await prisma.enrollment.findMany({
+    where: { organizationId: organization.id, academicYear: ay, term, enrollmentStatus: 'Enrolled' },
+    select: { studentId: true },
+  });
+  const termEnrolledStudentIds = new Set(termEnrolledRows.map((row) => row.studentId));
+
   const periodLedger = await getPeriodLedger(prisma, organization.id, ay, term);
   const isClosed = Boolean(periodLedger.activeRollover);
   // Historic debts are assessed records, not inferred fees for all prior years.
@@ -334,7 +342,7 @@ export default async function ClearancePage({
     );
 
     const remainingPkg = money(termPkg.total - packagePaid);
-    if (termPkg.total > 0 && remainingPkg > 0) {
+    if (termEnrolledStudentIds.has(student.id) && termPkg.total > 0 && remainingPkg > 0) {
       unpaidItems.push({
         category: 'Departmental Fee',
         itemDescription: 'Mandatory Package Balance',
@@ -511,7 +519,7 @@ export default async function ClearancePage({
           studentAdvs,
           studentDues
         );
-        isLiveCleared = liveUnpaid.length === 0;
+        isLiveCleared = termEnrolledStudentIds.has(verifiedStudent.id) && liveUnpaid.length === 0;
       }
     }
 
@@ -617,7 +625,8 @@ export default async function ClearancePage({
         studentId: student.studentId,
         fullName: student.fullName,
         email: student.email,
-        isCleared: unpaidItems.length === 0,
+        isEnrolled: termEnrolledStudentIds.has(student.id),
+        isCleared: termEnrolledStudentIds.has(student.id) && unpaidItems.length === 0,
         unpaidItems,
       };
     });
@@ -682,7 +691,7 @@ export default async function ClearancePage({
                 ) : (
                   <div className="mt-2">
                     <h6 className="text-danger fw-bold small text-uppercase mb-2">
-                      <i className="bi bi-exclamation-triangle-fill me-1"></i> Clearance On Hold — Itemized Balance Breakdown:
+                      <i className="bi bi-exclamation-triangle-fill me-1"></i> {queriedStudent.isEnrolled ? 'Clearance On Hold — Itemized Balance Breakdown:' : 'Not enrolled in this term — no automatic mandatory package fee'}
                     </h6>
                     <div className="table-responsive">
                       <table className="table table-sm table-bordered border-secondary mb-0 bg-body text-body">
