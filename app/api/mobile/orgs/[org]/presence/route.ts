@@ -9,7 +9,7 @@ export const POST = handler(async (req: Request, { params }: Ctx) => {
   const body = await readJson<{ page: string; tabId: string }>(req);
   const page = normalizePresencePage(body.page);
   if (!page || !['overview','students','remittances'].includes(page)) return { colleagues: [], count: 0 };
-  const { officer, org } = await requireMobileOfficer(req, slug, PRESENCE_TABS[page]);
+  const { officer, org } = await requireMobileOfficer(req, slug, page === 'students' ? ['tab-students', 'tab-payment'] : PRESENCE_TABS[page]);
   if (String(officer.role).toLowerCase() === 'superadmin') return { colleagues: [], count: 0 };
   return updatePagePresence({
     organizationId: org.id, userId: officer.id, page, ay: org.activeAy, term: org.activeTerm,
