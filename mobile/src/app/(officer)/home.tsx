@@ -5,6 +5,7 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { api, type DashboardSummary, type LedgerEntry } from '@/api';
 import { PAYMENT_WRITES_ENABLED } from '@/api/config';
 import { Banner, Button, ColorTile, HeroStat, LedgerList, LedgerRow, Screen, SectionHeader, TermChip, Text } from '@/components/ui';
+import { FinancialOverview } from '@/components/overview/FinancialOverview';
 import { formatWhen } from '@/lib/dates';
 import { fromCentavos } from '@/lib/money';
 import { setPendingCount } from '@/lib/pending-count';
@@ -100,6 +101,8 @@ export default function Home() {
           </View>
         </>
       ) : null}
+
+      {canOverview && stats ? <FinancialOverview stats={stats} /> : null}
 
       {canRemittances ? (
         <Button block variant="secondary" icon="shield" onPress={() => router.push('/verify')}>
