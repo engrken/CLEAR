@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, StyleSheet, TextInput, View } from 'react-native';
 
 import { api } from '@/api';
 import { BackHeader, Banner, Button, Card, Screen, Text } from '@/components/ui';
@@ -57,11 +57,21 @@ export default function OfficerProfile() {
   };
   const confirm = () => {
     if (!/^\d{6}$/.test(newCode.trim())) return setError('Enter the six-digit new-email code.');
-    void run(async () => {
-      await api.confirmOfficerEmailChange(session, newEmail.trim().toLowerCase(), newCode.trim());
-      setNewCode(''); setStage('complete');
-      setNotice('Your email has changed. Existing officer sessions were revoked; sign in again using the new address.');
-    });
+    Alert.alert(
+      'Confirm your login email change?',
+      `Your login email will become ${newEmail.trim().toLowerCase()}. Existing sessions will be revoked and you must sign in again.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Change Email',
+          onPress: () => void run(async () => {
+            await api.confirmOfficerEmailChange(session, newEmail.trim().toLowerCase(), newCode.trim());
+            setNewCode(''); setStage('complete');
+            setNotice('Your email has changed. Existing officer sessions were revoked; sign in again using the new address.');
+          }),
+        },
+      ],
+    );
   };
   const finish = async () => {
     setBusy(true);
