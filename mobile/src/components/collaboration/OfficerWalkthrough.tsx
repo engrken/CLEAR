@@ -71,8 +71,11 @@ export function OfficerWalkthrough({ auto = true, onClose }: { auto?: boolean; o
       await api.completeOfficerOnboarding(session);
       setVisible(false);
       onClose?.();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Please retry saving your progress.');
+    } catch {
+      // A failed metadata write must not trap an officer in onboarding.
+      // No completion is recorded, so the guide reappears next login.
+      setVisible(false);
+      onClose?.();
     } finally { setBusy(false); }
   };
 
