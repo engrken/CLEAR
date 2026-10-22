@@ -3,6 +3,7 @@
 "use client";
 import { manilaDateInput } from "@/lib/clear-timezone";
 import { clearAlert, clearConfirm, clearPrompt } from "@/lib/clear-dialogs";
+import { confirmCommittedChange } from '@/lib/clear-dialogs';
 
 
 import { useState, useMemo, useEffect } from "react";
@@ -170,6 +171,12 @@ export default function ReportsClient({
   };
 
   const handleSaveReportSettings = async () => {
+    if (!await confirmCommittedChange({
+      action: 'Confirm report branding and signatories',
+      target: `${schoolName.trim()} · ${department}`,
+      consequence: 'This will update the organization report settings used for generated summaries and printed reports.',
+      confirmText: 'Save Report Settings',
+    })) return;
     setIsSaving(true);
     try {
       const formData = new FormData();
