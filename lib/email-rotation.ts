@@ -212,6 +212,8 @@ export async function confirmNewEmail(scope: Scope, proposed: string, rawCode: s
         data: { email: newEmail },
       });
       if (updated.count !== 1) throw new ApiFailure(409, 'conflict', 'Your roster email changed. Please restart verification.');
+      // The clearance session was tied to the old verified email and must not survive a change.
+      await tx.verificationToken.deleteMany({ where: { identifier: 'clear-student:session:' + scope.sessionKey } });
     } else {
       const existing = await tx.tenantUser.findFirst({
         where: { organizationId: scope.orgId, id: { not: scope.accountId }, email: { equals: newEmail, mode: 'insensitive' } },
