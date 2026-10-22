@@ -1,7 +1,7 @@
 // /app/department/[department]/(protected)/users/UserManagementClient.tsx
 
 "use client";
-import { clearAlert, clearConfirm, clearPrompt } from "@/lib/clear-dialogs";
+import { clearAlert, clearConfirm, clearPrompt, confirmCommittedChange } from "@/lib/clear-dialogs";
 
 
 import { useState } from "react";
@@ -153,6 +153,12 @@ export default function UserManagementClient({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!await confirmCommittedChange({
+      action: editingUser ? 'Confirm officer profile update' : 'Confirm new officer account',
+      target: `${fullName} · ${email} · ${role} · ${status}`,
+      consequence: `This will ${editingUser ? 'change' : 'create'} a tenant user account and its effective permissions. Verify role and module access before saving.`,
+      confirmText: editingUser ? 'Save Account Changes' : 'Create Officer',
+    })) return;
     setIsSubmitting(true);
 
     try {
