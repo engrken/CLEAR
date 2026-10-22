@@ -83,7 +83,14 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
+      # Ubuntu GitHub runners already ship Android command-line tools and SDK.
+      # setup-android@v3 attempts to install removed legacy 'tools' package and fails.
+      - name: Use preinstalled Android SDK and accept required licenses
+        run: |
+          set -euo pipefail
+          test -n "${ANDROID_HOME:-}"
+          test -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" || command -v sdkmanager
+          yes | sdkmanager --licenses >/dev/null || test "${PIPESTATUS[1]}" -eq 0
       - uses: gradle/actions/setup-gradle@v4
       - name: Generate Android native project locally (no Expo cloud build)
         run: npx expo prebuild --platform android --non-interactive --no-install
