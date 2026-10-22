@@ -116,6 +116,15 @@ export const httpApi: ClearApi = {
     }
   },
 
+  requestOfficerEmailChangeCurrentCode: (s) =>
+    request(`${org(s.org.subdomain)}/profile/email/request-current`, { method: 'POST', ...as(s) }),
+  verifyOfficerEmailChangeCurrentCode: (s, code) =>
+    request(`${org(s.org.subdomain)}/profile/email/verify-current`, { method: 'POST', ...as(s), json: { code } }),
+  requestOfficerEmailChangeNewCode: (s, newEmail) =>
+    request(`${org(s.org.subdomain)}/profile/email/request-new`, { method: 'POST', ...as(s), json: { newEmail } }),
+  confirmOfficerEmailChange: (s, newEmail, code) =>
+    request(`${org(s.org.subdomain)}/profile/email/confirm`, { method: 'POST', ...as(s), json: { newEmail, code } }),
+
   requestGlobalCode: (email) => request('/global/auth/request-code', {
     method: 'POST', json: { email: email.trim().toLowerCase() },
   }),
