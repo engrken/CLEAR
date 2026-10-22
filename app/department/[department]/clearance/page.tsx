@@ -175,6 +175,24 @@ export default async function ClearancePage({
   const hasSession = Boolean(session?.user);
   const isOfficer = hasSession ? await checkOfficerClearanceAccess(cleanDepartment) : false;
 
+  // Reject malformed/forged public certificates BEFORE querying any financial
+  // ledger, arrears or student records. This also prevents expensive anonymous
+  // requests masquerading as signed certificates.
+  if (sigParam && q && !verifyClearanceSignature(organization.id, q, ay, term, sigParam)) {
+    return (
+      <div className="d-flex flex-column min-vh-100 bg-body-tertiary text-body">
+        <PublicHeader organizationName={organization.name} />
+        <main className="flex-grow-1 p-3 p-md-5 mx-auto w-100" style={{ maxWidth: '760px' }}>
+          <div className="card border-danger bg-body shadow-sm p-4">
+            <h1 className="h4 text-danger fw-bold">Invalid clearance certificate</h1>
+            <p>The digital clearance certificate could not be verified. Request a fresh signed certificate from your authorized officer.</p>
+            <Link href={`${basePath}/clearance`} className="btn btn-outline-secondary">Return to student clearance</Link>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   // Private student inquiry is ALWAYS enforced in Production and Preview.
   // An identifier/email in an anonymous GET URL is never identity proof.
   // Only independently HMAC-signed clearance certificates retain public GET verification.

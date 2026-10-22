@@ -11,6 +11,9 @@ test('anonymous browser student inquiry requires OTP unconditionally before rost
   assert.match(page, /redirect\(`\$\{basePath\}\/clearance`\)/);
   assert.match(page, /<StudentClearanceInquiry/);
   assert.match(page, /if \(sigParam && q\)/, 'valid signed-certificate flow is retained');
+  const invalid = page.indexOf('if (sigParam && q && !verifyClearanceSignature');
+  assert.ok(invalid > 0 && invalid < page.indexOf('const collectionSetups ='),
+    'forged signatures must fail before financial and roster queries');
   assert.doesNotMatch(page, /CLEAR_PUBLIC_CLEARANCE_REQUIRE_OTP|RECORD NOT FOUND|api\.qrserver\.com|studentRecord = await prisma\.student\.findFirst/);
   assert.match(page, /referrer: 'no-referrer'/);
 });

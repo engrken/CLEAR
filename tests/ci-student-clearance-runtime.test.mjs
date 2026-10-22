@@ -170,6 +170,13 @@ test('student-only OTP, reuse, guesses, tenant/period isolation, minimal status,
     assert.match(browserHtml, /Private student clearance inquiry/);
     assert.doesNotMatch(browserHtml, /RECORD NOT FOUND|CLEARANCE HOLD ACTIVE|CLEARED FOR SIGNING|api\.qrserver\.com/);
     assert.doesNotMatch(browserHtml, /Synthetic Student A|CI-ONLY-A-007/);
+    const forgedCertificate = await fetch(root + '/department/' + tenantA +
+      '/clearance?ay=A.Y.%20CI-ONLY-2026&term=1st%20Sem&q=' +
+      encodeURIComponent(a.studentId) + '&sig=' + '0'.repeat(64));
+    assert.equal(forgedCertificate.status, 200, 'bad signature gets generic invalid certificate');
+    const forgedHtml = await forgedCertificate.text();
+    assert.match(forgedHtml, /Invalid clearance certificate/);
+    assert.doesNotMatch(forgedHtml, /Synthetic Student A|CLEARED FOR SIGNING|CLEARANCE ON HOLD/);
 
 
     // Real bearer-token/Prisma authorization checks for officer, tenant admin
