@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Banner, Button, Card, Icon, Screen, Text } from '@/components/ui';
+import { DataPrivacyNotice } from '@/components/privacy/DataPrivacyNotice';
 import { ACCOUNT_DELETION_URL, PRIVACY_URL, openWebPage } from '@/lib/links';
 import { grantedModules, type MobileAvailability } from '@/lib/module-access';
 import { useOfficerSession, useSession } from '@/lib/session';
@@ -31,6 +32,7 @@ export default function More() {
   const router = useRouter();
   const { c } = useTheme();
   const [showWebOnly, setShowWebOnly] = useState(false);
+  const [privacyOpen, setPrivacyOpen] = useState(false);
   const isTenantAdmin = ['admin', 'administrator', 'master'].includes(String(session.officer.role).trim().toLowerCase());
   const modules = grantedModules(session.officer.allowedTabs);
   const available = modules.filter((m) => m.availability === 'available' || m.availability === 'review-only');
@@ -59,6 +61,7 @@ export default function More() {
   );
 
   return (
+    <>
     <Screen
       edges={['top']}
       bottomInset={TAB_BAR_SPACE + spacing[8]}
@@ -128,6 +131,9 @@ export default function More() {
       ) : null}
 
       <Text variant="headline" accessibilityRole="header">Account and privacy</Text>
+      <Button block variant="secondary" icon="shield" onPress={() => setPrivacyOpen(true)}>
+        View data privacy notice
+      </Button>
       {LINKS.map((link) => (
         <Pressable
           key={link.url}
@@ -140,6 +146,8 @@ export default function More() {
         </Pressable>
       ))}
     </Screen>
+    <DataPrivacyNotice visible={privacyOpen} onDismiss={() => setPrivacyOpen(false)} />
+    </>
   );
 }
 
