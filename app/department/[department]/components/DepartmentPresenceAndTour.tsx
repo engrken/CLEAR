@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { PRESENCE_TABS, normalizePresencePage } from '@/lib/collaboration-pages';
 
 type Colleague = { id: string; name: string };
@@ -33,10 +33,9 @@ export default function DepartmentPresenceAndTour({
   const exempt = Boolean(currentUser.isSuperAdmin) || String(currentUser.role || '').toLowerCase() === 'superadmin';
   const routeRoot = '/department/' + encodeURIComponent(department);
   const module = pathname.startsWith(routeRoot)
-    ? (pathname.slice(routeRoot.length).replace(/^\\/+/, '').split('/')[0] || 'overview')
+    ? (pathname.slice(routeRoot.length).split('/').filter(Boolean)[0] || 'overview')
     : '';
   const page = normalizePresencePage(module);
-  const tabId = useRef<string>('');
   const [colleagues, setColleagues] = useState<Colleague[]>([]);
   const [total, setTotal] = useState(0);
   const [tourOpen, setTourOpen] = useState(false);
@@ -59,7 +58,6 @@ export default function DepartmentPresenceAndTour({
     if (exempt || !page || !PRESENCE_TABS[page]) return;
     let alive = true;
     const id = crypto.randomUUID();
-    tabId.current = id;
     const pulse = async () => {
       if (document.visibilityState !== 'visible') return;
       try {
