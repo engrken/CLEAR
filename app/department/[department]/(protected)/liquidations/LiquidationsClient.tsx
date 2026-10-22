@@ -1,6 +1,7 @@
 // /app/department/[department]/(protected)/liquidations/LiquidationsClient.tsx
 "use client";
 import { clearAlert, clearConfirm, clearPrompt } from "@/lib/clear-dialogs";
+import { confirmCommittedChange } from '@/lib/clear-dialogs';
 
 
 import { useEffect, useState } from "react";
@@ -158,6 +159,12 @@ export default function LiquidationsClient({
 
   const handleSaveReportSettings = async () => {
     if (isSaving) return;
+    if (!await confirmCommittedChange({
+      action: 'Confirm liquidation report settings',
+      target: `${schoolName.trim()} · ${department}`,
+      consequence: 'This updates organization report branding and authorized signatories on future printouts.',
+      confirmText: 'Save Report Settings',
+    })) return;
     setIsSaving(true);
     try {
       const formData = new FormData();
