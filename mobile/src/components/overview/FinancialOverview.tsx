@@ -143,10 +143,12 @@ export function FinancialOverview({ stats }: { stats: DashboardSummary }) {
           <Text variant="bodySm" color="inkMuted">Fund details unavailable from this server.</Text>
         ) : funds.length === 0 ? (
           <Text variant="bodySm" color="inkMuted">No fund activity recorded for this term.</Text>
-        ) : (
+        ) : funds.some((f) => f.balanceCentavos > 0) ? (
           funds.filter((f) => f.balanceCentavos > 0).map((f) => (
             <Detail key={f.name} label={f.name} amount={f.balanceCentavos} />
           ))
+        ) : (
+          <Text variant="bodySm" color="inkMuted">No positive fund balances to display.</Text>
         )}
       </Card>
 
