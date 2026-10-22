@@ -1,0 +1,119 @@
+name: CLEAR Android GitHub-native internal QA APK (no Expo cloud credits)
+
+# Build an installable internal QA APK on GitHub-hosted Android SDK/Gradle.
+# This workflow does not use EAS Build or Expo cloud build credits.
+# QA APK uses the Android debug signing key and is NOT a publishable release.
+on:
+  workflow_dispatch:
+    inputs:
+      deployed_production_sha:
+        description: 'Exact Vercel Production SHA, matching main source commit'
+        type: string
+        required: true
+      production_database_mapping_verified:
+        description: 'Production DB diagnostic verified and temporary endpoint disabled'
+        type: boolean
+        required: true
+      qa_build_confirmation:
+        description: 'Type BUILD_QA_APK_ONLY'
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  statuses: read
+
+jobs:
+  native-qa-apk:
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      inputs.production_database_mapping_verified &&
+      inputs.qa_build_confirmation == 'BUILD_QA_APK_ONLY'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      CI: '1'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_API_URL: https://clearsys.vercel.app/api/mobile
+      EXPO_PUBLIC_CLEAR_RELEASE_KIND: live-readonly-internal
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Require exact approved deployed Production revision
+        env:
+          APPROVED_SHA: ${{ inputs.deployed_production_sha }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$APPROVED_SHA" =~ ^[0-9a-f]{40}$ ]] || [ "$APPROVED_SHA" != "$GITHUB_SHA" ]; then
+            echo "::error::Exact approved Vercel Production SHA must match checked-out main SHA."
+            exit 1
+          fi
+      - name: Require GitHub-recorded successful Vercel deployment
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          node --input-type=module <<'CHECK'
+          const response = await fetch(`https://api.github.com/repos/${process.env.REPO}/commits/${process.env.GITHUB_SHA}/status`, {
+            headers: { Authorization: `Bearer ${process.env.GITHUB_TOKEN}`, Accept: 'application/vnd.github+json' },
+            signal: AbortSignal.timeout(15000)
+          });
+          if (!response.ok || !(await response.json()).statuses?.some(s => s.context === 'Vercel' && s.state === 'success')) {
+            console.error('No successful Vercel deployment for approved SHA. Build refused.');
+            process.exit(1);
+          }
+          console.log('Approved source SHA has successful Vercel status.');
+          CHECK
+      - name: Verify pinned read-only Production configuration
+        run: node scripts/verify-live-viewer.mjs
+      - name: Prepare npm lockfile in disposable runner
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Install dependencies
+        run: npm ci
+      - name: Validate TypeScript
+        run: npm run typecheck
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Generate Android native project locally (no Expo cloud build)
+        run: npx expo prebuild --platform android --non-interactive --no-install
+      - name: Confirm release variant is QA debug-signed (never a store release)
+        run: |
+          set -euo pipefail
+          test -f android/app/build.gradle
+          if ! grep -Eq 'signingConfig signingConfigs.debug' android/app/build.gradle; then
+            echo "::error::Expected Android debug-signed release configuration missing; refusing unsigned/unverified APK."
+            exit 1
+          fi
+          echo "QA-only: release JS bundle with disposable Android debug signing."
+      - name: Build installable Android release JS APK locally
+        run: |
+          set -euo pipefail
+          cd android
+          chmod +x gradlew
+          ./gradlew :app:assembleRelease --no-daemon --stacktrace
+      - name: Verify APK output and SHA256
+        run: |
+          set -euo pipefail
+          APK="android/app/build/outputs/apk/release/app-release.apk"
+          test -s "$APK"
+          sha256sum "$APK" | tee android-qa-apk.sha256
+          echo "APK built for controlled device QA only; no release or distribution."
+      - uses: actions/upload-artifact@v4
+        with:
+          name: clear-production-readonly-internal-qa-apk
+          path: |
+            mobile/android/app/build/outputs/apk/release/app-release.apk
+            mobile/android-qa-apk.sha256
+          if-no-files-found: error
+          retention-days: 7
