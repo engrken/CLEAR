@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { confirmCommittedChange } from '@/lib/clear-dialogs';
 
 type Stage = 'identity' | 'current_code' | 'new_address' | 'new_code' | 'complete';
 const emailValid = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim()) && v.trim().length <= 254;
@@ -87,12 +88,20 @@ export default function StudentEmailChange({ department }: { department: string 
   const confirmNew = (event: FormEvent) => {
     event.preventDefault();
     if (!/^\d{6}$/.test(code)) return setError('Enter the six-digit code sent to the new address.');
-    void run(async () => {
+    void (async () => {
+      if (!await confirmCommittedChange({
+        action: 'Confirm your roster email change',
+        target: `${studentId.trim()} · New email: ${newEmail.trim().toLowerCase()}`,
+        consequence: 'Your student roster will use the new email for clearance and future notifications. The old-email verification session will be revoked.',
+        confirmText: 'Update My Roster Email',
+      })) return;
+      await run(async () => {
       await post('/clearance/email-change/confirm', { newEmail: newEmail.trim().toLowerCase(), code }, true);
       tokenRef.current = null; // Server revoked old-email clearance token transactionally.
       setCode(''); setStage('complete');
       setNotice('Your roster email has been updated. Use the new email for your next clearance verification.');
-    });
+      });
+    })();
   };
   const reset = () => {
     revoke(); setStage('identity'); setStudentId(''); setCurrentEmail(''); setNewEmail('');
