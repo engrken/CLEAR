@@ -37,6 +37,7 @@ export default function DepartmentPresenceAndTour({
     : '';
   const page = normalizePresencePage(module);
   const [colleagues, setColleagues] = useState<Colleague[]>([]);
+  const [serverGrantedTabs, setServerGrantedTabs] = useState<string[]>([]);
   const [total, setTotal] = useState(0);
   const [tourOpen, setTourOpen] = useState(false);
   const [tourStep, setTourStep] = useState(0);
@@ -45,14 +46,12 @@ export default function DepartmentPresenceAndTour({
   const [tourError, setTourError] = useState('');
   const [finished, setFinished] = useState(false);
   const base = '/api/department/' + encodeURIComponent(department);
-  const permitted = Array.isArray(currentUser.allowedTabs) ? currentUser.allowedTabs : [];
-  const isAdmin = ['admin', 'administrator', 'master'].includes(String(currentUser.role || '').toLowerCase());
   const steps = useMemo<TourStep[]>(() => [
     { title: 'Welcome to CLEAR', detail: 'This guide covers only the modules available to your assigned role. Your actions remain subject to server-side permissions.' },
-    ...MODULES.filter((m) => isAdmin || permitted.includes(m.tab)).map(({ page: route, title, detail }) => ({ module: route, title, detail })),
+    ...MODULES.filter((m) => serverGrantedTabs.includes(m.tab)).map(({ page: route, title, detail }) => ({ module: route, title, detail })),
     { title: 'Before you commit', detail: 'Always review the affected student, amount, academic term and audit impact. Confirmations help avoid mistakes but never replace server validation.' },
     { title: 'Help and privacy', detail: 'Use the account menu for privacy information. Other officers appear only when they are actively viewing your same tenant, page and term.' },
-  ], [isAdmin, permitted.join('|')]);
+  ], [serverGrantedTabs.join('|')]);
 
   useEffect(() => {
     if (exempt || !page || !PRESENCE_TABS[page]) return;
@@ -103,7 +102,10 @@ export default function DepartmentPresenceAndTour({
       .then(async res => {
         if (!res.ok) throw new Error('Unavailable');
         const data = await res.json();
-        if (alive && !data.exempt && !data.completed) setShowTour(true);
+        if (alive && !data.exempt) {
+          setServerGrantedTabs(Array.isArray(data.tabs) ? data.tabs : []);
+          if (!data.completed) setShowTour(true);
+        }
       })
       .catch(() => { /* Onboarding must never interrupt unauthorized or offline sessions. */ });
     return () => { alive = false; };
