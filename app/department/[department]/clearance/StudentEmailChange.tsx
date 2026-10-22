@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 
 type Stage = 'identity' | 'current_code' | 'new_address' | 'new_code' | 'complete';
 const emailValid = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim()) && v.trim().length <= 254;
@@ -19,14 +19,14 @@ export default function StudentEmailChange({ department }: { department: string 
   const tokenRef = useRef<string | null>(null);
   const base = '/api/mobile/orgs/' + encodeURIComponent(department);
 
-  const revoke = () => {
+  const revoke = useCallback(() => {
     const token = tokenRef.current;
     tokenRef.current = null;
     if (token) void fetch(base + '/clearance/auth/session', {
       method: 'DELETE', headers: { Authorization: 'Bearer ' + token }, cache: 'no-store', keepalive: true,
     }).catch(() => {});
-  };
-  useEffect(() => () => revoke(), [base]);
+  }, [base]);
+  useEffect(() => () => revoke(), [revoke]);
 
   const post = async (path: string, payload: object, useToken = false) => {
     const token = tokenRef.current;
