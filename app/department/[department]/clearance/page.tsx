@@ -10,6 +10,7 @@ import { notFound, redirect } from 'next/navigation';
 import crypto from 'node:crypto';
 import Link from 'next/link';
 import StudentClearanceInquiry from './StudentClearanceInquiry';
+import StudentEmailChange from './StudentEmailChange';
 import ClearanceClientView from './ClearanceClientView';
 import ClearanceManager from './ClearanceManager';
 import DataPrivacyModal from '../components/DataPrivacyModal';
@@ -240,6 +241,7 @@ export default async function ClearancePage({
             academicYear={organization.activeAy}
             term={organization.activeTerm}
           />
+          <div className="mt-4"><StudentEmailChange department={cleanDepartment} /></div>
           <div className="mt-4">
             <ClearanceClientView
               department={cleanDepartment}
