@@ -2,7 +2,7 @@
 
 "use client";
 import { manilaDateInput } from '@/lib/clear-timezone';
-import { clearAlert, clearConfirm, clearPrompt } from "@/lib/clear-dialogs";
+import { clearAlert, clearConfirm, clearPrompt, confirmCommittedChange } from "@/lib/clear-dialogs";
 
 
 import { useState, useMemo, useEffect } from "react";
@@ -172,6 +172,12 @@ export default function LiquidationsForm({
     if (!selectedCaRef) return void clearAlert("Select a Cash Advance reference ID or choose 'Direct Expense'.");
     if (expenseRows.length === 0 || totalExpense <= 0) return void clearAlert("Please add at least one valid expense item.");
 
+    if (!await confirmCommittedChange({
+      action: 'Confirm liquidation audit',
+      target: `${requestor} · ${fmt(totalExpense)} · ${fundSource} · ${ay} ${term}`,
+      consequence: `This will post ${expenseRows.length} audited expense line(s) against ${selectedCaRef === 'DIRECT' ? 'a direct expense' : 'advance ' + selectedCaRef}. Check amounts and supporting ORs before recording.`,
+      confirmText: 'Record Liquidation',
+    })) return;
     setIsSubmitting(true);
     try {
       await recordAudit(department, {
