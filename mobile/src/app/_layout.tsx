@@ -7,9 +7,11 @@ import {
 import { DefaultTheme, Stack, ThemeProvider as NavThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 import { MOBILE_BUSINESS_WRITES_ENABLED } from '@/api/config';
+import { DataPrivacyNotice } from '@/components/privacy/DataPrivacyNotice';
+import { getItem, setItem } from '@/lib/secure-storage';
 import { SessionProvider, useSession } from '@/lib/session';
 import { ThemeProvider, useTheme } from '@/theme';
 
@@ -35,6 +37,24 @@ export default function RootLayout() {
 function Navigator() {
   const { c } = useTheme();
   const { session, globalSession, restoring } = useSession();
+  const [privacyReady, setPrivacyReady] = useState(false);
+  const [privacyAcknowledged, setPrivacyAcknowledged] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    void getItem('clear_privacy_notice_ack_v1')
+      .then((value) => { if (active) setPrivacyAcknowledged(value === 'true'); })
+      .catch(() => { if (active) setPrivacyAcknowledged(false); })
+      .finally(() => { if (active) setPrivacyReady(true); });
+    return () => { active = false; };
+  }, []);
+
+  const acknowledgePrivacy = () => {
+    setPrivacyAcknowledged(true);
+    void setItem('clear_privacy_notice_ack_v1', 'true').catch(() => {
+      // A failed local write means the disclosure will be shown again next launch.
+    });
+  };
 
   // Keep the splash up until fonts are in and any stored session is re-checked.
   useEffect(() => {
@@ -45,7 +65,7 @@ function Navigator() {
     ...DefaultTheme,
     colors: { ...DefaultTheme.colors, background: c.canvas, card: c.canvas, text: c.ink, border: c.border, primary: c.accent },
   };
-  if (restoring) return null;
+  if (restoring || !privacyReady) return null;
 
   return (
     <NavThemeProvider value={navTheme}>
@@ -92,6 +112,11 @@ function Navigator() {
           <Stack.Screen name="global/provisions/[id]" />
         </Stack.Protected>
       </Stack>
+      <DataPrivacyNotice
+        visible={!privacyAcknowledged}
+        required
+        onDismiss={acknowledgePrivacy}
+      />
     </NavThemeProvider>
   );
 }
