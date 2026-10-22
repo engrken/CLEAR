@@ -256,6 +256,12 @@ export default function StudentsClient({
       isEdit: !!editStudent,
     };
 
+    if (!await confirmCommittedChange({
+      action: editStudent ? 'Confirm student roster update' : 'Confirm new student',
+      target: `${payload.fullName} · ${payload.studentId} · ${ay} ${term}`,
+      consequence: 'This updates the authorized tenant roster and enrollment details. Check the Student ID and email before saving.',
+      confirmText: editStudent ? 'Update Student' : 'Add Student',
+    })) return;
     setIsSubmitting(true);
     try {
       await saveStudent(department, organizationId, ay, term, payload);
