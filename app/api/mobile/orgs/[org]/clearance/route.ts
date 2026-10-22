@@ -28,7 +28,7 @@ export const GET = handler(async (req: Request, { params }: Ctx) => {
     return {
       studentName: result.student.fullName,
       studentId: result.student.studentId,
-      status: result.isCleared ? 'cleared' : 'hold',
+      status: !result.isEnrolled ? 'not_enrolled' : result.isCleared ? 'cleared' : 'hold',
       outstandingCentavos: outstanding,
       unpaidItems: result.unpaidItems.map(i => ({
         label: i.itemDescription, amount: toCentavos(i.balanceDue),
@@ -54,7 +54,7 @@ export const GET = handler(async (req: Request, { params }: Ctx) => {
   return {
     studentName: null,
     studentId: null,
-    status: result.isCleared ? 'cleared' : 'hold',
+    status: !result.isEnrolled ? 'not_enrolled' : result.isCleared ? 'cleared' : 'hold',
     outstandingCentavos: null,
     unpaidItems: null,
     // Public QR verification paths contain school IDs; do not leak them via
