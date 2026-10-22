@@ -31,6 +31,6 @@ export async function studentEmailScope(req: Request, slug: string) {
     accountId: verified.id,
     currentEmail: row.email,
     // The token is not persisted here, logged, or echoed back.
-    sessionKey: crypto.createHash('sha256').update(bearer.replace(/^Bearer\\s+/i, '')).digest('hex'),
+    sessionKey: crypto.createHash('sha256').update(bearer.replace(/^Bearer\s+/i, '')).digest('hex'),
   };
 }
