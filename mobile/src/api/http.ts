@@ -155,6 +155,10 @@ export const httpApi: ClearApi = {
   listGlobalTenantLedger: (s, slug) => request(`/global/orgs/${encodeURIComponent(slug)}/ledger`, { token: s.token }),
   listGlobalTenantRemittances: (s, slug) => request(`/global/orgs/${encodeURIComponent(slug)}/remittances`, { token: s.token }),
 
+  getOfficerOnboarding: (s) => request(`${org(s.org.subdomain)}/onboarding`, as(s)),
+  completeOfficerOnboarding: (s) => request(`${org(s.org.subdomain)}/onboarding`, { method: 'POST', ...as(s) }),
+  pulseOfficerPresence: (s, page, tabId) => request(`${org(s.org.subdomain)}/presence`, { method: 'POST', ...as(s), json: { page, tabId } }),
+  leaveOfficerPresence: (s, tabId) => request(`${org(s.org.subdomain)}/presence`, { method: 'DELETE', ...as(s), json: { tabId } }),
   getTenantPortal: (s) => request(`${org(s.org.subdomain)}/portal`, as(s)),
   getDashboard: (s) => request(`${org(s.org.subdomain)}/dashboard`, as(s)),
   listLedger: (s, f) => request(`${org(s.org.subdomain)}/ledger`, { ...as(s), query: { status: f?.status, limit: f?.limit } }),
