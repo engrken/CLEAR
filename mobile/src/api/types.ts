@@ -274,6 +274,11 @@ export type ClearApi = {
   /** Re-validates a stored token; throws ApiError('unauthorized') when it is no longer good. */
   restoreSession(org: string, token: string): Promise<Session>;
   signOut(session: Session): Promise<void>;
+  /** Signed-in officer identity-only profile changes; no financial/business writes. */
+  requestOfficerEmailChangeCurrentCode(session: Session): Promise<{ message: string }>;
+  verifyOfficerEmailChangeCurrentCode(session: Session, code: string): Promise<{ verified: true }>;
+  requestOfficerEmailChangeNewCode(session: Session, newEmail: string): Promise<{ message: string }>;
+  confirmOfficerEmailChange(session: Session, newEmail: string, code: string): Promise<{ success: true; message: string }>;
   // global superadmin — separate OTP policy, session and read-only overview.
   requestGlobalCode(email: string): Promise<{ message: string }>;
   verifyGlobalCode(email: string, code: string): Promise<GlobalSession>;
