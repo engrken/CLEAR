@@ -296,6 +296,11 @@ export type ClearApi = {
   listGlobalTenantLedger(session: GlobalSession, slug: string): Promise<LedgerEntry[]>;
   listGlobalTenantRemittances(session: GlobalSession, slug: string): Promise<LedgerEntry[]>;
   // officer
+  /** Session metadata only; all server requests independently check tenant and tab permissions. */
+  getOfficerOnboarding(s: Session): Promise<{ exempt: boolean; completed: boolean; tabs: string[] }>;
+  completeOfficerOnboarding(s: Session): Promise<{ exempt: boolean; completed: boolean }>;
+  pulseOfficerPresence(s: Session, page: 'overview' | 'students' | 'remittances', tabId: string): Promise<{ colleagues: Array<{ id: string; name: string }>; count: number }>;
+  leaveOfficerPresence(s: Session, tabId: string): Promise<{ ok: true }>;
   getTenantPortal(s: Session): Promise<TenantPortalStatus>;
   getDashboard(s: Session): Promise<DashboardSummary>;
   listLedger(s: Session, filter?: { status?: string; limit?: number }): Promise<LedgerEntry[]>;
