@@ -31,7 +31,10 @@ export default function DepartmentPresenceAndTour({
   pathname: string;
 }) {
   const exempt = Boolean(currentUser.isSuperAdmin) || String(currentUser.role || '').toLowerCase() === 'superadmin';
-  const module = pathname.replace(new RegExp('^/department/' + department.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '/?'), '').split('/')[0] || 'overview';
+  const routeRoot = '/department/' + encodeURIComponent(department);
+  const module = pathname.startsWith(routeRoot)
+    ? (pathname.slice(routeRoot.length).replace(/^\\/+/, '').split('/')[0] || 'overview')
+    : '';
   const page = normalizePresencePage(module);
   const tabId = useRef<string>('');
   const [colleagues, setColleagues] = useState<Colleague[]>([]);
