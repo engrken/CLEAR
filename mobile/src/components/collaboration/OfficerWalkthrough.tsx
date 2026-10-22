@@ -45,14 +45,20 @@ export function OfficerWalkthrough({ auto = true, onClose }: { auto?: boolean; o
       if (!auto) { setVisible(true); return; }
       if (result.completed) return;
       // The mandatory Data Privacy notice is presented first by RootLayout.
+      let presented = false;
       const check = async () => {
+        if (presented || !alive) return;
         try {
-          if (await getItem('clear_privacy_notice_ack_v1') === 'true' && alive) setVisible(true);
+          if (await getItem('clear_privacy_notice_ack_v1') === 'true' && alive) {
+            presented = true;
+            cleanupTimer?.();
+            setVisible(true);
+          }
         } catch { /* without local privacy acknowledgement, no walkthrough */ }
       };
-      void check();
       const timer = setInterval(() => void check(), 2500);
       cleanupTimer = () => clearInterval(timer);
+      void check();
     }).catch(() => { if (alive) setError('Unable to retrieve walkthrough details.'); });
     let cleanupTimer: (() => void) | undefined;
     return () => { alive = false; cleanupTimer?.(); };
