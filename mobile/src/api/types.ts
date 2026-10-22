@@ -129,7 +129,7 @@ export type ClearanceResult = {
   /** Hidden on anonymous public lookups; present for authorized officers. */
   studentName: string | null;
   studentId: string | null;
-  status: 'cleared' | 'hold';
+  status: 'cleared' | 'hold' | 'not_enrolled';
   /** null on public lookups (cleared/on hold only); filled for an officer token with tab-clearance. */
   outstandingCentavos: number | null;
   /** The absolute, signed verification URL the web checks live. Encode as-is in the QR. */
