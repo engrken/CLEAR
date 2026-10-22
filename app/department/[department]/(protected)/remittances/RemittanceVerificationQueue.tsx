@@ -3,6 +3,7 @@
 "use client";
 import { formatManilaDateTime24 } from '@/lib/clear-timezone';
 import { clearAlert, clearConfirm, clearPrompt } from "@/lib/clear-dialogs";
+import { confirmCommittedChange } from '@/lib/clear-dialogs';
 
 
 import { useState } from "react";
@@ -98,6 +99,12 @@ export default function RemittanceVerificationQueue({
       return void clearAlert("No configured destination fund is selected for this academic term.");
     }
 
+    if (!await confirmCommittedChange({
+      action: 'Verify payment proof and issue OR?',
+      target: `${verifyingItem.studentName} · ${verifyingItem.referenceNumber} · ${fmt(verifyingItem.amountPaid)} · ${ay} ${term}`,
+      consequence: `This approves the payment proof, posts a collection to ${fundAllocation}, and issues an official receipt. Only proceed after matching the payment details.`,
+      confirmText: 'Verify and Issue Receipt',
+    })) return;
     setIsSubmitting(true);
     try {
       const result = await verifyOnlineRemittance(department, {
