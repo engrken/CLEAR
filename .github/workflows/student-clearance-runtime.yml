@@ -4,11 +4,13 @@ on:
   pull_request:
     paths:
       - 'app/api/mobile/**'
+      - 'app/department/**/clearance/**'
       - 'lib/mobile/**'
       - 'lib/clearance.ts'
       - 'lib/student-arrears.ts'
       - 'prisma/**'
       - 'tests/ci-student-clearance-runtime.test.mjs'
+      - 'tests/web-student-clearance-privacy.test.mjs'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/student-clearance-runtime.yml'

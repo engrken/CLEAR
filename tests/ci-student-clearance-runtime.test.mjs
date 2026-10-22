@@ -157,6 +157,21 @@ test('student-only OTP, reuse, guesses, tenant/period isolation, minimal status,
     await start();
     const { tenantA, tenantB, a, b, c: studentC } = fixture;
 
+    // Real Next.js SSR privacy regression on synthetic organizations.
+    // Anonymous school-ID lookups redirect before student/ledger evaluation.
+    const legacyLookup = await fetch(root + '/department/' + tenantA +
+      '/clearance?q=' + encodeURIComponent(a.studentId), { redirect: 'manual' });
+    assert.ok([307, 308].includes(legacyLookup.status), 'anonymous legacy ?q redirect');
+    assert.equal(new URL(legacyLookup.headers.get('location'), root).pathname,
+      '/department/' + tenantA + '/clearance', 'legacy student ID scrubbed from URL');
+    const browserPage = await fetch(root + '/department/' + tenantA + '/clearance');
+    assert.equal(browserPage.status, 200, 'public private-inquiry form loads');
+    const browserHtml = await browserPage.text();
+    assert.match(browserHtml, /Private student clearance inquiry/);
+    assert.doesNotMatch(browserHtml, /RECORD NOT FOUND|CLEARANCE HOLD ACTIVE|CLEARED FOR SIGNING|api\.qrserver\.com/);
+    assert.doesNotMatch(browserHtml, /Synthetic Student A|CI-ONLY-A-007/);
+
+
     // Real bearer-token/Prisma authorization checks for officer, tenant admin
     // and global admin. Everything is synthetic and runs only on CI's PostgreSQL.
     const officer = await prisma.tenantUser.create({

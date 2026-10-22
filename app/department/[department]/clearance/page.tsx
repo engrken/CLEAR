@@ -6,10 +6,10 @@ import { fmt, money } from '@/lib/utils';
 import { requireTabAccess } from '@/lib/permissions';
 import { formatInTimeZone } from 'date-fns-tz';
 import { headers } from 'next/headers';
+import { notFound, redirect } from 'next/navigation';
 import crypto from 'node:crypto';
 import Link from 'next/link';
-import Image from 'next/image';
-import ClearanceClientView from './ClearanceClientView';
+import StudentClearanceInquiry from './StudentClearanceInquiry';
 import ClearanceManager from './ClearanceManager';
 import DataPrivacyModal from '../components/DataPrivacyModal';
 import { Metadata } from 'next';
@@ -22,6 +22,8 @@ export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: 'Centralized Liquidation of Expense & Audit Records',
+  referrer: 'no-referrer',
+  robots: { index: false, follow: false, noarchive: true },
 };
 
 function formatOrgDisplayName(organizationName: string) {
@@ -172,6 +174,27 @@ export default async function ClearancePage({
   const session = await auth();
   const hasSession = Boolean(session?.user);
   const isOfficer = hasSession ? await checkOfficerClearanceAccess(cleanDepartment) : false;
+
+  // Private student inquiry is ALWAYS enforced in Production and Preview.
+  // An identifier/email in an anonymous GET URL is never identity proof.
+  // Only independently HMAC-signed clearance certificates retain public GET verification.
+  if (!isOfficer && !(sigParam && q)) {
+    // Clean legacy bookmarked ?q= URLs without echoing IDs into SSR HTML.
+    if (q || sigParam) redirect(`${basePath}/clearance`);
+    return (
+      <div className="d-flex flex-column min-vh-100 bg-body-tertiary text-body">
+        {!hasSession && <PublicHeader organizationName={organization.name} />}
+        <main className="flex-grow-1 p-3 p-md-5 mx-auto w-100" style={{ maxWidth: '760px' }}>
+          <StudentClearanceInquiry
+            department={cleanDepartment}
+            organizationName={organization.name}
+            academicYear={organization.activeAy}
+            term={organization.activeTerm}
+          />
+        </main>
+      </div>
+    );
+  }
 
   // 🚀 SECURITY FIX (F30): Compute termPkg directly from collectionSetup without invoking internal treasury engine
   const collectionSetups = await prisma.collectionSetup.findMany({
@@ -509,7 +532,7 @@ export default async function ClearancePage({
   // =========================================================================
   // 2. OFFICER CLEARANCE DASHBOARD VIEW (SHOWS FULL ITEMIZED BREAKDOWN)
   // =========================================================================
-  if (isOfficer && !sigParam) {
+  if (isOfficer && !(sigParam && q)) {
     const [allStudents, allCollections, allPenalties, allAdvances, allDues] = await Promise.all([
       prisma.student.findMany({ where: { organizationId: organization.id }, orderBy: { fullName: 'asc' } }),
       prisma.collection.findMany({ where: { organizationId: organization.id, academicYear: ay, term } }),
@@ -583,15 +606,10 @@ export default async function ClearancePage({
                     <div className="fw-bold mb-2">
                       <i className="bi bi-patch-check-fill me-2"></i> CLEARED FOR SIGNING
                     </div>
-                    <div className="d-inline-block p-2 bg-white rounded border border-success shadow-sm mb-2">
-                      <Image
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(queriedVerifyUrl)}`}
-                        alt="Clearance QR Code"
-                        width={120}
-                        height={120}
-                        unoptimized
-                      />
-                    </div>
+                    <p className="small text-body mb-2">
+                      The signed digital certificate can be opened below. To protect student IDs,
+                      CLEAR no longer sends verification links to an external QR-image provider.
+                    </p>
                     <div>
                       <a href={queriedVerifyUrl} target="_blank" rel="noopener noreferrer" className="btn btn-success btn-sm fw-bold text-dark">
                         <i className="bi bi-box-arrow-up-right me-1"></i> Open Digital Certificate
@@ -651,203 +669,6 @@ export default async function ClearancePage({
     );
   }
 
-  // =========================================================================
-  // 3. PUBLIC STUDENT SELF-VERIFICATION PORTAL (STATUS + QR ONLY; NO ITEMIZED DETAILS)
-  // =========================================================================
-  let studentRecord = null;
-  let isCleared = false;
-  let clearanceSig = '';
-  let verifyUrl = '';
-
-  if (q && !isOfficer) {
-    studentRecord = await prisma.student.findFirst({
-      where: {
-        organizationId: organization.id,
-        OR: [
-          { studentId: { equals: q, mode: 'insensitive' } },
-          { email: { equals: q, mode: 'insensitive' } },
-        ],
-      },
-    });
-
-    if (studentRecord) {
-      const [collections, penalties, cashAdvances, studentDues] = await Promise.all([
-        prisma.collection.findMany({
-          where: {
-            organizationId: organization.id,
-            academicYear: ay,
-            term,
-            OR: [
-              { studentId: studentRecord.id },
-              { studentId: { equals: studentRecord.studentId, mode: 'insensitive' } },
-              { studentName: { equals: studentRecord.fullName, mode: 'insensitive' } },
-            ],
-          },
-        }),
-        prisma.penalty.findMany({
-          where: {
-            organizationId: organization.id,
-            academicYear: ay,
-            term,
-            studentId: { equals: studentRecord.studentId, mode: 'insensitive' },
-          },
-        }),
-        prisma.cashAdvance.findMany({
-          where: {
-            organizationId: organization.id,
-            academicYear: ay,
-            term,
-            requestor: { contains: studentRecord.studentId, mode: 'insensitive' },
-          },
-        }),
-        prisma.collectible.findMany({ where: { organizationId: organization.id, academicYear: ay, term } }),
-      ]);
-
-      const unpaidItems = evaluateStudentObligations(
-        studentRecord,
-        collections,
-        penalties,
-        cashAdvances,
-        studentDues
-      );
-
-      isCleared = unpaidItems.length === 0;
-
-      if (isCleared) {
-        clearanceSig = generateClearanceSignature(organization.id, studentRecord.studentId, ay, term);
-        verifyUrl = `${absoluteBaseUrl}${basePath}/clearance?ay=${encodeURIComponent(ay)}&term=${encodeURIComponent(term)}&q=${encodeURIComponent(studentRecord.studentId)}&sig=${encodeURIComponent(clearanceSig)}`;
-      }
-    }
-  }
-
-  return (
-    <div className="d-flex flex-column min-vh-100 bg-body-tertiary">
-      {!hasSession && <PublicHeader organizationName={organization.name} />}
-      <main className="flex-grow-1 p-3 p-md-5 mx-auto w-100 text-body" style={{ maxWidth: '1200px' }}>
-        <div className="module card p-3 p-md-4 border-secondary shadow-sm h-100 bg-body">
-          <h5 className="text-info mb-2 fw-bold">
-            <i className="bi bi-person-check me-2"></i>Student Financial Clearance Verification
-          </h5>
-          <p className="text-muted small mb-3">
-            Verification requires your exact <strong>Student ID</strong> or registered <strong>Email Address</strong>.
-          </p>
-
-          <form method="GET" action={`${basePath}/clearance`} className="mb-4">
-            <input type="hidden" name="ay" value={ay} />
-            <input type="hidden" name="term" value={term} />
-            <div className="row g-2">
-              <div className="col-12 col-md-8">
-                <div className="input-group">
-                  <span className="input-group-text border-secondary text-muted bg-body-secondary">
-                    <i className="bi bi-person-vcard"></i>
-                  </span>
-                  <input
-                    type="text"
-                    name="q"
-                    className="form-control bg-body text-body border-secondary"
-                    placeholder="Enter student ID or registered email..."
-                    defaultValue={q || ''}
-                    autoComplete="off"
-                    required
-                  />
-                </div>
-              </div>
-              <div className="col-12 col-md-4 d-flex align-items-end">
-                <button type="submit" className="btn btn-info text-dark w-100 fw-bold">
-                  <i className="bi bi-search me-1"></i> Check Clearance
-                </button>
-              </div>
-            </div>
-          </form>
-
-          {q && (
-            <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.75)' }}>
-              <div className="modal-dialog modal-dialog-centered modal-lg">
-                <div className="modal-content card border-secondary bg-body text-body shadow-lg clear-theme-modal">
-                  <div className="modal-header border-secondary">
-                    <h5 className="modal-title text-info fw-bold">
-                      <i className="bi bi-person-badge me-2"></i> Clearance Verification Result
-                    </h5>
-                    <Link href={`${basePath}/clearance${queryString}`} className="btn-close" />
-                  </div>
-
-                  <div className="modal-body" style={{ maxHeight: '75vh', overflowY: 'auto' }}>
-                    {!studentRecord ? (
-                      <div className="alert border-warning bg-warning bg-opacity-10 text-warning py-4 text-center shadow-sm m-0">
-                        <i className="bi bi-person-x-fill fs-3 d-block mb-2 text-warning"></i>
-                        <strong className="fs-5">RECORD NOT FOUND</strong>
-                        <div className="small mt-1 opacity-75">
-                          No enrolled record matches <code>{q}</code> for {term} ({ay}). Please verify your entry or visit the department treasury office.
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="card p-3 border-secondary shadow-sm mb-3 bg-body-secondary">
-                        <div className="d-flex justify-content-between align-items-center mb-2">
-                          <span className="text-muted small fw-bold">STUDENT RECORD:</span>
-                          <span className="badge border border-secondary text-info">{term} ({ay})</span>
-                        </div>
-                        <div className="small text-muted mb-2">Verification result for the supplied student credentials.</div>
-
-                        {isCleared ? (
-                          <div className="alert border-success bg-success bg-opacity-10 text-success py-3 mb-0 text-center shadow-sm">
-                            <div className="fw-bold fs-5 mb-2">
-                              <i className="bi bi-patch-check-fill me-2"></i> CLEARED FOR SIGNING
-                            </div>
-                            <div className="small opacity-75 mb-3 text-body">
-                              Present this official QR code to the department adviser or custodian for digital sign-off.
-                            </div>
-                            <div className="d-inline-block p-2 bg-white rounded border border-success shadow-sm mb-2">
-                              <Image
-                                src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(verifyUrl)}`}
-                                alt="Clearance QR Code"
-                                width={140}
-                                height={140}
-                                unoptimized
-                              />
-                            </div>
-                            <div>
-                              <a href={verifyUrl} target="_blank" rel="noopener noreferrer" className="btn btn-success btn-sm fw-bold mt-1 text-dark">
-                                <i className="bi bi-box-arrow-up-right me-1"></i> Open Digital Certificate
-                              </a>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="alert border-danger bg-danger bg-opacity-10 text-danger py-3 mb-0 text-center shadow-sm">
-                            <div className="fw-bold fs-5 mb-1">
-                              <i className="bi bi-exclamation-triangle-fill me-2"></i> CLEARANCE HOLD ACTIVE
-                            </div>
-                            <div className="small opacity-75 text-body mt-1">
-                              Your clearance is currently on hold due to unsettled obligations. Please visit the department treasurer or auditor to verify and settle your account.
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  <div className="modal-footer border-secondary">
-                    <Link href={`${basePath}/clearance${queryString}`} className="btn btn-secondary btn-sm">
-                      Close View
-                    </Link>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <ClearanceClientView
-            department={cleanDepartment}
-            ay={ay}
-            term={term}
-            defaultStudentId={studentRecord?.studentId || q || ''}
-            defaultFullName=""
-            defaultEmail=""
-            feeOptions={feeOptions}
-            packageRate={termPkg.total}
-            closed={isClosed}
-          />
-        </div>
-      </main>
-      {!hasSession && <DataPrivacyModal />}
-    </div>
-  );
+  // All other paths fail closed; no legacy anonymous student-ID lookup remains.
+  notFound();
 }
