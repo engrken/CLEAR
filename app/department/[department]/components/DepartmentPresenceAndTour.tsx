@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PRESENCE_TABS, normalizePresencePage } from '@/lib/collaboration-pages';
 
 type Colleague = { id: string; name: string };
@@ -37,6 +37,7 @@ export default function DepartmentPresenceAndTour({
     : '';
   const page = normalizePresencePage(module);
   const [colleagues, setColleagues] = useState<Colleague[]>([]);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
   const [serverGrantedTabs, setServerGrantedTabs] = useState<string[]>([]);
   const [total, setTotal] = useState(0);
   const [tourOpen, setTourOpen] = useState(false);
@@ -133,9 +134,36 @@ export default function DepartmentPresenceAndTour({
       if (!response.ok) throw new Error('Unable to save your walkthrough progress. Please retry.');
       setFinished(true); setTourOpen(false); setShowTour(false);
     } catch (error) {
-      setTourError(error instanceof Error ? error.message : 'Unable to complete walkthrough.');
+      // Tour guidance must never block the workspace during an outage.
+      setTourError(error instanceof Error ? error.message : 'Unable to save walkthrough.');
+      setFinished(true); setTourOpen(false); setShowTour(false);
     } finally { setTourPending(false); }
   }, [tourPending, base]);
+
+  // Keep keyboard users inside the dialog, restore focus on exit.
+  useEffect(() => {
+    if (!tourOpen || exempt) return;
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const dialog = dialogRef.current;
+    dialog?.focus();
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        void endTour();
+      }
+      if (event.key !== 'Tab' || !dialog) return;
+      const links = Array.from(dialog.querySelectorAll<HTMLElement>('a[href], button:not([disabled])'));
+      if (!links.length) { event.preventDefault(); return; }
+      const first = links[0], last = links[links.length - 1];
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog)) {
+        event.preventDefault(); last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault(); first.focus();
+      }
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => { document.removeEventListener('keydown', handleKey); previous?.focus(); };
+  }, [tourOpen, exempt, endTour]);
 
   if (exempt) return null;
   return (
@@ -159,7 +187,7 @@ export default function DepartmentPresenceAndTour({
         }}>
         <i className="bi bi-question-circle me-1" aria-hidden="true" /> Tour
       </button>
-      {tourOpen && <div className="modal fade show d-block" role="dialog" aria-modal="true"
+      {tourOpen && <div ref={dialogRef} tabIndex={-1} className="modal fade show d-block" role="dialog" aria-modal="true"
         aria-labelledby="clear-onboarding-title"
         style={{ background: 'rgba(0,0,0,0.76)', zIndex: 1090 }}>
         <div className="modal-dialog modal-dialog-centered">
