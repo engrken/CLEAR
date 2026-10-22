@@ -2,7 +2,7 @@
 
 "use client";
 import { manilaDateInput } from '@/lib/clear-timezone';
-import { clearAlert, clearConfirm, clearPrompt } from "@/lib/clear-dialogs";
+import { clearAlert, clearConfirm, clearPrompt, confirmCommittedChange } from "@/lib/clear-dialogs";
 
 
 import { useState, useMemo } from "react";
@@ -77,6 +77,12 @@ export default function AdvancesForm({
     if (Math.round(amt * 100) > Math.round(selectedFundBalance * 100)) return void clearAlert("Insufficient balance in the chosen fund.");
     if (expectedReturnDate < dateIssued) return void clearAlert("Validation Error: Expected return date cannot be earlier than the date of issuance.");
 
+    if (!await confirmCommittedChange({
+      action: 'Confirm cash advance',
+      target: `${requestor} · ${fmt(amt)} · ${fundSource} · ${ay} ${term}`,
+      consequence: `An advance will be issued and recorded as unliquidated until the supporting expenses are audited. Expected return: ${expectedReturnDate}.`,
+      confirmText: 'Issue Advance',
+    })) return;
     setIsSubmitting(true);
 
     const formattedRequestor = (studentId && !requestor.includes(studentId)) 
