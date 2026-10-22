@@ -115,6 +115,7 @@ export function evaluateStudentObligations(
   collections: any[],
   penalties: any[],
   advances: any[],
+  isTermEnrolled: boolean,
   collectibles: any[] = [],
   historicalDebts: HistoricalDebt[] = []
 ): UnpaidItem[] {
@@ -151,7 +152,7 @@ export function evaluateStudentObligations(
   );
 
   const remainingPkg = money(termPkg.total - packagePaid);
-  if (termPkg.total > 0 && remainingPkg > 0) {
+  if (isTermEnrolled && termPkg.total > 0 && remainingPkg > 0) {
     unpaidItems.push({
       category: 'Departmental Fee',
       itemDescription: 'Mandatory Package Balance',
@@ -326,10 +327,17 @@ export async function getStudentClearance(organizationId: string, query: string,
   });
   if (!student) return null;
 
-  const setups = await prisma.collectionSetup.findMany({
-    where: { organizationId, academicYear: ay, term },
-    orderBy: { name: 'asc' },
-  });
+  // An existing student directory entry is not evidence of enrollment in this term.
+  const [setups, enrollment] = await Promise.all([
+    prisma.collectionSetup.findMany({
+      where: { organizationId, academicYear: ay, term },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.enrollment.findFirst({
+      where: { organizationId, academicYear: ay, term, studentId: student.id, enrollmentStatus: 'Enrolled' },
+      select: { id: true },
+    }),
+  ]);
   const termPkg = buildTermPackage(setups, term);
   const records = await loadStudentObligationRecords(organizationId, student, ay, term);
   const unpaidItems = evaluateStudentObligations(
@@ -338,13 +346,16 @@ export async function getStudentClearance(organizationId: string, query: string,
     records.collections,
     records.penalties,
     records.cashAdvances,
+    Boolean(enrollment),
     records.collectibles,
     records.historicalDebts
   );
-  const isCleared = unpaidItems.length === 0;
+  const isEnrolled = Boolean(enrollment);
+  const isCleared = isEnrolled && unpaidItems.length === 0;
   return {
     student,
     unpaidItems,
+    isEnrolled,
     isCleared,
     signature: isCleared ? generateClearanceSignature(organizationId, student.studentId, ay, term) : null,
   };
