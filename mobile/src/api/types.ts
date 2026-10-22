@@ -187,6 +187,35 @@ export type DashboardSummary = {
   outstandingCentavos: number;
   outstandingStudents: number;
   collectionsToday: number;
+  /** Web Overview values, read-only; optional for pre-patch server compatibility. */
+  remainingBalanceCentavos?: number;
+  totalCollectedCentavos?: number;
+  totalExpensesCentavos?: number;
+  unliquidatedCentavos?: number;
+  carriedInCentavos?: number;
+  carriedOutCentavos?: number;
+  depositedCentavos?: number;
+  withdrawnCentavos?: number;
+  periodClosed?: boolean;
+  funds?: Array<{
+    name: string;
+    initialCentavos: number;
+    transfersCentavos: number;
+    collectedCentavos: number;
+    disbursedCentavos: number;
+    unliquidatedCentavos: number;
+    balanceCentavos: number;
+  }>;
+  pendingAdvances?: Array<{
+    id: string;
+    advanceId: string;
+    requestor: string;
+    amountCentavos: number;
+    fund: string;
+    date: string;
+    due: string;
+    status: string;
+  }>;
 };
 
 export type Student = {
