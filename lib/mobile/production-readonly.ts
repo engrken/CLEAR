@@ -19,6 +19,8 @@ const STUDENT_LOGOUT = /^\/api\/mobile\/orgs\/[a-z0-9-]+\/clearance\/auth\/sessi
 // metadata. Never treat these as permission for business or financial writes.
 const OFFICER_PROFILE_EMAIL = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/profile\/email\/(?:request-current|verify-current|request-new|confirm)$/;
 const STUDENT_EMAIL_CHANGE = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/clearance\/email-change\/(?:request-new|confirm)$/;
+// Session-only collaboration metadata. Does not authorize a business mutation.
+const OFFICER_COLLABORATION = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/(?:presence|onboarding)$/;
 const GLOBAL_LOGOUT = '/api/mobile/global/auth/session';
 const OFFICER_LOGOUT = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/auth\/session$/;
 
@@ -41,6 +43,9 @@ export function isMobileRequestAllowed(
   if (verb === 'POST' && (GLOBAL_OTP.test(path) || OFFICER_OTP.test(path) || STUDENT_OTP.test(path))) return true;
   if (verb === 'DELETE' && (path === GLOBAL_LOGOUT || OFFICER_LOGOUT.test(path) || STUDENT_LOGOUT.test(path))) return true;
   if (verb === 'POST' && (OFFICER_PROFILE_EMAIL.test(path) || STUDENT_EMAIL_CHANGE.test(path))) return true;
+  if ((verb === 'POST' || verb === 'DELETE') && OFFICER_COLLABORATION.test(path)) {
+    return verb === 'POST' || path.endsWith('/presence');
+  }
 
   // Do not broaden this gate based on a user-supplied role, header or body.
   if (
