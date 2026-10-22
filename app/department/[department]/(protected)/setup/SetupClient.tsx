@@ -4,6 +4,7 @@
 
 "use client";
 import { clearAlert, clearConfirm, clearPrompt } from "@/lib/clear-dialogs";
+import { confirmCommittedChange } from '@/lib/clear-dialogs';
 
 
 import { useState, useEffect } from "react";
@@ -256,6 +257,12 @@ export default function SetupClient({
       return;
     }
 
+    if (totalAllocation > 0 && !await confirmCommittedChange({
+      action: 'Confirm fund allocation changes',
+      target: `${targetAy} ${targetTerm} · Total allocation ${fmt(totalAllocation)}`,
+      consequence: 'This will change initial fund allocations and may affect treasury balances. Verify all funds and the adjustment reason.',
+      confirmText: 'Save Fund Allocations',
+    })) return;
     setIsSubmitting(true);
 
     try {
