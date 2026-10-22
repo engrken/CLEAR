@@ -15,6 +15,10 @@ const GLOBAL_OTP = /^\/api\/mobile\/global\/auth\/(?:request-code|verify-code)$/
 const OFFICER_OTP = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/auth\/(?:request-code|verify-code)$/;
 const STUDENT_OTP = /^\/api\/mobile\/orgs\/[a-z0-9-]+\/clearance\/auth\/(?:request-code|verify-code)$/;
 const STUDENT_LOGOUT = /^\/api\/mobile\/orgs\/[a-z0-9-]+\/clearance\/auth\/session$/;
+// Only the six verified profile/email identity endpoints can mutate account
+// metadata. Never treat these as permission for business or financial writes.
+const OFFICER_PROFILE_EMAIL = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/profile\/email\/(?:request-current|verify-current|request-new|confirm)$/;
+const STUDENT_EMAIL_CHANGE = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/clearance\/email-change\/(?:request-new|confirm)$/;
 const GLOBAL_LOGOUT = '/api/mobile/global/auth/session';
 const OFFICER_LOGOUT = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/auth\/session$/;
 
@@ -36,6 +40,7 @@ export function isMobileRequestAllowed(
   // Login and logout are identity/session operations, not business transactions.
   if (verb === 'POST' && (GLOBAL_OTP.test(path) || OFFICER_OTP.test(path) || STUDENT_OTP.test(path))) return true;
   if (verb === 'DELETE' && (path === GLOBAL_LOGOUT || OFFICER_LOGOUT.test(path) || STUDENT_LOGOUT.test(path))) return true;
+  if (verb === 'POST' && (OFFICER_PROFILE_EMAIL.test(path) || STUDENT_EMAIL_CHANGE.test(path))) return true;
 
   // Do not broaden this gate based on a user-supplied role, header or body.
   if (
