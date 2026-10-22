@@ -6,6 +6,7 @@ import { api, type DashboardSummary, type LedgerEntry } from '@/api';
 import { PAYMENT_WRITES_ENABLED } from '@/api/config';
 import { Banner, Button, ColorTile, HeroStat, LedgerList, LedgerRow, Screen, SectionHeader, TermChip, Text } from '@/components/ui';
 import { FinancialOverview } from '@/components/overview/FinancialOverview';
+import { OfficerPresence } from '@/components/collaboration/OfficerPresence';
 import { formatWhen } from '@/lib/dates';
 import { fromCentavos } from '@/lib/money';
 import { setPendingCount } from '@/lib/pending-count';
@@ -64,6 +65,7 @@ export default function Home() {
 
   return (
     <Screen edges={['top']} header={header} bottomInset={TAB_BAR_SPACE} contentStyle={{ gap: 12 }}>
+      <OfficerPresence page="overview" session={session} />
       {!canOverview ? (
         <Banner tone="info" title="Your assigned workspace">
           Your role does not include the financial overview. Only the modules authorized for this department are available.
