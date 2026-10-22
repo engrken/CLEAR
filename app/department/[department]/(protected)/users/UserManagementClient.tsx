@@ -139,6 +139,13 @@ export default function UserManagementClient({
       void clearAlert("You cannot deactivate or block your currently signed-in account.");
       return;
     }
+    if (!await confirmCommittedChange({
+      action: 'Confirm officer account status change',
+      target: `Account ${userId} · New status: ${newStatus}`,
+      consequence: 'This will change the account login and role availability. Blocking or deactivating can immediately end the user’s access.',
+      destructive: newStatus !== 'Active',
+      confirmText: 'Update Account Status',
+    })) return;
     try {
       const res = await updateUserAccountStatus(userId, newStatus, department);
       if (res.success) {
