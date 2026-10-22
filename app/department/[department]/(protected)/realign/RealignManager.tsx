@@ -3,6 +3,7 @@
 import { useMemo, useState, useEffect, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { fmt } from "@/lib/utils";
+import { confirmCommittedChange } from '@/lib/clear-dialogs';
 import { transferFunds, carryOverTermBalance } from "./actions";
 
 interface Fund { name: string; balance: number }
@@ -128,6 +129,13 @@ export default function RealignManager({
 
   async function execute() {
     if (!preview || saving) return;
+    if (preview.kind === 'carry' && !await confirmCommittedChange({
+      action: 'Confirm closing and carrying forward this term',
+      target: `${ay} ${term} → ${nextPeriod.ay} ${nextPeriod.term} · ${pesos(preview.amount)}`,
+      consequence: 'The source academic term will close and remaining funds will carry to the next term. Reopening requires an authorized reversal.',
+      destructive: true,
+      confirmText: 'Close Term and Carry Over',
+    })) return;
     setSaving(true);
     setFeedback(null);
     try {
