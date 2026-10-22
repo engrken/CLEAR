@@ -157,6 +157,39 @@ test('student-only OTP, reuse, guesses, tenant/period isolation, minimal status,
     await start();
     const { tenantA, tenantB, a, b, c: studentC } = fixture;
 
+    // Real Next.js SSR privacy regression on synthetic organizations.
+    // Anonymous school-ID lookups redirect before student/ledger evaluation.
+    const legacyLookup = await fetch(root + '/department/' + tenantA +
+      '/clearance?q=' + encodeURIComponent(a.studentId), { redirect: 'manual' });
+    if ([307, 308].includes(legacyLookup.status)) {
+      assert.equal(new URL(legacyLookup.headers.get('location'), root).pathname,
+        '/department/' + tenantA + '/clearance', 'legacy student ID scrubbed from URL');
+    } else {
+      // Next.js may stream a 200 document containing a meta refresh if the
+      // outer layout flushed before the Server Component called redirect().
+      assert.equal(legacyLookup.status, 200, 'Next.js streaming redirect document');
+      const streamed = await legacyLookup.text();
+      assert.match(streamed, /NEXT_REDIRECT|http-equiv=["']refresh/i,
+        'streamed document must navigate to a clean URL');
+      assert.doesNotMatch(streamed, /RECORD NOT FOUND|CLEARED FOR SIGNING|CLEARANCE HOLD ACTIVE|Synthetic Student A/,
+        'redirect cannot render an anonymous clearance result');
+    }
+    const browserPage = await fetch(root + '/department/' + tenantA + '/clearance');
+    assert.equal(browserPage.status, 200, 'public private-inquiry form loads');
+    const browserHtml = await browserPage.text();
+    assert.match(browserHtml, /Private student clearance inquiry/);
+    assert.match(browserHtml, /Paid via GCash or Maya/, 'public payment-proof form remains available without clearance lookup');
+    assert.doesNotMatch(browserHtml, /RECORD NOT FOUND|CLEARANCE HOLD ACTIVE|CLEARED FOR SIGNING|api\.qrserver\.com/);
+    assert.doesNotMatch(browserHtml, /Synthetic Student A|CI-ONLY-A-007/);
+    const forgedCertificate = await fetch(root + '/department/' + tenantA +
+      '/clearance?ay=A.Y.%20CI-ONLY-2026&term=1st%20Sem&q=' +
+      encodeURIComponent(a.studentId) + '&sig=' + '0'.repeat(64));
+    assert.equal(forgedCertificate.status, 200, 'bad signature gets generic invalid certificate');
+    const forgedHtml = await forgedCertificate.text();
+    assert.match(forgedHtml, /Invalid clearance certificate/);
+    assert.doesNotMatch(forgedHtml, /Synthetic Student A|CLEARED FOR SIGNING|CLEARANCE ON HOLD/);
+
+
     // Real bearer-token/Prisma authorization checks for officer, tenant admin
     // and global admin. Everything is synthetic and runs only on CI's PostgreSQL.
     const officer = await prisma.tenantUser.create({
