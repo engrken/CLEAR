@@ -168,6 +168,7 @@ test('student-only OTP, reuse, guesses, tenant/period isolation, minimal status,
     assert.equal(browserPage.status, 200, 'public private-inquiry form loads');
     const browserHtml = await browserPage.text();
     assert.match(browserHtml, /Private student clearance inquiry/);
+    assert.match(browserHtml, /Paid via GCash or Maya/, 'public payment-proof form remains available without clearance lookup');
     assert.doesNotMatch(browserHtml, /RECORD NOT FOUND|CLEARANCE HOLD ACTIVE|CLEARED FOR SIGNING|api\.qrserver\.com/);
     assert.doesNotMatch(browserHtml, /Synthetic Student A|CI-ONLY-A-007/);
     const forgedCertificate = await fetch(root + '/department/' + tenantA +

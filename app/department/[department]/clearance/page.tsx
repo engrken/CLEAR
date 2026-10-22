@@ -10,6 +10,7 @@ import { notFound, redirect } from 'next/navigation';
 import crypto from 'node:crypto';
 import Link from 'next/link';
 import StudentClearanceInquiry from './StudentClearanceInquiry';
+import ClearanceClientView from './ClearanceClientView';
 import ClearanceManager from './ClearanceManager';
 import DataPrivacyModal from '../components/DataPrivacyModal';
 import { Metadata } from 'next';
@@ -199,6 +200,36 @@ export default async function ClearancePage({
   if (!isOfficer && !(sigParam && q)) {
     // Clean legacy bookmarked ?q= URLs without echoing IDs into SSR HTML.
     if (q || sigParam) redirect(`${basePath}/clearance`);
+
+    // Preserve the existing public GCash/Maya receipt-upload workflow without
+    // reopening anonymous clearance or roster lookups. Only public fee-setup
+    // metadata and the term-closed flag are needed for the proof form.
+    const publicFeeSetups = await prisma.collectionSetup.findMany({
+      where: {
+        organizationId: organization.id,
+        academicYear: organization.activeAy,
+        term: organization.activeTerm,
+      },
+      orderBy: { name: 'asc' },
+    });
+    const publicPackage = buildTermPackage(publicFeeSetups, organization.activeTerm);
+    const publicPackageRates = new Map<string, number>();
+    for (const setup of publicFeeSetups) {
+      if (!setup.isPackage || !Number.isFinite(Number(setup.amount)) || Number(setup.amount) <= 0) continue;
+      publicPackageRates.set(setup.category, (publicPackageRates.get(setup.category) || 0) + money(setup.amount));
+    }
+    const publicFeeOptions = [
+      ...Array.from(publicPackageRates, ([category, amount]) => ({
+        category, name: 'Departmental Fee (Full Package)', amount,
+      })),
+      ...publicFeeSetups.filter(c => Number(c.amount) > 0).map(c => ({
+        category: c.category, name: c.name, amount: money(c.amount),
+      })),
+    ];
+    const publicPeriodLedger = await getPeriodLedger(
+      prisma, organization.id, organization.activeAy, organization.activeTerm
+    );
+
     return (
       <div className="d-flex flex-column min-vh-100 bg-body-tertiary text-body">
         {!hasSession && <PublicHeader organizationName={organization.name} />}
@@ -209,7 +240,21 @@ export default async function ClearancePage({
             academicYear={organization.activeAy}
             term={organization.activeTerm}
           />
+          <div className="mt-4">
+            <ClearanceClientView
+              department={cleanDepartment}
+              ay={organization.activeAy}
+              term={organization.activeTerm}
+              defaultStudentId=""
+              defaultFullName=""
+              defaultEmail=""
+              feeOptions={publicFeeOptions}
+              packageRate={publicPackage.total}
+              closed={Boolean(publicPeriodLedger.activeRollover)}
+            />
+          </div>
         </main>
+        {!hasSession && <DataPrivacyModal />}
       </div>
     );
   }

@@ -10,6 +10,8 @@ test('anonymous browser student inquiry requires OTP unconditionally before rost
   assert.ok(guard < page.indexOf('const collectionSetups ='), 'guard must be before all finance queries');
   assert.match(page, /redirect\(`\$\{basePath\}\/clearance`\)/);
   assert.match(page, /<StudentClearanceInquiry/);
+  assert.match(page, /<ClearanceClientView/, 'public payment proof must remain available without anonymous clearance lookup');
+  assert.match(page, /defaultStudentId=""/, 'public proof workflow cannot reuse an anonymous roster lookup');
   assert.match(page, /if \(sigParam && q\)/, 'valid signed-certificate flow is retained');
   const invalid = page.indexOf('if (sigParam && q && !verifyClearanceSignature');
   assert.ok(invalid > 0 && invalid < page.indexOf('const collectionSetups ='),
