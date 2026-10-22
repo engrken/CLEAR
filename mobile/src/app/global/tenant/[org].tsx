@@ -3,9 +3,10 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { api, type LedgerEntry, type Student } from '@/api';
-import { BackHeader, Banner, Button, Card, HeroStat, LedgerList, LedgerRow, Screen, Text } from '@/components/ui';
+import { BackHeader, Banner, Button, Card, LedgerList, LedgerRow, Screen, Text } from '@/components/ui';
+import { FinancialOverview } from '@/components/overview/FinancialOverview';
 import { formatWhen } from '@/lib/dates';
-import { fromCentavos, formatPeso } from '@/lib/money';
+import { fromCentavos } from '@/lib/money';
 import { useGlobalSession } from '@/lib/session';
 import { useAsync } from '@/lib/use-async';
 import { radius, spacing, useTheme } from '@/theme';
@@ -96,23 +97,11 @@ export default function GlobalTenantReadOnly() {
           {summary.loading && !financials ? <ActivityIndicator color={c.cobalt} /> : null}
           {financials ? (
             <>
-              <HeroStat label="Cash on hand" value={fromCentavos(financials.cashOnHandCentavos)} />
-              <View style={styles.metrics}>
-                <Card style={styles.metric}>
-                  <Text variant="caption" color="inkMuted">Safekeeping</Text>
-                  <Text variant="figure">{formatPeso(fromCentavos(financials.safekeepingCentavos))}</Text>
-                </Card>
-                <Card style={styles.metric}>
-                  <Text variant="caption" color="inkMuted">Pending proofs</Text>
-                  <Text variant="figure">{financials.pendingCount}</Text>
-                </Card>
-              </View>
-              <Card>
-                <View style={{ gap: 7 }}>
-                  <Text variant="bodyStrong">Outstanding collections</Text>
-                  <Text variant="figure">{formatPeso(fromCentavos(financials.outstandingCentavos))}</Text>
-                  <Text variant="bodySm" color="inkMuted">{financials.outstandingStudents} students with outstanding package balances</Text>
-                </View>
+              <FinancialOverview stats={financials} />
+              <Card style={styles.compact}>
+                <Text variant="bodyStrong">Pending payment proofs</Text>
+                <Text variant="figure">{financials.pendingCount}</Text>
+                <Text variant="bodySm" color="inkMuted">Review only; mobile financial actions remain disabled.</Text>
               </Card>
             </>
           ) : null}
@@ -172,7 +161,5 @@ const styles = StyleSheet.create({
   head: { paddingHorizontal: 4, gap: 5 },
   tabs: { flexDirection: 'row', alignItems: 'center', gap: spacing[2], paddingVertical: 4 },
   tab: { paddingVertical: 11, paddingHorizontal: 17, borderRadius: radius.pill },
-  metrics: { flexDirection: 'row', gap: spacing[2] },
-  metric: { flex: 1, padding: 16, gap: 8 },
   compact: { paddingVertical: 12, paddingHorizontal: 16 },
 });
