@@ -135,6 +135,9 @@ export default function More() {
       ) : null}
 
       <Text variant="headline" accessibilityRole="header">Account and privacy</Text>
+      <Button block variant="secondary" icon="shield" onPress={() => router.push('/officer/walkthrough')}>
+        Replay first-time guide
+      </Button>
       <Button block variant="secondary" icon="shield" onPress={() => setPrivacyOpen(true)}>
         View data privacy notice
       </Button>
