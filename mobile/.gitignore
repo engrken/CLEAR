@@ -38,6 +38,15 @@ yarn-error.*
 
 example
 
+# Android release signing credentials (private EAS exports).
+# Never commit an upload keystore, signing passwords, or a downloaded credentials.json.
+credentials.json
+credentials/
+*.keystore
+*.jks
+*.p12
+*.pfx
+
 # generated native folders
 /ios
 /android
