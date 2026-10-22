@@ -3,6 +3,7 @@ import { ActivityIndicator, StyleSheet, TextInput, View } from 'react-native';
 
 import { api, type Student } from '@/api';
 import { Avatar, Banner, Icon, Screen, StatusPill, Text, type Tone } from '@/components/ui';
+import { OfficerPresence } from '@/components/collaboration/OfficerPresence';
 import { enrollmentLabel, isEnrolled } from '@/lib/enrollment';
 import { useOfficerSession } from '@/lib/session';
 import { TAB_BAR_SPACE } from '@/lib/tab-bar';
@@ -40,6 +41,7 @@ export default function Students() {
 
   return (
     <Screen edges={['top']} header={header} bottomInset={TAB_BAR_SPACE} contentStyle={{ gap: 10 }}>
+      <OfficerPresence page="students" session={session} />
       <View style={[styles.search, { backgroundColor: focused ? c.ground : c.soft, borderColor: focused ? c.cobalt : 'transparent' }]}>
         <Icon name="search" size={18} color="inkMuted" />
         <TextInput
