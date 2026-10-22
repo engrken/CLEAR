@@ -89,8 +89,19 @@ jobs:
         run: |
           set -euo pipefail
           test -n "${ANDROID_HOME:-}"
-          test -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" || command -v sdkmanager
-          yes | sdkmanager --licenses >/dev/null || test "${PIPESTATUS[1]}" -eq 0
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -perm /111 -print -quit)"
+          if [ -z "$SDKMANAGER" ]; then
+            echo "::error::Android sdkmanager executable not found under Android SDK command-line tools."
+            exit 1
+          fi
+          set +e
+          yes | "$SDKMANAGER" --licenses >/dev/null
+          sdk_status="${PIPESTATUS[1]}"
+          set -e
+          if [ "$sdk_status" -ne 0 ]; then
+            echo "::error::Android SDK license acceptance failed."
+            exit "$sdk_status"
+          fi
       - uses: gradle/actions/setup-gradle@v4
       - name: Generate Android native project locally (no Expo cloud build)
         run: npx expo prebuild --platform android --non-interactive --no-install
