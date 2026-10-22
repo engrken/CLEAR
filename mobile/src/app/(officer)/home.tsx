@@ -7,6 +7,7 @@ import { PAYMENT_WRITES_ENABLED } from '@/api/config';
 import { Banner, Button, ColorTile, HeroStat, LedgerList, LedgerRow, Screen, SectionHeader, TermChip, Text } from '@/components/ui';
 import { FinancialOverview } from '@/components/overview/FinancialOverview';
 import { OfficerPresence } from '@/components/collaboration/OfficerPresence';
+import { OfficerWalkthrough } from '@/components/collaboration/OfficerWalkthrough';
 import { formatWhen } from '@/lib/dates';
 import { fromCentavos } from '@/lib/money';
 import { setPendingCount } from '@/lib/pending-count';
