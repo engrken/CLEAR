@@ -10,7 +10,7 @@
     "postinstall": "prisma generate",
     "test:time": "node --experimental-strip-types --test tests/clear-timezone.test.mjs",
     "test:finance": "node --experimental-strip-types --test tests/financial-integrity*.test.mjs tests/remittance-fee-policy.test.mjs tests/summary-collections.test.mjs tests/summary-penalties.test.mjs tests/financial-engine-parity.test.mjs",
-    "test:mobile-roles": "node --experimental-strip-types --test tests/mobile-role-parity.test.mjs tests/mobile-global-tenant.test.mjs tests/mobile-provisioning.test.mjs tests/mobile-production-readonly.test.mjs tests/mobile-student-clearance-privacy.test.mjs tests/web-student-clearance-privacy.test.mjs tests/mobile-overview-privacy-parity.test.mjs"
+    "test:mobile-roles": "node --experimental-strip-types --test tests/mobile-role-parity.test.mjs tests/mobile-global-tenant.test.mjs tests/mobile-provisioning.test.mjs tests/mobile-production-readonly.test.mjs tests/mobile-student-clearance-privacy.test.mjs tests/web-student-clearance-privacy.test.mjs tests/mobile-overview-privacy-parity.test.mjs tests/email-rotation-identity.test.mjs"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.3",
