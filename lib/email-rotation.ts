@@ -22,7 +22,6 @@ const OTP_MS = 5 * 60_000;
 const VERIFIED_MS = 10 * 60_000;
 const COOLDOWN_MS = 60_000;
 const WINDOW_MS = 60 * 60_000;
-const LOCK_MS = 30 * 60_000;
 const MAX_GUESSES = 5;
 const SENT = 'If this request is eligible, a verification code has been sent.';
 const INVALID = 'The verification code is invalid or expired. Please restart verification.';
