@@ -2,6 +2,7 @@
 
 'use server';
 import { manilaDateInput } from '@/lib/clear-timezone';
+import { isEnrolledStatus } from '@/lib/term-enrollment';
 import { put, del } from '@vercel/blob';
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
@@ -870,17 +871,12 @@ export async function getDepartmentFinancials(
   let totalPackageReceivable = 0;
   let unpaidOrPartialPackageCount = 0;
 
-  const packageStudentMap = new Map(
-    students.map((s: any) => [String(s.id), s])
-  );
+  // Only a confirmed enrollment in this exact academic period creates the
+  // ordinary mandatory-package receivable. The roster is historical directory data.
+  const packageStudentMap = new Map<string, any>();
 
   enrollments
-    .filter(
-      (e: any) =>
-        !['DROPPED', 'CANCELLED', 'INACTIVE'].includes(
-          String(e.enrollmentStatus || '').toUpperCase()
-        )
-    )
+    .filter((e: any) => isEnrolledStatus(e.enrollmentStatus))
     .forEach(
       (e: any) =>
         e.student?.id &&
