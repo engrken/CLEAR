@@ -18,8 +18,13 @@ export async function GET(_req: Request, { params }: Ctx) {
   } catch { return json({ error: 'Not authorized or onboarding unavailable' }, 403); }
 }
 
-export async function POST(_req: Request, { params }: Ctx) {
+export async function POST(req: Request, { params }: Ctx) {
   try {
+    const contentType = req.headers.get('content-type') || '';
+    const origin = req.headers.get('origin');
+    // Cookie-authenticated metadata writes need a same-origin JSON request.
+    if (!contentType.toLowerCase().startsWith('application/json')) return json({ error: 'JSON required' }, 415);
+    if (origin && origin !== new URL(req.url).origin) return json({ error: 'Cross-origin request denied' }, 403);
     const { department } = await params;
     const actor = await requireTenantMember(department);
     if (actor.isSuper || String(actor.role).toLowerCase() === 'superadmin')
