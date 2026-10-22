@@ -66,6 +66,7 @@ export default function Home() {
 
   return (
     <Screen edges={['top']} header={header} bottomInset={TAB_BAR_SPACE} contentStyle={{ gap: 12 }}>
+      <OfficerWalkthrough auto />
       <OfficerPresence page="overview" session={session} />
       {!canOverview ? (
         <Banner tone="info" title="Your assigned workspace">
