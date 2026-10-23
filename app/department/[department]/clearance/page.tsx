@@ -104,7 +104,7 @@ function buildTermPackage(collectionSetups: any[], _term: string) {
     total: money(pkgItems.reduce((sum: number, c: any) => sum + Number(c.amount || 0), 0)),
     items: pkgItems.map((c: any) => ({
       name: String(c.name || "").trim(),
-      rate: money(c.amount),
+      rate: money(moneyNumber(c.amount)),
       fund: String(c.targetFund || "").trim(),
     })),
   };
@@ -226,7 +226,7 @@ export default async function ClearancePage({
         category, name: 'Departmental Fee (Full Package)', amount,
       })),
       ...publicFeeSetups.filter(c => Number(c.amount) > 0).map(c => ({
-        category: c.category, name: c.name, amount: money(c.amount),
+        category: c.category, name: c.name, amount: money(moneyNumber(c.amount)),
       })),
     ];
     const publicPeriodLedger = await getPeriodLedger(
@@ -302,7 +302,7 @@ export default async function ClearancePage({
       category, name: 'Departmental Fee (Full Package)', amount,
     })),
     ...collectionSetups.filter(c => Number(c.amount) > 0).map(c => ({
-      category: c.category, name: c.name, amount: money(c.amount),
+      category: c.category, name: c.name, amount: money(moneyNumber(c.amount)),
     })),
   ];
 
