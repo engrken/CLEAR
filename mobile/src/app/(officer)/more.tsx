@@ -1,6 +1,6 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { Banner, Button, Card, Icon, Screen, Text } from '@/components/ui';
 import { DataPrivacyNotice } from '@/components/privacy/DataPrivacyNotice';
@@ -18,9 +18,16 @@ const LINKS = [
 const state: Record<MobileAvailability, string> = {
   available: 'Read-only',
   'review-only': 'Review-only',
-  paused: 'Temporarily disabled',
+  paused: 'Unavailable on Android',
   'web-only': 'Web only',
 };
+
+/** Grouping is presentation only. Effective tab grants still come from the server. */
+const GROUPS = [
+  { title: 'Students & clearance', tabs: ['tab-students', 'tab-clearance', 'tab-collectibles', 'tab-penalties'] },
+  { title: 'Payments & finance', tabs: ['tab-overview', 'tab-payment', 'tab-remittances', 'tab-advances', 'tab-audit', 'tab-void', 'tab-transfer'] },
+  { title: 'Reports & administration', tabs: ['tab-reports', 'tab-report', 'tab-users', 'tab-setup'] },
+] as const;
 
 const initials = (name: string) =>
   name.replace(/[^A-Za-z\s-]/g, ' ').split(/[\s-]+/).filter(Boolean)
@@ -31,149 +38,191 @@ export default function More() {
   const { signOut, refreshPermissions } = useSession();
   const router = useRouter();
   const { c } = useTheme();
-  const [showWebOnly, setShowWebOnly] = useState(false);
+  const [query, setQuery] = useState('');
+  const [showAll, setShowAll] = useState(false);
   const [privacyOpen, setPrivacyOpen] = useState(false);
+
   const isTenantAdmin = ['admin', 'administrator', 'master'].includes(String(session.officer.role).trim().toLowerCase());
   const modules = grantedModules(session.officer.allowedTabs);
-  const available = modules.filter((m) => m.availability === 'available' || m.availability === 'review-only');
-  const paused = modules.filter((m) => m.availability === 'paused');
-  const webOnly = modules.filter((m) => m.availability === 'web-only');
+  const ready = modules.filter(m => m.availability === 'available' || m.availability === 'review-only');
+  const normalized = query.trim().toLowerCase();
+  const filtered = modules.filter(m => {
+    if (!showAll && !normalized && (m.availability === 'web-only' || m.availability === 'paused')) return false;
+    return !normalized || [m.name, m.detail, state[m.availability]].some(value => value.toLowerCase().includes(normalized));
+  });
+  const groups = GROUPS.map(group => ({
+    title: group.title,
+    items: filtered.filter(m => (group.tabs as readonly string[]).includes(m.tab)),
+  })).filter(group => group.items.length > 0);
+
   useFocusEffect(useCallback(() => { void refreshPermissions(); }, [refreshPermissions]));
 
-  const moduleRow = (m: (typeof modules)[number]) => (
-    <Card key={m.tab} style={styles.module}>
-      <View style={{ gap: 3 }}>
-        <View style={styles.moduleTitle}>
-          <Text variant="bodyStrong" style={{ flex: 1 }}>{m.name}</Text>
-          <Text variant="caption" color="inkMuted">{state[m.availability]}</Text>
+  const actionFor = (tab: string): { text: string; open: () => void } | null => {
+    if (tab === 'tab-overview') return { text: 'Open overview', open: () => router.push('/home') };
+    if (tab === 'tab-students') return { text: 'Open student roster', open: () => router.push('/students') };
+    if (tab === 'tab-clearance') return {
+      text: 'Open clearance lookup',
+      open: () => router.push({ pathname: '/d/[dept]/clearance', params: { dept: session.org.subdomain } }),
+    };
+    if (tab === 'tab-remittances') return { text: 'Review payment proofs', open: () => router.push('/verify') };
+    return null;
+  };
+
+  const moduleRow = (m: (typeof modules)[number]) => {
+    const action = m.availability === 'available' || m.availability === 'review-only' ? actionFor(m.tab) : null;
+    return (
+      <Card key={m.tab} style={styles.module}>
+        <View style={styles.moduleBody}>
+          <View style={styles.moduleTitle}>
+            <Text variant="bodyStrong" style={styles.grow}>{m.name}</Text>
+            <View style={[styles.badge, { backgroundColor: action ? c.mint : c.soft }]}>
+              <Text variant="caption" color={action ? 'mintInk' : 'inkMuted'}>{state[m.availability]}</Text>
+            </View>
+          </View>
+          <Text variant="bodySm" color="inkMuted">{m.detail}</Text>
+          {action ? (
+            <Button size="sm" variant="secondary" onPress={action.open}>{action.text}</Button>
+          ) : m.availability === 'web-only' ? (
+            <Text variant="caption" color="inkMuted">
+              Available through your authorized CLEAR web portal. This Android view cannot post transactions.
+            </Text>
+          ) : null}
         </View>
-        <Text variant="bodySm" color="inkMuted">{m.detail}</Text>
-        {m.tab === 'tab-clearance' ? (
-          <Button size="sm" variant="secondary" onPress={() => router.push({
-            pathname: '/d/[dept]/clearance',
-            params: { dept: session.org.subdomain },
-          })}>
-            Open clearance lookup
-          </Button>
-        ) : null}
-      </View>
-    </Card>
-  );
+      </Card>
+    );
+  };
 
   return (
     <>
-    <Screen
-      edges={['top']}
-      bottomInset={TAB_BAR_SPACE + spacing[8]}
-      contentStyle={{ paddingTop: 18, gap: 12 }}>
-      <View style={[styles.profile, { backgroundColor: c.inkBlock }]}>
-        <View style={[styles.profileAvatar, { backgroundColor: c.sun }]}>
-          <Text variant="headline" style={{ fontSize: 18, lineHeight: 22 }}>{initials(session.officer.fullName)}</Text>
+      <Screen edges={['top']} bottomInset={TAB_BAR_SPACE + spacing[8]}
+        contentStyle={styles.content}>
+        <View style={[styles.profile, { backgroundColor: c.inkBlock }]}>
+          <View style={[styles.profileAvatar, { backgroundColor: c.sun }]}>
+            <Text variant="headline" style={{ fontSize: 18, lineHeight: 22 }}>{initials(session.officer.fullName)}</Text>
+          </View>
+          <View style={styles.grow}>
+            <Text variant="headline" color="onAccent" numberOfLines={2}>{session.officer.fullName}</Text>
+            <Text variant="caption" style={{ color: c.tabInactive }} numberOfLines={1}>{session.org.name}</Text>
+            <Text variant="caption" style={{ color: c.tabInactive }}>{session.officer.role} · Read-only Android</Text>
+          </View>
         </View>
-        <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
-          <Text variant="headline" color="onAccent" numberOfLines={2}>{session.officer.fullName}</Text>
-          <Text variant="caption" style={{ color: c.tabInactive }}>{session.officer.email}</Text>
-          <Text variant="caption" style={{ color: c.tabInactive }}>
-            Department role: {session.officer.role} · {session.org.subdomain}
+
+        <View style={styles.intro}>
+          <Text variant="title" accessibilityRole="header">My modules</Text>
+          <Text variant="bodySm" color="inkMuted">
+            {ready.length} ready to view · {modules.length} assigned to your role. Find a module below.
           </Text>
         </View>
-      </View>
 
-      <Button block variant="secondary" icon="people" onPress={() => router.push('/officer/profile')}>
-        My profile · Edit email
-      </Button>
+        <View style={[styles.search, { backgroundColor: c.soft }]}>
+          <Icon name="search" size={19} color="inkMuted" />
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            accessibilityLabel="Find an assigned module"
+            placeholder="Search my modules"
+            placeholderTextColor={c.inkMuted}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="search"
+            style={[styles.searchInput, { color: c.ink }]}
+          />
+          {query ? (
+            <Pressable accessibilityRole="button" accessibilityLabel="Clear module search"
+              hitSlop={10} onPress={() => setQuery('')}>
+              <Icon name="x" size={20} color="inkMuted" />
+            </Pressable>
+          ) : null}
+        </View>
 
-      {isTenantAdmin ? (
-        <Button block variant="secondary" icon="people" onPress={() => router.push('/officer/tenant-portal')}>
-          My tenant portal (read-only)
-        </Button>
-      ) : null}
-      <Button
-        block
-        variant="secondary"
-        icon="shield"
-        onPress={() => router.push('/global/sign-in')}>
-        Sign in as Global Superadmin
-      </Button>
-      <Text variant="caption" color="inkMuted">
-        Uses a separate Global Superadmin OTP. You can open JIECEP or another tenant after verification.
-      </Text>
-      <Button block variant="secondary" onPress={() => void signOut()}>Sign out</Button>
-      <Banner tone="info" title="Your web-assigned permissions">
-        Modules are based on your current department role and web assignments. Global Superadmin sign-in is separate. Android financial posting is disabled for every role.
-      </Banner>
-
-      <Text variant="headline" accessibilityRole="header">Available on Android ({available.length})</Text>
-      {available.map(moduleRow)}
-      {!available.length ? <Text variant="bodySm" color="inkMuted">No modules assigned for Android viewing.</Text> : null}
-
-      {paused.length ? (
-        <>
-          <Text variant="headline" accessibilityRole="header">Temporarily disabled ({paused.length})</Text>
-          {paused.map(moduleRow)}
-        </>
-      ) : null}
-
-      {webOnly.length ? (
-        <>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ expanded: showWebOnly }}
-            accessibilityLabel={showWebOnly ? 'Hide web-only modules' : 'Show web-only modules'}
-            onPress={() => setShowWebOnly((v) => !v)}
-            style={[styles.expand, { backgroundColor: c.soft }]}>
-            <View style={{ flex: 1, gap: 3 }}>
-              <Text variant="bodyStrong">Web-only modules ({webOnly.length})</Text>
-              <Text variant="bodySm" color="inkMuted">
-                {showWebOnly ? 'Tap to hide these modules' : 'Tap to view your assigned web modules'}
-              </Text>
-            </View>
-            <Icon name={showWebOnly ? 'chevronDown' : 'forward'} size={20} color="ink" />
+        <View style={styles.selector}>
+          <Pressable accessibilityRole="button" accessibilityState={{ selected: !showAll }}
+            onPress={() => setShowAll(false)}
+            style={[styles.segment, { backgroundColor: !showAll ? c.inkBlock : c.soft }]}>
+            <Text variant="bodySm" color={!showAll ? 'onAccent' : 'ink'}>Available now</Text>
           </Pressable>
-          {showWebOnly ? webOnly.map(moduleRow) : null}
-        </>
-      ) : null}
+          <Pressable accessibilityRole="button" accessibilityState={{ selected: showAll }}
+            onPress={() => setShowAll(true)}
+            style={[styles.segment, { backgroundColor: showAll ? c.inkBlock : c.soft }]}>
+            <Text variant="bodySm" color={showAll ? 'onAccent' : 'ink'}>All assigned</Text>
+          </Pressable>
+        </View>
 
-      <Text variant="headline" accessibilityRole="header">Account and privacy</Text>
-      <Button block variant="secondary" icon="shield" onPress={() => router.push('/officer/walkthrough')}>
-        Replay first-time guide
-      </Button>
-      <Button block variant="secondary" icon="shield" onPress={() => setPrivacyOpen(true)}>
-        View data privacy notice
-      </Button>
-      {LINKS.map((link) => (
-        <Pressable
-          key={link.url}
-          accessibilityRole="link"
-          accessibilityHint="Opens in the browser"
-          onPress={() => openWebPage(link.url)}
-          style={({ pressed }) => [styles.link, { backgroundColor: pressed ? c.cobaltTint : c.soft }]}>
-          <Text variant="bodyStrong" style={{ flex: 1, fontSize: 15 }}>{link.title}</Text>
-          <Icon name="forward" size={16} color="ink" />
-        </Pressable>
-      ))}
-    </Screen>
-    <DataPrivacyNotice visible={privacyOpen} onDismiss={() => setPrivacyOpen(false)} />
+        <Banner tone="info" title="Your permissions stay protected">
+          Modules appear only when granted to your department role. Payments, reversal and other financial posting remain disabled in this Android release.
+        </Banner>
+
+        {groups.map(group => (
+          <View key={group.title} style={styles.group}>
+            <Text variant="headline" accessibilityRole="header">{group.title}</Text>
+            {group.items.map(moduleRow)}
+          </View>
+        ))}
+        {!groups.length ? (
+          <Banner tone="info" title="No matching modules">
+            Try a different search, or choose All assigned to view your web-only modules.
+          </Banner>
+        ) : null}
+
+        <Text variant="headline" accessibilityRole="header">Account & help</Text>
+        <Button block variant="secondary" icon="people" onPress={() => router.push('/officer/profile')}>
+          My profile · Edit email
+        </Button>
+        {isTenantAdmin ? (
+          <Button block variant="secondary" icon="people" onPress={() => router.push('/officer/tenant-portal')}>
+            My tenant portal (read-only)
+          </Button>
+        ) : null}
+        <Button block variant="secondary" icon="shield" onPress={() => router.push('/officer/walkthrough')}>
+          Replay first-time guide
+        </Button>
+        <Button block variant="secondary" icon="shield" onPress={() => setPrivacyOpen(true)}>
+          View data privacy notice
+        </Button>
+        <Button block variant="secondary" icon="shield" onPress={() => router.push('/global/sign-in')}>
+          Sign in as Global Superadmin
+        </Button>
+        <Text variant="caption" color="inkMuted">
+          Global Superadmin requires a separate OTP and independently verified permission.
+        </Text>
+        {LINKS.map(link => (
+          <Pressable key={link.url} accessibilityRole="link" accessibilityHint="Opens in the browser"
+            onPress={() => void openWebPage(link.url)}
+            style={({ pressed }) => [styles.link, { backgroundColor: pressed ? c.cobaltTint : c.soft }]}>
+            <Text variant="bodyStrong" style={styles.grow}>{link.title}</Text>
+            <Icon name="forward" size={16} color="ink" />
+          </Pressable>
+        ))}
+        <Button block variant="ink" onPress={() => void signOut()}>Sign out</Button>
+      </Screen>
+      <DataPrivacyNotice visible={privacyOpen} onDismiss={() => setPrivacyOpen(false)} />
     </>
   );
 }
 
 const styles = StyleSheet.create({
+  content: { paddingTop: 18, gap: 12 },
   profile: {
     flexDirection: 'row', alignItems: 'center', gap: 14,
     paddingVertical: 16, paddingHorizontal: 18, borderRadius: radius.lg,
   },
-  profileAvatar: {
-    width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center',
+  profileAvatar: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
+  grow: { flex: 1, minWidth: 0 },
+  intro: { gap: 4, paddingTop: 4 },
+  search: {
+    flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: radius.md,
+    minHeight: 54, paddingHorizontal: 16,
   },
-  module: { paddingVertical: 12, paddingHorizontal: 16 },
+  searchInput: { flex: 1, minWidth: 0, minHeight: 50, fontFamily: 'Figtree_600SemiBold', fontSize: 16 },
+  selector: { flexDirection: 'row', gap: spacing[2] },
+  segment: { flex: 1, minHeight: 46, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 },
+  group: { gap: spacing[2], marginTop: spacing[2] },
+  module: { paddingVertical: 14, paddingHorizontal: 16 },
+  moduleBody: { gap: spacing[2] },
   moduleTitle: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  expand: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    paddingVertical: 18, paddingHorizontal: 16, borderRadius: radius.lg,
-  },
+  badge: { paddingVertical: 5, paddingHorizontal: 10, borderRadius: radius.pill },
   link: {
     flexDirection: 'row', alignItems: 'center', gap: spacing[3],
-    minHeight: 52, paddingHorizontal: 18, borderRadius: 20,
+    minHeight: 52, paddingHorizontal: 18, borderRadius: radius.md,
   },
 });
