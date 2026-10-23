@@ -5,8 +5,10 @@
 
 import type { Organization, TenantUser } from '@prisma/client';
 import { effectiveTabs } from '@/lib/roles';
+import { moneyCentavos, type MoneyScalar } from '@/lib/money-precision';
 
-export const toCentavos = (pesos: unknown) => Math.round((Number(pesos) || 0) * 100);
+export const toCentavos = (pesos: MoneyScalar | null | undefined) =>
+  pesos == null ? 0 : moneyCentavos(pesos);
 export const toPesos = (centavos: number) => Math.round(centavos) / 100;
 
 export function toOrganization(org: Pick<Organization, 'subdomain' | 'name' | 'type' | 'logo' | 'activeAy' | 'activeTerm'>) {
