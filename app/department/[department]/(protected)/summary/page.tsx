@@ -107,7 +107,7 @@ export default async function SummaryReportPage({
   // This breakdown uses actual valid paid receipts; package-only receipts are
   // apportioned across configured package items, preserving exact centavos.
   // Do not use this to recalculate or alter the authoritative finance engine.
-  const summaryCategories = itemizeCollectionsForSummary(receipts.map(row => ({ ...row, amountPaid: moneyNumber(row.amountPaid) })), feeSetups);
+  const summaryCategories = itemizeCollectionsForSummary(receipts.map(row => ({ ...row, amountPaid: moneyNumber(row.amountPaid) })), feeSetups.map(row => ({ ...row, amount: moneyNumber(row.amount) })));
 
   const penaltySummary = summarizeCashOnlyPenaltyObligations(activePenalties.map(row => ({ ...row, fineAmount: moneyNumber(row.fineAmount) })));
   // Reuse the finance engine's authoritative collectible buckets. Do not
