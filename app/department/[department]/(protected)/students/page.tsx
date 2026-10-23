@@ -70,7 +70,10 @@ export default async function StudentsPage({
   }
   const whereClause = { AND: andFilters };
 
-  const [totalDirectory, absoluteEnrolledCount, totalFiltered, students] = await Promise.all([
+  // The unfiltered roster count is the directory count: skip a duplicate
+  // COUNT(*) on initial load and when returning to the unfiltered list.
+  const unfilteredRoster = !search.trim() && yearFilter === 'ALL' && statusFilter === 'ALL';
+  const [totalDirectory, absoluteEnrolledCount, filteredCount, students] = await Promise.all([
     prisma.student.count({ where: { organizationId: organization.id } }),
     prisma.student.count({
       where: {
@@ -80,12 +83,17 @@ export default async function StudentsPage({
         }
       }
     }),
-    prisma.student.count({ where: whereClause }),
+    unfilteredRoster ? Promise.resolve(null) : prisma.student.count({ where: whereClause }),
     prisma.student.findMany({
       where: whereClause,
-      include: {
+      // Send only the columns rendered by this page, not all student or
+      // enrollment metadata. Tenant and period filtering are unchanged.
+      select: {
+        id: true, studentId: true, fullName: true, yearLevel: true, email: true,
         enrollments: {
           where: { academicYear: ay, term },
+          select: { enrollmentStatus: true },
+          take: 1,
         },
       },
       orderBy: { fullName: 'asc' },
@@ -94,6 +102,7 @@ export default async function StudentsPage({
     }),
   ]);
 
+  const totalFiltered = filteredCount ?? totalDirectory;
   const enrolledCount = absoluteEnrolledCount;
   const notEnrolledCount = Math.max(0, totalDirectory - enrolledCount);
 
