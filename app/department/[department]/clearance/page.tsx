@@ -1,5 +1,6 @@
 // /app/department/[department]/clearance/page.tsx
 
+import { moneyNumber } from "@/lib/money-precision";
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/auth';
 import { fmt, money } from '@/lib/utils';
@@ -218,7 +219,7 @@ export default async function ClearancePage({
     const publicPackageRates = new Map<string, number>();
     for (const setup of publicFeeSetups) {
       if (!setup.isPackage || !Number.isFinite(Number(setup.amount)) || Number(setup.amount) <= 0) continue;
-      publicPackageRates.set(setup.category, (publicPackageRates.get(setup.category) || 0) + money(setup.amount));
+      publicPackageRates.set(setup.category, (publicPackageRates.get(setup.category) || 0) + money(moneyNumber(setup.amount)));
     }
     const publicFeeOptions = [
       ...Array.from(publicPackageRates, ([category, amount]) => ({
@@ -294,7 +295,7 @@ export default async function ClearancePage({
   const packageRates = new Map<string, number>();
   for (const setup of collectionSetups) {
     if (!setup.isPackage || !Number.isFinite(Number(setup.amount)) || Number(setup.amount) <= 0) continue;
-    packageRates.set(setup.category, (packageRates.get(setup.category) || 0) + money(setup.amount));
+    packageRates.set(setup.category, (packageRates.get(setup.category) || 0) + money(moneyNumber(setup.amount)));
   }
   const feeOptions = [
     ...Array.from(packageRates, ([category, amount]) => ({
