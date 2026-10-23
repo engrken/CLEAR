@@ -23,8 +23,8 @@ export function allocateLegacyPackageCents(
     }
     return BigInt(rateCents);
   });
-  const denominator = weights.reduce((sum, value) => sum + value, 0n);
-  if (denominator === 0n) return [];
+  const denominator = weights.reduce((sum, value) => sum + value, BigInt(0));
+  if (denominator === BigInt(0)) return [];
   const numerator = BigInt(cents);
   const distributed = weights.map((weight) => Number((numerator * weight) / denominator));
   const remainders = weights.map((weight) => (numerator * weight) % denominator);
