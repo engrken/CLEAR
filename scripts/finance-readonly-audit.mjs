@@ -7,24 +7,8 @@
  */
 import { Prisma, PrismaClient } from '@prisma/client';
 
-export const MONEY_COLUMNS = Object.freeze({
-  Fund: ['initialAllocation', 'currentBalance'],
-  Collection: ['standardRate', 'amountPaid', 'balanceDue'],
-  CollectionSetup: ['amount'],
-  Penalty: ['assessedAmount', 'ratePerHour', 'fineAmount'],
-  CashAdvance: ['amountApproved'],
-  Audit: ['budgetRequested', 'totalExpense', 'varianceReturn', 'reimbursementDue'],
-  ExpenseItem: ['subTotal'],
-  Collectible: ['balanceDue'],
-  OnlineRemittance: ['amountPaid'],
-  FundTransfer: ['amount'],
-  VoidTransaction: ['amount'],
-  FundRealignment: ['amount'],
-  CashierRemittance: ['amount'],
-  AcademicPeriodTransition: ['amount'],
-  ArrearPaymentLink: ['amount'],
-  PenaltySettlementEvent: ['amount', 'balanceBefore', 'balanceAfter'],
-});
+import { MONEY_COLUMNS } from '../lib/financial-column-catalog.mjs';
+
 // Penalty.hoursLate is a time measurement; never convert it as currency.
 
 const quote = id => {
