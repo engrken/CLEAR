@@ -36,6 +36,29 @@ Vercel project: `clearsys`, ID `prj_RaSibcpC2ZJq4isr31v8XPrJPmsT`, Production do
 
 **Evidence limitation:** Vercel reports the variables' names, scopes and existence, but their plaintext values remain protected (`decrypted: false`), even with connected Vercel access. Accordingly, the mapped Neon targets are the **approved/expected configuration**, **not a cryptographic or runtime proof** that Vercel's currently deployed secret points there. Avoid claiming a Production/Preview binding is verified solely because the Neon hostname above exists or because a Vercel build is green.
 
+## Local workstation web testing (non-production)
+
+**Workstation convention (owner-supplied, 2026-10-23):**
+- Git repository: `D:\clear-system-saas` (synchronized `main`).
+- Local Next.js URL: `http://localhost:3000`; start from repo root with `npm run dev`.
+- Local-only configuration file: `D:\clear-system-saas\.env.local` (gitignored). **The file's existence, contents, and successful localhost connection have not been independently verified.**
+- Separate optional Android QA/native build workspace: `D:\c\mobile\android`. It is **not** the database and is **not** the publicly released Android v1.2.0 build.
+
+**Selected/expected local test database:** Neon **E2E staging** branch `clear-v24-e2e-staging-20261020`, immutable ID `br-solitary-morning-b3amr5wy`, database `neondb`, direct hostname `ep-tiny-violet-b39872ht.c-4.ap-southeast-1.aws.neon.tech`. Verified by Neon branch and compute inspection on **2026-10-23**. This is distinct from **both** Production `br-calm-dew-b3vd1ira` and the Android integration Preview `br-crimson-sea-b3uiuqe1`.
+
+**Intended environment-variable names** (values must stay private and local):
+- `DATABASE_URL`: complete **staging-branch** PostgreSQL connection URL retrieved privately from Neon Connect. Host must match the staging hostname above, never the Production/Android Preview host; use TLS.
+- `AUTH_SECRET` / `NEXTAUTH_SECRET`: strong local random secret, not Production's signing secret.
+- `NEXTAUTH_URL` / `AUTH_URL`: `http://localhost:3000`.
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM`: **only** configure a safe testing mail account if OTP/email testing is explicitly required; avoid sending messages to real copied student addresses.
+- Additional server-only integrations should be configured separately **only as needed** and must never be committed to Git.
+
+**Compatibility warning — verified on 2026-10-23:** The above staging branch currently has **9 completed Prisma migrations**, while actual Production has **11 completed migrations**. In particular, staging lacks `20261021173000_global_mobile_sessions` and `20261023100000_officer_presence_onboarding`. Therefore this is an **environment target reference, not proof that latest `main` can run all features on it**. Its schema and stored data must be reconciled/tested on an appropriately isolated staging branch using a separately reviewed migration plan. **Do not run `prisma migrate deploy`, `prisma db push`, reset, or other schema writes against this branch without reviewing the outstanding migration dependencies and obtaining authorization.** Do not aim localhost at Production as a workaround.
+
+**Data safety:** This nonproduction branch was derived from Production and may contain real student/financial data. Nonproduction is not synonymous with sanitized. Before functional testing, use synthesized/sanitized identities and an isolated authorized branch; read-only schema verification is allowed, but financial postings, student emails or state changes are not an implicit part of localhost setup.
+
+**Local verification before testing:** Inspect `git status`, confirm the local environment file is present **without printing it**, verify the configured hostname locally without exposing passwords, and ensure the database schema is compatible. Running `npm ci`, `npx prisma generate` and `npm run dev` does not perform a database migration or prove runtime authorization/security.
+
 ## Safe verification and release procedure
 
 1. Identify environment **first**: Production, Android integration Preview, or separate staging. Resolve the **Neon immutable branch ID**, not a mutable branch name.
