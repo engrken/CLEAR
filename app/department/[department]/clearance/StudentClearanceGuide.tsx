@@ -39,7 +39,7 @@ export default function StudentClearanceGuide({ department }: { department: stri
     // Only poll while the separate privacy notice is pending. Once the
     // preference is known, stop polling rather than waking the clearance
     // page every second for the lifetime of the browser session.
-    let timer: ReturnType<typeof setInterval> | null = null;
+    let timer: number | null = null;
     const check = (): boolean => {
       try {
         if (window.localStorage.getItem(storageKey) === 'true') return true;
