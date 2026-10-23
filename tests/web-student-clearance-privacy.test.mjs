@@ -34,3 +34,26 @@ test('private web student UI protects bearer credentials, financial fields and s
   assert.match(src, /privateResult\.studentName !== null/);
   assert.match(src, /privateResult\.unpaidItems !== null/);
 });
+
+test('public student clearance guide is privacy-first, replayable and contains no student session data', () => {
+  const page = read('app/department/[department]/clearance/page.tsx');
+  const guide = read('app/department/[department]/clearance/StudentClearanceGuide.tsx');
+  const guard = page.indexOf('if (!isOfficer && !(sigParam && q))');
+  const insertion = page.indexOf('<StudentClearanceGuide department={cleanDepartment} />');
+  assert.match(page, /import StudentClearanceGuide from '\.\/StudentClearanceGuide'/);
+  assert.ok(insertion > guard, 'guide must render in the anonymous inquiry branch');
+  assert.ok(insertion < page.indexOf('const collectionSetups ='), 'student guide must not depend on officer financial queries');
+  assert.match(guide, /window\.localStorage\.getItem\('clear_privacy_accepted'\)/,
+    'privacy acknowledgement must precede first-visit auto-launch');
+  assert.match(guide, /clear_student_clearance_guide_v1:/, 'completion preference must be versioned');
+  assert.match(guide, /window\.localStorage\.setItem\(storageKey, 'true'\)/);
+  assert.match(guide, /How to check my clearance/, 'students must have a replay action');
+  assert.match(guide, /CLEARED/);
+  assert.match(guide, /CLEARANCE ON HOLD/);
+  assert.match(guide, /NOT ENROLLED THIS TERM/);
+  assert.match(guide, /six-digit code/);
+  assert.match(guide, /Skip guide/);
+  assert.match(guide, /aria-modal="true"/);
+  assert.doesNotMatch(guide, /fetch\(|Authorization:|studentName|registeredEmail|outstandingCentavos/,
+    'the guide must never request or retain protected clearance data');
+});
