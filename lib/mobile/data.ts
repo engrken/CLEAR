@@ -14,6 +14,7 @@ import { computeDepartmentFinancials, isVoidedRecord } from '@/lib/financials';
 import { isOrganizationActive, normalizeDepartmentSlug } from '@/lib/roles';
 import { ApiFailure } from '@/lib/mobile/http';
 import { toCentavos } from '@/lib/mobile/serialize';
+import type { MoneyScalar } from '@/lib/money-precision';
 import {
   isRolloverSource,
   matchesRolloverSource,
@@ -80,8 +81,8 @@ export type LedgerEntry = {
 
 type CollectionRow = {
   id: string; studentName: string; orNumber: string; itemDescription: string;
-  amountPaid: number; status: string; paymentType: string; timestamp: Date;
-  balanceDue?: number | null;
+  amountPaid: MoneyScalar; status: string; paymentType: string; timestamp: Date;
+  balanceDue?: MoneyScalar | null;
 };
 
 /** Splits Ken's multi-item receipt numbers: "OR-1-P02" → { receiptNumber: "OR-1", receiptLine: 2 }. */
@@ -107,7 +108,7 @@ export function collectionEntry(c: CollectionRow): LedgerEntry {
 
 type RemittanceRow = {
   id: string; studentName: string; referenceNumber: string; itemDescription: string;
-  paymentChannel: string; amountPaid: number; status: string; timestamp: Date;
+  paymentChannel: string; amountPaid: MoneyScalar; status: string; timestamp: Date;
 };
 
 export function remittanceEntry(r: RemittanceRow): LedgerEntry {
@@ -125,7 +126,7 @@ export function remittanceEntry(r: RemittanceRow): LedgerEntry {
 
 type PenaltyRow = {
   id: string; studentName: string; penaltyId: string; activity: string; hoursLate: number;
-  ratePerHour: number; fineAmount: number; assessedAmount: number | null; penaltyType: string;
+  ratePerHour: MoneyScalar; fineAmount: MoneyScalar; assessedAmount: MoneyScalar | null; penaltyType: string;
   status: string; date: Date;
 };
 
@@ -308,7 +309,7 @@ export async function dashboardSummary(org: Organization) {
       select: { studentId: true, studentName: true, fineAmount: true, status: true },
     }),
   ]);
-  const pen = penaltiesOutstanding(penalties);
+  const pen = penaltiesOutstanding(penalties.map(p => ({ ...p, fineAmount: Number(p.fineAmount) })));
 
   return {
     ay,
