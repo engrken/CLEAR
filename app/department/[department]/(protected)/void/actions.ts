@@ -1,6 +1,7 @@
 // app/department/[department]/(protected)/void/actions.ts
 "use server";
 
+import { moneyNumber } from "@/lib/money-precision";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { withFinancialTransaction } from "@/lib/financial-transaction";
@@ -393,7 +394,7 @@ export async function executeVoidTransaction(formData: {
       // Receivable restoration and OR void are a single atomic operation.
       // A failed restoration rolls back the receipt status and audit logs.
       const restoredCollectibles = penaltyRestoration || arrearLinks.length ? 0 : await restoreCollectiblePayments(
-        tx, organization.id, ay, term, receiptRows, officerName, baseOR
+        tx, organization.id, ay, term, receiptRows.map(row => ({ ...row, amountPaid: moneyNumber(row.amountPaid) })), officerName, baseOR
       );
       for (const link of arrearLinks) {
         const cash = Math.round(Number(link.amount) * 100);
