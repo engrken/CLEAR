@@ -81,6 +81,14 @@ export function buildIssuedReceipts(lines: HistoryLine[]): IssuedReceipt[] {
     if (group.some(row => !Number.isFinite(row.amountPaid))) {
       reasons.push("Non-finite monetary amount in receipt allocations");
     }
+    // Existing historical lines are never changed here. Surface anomalous
+    // sub-cent values for supervised audit rather than rounding them away
+    // silently or assigning an incorrect student/obligation association.
+    if (group.some(row => Number.isFinite(row.amountPaid) &&
+      (!Number.isSafeInteger(Math.round(row.amountPaid * 100)) ||
+        Math.abs(row.amountPaid * 100 - Math.round(row.amountPaid * 100)) > 0.000001))) {
+      reasons.push("Sub-cent or unsafe monetary precision in receipt allocation");
+    }
     const status = reasons.length
       ? "Inconsistent"
       : voided === group.length ? "Voided" : "Valid";
