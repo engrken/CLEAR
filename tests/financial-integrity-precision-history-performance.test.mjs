@@ -66,6 +66,6 @@ test('receipt lookup narrows exact OR on the database without losing package row
   const source = read('app/department/[department]/(protected)/collections/history/page.tsx');
   assert.match(source, /\.\.\.\(exactOr \? \{ OR:/);
   assert.match(source, /orNumber: \{ startsWith:/);
-  assert.match(source, /buildIssuedReceipts\(allocationLines\)/);
+  assert.match(source, /buildIssuedReceipts\(allocationLines(?:\.map\(row => \(\{ \.\.\.row, amountPaid: moneyNumber\(row\.amountPaid\) \}\)\))?\)/);
   assert.match(source, /requireTabAccess\("tab-payment", slug\)/);
 });
