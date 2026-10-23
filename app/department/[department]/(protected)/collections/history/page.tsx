@@ -1,3 +1,4 @@
+import { moneyNumber } from "@/lib/money-precision";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
@@ -89,7 +90,7 @@ export default async function ReceiptHistoryPage({
     },
   });
 
-  const grouped = buildIssuedReceipts(allocationLines);
+  const grouped = buildIssuedReceipts(allocationLines.map(row => ({ ...row, amountPaid: moneyNumber(row.amountPaid) })));
   const categories = [...new Set(grouped.flatMap(r => r.categories))].sort();
   const paymentTypes = [...new Set(grouped.flatMap(r => r.paymentTypes))].sort();
   const matched = filterIssuedReceipts(grouped, {
