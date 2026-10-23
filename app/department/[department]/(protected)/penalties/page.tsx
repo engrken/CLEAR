@@ -1,4 +1,5 @@
 // app/department/[department]/(protected)/penalties/page.tsx
+import { moneyNumber } from "@/lib/money-precision";
 import { prisma } from "@/lib/prisma";
 import { requireTabAccess, requireOrgAdmin } from "@/lib/permissions";
 import { getPeriodLedger } from "../realign/ledger";
@@ -249,7 +250,7 @@ export default async function PenaltiesPage({
         ay={ay}
         term={term}
         students={students}
-        penalties={penalties}
+        penalties={penalties.map(p => ({ ...p, assessedAmount: p.assessedAmount == null ? null : moneyNumber(p.assessedAmount), ratePerHour: moneyNumber(p.ratePerHour), fineAmount: moneyNumber(p.fineAmount) }))}
         canVoid={canVoid}
         canReconcile={canReconcile}
         periodClosed={periodClosed}
