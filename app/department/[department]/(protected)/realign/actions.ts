@@ -1,5 +1,6 @@
 "use server";
 
+import { moneyNumber } from "@/lib/money-precision";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireTabAccess } from "@/lib/permissions";
@@ -272,7 +273,7 @@ export async function carryOverTermBalance(department: string, data: CarryReques
           targetFund: sourceFee.targetFund, isPackage: sourceFee.isPackage,
         }});
         copiedFeeSnapshot.push({ id: copied.id, category: copied.category, name: copied.name,
-          amount: copied.amount, targetFund: copied.targetFund, isPackage: copied.isPackage });
+          amount: moneyNumber(copied.amount), targetFund: copied.targetFund, isPackage: copied.isPackage });
       }
       copiedFeeCount = sourceFees.length;
     }
