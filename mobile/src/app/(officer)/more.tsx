@@ -130,7 +130,7 @@ export default function More() {
           {query ? (
             <Pressable accessibilityRole="button" accessibilityLabel="Clear module search"
               hitSlop={10} onPress={() => setQuery('')}>
-              <Icon name="x" size={20} color="inkMuted" />
+              <Icon name="close" size={20} color="inkMuted" />
             </Pressable>
           ) : null}
         </View>
