@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useTransition } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { executeVoidTransaction } from "./actions";
 import { ThemedAlert } from '@/lib/clear-dialogs';
@@ -32,6 +32,9 @@ export default function VoidClient({
 }) {
   const [records, setRecords] = useState(initialRecords);
   const [searchText, setSearchText] = useState(query);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const editingSearch = useRef(false);
+  const [isSearching, startSearch] = useTransition();
   const [isProcessing, setIsProcessing] = useState(false);
   const [pendingVoid, setPendingVoid] = useState<{ refId: string; amount: number; particulars: string } | null>(null);
   const [reason, setReason] = useState("");
@@ -43,7 +46,18 @@ export default function VoidClient({
     setRecords(initialRecords);
   }, [initialRecords]);
 
-  useEffect(() => { setSearchText(query); }, [query]);
+  useEffect(() => {
+    if (!editingSearch.current) setSearchText(query);
+    else if (!searchTimer.current && searchText.trim() === query.trim()) editingSearch.current = false;
+  }, [query, searchText]);
+  useEffect(() => () => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+  }, []);
+
+  const cancelScheduledSearch = () => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = null;
+  };
 
   const buildUrl = (categoryName: string, pageNumber: number, text = query, size = pageSize) => {
     const params = new URLSearchParams({ category: categoryName, page: String(pageNumber),
@@ -52,23 +66,40 @@ export default function VoidClient({
     return `${pathname}?${params.toString()}`;
   };
 
+  const changeSearch = (value: string) => {
+    editingSearch.current = true;
+    setSearchText(value);
+    cancelScheduledSearch();
+    searchTimer.current = setTimeout(() => {
+      searchTimer.current = null;
+      startSearch(() => router.replace(buildUrl(category, 1, value), { scroll: false }));
+    }, 400);
+  };
+
   const handleSearch = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    cancelScheduledSearch();
+    editingSearch.current = true;
     router.push(buildUrl(category, 1, searchText));
   };
 
   const clearSearch = () => {
+    cancelScheduledSearch();
+    editingSearch.current = true;
     setSearchText('');
     router.push(buildUrl(category, 1, ''));
   };
 
   const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    cancelScheduledSearch();
+    editingSearch.current = true;
     setSearchText('');
     router.push(buildUrl(e.target.value, 1, ''));
   };
 
   const handlePageChange = (newPage: number) => {
-    router.push(buildUrl(category, newPage));
+    cancelScheduledSearch();
+    router.push(buildUrl(category, newPage, searchText));
   };
 
   const handleVoidClick = (refId: string, amount: number, particulars: string) => {
@@ -141,6 +172,8 @@ export default function VoidClient({
       if (res.success) {
         setRecords(prev => prev.filter(r => r.refId !== refId));
         // Never leave a previous student/receipt search selected after a successful reversal.
+        cancelScheduledSearch();
+        editingSearch.current = true;
         setSearchText('');
         router.replace(buildUrl(category, 1, ''));
         router.refresh();
@@ -197,7 +230,7 @@ export default function VoidClient({
               <label htmlFor="void-search" className="form-label text-secondary small fw-semibold">Search Student / Requestor / Reference</label>
               <div className="input-group">
                 <input id="void-search" type="search" value={searchText} maxLength={100}
-                  onChange={(event) => setSearchText(event.target.value)}
+                  onChange={(event) => changeSearch(event.target.value)}
                   placeholder="Student name or ID, OR, fee or reference" className="form-control bg-card text-color border-secondary" />
                 <button type="submit" className="btn btn-info fw-semibold">Search</button>
                 <button type="button" className="btn btn-outline-secondary" onClick={clearSearch}
@@ -208,11 +241,16 @@ export default function VoidClient({
         </div>
       </div>
       <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
-        <span className="small text-secondary">{totalCount} matching record{totalCount === 1 ? '' : 's'} · {term} ({ay})</span>
+        <span className="small text-secondary" role="status">
+          {isSearching ? 'Updating matches…' : `${totalCount} matching record${totalCount === 1 ? '' : 's'} · ${term} (${ay})`}
+        </span>
         <label className="d-flex align-items-center gap-2 small text-secondary">
           Rows per page
           <select className="form-select form-select-sm bg-card text-color border-secondary" style={{ width: 'auto' }}
-            aria-label="Rows per page" value={pageSize} onChange={(e) => router.push(buildUrl(category, 1, query, Number(e.target.value)))}>
+            aria-label="Rows per page" value={pageSize} onChange={(e) => {
+              cancelScheduledSearch();
+              router.push(buildUrl(category, 1, searchText, Number(e.target.value)));
+            }}>
             {[10,25,50,100].map(n => <option key={n} value={n}>{n}</option>)}
           </select>
         </label>

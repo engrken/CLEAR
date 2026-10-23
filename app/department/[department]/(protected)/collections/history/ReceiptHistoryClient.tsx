@@ -1,7 +1,7 @@
 "use client";
 import { formatManilaDate } from '@/lib/clear-timezone';
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { clearAlert, clearConfirm } from "@/lib/clear-dialogs";
@@ -25,21 +25,62 @@ export default function ReceiptHistoryClient(p: Props) {
   const [search, setSearch] = useState(p.q);
   const [exactOrSearch, setExactOrSearch] = useState(p.exactOr);
   const [descriptionSearch, setDescriptionSearch] = useState(p.description);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const editingSearch = useRef(false);
+  const clearScheduledSearch = () => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = null;
+  };
+  useEffect(() => () => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+  }, []);
+  useEffect(() => {
+    if (!editingSearch.current) {
+      setSearch(p.q);
+      setExactOrSearch(p.exactOr);
+      setDescriptionSearch(p.description);
+    } else if (!searchTimer.current && search.trim() === p.q.trim()
+      && exactOrSearch.trim() === p.exactOr.trim()
+      && descriptionSearch.trim() === p.description.trim()) {
+      editingSearch.current = false;
+    }
+  }, [p.q, p.exactOr, p.description, search, exactOrSearch, descriptionSearch]);
   const [busy, begin] = useTransition();
   const [isNavigating, startNavigation] = useTransition();
   const [selected, setSelected] = useState<string | null>(null);
   const [toStudent, setToStudent] = useState(true);
   const [toOfficer, setToOfficer] = useState(true);
   const historyBase = `/department/${encodeURIComponent(p.department)}/collections/history`;
-  const navigate = (changes: Record<string, string>) => {
+  const navigate = (changes: Record<string, string>, replace = false) => {
+    clearScheduledSearch();
+    const drafts = editingSearch.current
+      ? { q: search.trim(), or: exactOrSearch.trim(), description: descriptionSearch.trim() }
+      : {};
     const qs = new URLSearchParams({
       ay: p.ay || "all", term: p.term || "all", q: p.q,
       or: p.exactOr, status: p.statusFilter, category: p.category,
       description: p.description, paymentType: p.paymentType,
       from: p.from, to: p.to, inconsistentOnly: p.inconsistentOnly ? "1" : "0",
-      page: String(p.page), size: String(p.pageSize), ...changes,
+      page: String(p.page), size: String(p.pageSize), ...drafts, ...changes,
     });
-    startNavigation(() => router.push(`${historyBase}?${qs.toString()}`));
+    startNavigation(() => {
+      const url = `${historyBase}?${qs.toString()}`;
+      if (replace) router.replace(url, { scroll: false });
+      else router.push(url);
+    });
+  };
+  const scheduleSearch = (next: { q: string; or: string; description: string }) => {
+    editingSearch.current = true;
+    clearScheduledSearch();
+    searchTimer.current = setTimeout(() => {
+      searchTimer.current = null;
+      navigate({
+        q: next.q.trim(),
+        or: next.or.trim(),
+        description: next.description.trim(),
+        page: "1",
+      }, true);
+    }, 450);
   };
   const sendCopy = async () => {
     if (!selected) return;
@@ -69,12 +110,18 @@ export default function ReceiptHistoryClient(p: Props) {
       }}>
         <div className="col-12 col-md-4">
           <label className="form-label small fw-semibold">Student name / ID / OR search</label>
-          <input className="form-control" value={search} onChange={e => setSearch(e.target.value)}
+          <input className="form-control" value={search} onChange={e => {
+            setSearch(e.target.value);
+            scheduleSearch({ q: e.target.value, or: exactOrSearch, description: descriptionSearch });
+          }}
             maxLength={80} placeholder="Student or OR..." aria-label="Search issued receipt history" />
         </div>
         <div className="col-12 col-md-2">
           <label className="form-label small fw-semibold">Exact OR number</label>
-          <input className="form-control" value={exactOrSearch} onChange={e => setExactOrSearch(e.target.value)}
+          <input className="form-control" value={exactOrSearch} onChange={e => {
+            setExactOrSearch(e.target.value);
+            scheduleSearch({ q: search, or: e.target.value, description: descriptionSearch });
+          }}
             maxLength={50} placeholder="26-376" aria-label="Exact official receipt number" />
         </div>
         <div className="col-6 col-md-3">
@@ -113,7 +160,10 @@ export default function ReceiptHistoryClient(p: Props) {
         <div className="col-12 col-md-6">
           <label className="form-label small fw-semibold">Item description contains</label>
           <input className="form-control" value={descriptionSearch}
-            onChange={e => setDescriptionSearch(e.target.value)} maxLength={120}
+            onChange={e => {
+              setDescriptionSearch(e.target.value);
+              scheduleSearch({ q: search, or: exactOrSearch, description: e.target.value });
+            }} maxLength={120}
             placeholder="Departmental Fee, Penalty, Shirt..." />
         </div>
         <div className="col-6 col-md-3">
@@ -149,6 +199,9 @@ export default function ReceiptHistoryClient(p: Props) {
             }}>Clear filters</button>
         </div>
       </form>
+      <p className="small text-muted mb-2" role="status">
+        {isNavigating ? 'Updating matching receipts…' : 'Search fields update automatically while you type.'}
+      </p>
       {isNavigating ? (
         <div className="alert alert-info py-2 small" role="status">
           Loading matching receipts — previous results are temporarily hidden.

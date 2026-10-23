@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { 
   toggleStudentStatus, 
@@ -59,6 +59,37 @@ export default function StudentsClient({
   const searchParams = useSearchParams();
 
   const [search, setSearch] = useState(currentSearch);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const editingSearch = useRef(false);
+  const [isSearching, startSearch] = useTransition();
+
+  useEffect(() => {
+    if (!editingSearch.current) setSearch(currentSearch);
+    else if (!searchTimer.current && search.trim() === currentSearch.trim()) editingSearch.current = false;
+  }, [currentSearch, search]);
+  useEffect(() => () => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+  }, []);
+
+  const cancelScheduledSearch = () => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = null;
+  };
+
+  const changeSearch = (value: string) => {
+    editingSearch.current = true;
+    setSearch(value);
+    cancelScheduledSearch();
+    // Keep the existing server-side tenant/role checks and paginated query.
+    searchTimer.current = setTimeout(() => {
+      searchTimer.current = null;
+      const params = new URLSearchParams(window.location.search);
+      if (value.trim()) params.set('search', value.trim());
+      else params.delete('search');
+      params.set('page', '1');
+      startSearch(() => router.replace(`${pathname}?${params.toString()}`, { scroll: false }));
+    }, 400);
+  };
   const [yearFilter, setYearFilter] = useState(currentYear);
   const [statusFilter, setStatusFilter] = useState(currentStatus);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -127,6 +158,8 @@ export default function StudentsClient({
   };
 
   const clearRosterSearchAfterSuccess = () => {
+    cancelScheduledSearch();
+    editingSearch.current = true;
     setSearch("");
     updateQuery({ search: "", page: "1" });
     router.refresh();
@@ -134,11 +167,14 @@ export default function StudentsClient({
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    updateQuery({ search, page: '1' });
+    cancelScheduledSearch();
+    editingSearch.current = true;
+    updateQuery({ search: search.trim(), page: '1' });
   };
 
   const handlePageChange = (newPage: number) => {
-    updateQuery({ page: String(newPage) });
+    cancelScheduledSearch();
+    updateQuery({ search: search.trim(), page: String(newPage) });
   };
 
   const handleToggle = async (studentId: string, currentStatus: string) => {
@@ -385,7 +421,9 @@ export default function StudentsClient({
               <input 
                 type="text" 
                 value={search} 
-                onChange={e => setSearch(e.target.value)} 
+                onChange={e => changeSearch(e.target.value)}
+                maxLength={100}
+                aria-label="Search students by ID, name, or email"
                 placeholder="Search by ID, Name, or Email..." 
                 className="form-control form-control-sm border-secondary" 
               />
@@ -394,7 +432,7 @@ export default function StudentsClient({
           <div className="col-12 col-md-3">
             <select 
               value={yearFilter} 
-              onChange={e => { setYearFilter(e.target.value); updateQuery({ year: e.target.value, page: '1' }); }} 
+              onChange={e => { cancelScheduledSearch(); setYearFilter(e.target.value); updateQuery({ year: e.target.value, search: search.trim(), page: '1' }); }} 
               className="form-select form-select-sm border-secondary"
             >
               <option value="ALL">All Year Levels</option>
@@ -409,7 +447,7 @@ export default function StudentsClient({
           <div className="col-12 col-md-3">
             <select 
               value={statusFilter} 
-              onChange={e => { setStatusFilter(e.target.value); updateQuery({ status: e.target.value, page: '1' }); }} 
+              onChange={e => { cancelScheduledSearch(); setStatusFilter(e.target.value); updateQuery({ status: e.target.value, search: search.trim(), page: '1' }); }} 
               className="form-select form-select-sm border-secondary"
             >
               <option value="ALL">All Enrollment Statuses</option>
@@ -418,9 +456,12 @@ export default function StudentsClient({
             </select>
           </div>
           <div className="col-12 col-md-1">
-            <button type="submit" className="btn btn-info btn-sm w-100 fw-bold">Filter</button>
+            <button type="submit" className="btn btn-info btn-sm w-100 fw-bold">Apply</button>
           </div>
         </form>
+        <div className="small text-muted mt-2" role="status">
+          {isSearching ? 'Updating student results…' : 'Search updates automatically as you type.'}
+        </div>
       </div>
 
       <div className="card border-secondary shadow-sm p-3 mb-3">
