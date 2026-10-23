@@ -39,12 +39,11 @@ yarn-error.*
 example
 
 # Android release signing credentials (private EAS exports).
-# Never commit an upload keystore, signing passwords, or a downloaded credentials.json.
+# Keep the official EAS signing credentials outside version control.
+# Existing native ignores above also protect *.jks and *.p12.
 credentials.json
 credentials/
 *.keystore
-*.jks
-*.p12
 *.pfx
 
 # generated native folders
