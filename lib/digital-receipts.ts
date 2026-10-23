@@ -1,3 +1,4 @@
+import { moneyCentavos, moneyNumber } from "@/lib/money-precision";
 import { formatManilaDateTime24, manilaDateInput } from '@/lib/clear-timezone';
 import { resolveReceiptBranding } from '@/lib/receipt-branding';
 import "server-only";
@@ -123,7 +124,7 @@ export async function enqueuePaymentReceipt(tx: Tx, args: {
   const student = studentId ? await tx.student.findFirst({
     where: { organizationId: args.organizationId, id: studentId }, select: { email: true, fullName: true },
   }) : null;
-  const totalCents = rows.reduce((sum,r) => sum + Math.round(r.amountPaid*100), 0);
+  const totalCents = rows.reduce((sum,r) => sum + moneyCentavos(r.amountPaid), 0);
   return enqueueAccountingNotice(tx, {
     organizationId: args.organizationId, eventKey: `payment:${orNumber}`,
     documentType: "Official Payment Receipt", referenceNo: orNumber,
@@ -134,8 +135,8 @@ export async function enqueuePaymentReceipt(tx: Tx, args: {
     details: [
       ["Payment source", args.source || "COLLECTION"],
       ["Payment date", manilaDateInput(rows[0].date)],
-      ["Payment breakdown", rows.map(r => `${r.category} / ${r.itemDescription}: ${pesos(r.amountPaid)} → ${r.fundAllocation}`).join(" | ")],
-      ["Outstanding on receipt", pesos(rows.reduce((s,r) => s+r.balanceDue, 0))],
+      ["Payment breakdown", rows.map(r => `${r.category} / ${r.itemDescription}: ${pesos(moneyNumber(r.amountPaid))} → ${r.fundAllocation}`).join(" | ")],
+      ["Outstanding on receipt", pesos(rows.reduce((s,r) => s+moneyNumber(r.balanceDue), 0))],
     ].map(([label,value]) => ({label, value})),
   });
 }
