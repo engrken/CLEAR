@@ -1,5 +1,6 @@
 // /app/department/[department]/(protected)/cashier-remittance/page.tsx
 
+import { moneyNumber } from "@/lib/money-precision";
 import { prisma } from "@/lib/prisma";
 import { requireTabAccess } from "@/lib/permissions";
 import CashierRemittanceForm from "./CashierRemittanceForm";
@@ -67,7 +68,7 @@ export default async function CashierRemittancePage({
         ay={ay} 
         term={term} 
         funds={funds} 
-        remittances={remittances}
+        remittances={remittances.map(r => ({ ...r, amount: moneyNumber(r.amount) }))}
         orgName={organization.name}
         reportSchoolName={organization.reportSchoolName ?? ''}
         reportSchoolAddress={organization.reportSchoolAddress ?? ''}
