@@ -4,14 +4,16 @@
 
 CLEAR is a **multi-tenant, web-based financial administration and student clearance system** for schools, academic departments, and student organizations. It combines student enrollment records, collection fees, official receipts, remittance review, funds management, penalties, receivables, cash advances, liquidation, audit reports, and student clearance in a tenant-scoped workspace.
 
-> **Project status (October 2026): Pilot / User Acceptance Testing (UAT).** Core features and multiple security improvements have been implemented, and successful local production builds have been reported. This is **not a certification of production readiness, penetration-test results, or 50-user capacity**. Verify the final consolidated build and end-to-end financial workflows against an isolated staging database before accepting real payments.
+> **Release status (23 October 2026):** The CLEAR **web application is deployed** at [clearsys.vercel.app](https://clearsys.vercel.app) (Vercel reports the latest reviewed deployment READY). The owner confirms **Android v1.2.0 is publicly published on Google Play**: it was **built locally on the owner's workstation, signed separately by Rupert, then published**. GitHub's internal debug-signed QA APK is *not* that official release. A deployed system still requires ongoing UAT, independently verified authorization, privacy and financial controls, and performance testing; no 50-user-capacity or penetration-test certification is claimed.
 
 ## Contents
 
+- [Release status and recent changes](#release-status-and-recent-changes)
 - [Capabilities](#capabilities)
 - [Financial rules](#financial-rules)
 - [Technology](#technology)
 - [Getting started](#getting-started)
+- [Workstation synchronization and local testing](#workstation-synchronization-and-local-testing)
 - [Environment configuration](#environment-configuration)
 - [Database schema and migration safety](#database-schema-and-migration-safety)
 - [Application routes and project structure](#application-routes-and-project-structure)
@@ -19,6 +21,26 @@ CLEAR is a **multi-tenant, web-based financial administration and student cleara
 - [Deploying to Vercel](#deploying-to-vercel)
 - [Security and operational notes](#security-and-operational-notes)
 - [Known limitations and roadmap](#known-limitations-and-roadmap)
+
+## Release status and recent changes
+
+| Surface | October 2026 status | Release distinction |
+| --- | --- | --- |
+| **Web Production** | [clearsys.vercel.app](https://clearsys.vercel.app), GitHub `main` to Vercel; latest checked deployment READY | A READY deployment alone does not prove end-user smoke testing or the actual decrypted Vercel database binding. |
+| **Public Android app** | **v1.2.0** publicly available on Google Play (owner-confirmed) | Built on the local workstation, **signed separately by Rupert**, and published to Play; do not confuse with the GitHub QA build. |
+| **Next Android update** | Collecting approved changes into a **future major release** | [Issue #61](https://github.com/engrken/CLEAR/issues/61) tracks changes; no immediate APK/AAB upload. |
+| **Source** | [GitHub `engrken/CLEAR`](https://github.com/engrken/CLEAR) | Merging `main` may trigger a new **web** deployment, not a Play Store update. |
+
+### Key merged changes
+
+- **[PR #46](https://github.com/engrken/CLEAR/pull/46):** Production-backed, read-only mobile viewer controls, fail-closed mobile business-write policy, separate student/officer/global sessions, and the tenant-admin portal. Security/session maintenance exceptions do **not** authorize financial or provisioning transactions.
+- **[PRs #49 / #52](https://github.com/engrken/CLEAR/pull/52):** native mobile welcome/landing and role entry.
+- **[PR #56](https://github.com/engrken/CLEAR/pull/56):** registered-email OTP-based private web clearance and removal of third-party QR image generation. Signed certificate verification links remain; first-party QR graphics require [issue #57](https://github.com/engrken/CLEAR/issues/57).
+- **[PR #60](https://github.com/engrken/CLEAR/pull/60):** period-specific `Enrolled` package eligibility, `Not enrolled` handling and historical-debt safeguards; synchronized read-only financial overview; OTP-verified profile email updates; mobile privacy notice; same-page officer presence, role-aware first-time onboarding, and safer confirmation dialogs. Associated additive Production migration was applied with backup/recovery verification and financial-integrity checks.
+- **[PR #59](https://github.com/engrken/CLEAR/pull/59):** `mobile/.gitignore` signing-secret/keystore protections; this does **not** change or resign Android v1.2.0.
+- **[PR #53](https://github.com/engrken/CLEAR/pull/53):** GitHub-native **internal/debug-signed QA APK** workflow, not valid for Google Play distribution under Rupert's official signing identity.
+
+**Verification versus implementation:** These changes are in merged source, but real-device student OTP delivery, role/tenant isolation with authorized accounts and runtime Production database-binding attestation still require careful end-to-end verification. See [student inquiry #47](https://github.com/engrken/CLEAR/issues/47), [privacy review #50](https://github.com/engrken/CLEAR/issues/50) and [read-only rollout gates](docs/mobile-production-readonly-gates.md).
 
 ## Capabilities
 
@@ -29,7 +51,18 @@ CLEAR is a **multi-tenant, web-based financial administration and student cleara
 - Guided first-time setup for **fund pools** and **collection fees**.
 - OTP-based authentication with Auth.js/NextAuth; role-based and tab-based permissions enforced by server actions.
 - Tenant-scoped permissions for financial posting, reports, reversal, setup, and user management. A user cannot use User Management to deactivate or delete their **own current account**.
-- Student-facing clearance access distinct from authenticated officer details. Public responses should not expose the student's specific unpaid items.
+- Student self-service clearance is protected by registered-email OTP and short-lived, tenant/student-bound authorization; the response is minimal and distinct from officer-only financial detail. Environment-specific email, identity and device QA remain release gates.
+
+### Live mobile viewer and authorization policy
+
+| Viewer | Intended live scope | Restrictions |
+| --- | --- | --- |
+| Student | Their own clearance decision and academic period after registered-email OTP | No arbitrary ID/email search, other students' details, balances or financial writes |
+| Officer | Live information in authorized tenant and explicitly assigned tabs | No cross-tenant or unauthorized modules; Production business transactions denied |
+| Tenant administrator | Own organization portal, status and permitted overviews | No access to other tenant data or mobile financial/provisioning writes |
+| Verified global superadmin | Read-only global overview and authorized cross-tenant access | Independent global sessions; no officer impersonation or business writes |
+
+Authentication/OTP, session revocation and security logging may write **security metadata**; they do not authorize changes to money, fee assessment, tenant provisioning or other business records. The API must enforce checks server-side. Merged viewer functionality is **not a claim of completed real-device/public-v1.2.0 acceptance testing**.
 
 ### Flexible academic calendars and controlled term transitions
 
@@ -112,6 +145,7 @@ The following invariants are more important than any individual screen:
 5. **Tenant and period isolation:** Each action must verify authorization, organization, accounting period, and closure status on the server.
 6. **Historical arrears survive rollover:** A closed term does not erase a student's outstanding assessed obligations.
 7. **Email is not the ledger:** An unsent or duplicated notification cannot change the underlying posted transaction.
+8. **Term-specific package eligibility:** Current mandatory package dues depend on an explicit matching `Enrolled` student-period record; missing enrollment must not create phantom new debt or a false clearance. Preserve valid previously assessed obligations.
 
 ## Technology
 
@@ -125,6 +159,7 @@ The following invariants are more important than any individual screen:
 | Storage | Vercel Blob for supported logo/attachment workflows |
 | Email | Nodemailer over SMTP, transaction outbox and scheduled retries |
 | UI | Bootstrap, Bootstrap Icons, SweetAlert2, shared CLEAR theme-adaptive dialogs |
+| Android source | Expo SDK 58, React Native 0.88, Expo Router; app version `1.2.0` in `mobile/app.json` |
 
 ## Getting started
 
@@ -138,14 +173,14 @@ The following invariants are more important than any individual screen:
 ### Clone and install
 
 ```cmd
- git clone https://github.com/engrken/CLEAR.git
- cd CLEAR
- npm install
- npx prisma validate
- npx prisma generate
+git clone https://github.com/engrken/CLEAR.git
+cd CLEAR
+npm ci
+npx prisma validate
+npx prisma generate
 ```
 
-`npm install` also runs Prisma generation when the project's `postinstall` script is configured.
+Use `npm ci` for lockfile-pinned dependencies (the project also runs Prisma generation on `postinstall`). Installing dependencies and generating Prisma client do **not** authorize a database migration.
 
 ### Configure your local environment
 
@@ -179,9 +214,50 @@ npm run build
 
 For production-mode local benchmarking, use `npm run start` after a successful build, with a **nonproduction** database.
 
+## Workstation synchronization and local testing
+
+**Windows workstation reference (23 October 2026)**
+
+| Purpose | Local path |
+| --- | --- |
+| Intended permanent Git-managed source | `D:\clear-system-saas` |
+| Local web address | `http://localhost:3000` |
+| Private local environment | `D:\clear-system-saas\.env.local` (ignored by Git) |
+| Disposable mobile build workspace | `D:\c\mobile` |
+| Expo-generated Android native project | `D:\c\mobile\android` |
+
+The older `C:\Users\kentb\Desktop\clear-system-saas` checkout was relocated. A fresh Git clone on `D:\clear-system-saas-fresh` was verified clean at `main` commit `3a443f3` before renaming; **verify the fresh clone has actually become `D:\clear-system-saas` on your workstation**. Do not `git init` an existing non-Git folder or discard the original backup, local `.env.local`, or signing-related material.
+
+For a **clean, Git-enabled** permanent checkout, run PowerShell:
+
+```powershell
+Set-Location "D:\clear-system-saas"
+git status
+git fetch origin --prune
+git switch main
+git pull --ff-only origin main
+npm ci
+npx prisma generate
+npm run dev
+```
+
+Stop if Git detects local modifications or cannot fast-forward; never use `git reset --hard` as a shortcut. Open `http://localhost:3000` for web testing after nonproduction environment setup. Test the Android source without producing an APK:
+
+```powershell
+Set-Location "D:\clear-system-saas\mobile"
+npm ci
+npm run typecheck
+```
+
+Reserve `D:\c\mobile\android` for a separately approved **disposable native QA build**; normal `git pull` or localhost usage does not require rebuilding v1.2.0. Play signing stays private, with the release workflow coordinated with Rupert. See [major-release tracker #61](https://github.com/engrken/CLEAR/issues/61) and [historical internal-QA signing gate #58](https://github.com/engrken/CLEAR/issues/58).
+
 ## Environment configuration
 
 These examples are **placeholders**, never actual values. Environment requirements depend on the features enabled and your deployed code; check the current source before changing existing secrets.
+
+**Database environment source of truth:** [docs/database-environment-reference.md](docs/database-environment-reference.md). For localhost, the **intended E2E staging** Neon branch is `br-solitary-morning-b3amr5wy` (`clear-v24-e2e-staging-20261020`), database `neondb`, direct host `ep-tiny-violet-b39872ht.c-4.ap-southeast-1.aws.neon.tech`. Obtain the *complete connection string privately in Neon* and put it in your ignored `.env.local`; never paste a credential-bearing `DATABASE_URL` into GitHub or chat. Do not substitute Production or Android Preview.
+
+**Important (verified 23 October 2026):** The selected E2E staging branch currently has **9 completed Prisma migrations**, whereas Production has **11**. Staging is missing the global-mobile-session and officer-presence/onboarding migrations. It is **not yet confirmed to support all current `main` features**; migration compatibility requires a separate reviewed staging procedure. Staging was branched from Production and may contain copied private student data—use synthetic/sanitized identities and never send test emails to real students.
 
 ```dotenv
 # PostgreSQL / Neon (use the correct branch for each environment)
@@ -243,7 +319,7 @@ Configure schedules in Vercel or another trusted scheduler according to your hos
 
 ## Database schema and migration safety
 
-**Existing Neon installations need special care.** This project's development history has included live database schema changes and previously reported migration drift. Some database-applied migration versions were missing from a local `prisma/migrations` directory.
+**Existing Neon installations need special care.** As verified on 23 October 2026, the Neon default/primary Production branch `br-calm-dew-b3vd1ira` recorded **11 completed and zero failed Prisma migrations**, including PR #46 global mobile sessions and PR #60 officer presence/onboarding. The independent E2E staging branch was **two migrations behind (9 completed)**. Distinguish this *staging mismatch* from historical Production drift; check branch IDs and current migration registries before acting. [Environment reference](docs/database-environment-reference.md).
 
 **Never accept Prisma's prompt to reset a database containing financial data.** In particular, do not run `prisma migrate reset`, `prisma db push --force-reset`, or destructive schema sync commands against production.
 
@@ -273,6 +349,8 @@ npm run build
 | Penalty classifications/history | Penalty type fields, `PenaltySettlementEvent` |
 | Email delivery | `DigitalReceiptDelivery` |
 | Recipient preferences | `TransactionEmailPreference` |
+| Global mobile sessions | `GlobalMobileSession` (PR #46 Production migration completed) |
+| Officer page presence/onboarding | `OfficerPagePresence`, `TenantUser.onboardingSignature` (PR #60 Production migration completed) |
 
 Do not replay historical upgrade scripts against an existing database without inspecting its schema first.
 
@@ -340,8 +418,13 @@ From the project root:
 ```cmd
 npx prisma validate
 npx prisma generate
+npm run test:finance
+npm run test:mobile-roles
+npx tsc --noEmit
 npm run build
 ```
+
+Run `npm ci && npm run typecheck` separately from `mobile/` for the Android source. Never run business-posting tests against live Production data.
 
 Additional `scripts/test-*.cjs`, `scripts/verify-*.cjs`, and read-only audit utilities accompany specific releases. Run only scripts that actually exist in your project and review any `--apply` flag before executing it. See the release-specific READMEs for expected outputs.
 
@@ -362,7 +445,9 @@ Additional `scripts/test-*.cjs`, `scripts/verify-*.cjs`, and read-only audit uti
 - [ ] Reports: verify category totals, gross collections, audited expenses, net balances, and absence of student-level details in Summary.
 - [ ] User Management: reject self-deactivation/deletion and prevent cross-tenant actions.
 - [ ] Backup security: valid encrypted restore succeeds on **staging**; tampered/foreign-tenant backup is rejected and changes no records.
-- [ ] Public clearance discloses only status; officer view shows authorized details.
+- [ ] Registered-email OTP reveals only the verified student's clearance status; reject account enumeration, cross-tenant and student A→B requests, used/expired codes and revoked sessions.
+- [ ] Validate officer, tenant-admin and global-superadmin session scoping on authorized devices, including denied business writes.
+- [ ] Verify signed certificate links; first-party scannable QR remains gated by [#57](https://github.com/engrken/CLEAR/issues/57).
 - [ ] Light and dark dialogs work, and unsuccessful transactions do not unexpectedly clear input fields.
 
 **Known prior test evidence:** Local builds, read-only financial audits, and the encrypted-backup tampering/restore tests have succeeded during development. A prior read-only audit also identified an **older remittance/void status discrepancy** resulting from transactions voided before the coordinated reversal update. Record and reconcile such legacy exceptions before claiming a clean ledger. No validated 50-concurrent-user benchmark has been completed; performance/load testing was deferred until the user-testing phase.
@@ -402,24 +487,25 @@ For Vercel, a Git-connected repository can automatically deploy Preview branches
 - Audit rows are retained by the application; calling them **cryptographically immutable** would require additional controls such as append-only storage or independent integrity verification.
 - An encrypted authenticated backup can still be **deleted** or replaced by an older valid backup. Keep separate versioned, access-controlled backups and test PostgreSQL-native disaster recovery.
 - Never manually rewrite a posted financial transaction just to remove a validation error. Apply a documented, authorized reconciliation instead.
-- Prisma schema drift is unresolved until the migration history is formally reconciled. Treat schema changes as controlled operations.
+- Production has the approved 11 migrations as of the 23 October 2026 check; the E2E staging branch still lacks two. Keep schema changes controlled and independently verified rather than replaying old migrations.
 - SMTP is at-least-once; a rare retry can duplicate an email, **not** the underlying financial posting.
 - Older finance records with ambiguous item descriptions or no reliable assessment/receipt link may need supervised historical reconciliation.
 
 ## Known limitations and roadmap
 
-- **UAT pending:** Recent features have been delivered in successive releases; the latest combined checkout still needs complete regression testing on Vercel Preview.
-- **Capacity unverified:** 50-concurrent-user k6 testing was prepared but deferred; no throughput/SLO claim is made.
-- **Schema migration drift:** Reconcile and version the existing Neon migration history before subsequent production schema upgrades.
-- **Monetary precision:** Parts of the existing Prisma schema use `Float` for currency; consider a carefully reconciled migration to `Decimal`/integer minor units.
-- **Legacy historical debt links:** Some older payments cannot be safely auto-associated without a unique reference.
-- **Backup scope:** Application-level encrypted restore is not a substitute for full PostgreSQL snapshots and recovery drills.
-- **Email monitoring:** Operational delivery-failure review, retention policies, and monitoring should be finalized for production.
-- **Performance:** Review composite database indexes, server pagination, and Prisma connection pooling as tenant and transaction volumes increase.
+- **Production access acceptance:** The web is deployed but OTP email delivery, actual student-private clearance, device-based officer/tenant-admin/global-admin role access, and Vercel runtime database binding require independent verification. [Issue #47](https://github.com/engrken/CLEAR/issues/47) · [Read-only gates](docs/mobile-production-readonly-gates.md).
+- **Clearance privacy and QR:** Private web clearance code is merged via PR #56; external QR graphics were deliberately disabled. First-party QR and legacy verification/disclosure review remain [#57](https://github.com/engrken/CLEAR/issues/57) and [#50](https://github.com/engrken/CLEAR/issues/50).
+- **Local test database:** E2E staging has 9 migrations versus Production's 11 (23 October 2026). Test with a reviewed, schema-compatible isolated branch; **do not point localhost at Production as a workaround**.
+- **Android release:** v1.2.0 is already publicly published. Accumulate the next major release under [#61](https://github.com/engrken/CLEAR/issues/61) rather than creating a Play submission for every web/PR patch. Reconfirm Play versionCode, the installed package and Rupert's release/upload signing identity before a future AAB. Historical [#58](https://github.com/engrken/CLEAR/issues/58) concerns *debug-signed internal QA*, not the official published v1.2.0 artifact.
+- **Capacity:** No independently validated 50-concurrent-user throughput/SLO benchmark is claimed.
+- **Currency types:** Existing Prisma `Float` currency fields warrant a later carefully rehearsed and financially reconciled `Decimal`/integer-minor-units migration.
+- **Historical payment associations:** Ambiguous legacy receipts, penalties and arrears links need supervised reconciliation, never guessed joins or retrospective OR changes.
+- **Operations:** Application-encrypted backups do not replace PostgreSQL snapshots/recovery rehearsals. Strengthen email delivery monitoring, retention and incident response.
+- **Scale:** Review indexes, pagination, pooling and tenant isolation as the live workload grows.
 
 ## Repository and credits
 
 - Source repository: [github.com/engrken/CLEAR](https://github.com/engrken/CLEAR)
 - Developed for institutional financial transparency, auditable student clearance, and accountable fund administration.
 
-**Release guidance:** Treat the code as a **pilot/UAT candidate** until the deployed version, its database schema, permissions, and financial reversals have all been tested together.
+**Release guidance:** The web is deployed and Android v1.2.0 is public, but their existence does not close privacy, authorization, financial-regression, staging-parity or resilience tests. See [database environment reference](docs/database-environment-reference.md) and [Android roadmap #61](https://github.com/engrken/CLEAR/issues/61).
