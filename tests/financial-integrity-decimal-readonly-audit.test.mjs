@@ -10,19 +10,21 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = file => readFileSync(path.join(root,file), 'utf8');
 const moneyCount = Object.values(MONEY_COLUMNS).reduce((n, columns) => n + columns.length, 0);
 
-test('catalog maps every Prisma monetary Float exactly once and excludes hoursLate', () => {
+test('catalog maps every Prisma monetary Decimal exactly once and excludes Float hoursLate', () => {
   assert.equal(moneyCount, 26);
   const schema = read('prisma/schema.prisma');
   const actual = [];
   for (const [,model,body] of schema.matchAll(/model\s+(\w+)\s*\{([\s\S]*?)\n\}/g)) {
     for (const line of body.split('\n')) {
-      const match = line.trim().match(/^(\w+)\s+Float\??(?:\s|$)/);
+      const match = line.trim().match(/^(\w+)\s+(?:Float|Decimal)\??(?:\s|$)/);
       if (match) actual.push(model + '.' + match[1]);
     }
   }
   const expected = Object.entries(MONEY_COLUMNS).flatMap(([t, cols]) =>
     cols.map(c => t + '.' + c)).concat('Penalty.hoursLate');
   assert.deepEqual(actual.sort(), expected.sort());
+  assert.equal((schema.match(/\bDecimal\??\s+[^\n]*@db\.Decimal\(18, 2\)/g) || []).length, 26);
+  assert.match(schema, /hoursLate\s+Float/);
 });
 
 test('generated Decimal rehearsal validates data and always rolls back', () => {
