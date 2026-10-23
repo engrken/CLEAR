@@ -1,6 +1,7 @@
 // /app/department/[department]/(protected)/summary/page.tsx
 
 
+import { moneyNumber } from "@/lib/money-precision";
 import { prisma } from '@/lib/prisma';
 import SummaryClient from './SummaryClient';
 import { Metadata } from 'next';
@@ -106,9 +107,9 @@ export default async function SummaryReportPage({
   // This breakdown uses actual valid paid receipts; package-only receipts are
   // apportioned across configured package items, preserving exact centavos.
   // Do not use this to recalculate or alter the authoritative finance engine.
-  const summaryCategories = itemizeCollectionsForSummary(receipts, feeSetups);
+  const summaryCategories = itemizeCollectionsForSummary(receipts.map(row => ({ ...row, amountPaid: moneyNumber(row.amountPaid) })), feeSetups);
 
-  const penaltySummary = summarizeCashOnlyPenaltyObligations(activePenalties);
+  const penaltySummary = summarizeCashOnlyPenaltyObligations(activePenalties.map(row => ({ ...row, fineAmount: moneyNumber(row.fineAmount) })));
   // Reuse the finance engine's authoritative collectible buckets. Do not
   // re-query/recalculate individual obligations or expose student identifiers.
   // These rows always reconcile to the Dues / Collectibles summary above.
