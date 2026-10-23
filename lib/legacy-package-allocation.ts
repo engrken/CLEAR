@@ -35,5 +35,6 @@ export function allocateLegacyPackageCents(
   });
   for (let i = 0; i < balance; i++) distributed[ranked[i]]++;
   const sign = amountPesos < 0 ? -1 : 1;
-  return distributed.map((value) => (value * sign) / 100);
+  // Normalize zero for deterministic JSON/display behavior on negative credits.
+  return distributed.map((value) => value === 0 ? 0 : (value * sign) / 100);
 }
