@@ -491,6 +491,12 @@ For Vercel, a Git-connected repository can automatically deploy Preview branches
 - SMTP is at-least-once; a rare retry can duplicate an email, **not** the underlying financial posting.
 - Older finance records with ambiguous item descriptions or no reliable assessment/receipt link may need supervised historical reconciliation.
 
+## Next patch — financial centavos, historical audit and read efficiency (draft)
+
+The next shared web/mobile patch stages a deterministic integer-centavo allocation for **legacy single-line package receipts**, retaining the original stored receipt and ledger rows. Both financial summary engines use the same helper and load only necessary student fields. The historical arrears service retrieves recognized student-linked assessments with narrower projections; web Receipt History uses a narrower **exact-OR lookup** and flags legacy sub-cent anomalies for review. These are **unmerged source changes**, not a Production schema conversion or a new published Android app.
+
+The broader, controlled backlog remains: [exact-money migration #68](https://github.com/engrken/CLEAR/issues/68), [supervised historical reconciliation #69](https://github.com/engrken/CLEAR/issues/69), and [measured web/mobile performance #70](https://github.com/engrken/CLEAR/issues/70). The [next-patch runbook](docs/financial-precision-history-performance-next-patch.md) specifies staging schema parity, centavo conservation, tenant isolation, performance baselines, regression tests, backups and no silent legacy changes. Mobile source parity is mandatory under #64; Google Play release proceeds separately through #61 after device QA and official signing.
+
 ## Known limitations and roadmap
 
 - **Production access acceptance:** The web is deployed but OTP email delivery, actual student-private clearance, device-based officer/tenant-admin/global-admin role access, and Vercel runtime database binding require independent verification. [Issue #47](https://github.com/engrken/CLEAR/issues/47) · [Read-only gates](docs/mobile-production-readonly-gates.md).
