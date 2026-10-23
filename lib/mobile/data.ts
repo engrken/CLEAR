@@ -331,6 +331,29 @@ export async function dashboardSummary(org: Organization) {
     penaltiesOutstandingCentavos: pen.cents,
     penaltiesOutstandingStudents: pen.students,
     periodClosed: fin.hasActiveCarryOver,
+    // Web Overview parity: values are serialized from the canonical financial
+    // engine; this is read-only and only returned to role-authorized callers.
+    depositedCentavos: toCentavos(fin.totalDeposited),
+    withdrawnCentavos: toCentavos(fin.totalWithdrawn),
+    funds: fin.fundsList.map((f) => ({
+      name: f.name,
+      initialCentavos: toCentavos(f.initialAllocation),
+      transfersCentavos: toCentavos(f.netTransfers),
+      collectedCentavos: toCentavos(f.collected),
+      disbursedCentavos: toCentavos(f.spent),
+      unliquidatedCentavos: toCentavos(f.unliquidated),
+      balanceCentavos: toCentavos(f.balance),
+    })),
+    pendingAdvances: fin.unliquidatedAdvances.map((advance) => ({
+      id: advance.id,
+      advanceId: advance.advanceId,
+      requestor: advance.requestor,
+      amountCentavos: toCentavos(advance.amountApproved),
+      fund: advance.fund,
+      date: advance.date,
+      due: advance.due,
+      status: advance.status,
+    })),
   };
 }
 

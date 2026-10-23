@@ -14,6 +14,7 @@ import {
 } from "./actions";
 
 import { ThemedAlert } from '@/lib/clear-dialogs';
+import { confirmCommittedChange } from '@/lib/clear-dialogs';
 
 interface StudentRecord {
   id: string;
@@ -141,6 +142,12 @@ export default function StudentsClient({
   };
 
   const handleToggle = async (studentId: string, currentStatus: string) => {
+    if (!await confirmCommittedChange({
+      action: 'Confirm enrollment status change',
+      target: `Student ${studentId} · ${ay} ${term}`,
+      consequence: 'This changes current-term enrollment status and may affect mandatory-fee eligibility and clearance. Previous financial records remain intact.',
+      confirmText: 'Change Enrollment Status',
+    })) return;
     try {
       await toggleStudentStatus(department, studentId, currentStatus, ay, term);
       clearRosterSearchAfterSuccess();
@@ -249,6 +256,12 @@ export default function StudentsClient({
       isEdit: !!editStudent,
     };
 
+    if (!await confirmCommittedChange({
+      action: editStudent ? 'Confirm student roster update' : 'Confirm new student',
+      target: `${payload.fullName} · ${payload.studentId} · ${ay} ${term}`,
+      consequence: 'This updates the authorized tenant roster and enrollment details. Check the Student ID and email before saving.',
+      confirmText: editStudent ? 'Update Student' : 'Add Student',
+    })) return;
     setIsSubmitting(true);
     try {
       await saveStudent(department, organizationId, ay, term, payload);

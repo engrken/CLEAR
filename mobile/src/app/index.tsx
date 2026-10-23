@@ -102,7 +102,7 @@ export default function Welcome() {
 
       <View style={styles.footer}>
         <Text variant="caption" color="inkMuted" style={styles.disclaimer}>
-          Independent CLEAR application; not an official Filamer Christian University app. Personal data is handled in accordance with the Data Privacy Act of 2012 (RA 10173).
+          Personal data is handled in accordance with the Data Privacy Act of 2012 (RA 10173).
         </Text>
         <Button variant="ghost" size="sm" onPress={() => void openWebPage(PRIVACY_URL)}>
           Privacy policy

@@ -129,7 +129,7 @@ export type ClearanceResult = {
   /** Hidden on anonymous public lookups; present for authorized officers. */
   studentName: string | null;
   studentId: string | null;
-  status: 'cleared' | 'hold';
+  status: 'cleared' | 'hold' | 'not_enrolled';
   /** null on public lookups (cleared/on hold only); filled for an officer token with tab-clearance. */
   outstandingCentavos: number | null;
   /** The absolute, signed verification URL the web checks live. Encode as-is in the QR. */
@@ -187,6 +187,35 @@ export type DashboardSummary = {
   outstandingCentavos: number;
   outstandingStudents: number;
   collectionsToday: number;
+  /** Web Overview values, read-only; optional for pre-patch server compatibility. */
+  remainingBalanceCentavos?: number;
+  totalCollectedCentavos?: number;
+  totalExpensesCentavos?: number;
+  unliquidatedCentavos?: number;
+  carriedInCentavos?: number;
+  carriedOutCentavos?: number;
+  depositedCentavos?: number;
+  withdrawnCentavos?: number;
+  periodClosed?: boolean;
+  funds?: Array<{
+    name: string;
+    initialCentavos: number;
+    transfersCentavos: number;
+    collectedCentavos: number;
+    disbursedCentavos: number;
+    unliquidatedCentavos: number;
+    balanceCentavos: number;
+  }>;
+  pendingAdvances?: Array<{
+    id: string;
+    advanceId: string;
+    requestor: string;
+    amountCentavos: number;
+    fund: string;
+    date: string;
+    due: string;
+    status: string;
+  }>;
 };
 
 export type Student = {
@@ -245,6 +274,11 @@ export type ClearApi = {
   /** Re-validates a stored token; throws ApiError('unauthorized') when it is no longer good. */
   restoreSession(org: string, token: string): Promise<Session>;
   signOut(session: Session): Promise<void>;
+  /** Signed-in officer identity-only profile changes; no financial/business writes. */
+  requestOfficerEmailChangeCurrentCode(session: Session): Promise<{ message: string }>;
+  verifyOfficerEmailChangeCurrentCode(session: Session, code: string): Promise<{ verified: true }>;
+  requestOfficerEmailChangeNewCode(session: Session, newEmail: string): Promise<{ message: string }>;
+  confirmOfficerEmailChange(session: Session, newEmail: string, code: string): Promise<{ success: true; message: string }>;
   // global superadmin — separate OTP policy, session and read-only overview.
   requestGlobalCode(email: string): Promise<{ message: string }>;
   verifyGlobalCode(email: string, code: string): Promise<GlobalSession>;
@@ -262,6 +296,11 @@ export type ClearApi = {
   listGlobalTenantLedger(session: GlobalSession, slug: string): Promise<LedgerEntry[]>;
   listGlobalTenantRemittances(session: GlobalSession, slug: string): Promise<LedgerEntry[]>;
   // officer
+  /** Session metadata only; all server requests independently check tenant and tab permissions. */
+  getOfficerOnboarding(s: Session): Promise<{ exempt: boolean; completed: boolean; tabs: string[] }>;
+  completeOfficerOnboarding(s: Session): Promise<{ exempt: boolean; completed: boolean }>;
+  pulseOfficerPresence(s: Session, page: 'overview' | 'students' | 'remittances', tabId: string): Promise<{ colleagues: Array<{ id: string; name: string }>; count: number }>;
+  leaveOfficerPresence(s: Session, tabId: string): Promise<{ ok: true }>;
   getTenantPortal(s: Session): Promise<TenantPortalStatus>;
   getDashboard(s: Session): Promise<DashboardSummary>;
   listLedger(s: Session, filter?: { status?: string; limit?: number }): Promise<LedgerEntry[]>;

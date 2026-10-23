@@ -118,6 +118,15 @@ async function seed() {
     organizationId: fixture.tenantB, fullName: 'Synthetic Student B', yearLevel: '2nd Year' } });
   await prisma.student.create({ data: { ...fixture.c,
     organizationId: fixture.tenantA, fullName: 'Synthetic Student C', yearLevel: '3rd Year' } });
+  // Explicitly enroll only Student A in the active academic period. An old
+  // roster entry without a matching Enrollment must never be deemed cleared.
+  await prisma.enrollment.create({
+    data: {
+      organizationId: fixture.tenantA, studentId: fixture.a.id,
+      academicYear: 'A.Y. CI-ONLY-2026', term: '1st Sem',
+      enrollmentStatus: 'Enrolled',
+    },
+  });
 }
 
 async function issueSyntheticCode(org, student, code, expired = false) {
@@ -331,6 +340,10 @@ test('student-only OTP, reuse, guesses, tenant/period isolation, minimal status,
     assert.equal(privateResponse.body.studentId, null);
     assert.equal(privateResponse.body.studentName, null);
     assert.equal(privateResponse.body.outstandingCentavos, null);
+    assert.equal(privateResponse.body.status, 'not_enrolled',
+      'registered student without explicit current-term Enrollment must not be marked cleared');
+    assert.equal(privateResponse.body.qrToken, null,
+      'non-enrolled student cannot receive a clearance verification QR');
     assert.equal((await request(tenantB, '/clearance', 'GET', undefined, verifiedFromEmail.body.token)).status, 401);
     assert.equal((await request(tenantA, '/clearance/auth/session', 'DELETE', undefined, verifiedFromEmail.body.token)).status, 204);
 
@@ -356,7 +369,8 @@ test('student-only OTP, reuse, guesses, tenant/period isolation, minimal status,
 
     const mine = await request(tenantA, '/clearance', 'GET', undefined, good.body.token);
     assert.equal(mine.status, 200, JSON.stringify(mine.body));
-    assert.ok(['cleared', 'hold'].includes(mine.body?.status));
+    assert.equal(mine.body.status, 'cleared',
+      'synthetic current-term enrolled student with no obligations must be cleared');
     assert.equal(mine.body.studentId, null);
     assert.equal(mine.body.studentName, null);
     assert.equal(mine.body.outstandingCentavos, null);

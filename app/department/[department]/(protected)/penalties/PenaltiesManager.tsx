@@ -3,6 +3,7 @@
 "use client";
 import { manilaDateInput, formatManilaDateTime24 } from '@/lib/clear-timezone';
 import { clearAlert, clearConfirm, clearPrompt } from "@/lib/clear-dialogs";
+import { confirmCommittedChange } from '@/lib/clear-dialogs';
 import { canOfferLegacyCashReconciliation } from "@/lib/penalty-reconciliation-eligibility";
 
 
@@ -246,6 +247,12 @@ export default function PenaltiesManager({
       return void clearAlert("Select a registered student and enter a valid assessment for the selected penalty type.");
     }
 
+    if (!await confirmCommittedChange({
+      action: 'Confirm new student penalty',
+      target: `${studentName} (${studentId}) · ${activity} · ${fmt(totalFine)} · ${ay} ${term}`,
+      consequence: 'This will assess a student penalty, affect their outstanding balance, and may place clearance on hold.',
+      confirmText: 'Record Penalty',
+    })) return;
     setIsSubmitting(true);
 
     try {

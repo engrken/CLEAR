@@ -17,6 +17,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { manilaDateInput } from '@/lib/clear-timezone';
+import { isEnrolledStatus } from '@/lib/term-enrollment';
 import { money as roundMoney } from '@/lib/utils';
 import { getPeriodLedger } from '@/app/department/[department]/(protected)/realign/ledger';
 
@@ -452,17 +453,12 @@ export async function computeDepartmentFinancials(organizationId: string, ay: st
   let totalPackageReceivable = 0;
   let unpaidOrPartialPackageCount = 0;
 
-  const packageStudentMap = new Map(
-    students.map((s: any) => [String(s.id), s])
-  );
+  // Only a confirmed enrollment in this exact academic period creates the
+  // ordinary mandatory-package receivable. The roster is historical directory data.
+  const packageStudentMap = new Map<string, any>();
 
   enrollments
-    .filter(
-      (e: any) =>
-        !['DROPPED', 'CANCELLED', 'INACTIVE'].includes(
-          String(e.enrollmentStatus || '').toUpperCase()
-        )
-    )
+    .filter((e: any) => isEnrolledStatus(e.enrollmentStatus))
     .forEach(
       (e: any) =>
         e.student?.id &&

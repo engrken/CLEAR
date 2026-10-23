@@ -100,3 +100,26 @@ export async function clearPrompt(
   });
   return result.isConfirmed ? String(result.value ?? "") : null;
 }
+
+/**
+ * Standard pre-commit review: explain who/what is affected, the resulting
+ * record change, and give Cancel focus by default. Not a server authorization.
+ */
+export async function confirmCommittedChange(args: {
+  action: string; target: string; consequence: string;
+  destructive?: boolean; confirmText?: string;
+}): Promise<boolean> {
+  const result = await ThemedAlert.fire({
+    icon: args.destructive ? 'warning' : 'question',
+    title: args.action,
+    text: args.target + '\n\n' + args.consequence + '\n\nProceed?',
+    showCancelButton: true,
+    allowOutsideClick: false,
+    allowEscapeKey: true,
+    focusCancel: true,
+    confirmButtonText: args.confirmText ?? (args.destructive ? 'Confirm Change' : 'Confirm Transaction'),
+    cancelButtonText: 'Cancel',
+  });
+  return result.isConfirmed;
+}
+

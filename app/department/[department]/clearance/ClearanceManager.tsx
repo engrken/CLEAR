@@ -13,6 +13,7 @@ interface StudentClearance {
   fullName: string;
   email: string | null;
   isCleared: boolean;
+  isEnrolled: boolean;
   unpaidItems: any[];
 }
 
@@ -165,15 +166,15 @@ export default function ClearanceManager({
               <p className="text-muted small mb-0 font-monospace">ID: {activeStudent.studentId} | Email: {activeStudent.email || 'N/A'}</p>
             </div>
             <div>
-              <span className={`badge fs-6 px-3 py-2 ${activeStudent.isCleared ? 'bg-success text-white' : 'bg-danger text-white'}`}>
-                {activeStudent.isCleared ? 'CLEAR' : 'HOLD / UNPAID DUES'}
+              <span className={`badge fs-6 px-3 py-2 ${!activeStudent.isEnrolled ? 'bg-secondary text-white' : activeStudent.isCleared ? 'bg-success text-white' : 'bg-danger text-white'}`}>
+                {!activeStudent.isEnrolled ? 'NOT ENROLLED' : activeStudent.isCleared ? 'CLEAR' : 'HOLD / UNPAID DUES'}
               </span>
             </div>
           </div>
 
           <h6 className="text-muted small fw-semibold mb-2">Unpaid Obligations / Dues</h6>
           {activeStudent.unpaidItems.length === 0 ? (
-            <p className="text-success small fw-semibold">No outstanding obligations. Student is fully cleared for {term} ({ay}).</p>
+            <p className="text-success small fw-semibold">{activeStudent.isEnrolled ? `No outstanding obligations. Student is fully cleared for ${term} (${ay}).` : `Not enrolled for ${term} (${ay}). No automatic mandatory-package fee applies, and no clearance certificate is issued.`}</p>
           ) : (
             <div className="table-responsive">
               <table className="table table-sm align-middle text-body border-secondary">

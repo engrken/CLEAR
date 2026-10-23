@@ -8,6 +8,7 @@ import { signOut } from "next-auth/react";
 import { configurationForYear, periodsFor, type CalendarByYear } from "@/lib/academic-periods";
 import LoginModal from './LoginModal'; 
 import { updateMyEmail } from './actions';
+import DepartmentPresenceAndTour from './components/DepartmentPresenceAndTour';
 import { ThemedAlert } from '@/lib/clear-dialogs'; // 🚀 Fixed F11: Theme-adaptive SweetAlerts
 
 const MODULE_LABELS: Record<string, string> = {
@@ -237,6 +238,7 @@ function TopHeaderContent({
             <i className={`bi ${theme === 'light' ? 'bi-moon-fill' : 'bi-sun-fill'}`} style={{ fontSize: '0.85rem' }}></i>
           </button>
 
+          <DepartmentPresenceAndTour department={department} currentUser={currentUser} ay={ay} term={term} pathname={pathname} />
           <div>
             {/* 🚀 Fixed F36: Removed unreachable unauthenticated fallback since layout guards protected routes */}
             <div 

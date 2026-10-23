@@ -2,7 +2,7 @@
 
 "use client";
 import { manilaDateInput, formatManilaLongDate } from '@/lib/clear-timezone';
-import { clearAlert, clearConfirm, clearPrompt } from "@/lib/clear-dialogs";
+import { clearAlert, clearConfirm, clearPrompt, confirmCommittedChange } from "@/lib/clear-dialogs";
 
 
 import { useState, useMemo, useEffect, useRef } from "react";
@@ -312,6 +312,12 @@ export default function CollectionsForm({
     }
 
     if (isSubmitting) return;
+    if (!await confirmCommittedChange({
+      action: 'Confirm collection and issue receipt',
+      target: `${studentName} (${studentId}) · ${itemDescription} · ${fmt(paid)} · ${ay} ${term}`,
+      consequence: `This records a financial payment in ${fundAllocation} and issues an official receipt. Check for duplicate posting before continuing.`,
+      confirmText: 'Record Payment',
+    })) return;
     const requestPayload = {
       date, studentId, studentName, studentEmail, category, itemDescription,
       paymentType, standardRate: standardRate || paid, amountPaid: paid,

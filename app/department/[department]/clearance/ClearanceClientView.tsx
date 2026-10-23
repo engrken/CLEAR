@@ -2,6 +2,7 @@
 
 "use client";
 import { clearAlert, clearConfirm, clearPrompt } from "@/lib/clear-dialogs";
+import { confirmCommittedChange } from '@/lib/clear-dialogs';
 
 
 import { useState } from "react";
@@ -75,6 +76,12 @@ export default function ClearanceClientView({
       return void clearAlert("Select a configured fee before submitting a payment proof.");
     }
 
+    if (!await confirmCommittedChange({
+      action: 'Confirm payment-proof submission',
+      target: `${studentId} · ${selectedFee.name} · ₱${amount.toFixed(2)} · ${ay} ${term}`,
+      consequence: 'Your remittance proof will be submitted for officer review. This does not issue an official receipt until verification.',
+      confirmText: 'Submit Proof',
+    })) return;
     setIsSubmitting(true);
     try {
       const formData = new FormData();

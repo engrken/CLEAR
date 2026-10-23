@@ -312,6 +312,8 @@ model TenantUser {
   otpRequestCount    Int             @default(0)
   otpLastRequestedAt DateTime? @db.Timestamptz(3)
   updatedAt          DateTime        @updatedAt @db.Timestamptz(3)
+  onboardingSignature String?
+  OfficerPagePresence OfficerPagePresence[]
   MobileSession      MobileSession[]
   organization       Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
@@ -375,6 +377,21 @@ model AuthThrottle {
   lockedUntil DateTime? @db.Timestamptz(3)
   lastSentAt  DateTime? @db.Timestamptz(3)
   updatedAt   DateTime @db.Timestamptz(3)
+}
+
+// Ephemeral, per-page active officer presence, never an editing lock.
+// Untrusted client page/tenant claims are validated before writes.
+model OfficerPagePresence {
+  id             String   @id
+  organizationId String
+  tenantUserId   String
+  pageKey        String
+  lastSeen       DateTime @default(now()) @db.Timestamptz(3)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  officer        TenantUser @relation(fields: [tenantUserId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, pageKey, lastSeen])
+  @@index([tenantUserId, lastSeen])
 }
 
 model MobileSession {

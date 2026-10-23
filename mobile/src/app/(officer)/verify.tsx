@@ -4,6 +4,7 @@ import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { api, type LedgerEntry } from '@/api';
 import { Avatar, Banner, Screen, Text } from '@/components/ui';
+import { OfficerPresence } from '@/components/collaboration/OfficerPresence';
 import { formatWhen } from '@/lib/dates';
 import { formatPeso, fromCentavos } from '@/lib/money';
 import { setPendingCount } from '@/lib/pending-count';
@@ -37,6 +38,7 @@ export default function VerifyQueue() {
           Match each receipt with the GCash or Maya account, then issue an OR. Verifying emails the OR to the student.
         </Text>
       </View>
+      <OfficerPresence page="remittances" session={session} />
       {queue.error ? <Banner tone="danger" title="Couldn't load pending proofs">{queue.error.message}</Banner> : null}
       {!queue.data && queue.loading ? (
         <ActivityIndicator color={c.accent} />
