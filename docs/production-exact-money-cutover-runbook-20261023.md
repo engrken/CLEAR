@@ -49,3 +49,13 @@ At ANY failure, **do not unlock access to mismatched schema/client**. Keep the m
 - CI’s synthetic migration rehearsal alone does not substitute for the fresh Production-compatible restoration drill.
 
 **Do not claim this migration completed merely because GitHub CI or Vercel Preview is green.**
+
+## Exact-centavo record-level cutover fingerprint (October 24)
+
+The read-only operator script scripts/finance-cutover-fingerprint.mjs provides per-tenant/per-period HMAC digests of every monetary row and its exact integer-centavo columns. Receipt identities, status and linked record identifiers are included INSIDE the digest; they are never printed. Aggregate column-centavo sums and counts are also emitted under pseudonymous grouping keys. NULL remains distinct from zero.
+
+Use the same private operator-held CLEAR_CUTOVER_AUDIT_KEY (at least 32 characters) and DATABASE_URL with an explicit CLEAR_DB_AUDIT_SCOPE=prod-readonly both immediately after freezing writes and after the synchronized migration. Set the environment variables securely; do not check values or output into GitHub. Redirect baseline JSON into encrypted restricted storage, then invoke the script with --compare and the baseline path. A mismatch is a HARD STOP before reopening access. This records exact money equality; it does not independently prove role authorization, receipt cryptographic validity or schema parity.
+
+The script enforces a repeatable-read PostgreSQL READ ONLY transaction, and normalizes Float and Decimal to the same integer-centavo representation before hashing. Execute it with the matching Prisma client only after verifying the database connection and permissions; if a Decimal-only generated Prisma client cannot read the old schema, use the pre-cutover legacy-compatible build for the before snapshot. The audit secret and report must be kept available to the authorized cutover operator for rollback verification.
+
+This work does not supersede the required new Neon recovery point, isolated restoration rehearsal and old-deployment writer isolation. No Production migration should occur while those prerequisites remain unmet.
