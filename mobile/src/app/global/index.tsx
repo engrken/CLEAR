@@ -3,6 +3,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import { api } from '@/api';
+import { MOBILE_BUSINESS_WRITES_ENABLED } from '@/api/config';
 import { Banner, Button, Card, Screen, SectionHeader, Text } from '@/components/ui';
 import { useGlobalSession, useSession } from '@/lib/session';
 import { useAsync } from '@/lib/use-async';
@@ -28,16 +29,18 @@ export default function GlobalDashboard() {
       </View>
 
       <Banner tone="info" title="Global Superadmin · read-only Android access">
-        Use tenant management to provision and manage organizations. Open any tenant to review its financial overview, student roster, activity and remittances. Financial transactions remain disabled on Android.
+        Open authorized tenants to review their dashboard, student roster, financial overview and remittances. Provisioning and financial transactions remain disabled on Android.
       </Banner>
 
       <View style={{ gap: spacing[2] }}>
         <Button block icon="shield" onPress={() => router.push('/global/provisions')}>
           Tenant management portal
         </Button>
-        <Button block variant="secondary" icon="plus" onPress={() => router.push('/global/provisions/new')}>
-          Provision new tenant
-        </Button>
+        {MOBILE_BUSINESS_WRITES_ENABLED ? (
+          <Button block variant="secondary" icon="plus" onPress={() => router.push('/global/provisions/new')}>
+            Provision new tenant
+          </Button>
+        ) : null}
       </View>
 
       {overview.error ? (
