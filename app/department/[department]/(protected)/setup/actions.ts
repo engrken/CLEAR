@@ -149,9 +149,22 @@ export async function saveInitialFunds(
     prepared.push({ id: undefined, fundName: PENALTY_FUND_NAME, amount: 0 });
   }
   if (!prepared.length) throw new Error("At least the system Penalty Fund must exist.");
+  // A valid saved revision can originate from a legacy numeric form or from a
+  // Prisma.Decimal object returned by authenticated server test/callers.
+  // Reject malformed or sub-cent values rather than treating Decimal as NaN.
+  const isValidSnapshotMoney = (amount: unknown): boolean => {
+    try {
+      if (amount == null || (typeof amount !== "number" && typeof amount !== "string" &&
+        (typeof amount !== "object" || typeof (amount as { toString?: unknown }).toString !== "function"))) {
+        return false;
+      }
+      moneyCentavos(amount as number | string);
+      return true;
+    } catch { return false; }
+  };
   if (!Array.isArray(savedFundSnapshot) || savedFundSnapshot.some(row =>
     !row || typeof row.id !== "string" || typeof row.fundName !== "string" ||
-    !Number.isFinite(row.amount))) {
+    !isValidSnapshotMoney(row.amount))) {
     throw new Error("Invalid fund-list revision. Refresh the Setup page.");
   }
   const known = new Map(savedFundSnapshot.map(row => [row.id, row]));
@@ -168,7 +181,7 @@ export async function saveInitialFunds(
     if (existing.some(row => {
       const previous = known.get(row.id);
       return !previous || previous.fundName !== row.fundName ||
-        Math.round(previous.amount * 100) !== Math.round(Number(row.initialAllocation) * 100);
+        moneyCentavos(previous.amount) !== moneyCentavos(row.initialAllocation);
     }) || savedFundSnapshot.length !== existing.length) {
       throw new Error("The fund list or an opening allocation changed since this page was loaded. Refresh Setup and try again.");
     }
