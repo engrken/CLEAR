@@ -34,9 +34,20 @@ export async function listHistoricalDebts(
     mode: x.mode as "Semester" | "Trimester" | "FullYear", includeSummer: x.includeSummer,
   }]));
   const [penalties, dues] = await Promise.all([
-    db.penalty.findMany({ where: { organizationId, fineAmount: { gt: 0 },
-      ...(studentId ? { studentId: { equals: studentId, mode: "insensitive" as const } } : {}) } }),
-    db.collectible.findMany({ where: { organizationId, balanceDue: { gt: 0 } } }),
+    db.penalty.findMany({
+      where: { organizationId, fineAmount: { gt: 0 },
+        ...(studentId ? { studentId: { equals: studentId, mode: "insensitive" as const } } : {}) },
+      select: { id: true, studentId: true, status: true, academicYear: true, term: true,
+        activity: true, fineAmount: true },
+    }),
+    db.collectible.findMany({
+      // Only rows with the existing recognized student-assessment marker can
+      // ever become historical student debts. Unlinked organization dues are
+      // deliberately excluded; this does not guess any legacy associations.
+      where: { organizationId, balanceDue: { gt: 0 }, status: { contains: "|SID:" } },
+      select: { id: true, status: true, academicYear: true, term: true,
+        category: true, balanceDue: true },
+    }),
   ]);
   const out: HistoricalDebt[] = [];
   for (const pen of penalties) {

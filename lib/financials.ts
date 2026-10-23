@@ -19,6 +19,7 @@ import { prisma } from '@/lib/prisma';
 import { manilaDateInput } from '@/lib/clear-timezone';
 import { isEnrolledStatus } from '@/lib/term-enrollment';
 import { money as roundMoney } from '@/lib/utils';
+import { allocateLegacyPackageCents } from '@/lib/legacy-package-allocation';
 import { getPeriodLedger } from '@/app/department/[department]/(protected)/realign/ledger';
 
 // Mirrors isVoidedRecord / getStudentKey / normalizeItemKey in
@@ -84,6 +85,9 @@ export async function computeDepartmentFinancials(organizationId: string, ay: st
 
     prisma.student.findMany({
       where: { organizationId },
+      // Financial summaries only match student identifiers and names.
+      // Do not transfer the full roster (including email) on each request.
+      select: { id: true, studentId: true, fullName: true },
     }),
 
     prisma.enrollment.findMany({
@@ -101,6 +105,8 @@ export async function computeDepartmentFinancials(organizationId: string, ay: st
 
     prisma.collectionSetup.findMany({
       where: { organizationId, academicYear: ay, term },
+      // Stable order determines deterministic tie-breaking for legacy cents.
+      orderBy: { id: 'asc' },
     }),
 
     prisma.cashierRemittance.findMany({
@@ -291,13 +297,14 @@ export async function computeDepartmentFinancials(organizationId: string, ay: st
       const pkgTotalRate = Number(termPkg.total) || 0;
 
       if (pkgTotalRate > 0) {
-        termPkg.items.forEach((pi: any) => {
-          addCollectionItem(
-            pi.name,
-            (Number(pi.rate) / pkgTotalRate) * amt,
-            studentKey,
-            pi.fund
-          );
+        // Legacy single-row package: distribute integer centavos without
+        // inventing fractions or changing the original receipt amount.
+        const allocated = allocateLegacyPackageCents(
+          amt,
+          termPkg.items.map((pi: any) => Number(pi.rate))
+        );
+        termPkg.items.forEach((pi: any, index: number) => {
+          addCollectionItem(pi.name, allocated[index], studentKey, pi.fund);
         });
       } else {
         addCollectionItem(desc, amt, studentKey, fund);
