@@ -35,7 +35,7 @@ export default function VerifyQueue() {
           {count ? `${count} to check` : 'Verify'}
         </Text>
         <Text color="inkMuted" style={styles.lead}>
-          Match each receipt with the GCash or Maya account, then issue an OR. Verifying emails the OR to the student.
+          Review submitted proofs and transaction references. Android is read-only; verification and official receipt issuance remain on the authorized web app.
         </Text>
       </View>
       <OfficerPresence page="remittances" session={session} />
