@@ -43,7 +43,7 @@ test('audit scripts cannot benchmark Production and enforce read-only transactio
   assert.match(source, /SET TRANSACTION READ ONLY/);
   assert.match(source, /RepeatableRead/);
   assert.match(source, /mode === '--benchmark' && scope !== 'isolated'/);
-  assert.match(source, /history,/);
+  assert.match(source, /fields, history/);
   assert.match(source, /EXPLAIN \(ANALYZE, BUFFERS, FORMAT JSON\)/);
   assert.doesNotMatch(source, /\b(?:updateMany|deleteMany|createMany|ALTER TABLE|TRUNCATE TABLE)\s*\(/i);
   const child = spawnSync(process.execPath, ['scripts/finance-readonly-audit.mjs', '--benchmark'], {
