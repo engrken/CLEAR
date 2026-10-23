@@ -73,6 +73,13 @@ jobs:
         run: CLEAR_DB_AUDIT_SCOPE=isolated node scripts/finance-readonly-audit.mjs
       - name: Measure synthetic staging SQL only (no PII)
         run: CLEAR_DB_AUDIT_SCOPE=isolated node scripts/finance-readonly-audit.mjs --benchmark
+      - name: Validate exact-centavo financial fingerprints against disposable PostgreSQL
+        run: |
+          set -euo pipefail
+          export CLEAR_DB_AUDIT_SCOPE=isolated
+          export CLEAR_CUTOVER_AUDIT_KEY=ci-disposable-fingerprint-audit-key-do-not-use-in-production
+          node scripts/finance-cutover-fingerprint.mjs > /tmp/clear-ci-money-fingerprint.json
+          node scripts/finance-cutover-fingerprint.mjs --compare /tmp/clear-ci-money-fingerprint.json
       - name: Generate CI-only route and ephemeral request token
         run: |
           mkdir -p app/api/clear-ci-finance
