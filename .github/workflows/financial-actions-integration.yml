@@ -63,7 +63,10 @@ jobs:
           pg_dsn="${DATABASE_URL%%\?*}"
           psql "$pg_dsn" -X -v ON_ERROR_STOP=1 -f /tmp/clear-decimal-rehearsal.sql > /dev/null
           retained_type="$(psql "$pg_dsn" -X -Atc "SELECT data_type FROM information_schema.columns WHERE table_schema='public' AND table_name='Collection' AND column_name='amountPaid'")"
-          test "$retained_type" = "double precision"
+          # On the synchronized Decimal branch, Prisma migrate deploy already
+          # converted this synthetic schema. The extra rehearsal must roll back
+          # and leave that pre-existing NUMERIC column unchanged.
+          test "$retained_type" = "numeric"
       - name: Verify aggregate money and historical audit on synthetic CI database
         run: CLEAR_DB_AUDIT_SCOPE=isolated node scripts/finance-readonly-audit.mjs
       - name: Measure synthetic staging SQL only (no PII)
