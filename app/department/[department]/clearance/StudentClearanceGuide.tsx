@@ -36,26 +36,36 @@ export default function StudentClearanceGuide({ department }: { department: stri
   const dialogRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    let resolved = false;
-    const check = () => {
-      if (resolved) return;
+    // Only poll while the separate privacy notice is pending. Once the
+    // preference is known, stop polling rather than waking the clearance
+    // page every second for the lifetime of the browser session.
+    let timer: ReturnType<typeof setInterval> | null = null;
+    const check = (): boolean => {
       try {
-        if (window.localStorage.getItem(storageKey) === 'true') {
-          resolved = true;
-        } else if (window.localStorage.getItem('clear_privacy_accepted') === 'true') {
-          // Data Privacy Notice comes first. Never compete with its dialog.
-          resolved = true;
+        if (window.localStorage.getItem(storageKey) === 'true') return true;
+        if (window.localStorage.getItem('clear_privacy_accepted') === 'true') {
+          // Acknowledgement is distinct from identity/OTP authorization.
           setStep(0);
           setOpen(true);
+          return true;
         }
+        return false;
       } catch {
-        // Storage may be blocked. The replay button still works.
-        resolved = true;
+        // A blocked preference write must not block manual replay.
+        return true;
       }
     };
-    check();
-    const timer = window.setInterval(check, 1000);
-    return () => window.clearInterval(timer);
+    if (!check()) {
+      timer = window.setInterval(() => {
+        if (check() && timer !== null) {
+          window.clearInterval(timer);
+          timer = null;
+        }
+      }, 1000);
+    }
+    return () => {
+      if (timer !== null) window.clearInterval(timer);
+    };
   }, [storageKey]);
 
   const dismiss = useCallback(() => {
