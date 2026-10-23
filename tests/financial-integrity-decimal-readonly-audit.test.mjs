@@ -64,3 +64,25 @@ test('history audit aggregates legacy anomalies without listing students or rece
   assert.match(source, /existing_arrear_links/);
   assert.match(source, /SELECT COUNT\(\*\)::int/);
 });
+
+
+test('HTTP latency sampler refuses live Production and only issues bounded read-only GETs', () => {
+  const source = read('scripts/benchmark-web-readonly.mjs');
+  assert.match(source, /base\.hostname === 'clearsys\.vercel\.app'/);
+  assert.match(source, /method:'GET'/);
+  assert.match(source, /items\.length > 5/);
+  assert.match(source, /sample<7/);
+  assert.match(source, /response\.arrayBuffer\(\)/);
+  assert.doesNotMatch(source, /method:\s*'POST'|Authorization:\s*Bearer/);
+  const child = spawnSync(process.execPath, ['scripts/benchmark-web-readonly.mjs'], {
+    cwd: root, encoding: 'utf8',
+    env: {
+      ...process.env,
+      CLEAR_BENCHMARK_SCOPE: 'preview',
+      CLEAR_BENCHMARK_BASE_URL: 'https://clearsys.vercel.app',
+      CLEAR_BENCHMARK_ROUTES_JSON: '{"roster":"/department/example/students"}',
+    },
+  });
+  assert.notEqual(child.status, 0, 'Production URL must not be sampled');
+  assert.doesNotMatch(child.stderr, /clearsys\.vercel\.app|department\/example|token|cookie/i);
+});
