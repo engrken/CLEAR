@@ -74,3 +74,25 @@ test('OTP source throttle cannot be evaded with a caller-supplied IP header or m
   assert.match(source, /isIP\(candidate\) \? candidate : 'unknown'/);
   assert.doesNotMatch(source, /req\.headers\.get\('x-real-ip'\)|forwarded\?\.split\(','\)\[0\]/);
 });
+
+test('native first-time student clearance guidance mirrors web without storing private student data', () => {
+  const ui = read('mobile/src/app/d/[dept]/clearance.tsx');
+  const guide = read('mobile/src/components/student/StudentClearanceGuide.tsx');
+  assert.match(ui, /!officerMode \? <StudentClearanceGuide department=\{dept\} \/>/,
+    'only the public student flow shows the student guide');
+  assert.match(guide, /getItem\('clear_privacy_notice_ack_v1'\)/,
+    'the required privacy disclosure must be acknowledged before automatic guide');
+  assert.match(guide, /clear_student_guide_v1_/);
+  assert.match(guide, /setItem\(key, 'true'\)/, 'store only a non-identity completion preference');
+  assert.match(guide, /How to check my clearance/, 'the tutorial is replayable');
+  assert.match(guide, /CLEARED/);
+  assert.match(guide, /CLEARANCE ON HOLD/);
+  assert.match(guide, /NOT ENROLLED THIS TERM/);
+  assert.match(guide, /six-digit code/);
+  assert.match(guide, /Skip guide/);
+  assert.match(guide, /Finish/);
+  assert.doesNotMatch(guide, /api\.|fetch\(|studentToken|setStudentId|setEmail|setCode|Authorization/,
+    'guide cannot query or persist student data or credentials');
+  assert.match(ui, /getOwnClearance\(dept, verified\.token\)/, 'OTP-gated read path remains unchanged');
+  assert.match(ui, /revokeStudentClearance\(dept, studentToken\)/, 'session revocation remains unchanged');
+});
