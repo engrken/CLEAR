@@ -51,7 +51,11 @@ Read-only `EXPLAIN (ANALYZE, BUFFERS)` on existing E2E staging, **one execution 
 
 These plans executed with small staging tables (approximately 497 receipt rows and 104 enrollments). Sequential scans can be cheaper than indexes on small tables. The results do **not** measure Vercel cold start, Prisma connection acquisition, server render, transfer or browser display and cannot substantiate a p95 site-speed claim.
 
+**Measured warm staging SQL microbenchmark (October 23; one warm-up + six executions):** Receipt History returned **0.443 ms p50 / 0.499 ms p95** for database execution; a representative roster query returned **0.285 ms p50 / 0.357 ms p95**; marked historical collectible candidate query returned **0.037 ms p50 / 0.040 ms p95**. The first cold measurements above were markedly higher. Six samples on a tiny staging dataset are not sufficient to claim production performance or statistically robust SLOs; no browser or network latency was measured.
+
 **Implemented here:** the audit script has a separate isolated-branch microbenchmark mode that runs each SELECT with a warm-up plus 6 measured `EXPLAIN (ANALYZE, BUFFERS)` executions and prints **only query name and p50/p95/min/max execution milliseconds**. Using the tool locally requires a trusted isolated `DATABASE_URL`; no credentials are written to files by the script.
+
+**HTTP benchmark tooling:** `scripts/benchmark-web-readonly.mjs` makes bounded, sequential GET requests against an explicitly approved Vercel **Preview** or localhost, recording only anonymized route labels and TTFB/full-transfer p50/p95. It refuses the `clearsys.vercel.app` Production domain, makes no POST requests, and never prints cookies, tokens, URL paths, responses or student content. It requires an approved synthetic user session and configured preview URLs; it has not been used to load-test live Production.
 
 ### Follow-up load/connection investigation
 
