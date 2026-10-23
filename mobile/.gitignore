@@ -38,6 +38,14 @@ yarn-error.*
 
 example
 
+# Android release signing credentials (private EAS exports).
+# Keep the official EAS signing credentials outside version control.
+# Existing native ignores above also protect *.jks and *.p12.
+credentials.json
+credentials/
+*.keystore
+*.pfx
+
 # generated native folders
 /ios
 /android
