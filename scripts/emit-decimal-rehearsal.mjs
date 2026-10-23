@@ -14,7 +14,7 @@ const schema = readFileSync(new URL('../prisma/schema.prisma', import.meta.url),
 const actual = [];
 for (const [,model,body] of schema.matchAll(/model\s+(\w+)\s*\{([\s\S]*?)\n\}/g)) {
   for (const line of body.split('\n')) {
-    const match = line.trim().match(/^(\w+)\s+Float\??(?:\s|$)/);
+    const match = line.trim().match(/^(\w+)\s+(?:Float|Decimal)\??(?:\s|$)/);
     if (match) actual.push(model + '.' + match[1]);
   }
 }
