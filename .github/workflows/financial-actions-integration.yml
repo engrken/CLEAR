@@ -55,6 +55,10 @@ jobs:
         run: npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code
       - name: Seed synthetic tenant, officer and remittance
         run: node tests/ci-financial-seed.mjs
+      - name: Verify aggregate money and historical audit on synthetic CI database
+        run: CLEAR_DB_AUDIT_SCOPE=isolated node scripts/finance-readonly-audit.mjs
+      - name: Measure synthetic staging SQL only (no PII)
+        run: CLEAR_DB_AUDIT_SCOPE=isolated node scripts/finance-readonly-audit.mjs --benchmark
       - name: Generate CI-only route and ephemeral request token
         run: |
           mkdir -p app/api/clear-ci-finance
