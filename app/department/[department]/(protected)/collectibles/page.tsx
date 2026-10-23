@@ -1,4 +1,5 @@
 // app/department/[department]/(protected)/collectibles/page.tsx
+import { moneyNumber } from "@/lib/money-precision";
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { requireTabAccess } from "@/lib/permissions";
@@ -154,8 +155,8 @@ export default async function CollectiblesPage({
         ay={ay}
         term={term}
         students={students}
-        collectibles={collectibles}
-        collectionItems={collectionItems}
+        collectibles={collectibles.map(row => ({ ...row, balanceDue: moneyNumber(row.balanceDue) }))}
+        collectionItems={collectionItems.map(row => ({ ...row, amount: moneyNumber(row.amount) }))}
         closed={Boolean(ledger.activeRollover)}
         canVoidAssessments={canVoidAssessments}
         historyByAssessment={historyByAssessment}
