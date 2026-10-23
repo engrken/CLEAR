@@ -10,6 +10,7 @@ import { notFound, redirect } from 'next/navigation';
 import crypto from 'node:crypto';
 import Link from 'next/link';
 import StudentClearanceInquiry from './StudentClearanceInquiry';
+import StudentClearanceGuide from './StudentClearanceGuide';
 import StudentEmailChange from './StudentEmailChange';
 import ClearanceClientView from './ClearanceClientView';
 import ClearanceManager from './ClearanceManager';
@@ -235,6 +236,7 @@ export default async function ClearancePage({
       <div className="d-flex flex-column min-vh-100 bg-body-tertiary text-body">
         {!hasSession && <PublicHeader organizationName={organization.name} />}
         <main className="flex-grow-1 p-3 p-md-5 mx-auto w-100" style={{ maxWidth: '760px' }}>
+          <StudentClearanceGuide department={cleanDepartment} />
           <StudentClearanceInquiry
             department={cleanDepartment}
             organizationName={organization.name}
