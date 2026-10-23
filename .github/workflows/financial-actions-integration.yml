@@ -58,8 +58,11 @@ jobs:
       - name: Rehearse exact-money DDL then verify rollback on synthetic PostgreSQL
         run: |
           node scripts/emit-decimal-rehearsal.mjs > /tmp/clear-decimal-rehearsal.sql
-          psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f /tmp/clear-decimal-rehearsal.sql > /dev/null
-          retained_type="$(psql "$DATABASE_URL" -X -Atc "SELECT data_type FROM information_schema.columns WHERE table_schema='public' AND table_name='Collection' AND column_name='amountPaid'")"
+          # Prisma's ?schema=public URL option is not recognized by libpq/psql.
+          # This is the disposable CI-only local DB: strip that ORM URL option.
+          pg_dsn="${DATABASE_URL%%\?*}"
+          psql "$pg_dsn" -X -v ON_ERROR_STOP=1 -f /tmp/clear-decimal-rehearsal.sql > /dev/null
+          retained_type="$(psql "$pg_dsn" -X -Atc "SELECT data_type FROM information_schema.columns WHERE table_schema='public' AND table_name='Collection' AND column_name='amountPaid'")"
           test "$retained_type" = "double precision"
       - name: Verify aggregate money and historical audit on synthetic CI database
         run: CLEAR_DB_AUDIT_SCOPE=isolated node scripts/finance-readonly-audit.mjs
