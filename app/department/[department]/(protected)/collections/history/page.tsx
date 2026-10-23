@@ -71,6 +71,13 @@ export default async function ReceiptHistoryPage({
       organizationId: org.id,
       ...(ay ? { academicYear: ay } : {}),
       ...(term ? { term } : {}),
+      // An exact OR lookup needs only its original allocation lines, including
+      // legacy repeated ORs and current -P02/-P03 package suffixes. Keep the
+      // full-group behavior so anomalies and period collisions stay visible.
+      ...(exactOr ? { OR: [
+        { orNumber: { equals: exactOr, mode: "insensitive" as const } },
+        { orNumber: { startsWith: `${exactOr}-P`, mode: "insensitive" as const } },
+      ] } : {}),
     },
     orderBy: [{ timestamp: "desc" }, { id: "desc" }],
     select: {
