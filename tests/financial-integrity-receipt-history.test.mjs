@@ -90,7 +90,7 @@ test("exact OR, status, category, payment type, date and description filters run
 test("receipt history page counts grouped receipts before pagination and makes no financial writes", () => {
   const page = readFileSync(new URL("../app/department/[department]/(protected)/collections/history/page.tsx",import.meta.url),"utf8");
   const client = readFileSync(new URL("../app/department/[department]/(protected)/collections/history/ReceiptHistoryClient.tsx",import.meta.url),"utf8");
-  assert.match(page,/const grouped = buildIssuedReceipts\(allocationLines\)/);
+  assert.match(page,/const grouped = buildIssuedReceipts\(allocationLines(?:\.map\(row => \(\{ \.\.\.row, amountPaid: moneyNumber\(row\.amountPaid\) \}\)\))?\)/);
   assert.match(page,/const matched = filterIssuedReceipts\(grouped/);
   assert.match(page,/const total = matched.length/);
   assert.match(page,/const receipts = matched.slice\(/);
