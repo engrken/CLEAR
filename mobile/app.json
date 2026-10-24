@@ -22,7 +22,7 @@
       "package": "com.rupertbulquerin.clear",
       "adaptiveIcon": {
         "backgroundColor": "#0b1329",
-        "foregroundImage": "../public/android-chrome-512x512.png"
+        "foregroundImage": "./assets/clear-launcher.png"
       },
       "predictiveBackGestureEnabled": false,
       "blockedPermissions": [
@@ -68,6 +68,6 @@
         "projectId": "cfbb6ff9-bf5b-4776-9ec6-0def41a11cb1"
       }
     },
-    "icon": "../public/android-chrome-512x512.png"
+    "icon": "./assets/clear-launcher.png"
   }
 }
