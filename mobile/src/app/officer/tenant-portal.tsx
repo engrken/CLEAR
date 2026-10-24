@@ -4,6 +4,7 @@ import { ActivityIndicator, View } from 'react-native';
 
 import { api, type TenantPortalStatus } from '@/api';
 import { BackHeader, Banner, Button, Card, Screen, Text } from '@/components/ui';
+import { openDepartmentModule } from '@/lib/links';
 import { useOfficerSession } from '@/lib/session';
 import { useAsync } from '@/lib/use-async';
 import { useTheme } from '@/theme';
@@ -25,9 +26,9 @@ export default function TenantPortal() {
     <Screen
       edges={['top', 'bottom']}
       header={<BackHeader title="Tenant portal" onBack={() => router.back()} />}>
-      <Banner tone="info" title="Live tenant data · Read-only">
+      <Banner tone="info" title="Live tenant status">
         These figures are served by CLEAR with your active tenant permissions.
-        Payments, approvals, provisioning and other transactions are unavailable here.
+        Use the secure web portal for the management operations granted to your role.
       </Banner>
       {portal.loading && !portal.data ? <ActivityIndicator color={c.cobalt} /> : null}
       {portal.error ? (
@@ -43,7 +44,7 @@ export default function TenantPortal() {
               <Text variant="bodySm">Subscription tier: {org.tier}</Text>
               <Text variant="bodySm">School group: {org.schoolGroup}</Text>
               <Text variant="bodySm">Active period: {org.activeAy} · {org.activeTerm}</Text>
-              <Text variant="caption" color="inkMuted">Viewing only. Changes are made in the authorized CLEAR web portal.</Text>
+              <Text variant="caption" color="inkMuted">Changes are subject to department role checks in the web portal.</Text>
             </View>
           </Card>
           <Card>
@@ -57,6 +58,9 @@ export default function TenantPortal() {
           </Card>
         </>
       ) : null}
+      <Button block variant="secondary" onPress={() => void openDepartmentModule(session.org.subdomain, '/setup')}>
+        Open tenant administration on web
+      </Button>
       <Button block variant="secondary" onPress={reload}>Refresh live status</Button>
       <Button block variant="ghost" onPress={() => router.back()}>Back to account</Button>
     </Screen>
