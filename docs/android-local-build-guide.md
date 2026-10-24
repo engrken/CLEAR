@@ -133,6 +133,8 @@ Record the **actual** SHA-256 and certificate fingerprints privately in the QA b
 
 For device-specific testing, `adb devices -l` must show an authorized `device` and `adb shell getprop ro.product.cpu.abilist` must include `arm64-v8a`. `adb.exe: no devices/emulators found` is a USB debugging/driver/authorization issue, not a compilation failure.
 
+**Installed Play app verified, October 24:** OPPO CPH2371, Android API **33**, and package `com.rupertbulquerin.clear` were confirmed over ADB. Limiting `apksigner verify --print-certs` to `--min-sdk-version 33 --max-sdk-version 33` returned `Verifies`, **v3: true**, exit code **0**, and SHA-256 **`e2f951ecef56c07dc8b77bab8f74a3ee4cd463508ca675ec9e3d0eae80f9d58c`**, an exact match with the owner's Google Play **App signing key — In use**. Unrestricted local verifier rejected an additional API 37+ v3.2 ML-DSA PQC signer due to unsupported `KeyFactory`; that tooling limitation did not affect the Android 13 classical signature result. The installed Play app's certificate **does not match** the internal QA debug signer (`fac61745…1033b9c`). Do **not** overwrite or uninstall the Play app; to test on the same device, use a distinct QA `android.package` such as `com.rupertbulquerin.clear.qa` and a distinct URL scheme in a disposable Expo app-config copy, and verify the APK's manifest package before `adb install`. Authenticated deep-link / Android App Link behavior may differ for a QA variant and requires independent testing.
+
 ## 5. Historical failure patterns and diagnostics
 
 | Build | Observed failure or outcome | Guidance |
