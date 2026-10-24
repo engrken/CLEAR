@@ -4,7 +4,7 @@
 
 CLEAR is a **multi-tenant, web-based financial administration and student clearance system** for schools, academic departments, and student organizations. It combines student enrollment records, collection fees, official receipts, remittance review, funds management, penalties, receivables, cash advances, liquidation, audit reports, and student clearance in a tenant-scoped workspace.
 
-> **Release status (23 October 2026):** The CLEAR **web application is deployed** at [clearsys.vercel.app](https://clearsys.vercel.app) (Vercel reports the latest reviewed deployment READY). The owner confirms **Android v1.2.0 is publicly published on Google Play**: it was **built locally on the owner's workstation, signed separately by Rupert, then published**. GitHub's internal debug-signed QA APK is *not* that official release. A deployed system still requires ongoing UAT, independently verified authorization, privacy and financial controls, and performance testing; no 50-user-capacity or penetration-test certification is claimed.
+> **Release status (24 October 2026):** The CLEAR **web application remains deployed** at [clearsys.vercel.app](https://clearsys.vercel.app). **Android v1.2.1 (versionCode 11), “Student Experience & Navigation Update,” is available to Google Play internal testers** (Play Console: released 24 Oct 2026, 22:52). The previous **v1.2.0 is the last owner-confirmed public Production Android release**; internal-test distribution is **not** Production rollout. The new AAB is upload-key signed and Play accepted it into the internal track; a separate debug-signed QA APK is **not** the Play artifact. Device UAT, tenant-role/privacy controls, and financial read-only authorization still require independent validation; no penetration-testing or performance certification is claimed.
 
 ## Contents
 
@@ -27,9 +27,28 @@ CLEAR is a **multi-tenant, web-based financial administration and student cleara
 | Surface | October 2026 status | Release distinction |
 | --- | --- | --- |
 | **Web Production** | [clearsys.vercel.app](https://clearsys.vercel.app), GitHub `main` to Vercel; latest checked deployment READY | A READY deployment alone does not prove end-user smoke testing or the actual decrypted Vercel database binding. |
-| **Public Android app** | **v1.2.0** publicly available on Google Play (owner-confirmed) | Built on the local workstation, **signed separately by Rupert**, and published to Play; do not confuse with the GitHub QA build. |
-| **Next Android update** | Collecting approved changes into a **future major release** | [Issue #61](https://github.com/engrken/CLEAR/issues/61) tracks changes; no immediate APK/AAB upload. |
+| **Public Android app** | **v1.2.0** — latest owner-confirmed **Production** release | Existing Play-installed package `com.rupertbulquerin.clear` verified against the Play App Signing certificate; do not conflate with debug QA APKs. |
+| **Android internal testing** | **v1.2.1 (versionCode 11)** — “Student Experience & Navigation Update”; **available to internal testers** since **24 Oct 2026, 22:52** (Play Console display) | One country/region; 19,321 supported Android devices shown by Play. **Not yet promoted to Production.** [Release/UAT tracker #61](https://github.com/engrken/CLEAR/issues/61). |
 | **Source** | [GitHub `engrken/CLEAR`](https://github.com/engrken/CLEAR) | Merging `main` may trigger a new **web** deployment, not a Play Store update. |
+
+### Android v1.2.1 Play internal-testing release — 24 October 2026
+
+| Field | Verified/reporting source |
+| --- | --- |
+| Release title | **Student Experience & Navigation Update** (Play Console screenshot) |
+| Version name / version code | **`1.2.1` / `11`** (owner's Gradle configuration; Play Console confirms code `11`) |
+| Rollout status | **Available to internal testers**; Play Console shows release at **22:52 on 24 Oct 2026** |
+| Audience/device catalog | **1 country/region; 19,321 supported Android devices** (Play Console display; subject to change) |
+| Final Android bundle | Owner built `D:\m\android\app\build\outputs\bundle\release\app-release.aab` successfully using `gradlew.bat :app:bundleRelease` |
+| Upload signing | Owner confirmed the AAB signing certificate **SHA-256 `C7:16:9C:09:29:34:8A:37:71:A9:61:31:5F:EC:28:86:7C:8A:2D:B4:F1:25:8D:C1:DB:2C:F8:B2:3F:41:C1:A5`** exactly matches Google Play's **Upload key** |
+| Installed Play app signing | Android API 33 device's installed v3 APK signature verified with exit code 0; SHA-256 **`E2:F9:51:EC:EF:56:C0:7D:C8:B7:7B:AB:8F:74:A3:EE:4C:D4:63:50:8C:A6:75:EC:9E:3D:0E:AE:80:F9:D5:8C`** matches Play App Signing |
+| ABI packaging | Final AAB listing contains **`arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64`** native libraries |
+| Bundle verification | `jarsigner -verify` returned **`jar verified.`** with self-signed chain/timestamp and `JarFile`/`JarInputStream` inconsistency warnings; Google Play has accepted the bundle for internal testing. Warnings alone are not a device UAT result. |
+| Runtime build-time variables | `EXPO_PUBLIC_API_URL=https://clearsys.vercel.app/api/mobile`, `EXPO_PUBLIC_CLEAR_RELEASE_KIND=live-readonly-internal`; `EXPO_PUBLIC_API_MODE` removed during build. These flags do **not** independently prove server-side read-only enforcement. |
+
+**Source/artifact distinction:** GitHub `main` still declares `"version": "1.2.0"` in `mobile/app.json` as checked on 24 October 2026; **the owner's separately modified local Android Gradle release generated v1.2.1/code 11**. Do not silently change the repository source version or assume the local release signing configuration was committed. Before any reproducible subsequent build, reconcile version/source configuration in a reviewed PR while preserving keystore secrecy.
+
+**Next step:** Install v1.2.1 through the Google Play internal-testing track and provide actual screenshots/UAT evidence for student first-login onboarding, clearance OTP, reactive search, officer/tenant-admin/superadmin access, cross-tenant isolation, and fail-closed financial/business writes. No such UAT is claimed complete by this release status entry. **Production promotion remains gated on those checks.** The web/mobile feature-parity policy remains in force.
 
 ### Key merged changes
 
@@ -38,7 +57,8 @@ CLEAR is a **multi-tenant, web-based financial administration and student cleara
 - **[PR #56](https://github.com/engrken/CLEAR/pull/56):** registered-email OTP-based private web clearance and removal of third-party QR image generation. Signed certificate verification links remain; first-party QR graphics require [issue #57](https://github.com/engrken/CLEAR/issues/57).
 - **[PR #60](https://github.com/engrken/CLEAR/pull/60):** period-specific `Enrolled` package eligibility, `Not enrolled` handling and historical-debt safeguards; synchronized read-only financial overview; OTP-verified profile email updates; mobile privacy notice; same-page officer presence, role-aware first-time onboarding, and safer confirmation dialogs. Associated additive Production migration was applied with backup/recovery verification and financial-integrity checks.
 - **[PR #59](https://github.com/engrken/CLEAR/pull/59):** `mobile/.gitignore` signing-secret/keystore protections; this does **not** change or resign Android v1.2.0.
-- **[PR #53](https://github.com/engrken/CLEAR/pull/53):** GitHub-native **internal/debug-signed QA APK** workflow, not valid for Google Play distribution under Rupert's official signing identity.
+- **[PR #53](https://github.com/engrken/CLEAR/pull/53):** GitHub-native **internal/debug-signed QA APK** workflow, not valid for Google Play distribution under the official signing identity.
+- **[PR #75](https://github.com/engrken/CLEAR/pull/75):** Merged the student onboarding/guide and reactive, role-aware searchable module hub. Its inclusion in the v1.2.1 runtime is subject to on-device testing.
 
 **Verification versus implementation:** These changes are in merged source, but real-device student OTP delivery, role/tenant isolation with authorized accounts and runtime Production database-binding attestation still require careful end-to-end verification. See [student inquiry #47](https://github.com/engrken/CLEAR/issues/47), [privacy review #50](https://github.com/engrken/CLEAR/issues/50) and [read-only rollout gates](docs/mobile-production-readonly-gates.md).
 
@@ -62,7 +82,7 @@ CLEAR is a **multi-tenant, web-based financial administration and student cleara
 | Tenant administrator | Own organization portal, status and permitted overviews | No access to other tenant data or mobile financial/provisioning writes |
 | Verified global superadmin | Read-only global overview and authorized cross-tenant access | Independent global sessions; no officer impersonation or business writes |
 
-Authentication/OTP, session revocation and security logging may write **security metadata**; they do not authorize changes to money, fee assessment, tenant provisioning or other business records. The API must enforce checks server-side. Merged viewer functionality is **not a claim of completed real-device/public-v1.2.0 acceptance testing**.
+Authentication/OTP, session revocation and security logging may write **security metadata**; they do not authorize changes to money, fee assessment, tenant provisioning or other business records. The API must enforce checks server-side. Merged viewer functionality and v1.2.1 internal availability **do not constitute completed real-device acceptance testing or Production authorization certification**.
 
 ### Flexible academic calendars and controlled term transitions
 
@@ -159,7 +179,7 @@ The following invariants are more important than any individual screen:
 | Storage | Vercel Blob for supported logo/attachment workflows |
 | Email | Nodemailer over SMTP, transaction outbox and scheduled retries |
 | UI | Bootstrap, Bootstrap Icons, SweetAlert2, shared CLEAR theme-adaptive dialogs |
-| Android source | Expo SDK 58, React Native 0.88, Expo Router; app version `1.2.0` in `mobile/app.json` |
+| Android source | Expo SDK 58, React Native 0.88, Expo Router; **GitHub `mobile/app.json` remains `1.2.0`** as of 24 October 2026, while the **local Play internal-testing AAB is `1.2.1` / code `11`** |
 
 ## Getting started
 
@@ -249,7 +269,9 @@ npm ci
 npm run typecheck
 ```
 
-Reserve `D:\c\mobile\android` for a separately approved **disposable native QA build**; normal `git pull` or localhost usage does not require rebuilding v1.2.0. Play signing stays private, with the release workflow coordinated with Rupert. See [major-release tracker #61](https://github.com/engrken/CLEAR/issues/61) and [historical internal-QA signing gate #58](https://github.com/engrken/CLEAR/issues/58).
+Reserve `D:\c\mobile\android` for approved disposable native QA work; an additional `D:\m\android` workstation copy was used for the owner's 24 October build. Normal `git pull` or localhost usage does not rebuild the Play Store app. Official upload signing stays private. See [release tracker #61](https://github.com/engrken/CLEAR/issues/61) and [historical internal-QA signing gate #58](https://github.com/engrken/CLEAR/issues/58).
+
+**Windows build distinction (24 October 2026):** the isolated `D:\m\android` **ARM64-only debug-signed QA APK** succeeded after the Ninja 1.13.2 and PowerShell/Gradle fixes; its signing certificate **differs** from Google Play App Signing and it must **never** overwrite the installed Play app. Separately, the owner generated a **four-ABI official-upload-key-signed AAB** (`1.2.1` / code `11`) that Play Console accepted into **Internal testing**. See the [Windows Android build guide](docs/android-local-build-guide.md). On-device UAT remains pending.
 
 ## Environment configuration
 
@@ -502,7 +524,7 @@ The broader, controlled backlog remains: [exact-money migration #68](https://git
 - **Production access acceptance:** The web is deployed but OTP email delivery, actual student-private clearance, device-based officer/tenant-admin/global-admin role access, and Vercel runtime database binding require independent verification. [Issue #47](https://github.com/engrken/CLEAR/issues/47) · [Read-only gates](docs/mobile-production-readonly-gates.md).
 - **Clearance privacy and QR:** Private web clearance code is merged via PR #56; external QR graphics were deliberately disabled. First-party QR and legacy verification/disclosure review remain [#57](https://github.com/engrken/CLEAR/issues/57) and [#50](https://github.com/engrken/CLEAR/issues/50).
 - **Local test database:** E2E staging has 9 migrations versus Production's 11 (23 October 2026). Test with a reviewed, schema-compatible isolated branch; **do not point localhost at Production as a workaround**.
-- **Android release:** v1.2.0 is already publicly published. Accumulate the next major release under [#61](https://github.com/engrken/CLEAR/issues/61) rather than creating a Play submission for every web/PR patch. Reconfirm Play versionCode, the installed package and Rupert's release/upload signing identity before a future AAB. Historical [#58](https://github.com/engrken/CLEAR/issues/58) concerns *debug-signed internal QA*, not the official published v1.2.0 artifact.
+- **Android release:** `v1.2.0` is the last owner-confirmed public Play release; `v1.2.1` (code `11`) is **available in Internal testing** since 24 Oct 2026 and still needs tester screenshots, end-to-end OTP/role/tenant checks and financial read-only UAT **before any Production promotion**. Track acceptance in [#61](https://github.com/engrken/CLEAR/issues/61); [#58](https://github.com/engrken/CLEAR/issues/58) covers the separate debug-signed QA path. Reconcile the GitHub `mobile/app.json` version with the locally built `1.2.1` AAB before a later reproducible release.
 - **Capacity:** No independently validated 50-concurrent-user throughput/SLO benchmark is claimed.
 - **Currency types:** Existing Prisma `Float` currency fields warrant a later carefully rehearsed and financially reconciled `Decimal`/integer-minor-units migration.
 - **Historical payment associations:** Ambiguous legacy receipts, penalties and arrears links need supervised reconciliation, never guessed joins or retrospective OR changes.
@@ -514,4 +536,4 @@ The broader, controlled backlog remains: [exact-money migration #68](https://git
 - Source repository: [github.com/engrken/CLEAR](https://github.com/engrken/CLEAR)
 - Developed for institutional financial transparency, auditable student clearance, and accountable fund administration.
 
-**Release guidance:** The web is deployed and Android v1.2.0 is public, but their existence does not close privacy, authorization, financial-regression, staging-parity or resilience tests. See [database environment reference](docs/database-environment-reference.md) and [Android roadmap #61](https://github.com/engrken/CLEAR/issues/61).
+**Release guidance (24 October 2026):** Web Production remains deployed; **Android v1.2.1/code 11 is in Google Play Internal testing only**, alongside the last owner-confirmed public v1.2.0. A successful AAB upload is **not** proof of student privacy, role/tenant authorization, read-only financial integrity, or Production readiness. See [database environment reference](docs/database-environment-reference.md) and [Android release/UAT tracker #61](https://github.com/engrken/CLEAR/issues/61).
