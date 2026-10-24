@@ -4,9 +4,14 @@ const PROD_URL = 'https://clearsys.vercel.app/api/mobile';
 // Integration branch safety gate: payment writes must not be enabled until
 // the canonical web transaction service has been ported and verified.
 export const PAYMENT_WRITES_ENABLED = false;
-// The next live-data viewer has no tenant administration or student proof writes.
+// The read-only legacy build has no student proof or generic business writes.
 // Keep this fail-closed independently of role, APK environment and UI navigation.
 export const MOBILE_BUSINESS_WRITES_ENABLED = false;
+// v1.2.2 can request native tenant operations only when explicitly built for it.
+// The server independently requires MOBILE_TENANT_OPERATIONS_ENABLED=true,
+// Production main and a verified Global Superadmin session.
+// Payment posting, proofs and remittance verification remain separately blocked.
+export const TENANT_OPERATIONS_ENABLED = process.env.EXPO_PUBLIC_CLEAR_TENANT_OPERATIONS === 'true';
 const DEV_URL = 'http://localhost:3000/api/mobile';
 
 const configuredMode = process.env.EXPO_PUBLIC_API_MODE;
@@ -21,7 +26,7 @@ if (releaseKind === 'live-readonly-internal') {
   if (__DEV__ || configuredMode === 'mock' || apiUrl !== PROD_URL) {
     throw new Error('CLEAR live viewer release must use the pinned Production HTTPS API.');
   }
-  if (PAYMENT_WRITES_ENABLED !== false || MOBILE_BUSINESS_WRITES_ENABLED !== false) {
+  if (PAYMENT_WRITES_ENABLED !== false || MOBILE_BUSINESS_WRITES_ENABLED !== false || TENANT_OPERATIONS_ENABLED !== false) {
     throw new Error('CLEAR live viewer may not enable business transactions.');
   }
 }
