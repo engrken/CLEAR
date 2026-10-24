@@ -10,3 +10,38 @@ export const ACCOUNT_DELETION_URL = `${WEB_URL}/account-deletion`;
 export function openWebPage(url: string) {
   return WebBrowser.openBrowserAsync(url);
 }
+
+// Signed-in mobile sessions are NOT shared with the web application.
+// Launch only fixed, first-party HTTPS locations; users authenticate
+// independently on the web and its server performs every permission check.
+const CLEAR_WEB_APP = 'https://clearsys.vercel.app';
+const WEB_MODULE_PATHS = new Set([
+  '/summary', '/students', '/clearance', '/collections', '/remittances',
+  '/penalties', '/advances', '/liquidations', '/collectibles', '/reports',
+  '/void', '/realign', '/users', '/setup',
+]);
+
+function safeDepartmentUrl(slug: string, route = ''): string {
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
+    throw new Error('Invalid department address.');
+  }
+  if (route && !WEB_MODULE_PATHS.has(route)) {
+    throw new Error('Unknown CLEAR web module.');
+  }
+  return `${CLEAR_WEB_APP}/department/${encodeURIComponent(slug)}${route}`;
+}
+
+/** Additional student services; never put student IDs or OTP tokens in URLs. */
+export function openDepartmentWebPortal(slug: string) {
+  return openWebPage(safeDepartmentUrl(slug));
+}
+
+/** Web-owned operational modules require independent web authentication. */
+export function openDepartmentModule(slug: string, route: string) {
+  return openWebPage(safeDepartmentUrl(slug, route));
+}
+
+/** Existing audited Global Superadmin tenant workflow. */
+export function openGlobalAdministrationPortal() {
+  return openWebPage(`${CLEAR_WEB_APP}/dashboard/provisions`);
+}
