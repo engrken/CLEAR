@@ -55,3 +55,14 @@ test('tenant endpoints keep the tenant id in all data lookups', () => {
   assert.match(proofs, /organizationId: org\.id/);
   assert.match(proofs, /status: 'Pending Verification'/);
 });
+
+test('global tenant activity rounds fractional-hour legacy penalties in centavos', () => {
+  const data = source('lib/mobile/data.ts');
+  assert.match(data, /assessedCentavos: p\.assessedAmount != null/);
+  assert.match(data, /Math\.round\(Number\(p\.hoursLate\) \* toCentavos\(p\.ratePerHour\)\)/);
+  assert.doesNotMatch(data, /toCentavos\(p\.assessedAmount \?\? Number\(p\.hoursLate\)/);
+  // Production legacy data includes hours such as 4.4333 with a 50-peso rate.
+  // The old peso product (221.665) is rejected by strict monetary parsing.
+  assert.equal(String(4.4333 * 50), '221.665');
+  assert.equal(Math.round(4.4333 * 5000), 22167);
+});

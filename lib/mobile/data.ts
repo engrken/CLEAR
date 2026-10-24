@@ -151,8 +151,12 @@ export function penaltyEntry(p: PenaltyRow): LedgerEntry {
     amountCentavos: toCentavos(p.fineAmount),
     status: p.status,
     at: p.date.toISOString(),
-    // Same fallback as Ken's penalties page (~108).
-    assessedCentavos: toCentavos(p.assessedAmount ?? Number(p.hoursLate) * Number(p.ratePerHour)),
+    // Legacy penalty assessments can be null. Convert the exact hourly rate to
+    // centavos before multiplying fractional hours, matching the settlement guard.
+    // Do not pass a floating-point peso product to the strict money parser.
+    assessedCentavos: p.assessedAmount != null
+      ? toCentavos(p.assessedAmount)
+      : Math.round(Number(p.hoursLate) * toCentavos(p.ratePerHour)),
     penaltyType: p.penaltyType,
   };
 }
