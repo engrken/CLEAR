@@ -1,0 +1,118 @@
+name: CLEAR v1.2.2 official signed AAB (build only)
+
+# Runs once when the reviewed workflow is introduced on main.
+# Can be manually dispatched again by an authorized maintainer.
+# NEVER submits a build to Google Play or enables business writes.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/android-v122-official-aab.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: clear-v122-official-aab
+  cancel-in-progress: false
+
+jobs:
+  eas-production-aab:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      CI: '1'
+      EXPO_NO_TELEMETRY: '1'
+      FORCE_COLOR: '0'
+      EXPO_PUBLIC_CLEAR_TENANT_OPERATIONS: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Require explicitly versioned Play production AAB profile and closed financial gates
+        run: |
+          node --input-type=module <<'CHECK'
+          import { readFileSync } from 'node:fs';
+          const a = JSON.parse(readFileSync('app.json', 'utf8')).expo;
+          const e = JSON.parse(readFileSync('eas.json', 'utf8'));
+          const c = readFileSync('src/api/config.ts', 'utf8');
+          const pass =
+            a.version === '1.2.2' &&
+            a.owner === 'rupert2133s-team' &&
+            a.android.package === 'com.rupertbulquerin.clear' &&
+            a.extra.eas.projectId === 'cfbb6ff9-bf5b-4776-9ec6-0def41a11cb1' &&
+            a.icon === './assets/clear-launcher.png' &&
+            e.cli.appVersionSource === 'remote' &&
+            e.build.production.autoIncrement === true &&
+            e.build.production.android.buildType === 'app-bundle' &&
+            e.build.production.env.EXPO_PUBLIC_API_URL === 'https://clearsys.vercel.app/api/mobile' &&
+            e.build.production.env.EXPO_PUBLIC_CLEAR_TENANT_OPERATIONS === 'false' &&
+            c.includes('PAYMENT_WRITES_ENABLED = false') &&
+            c.includes('MOBILE_BUSINESS_WRITES_ENABLED = false');
+          if (!pass) {
+            console.error('Official CLEAR v1.2.2 source or financial safety gate mismatch; no AAB will be queued.');
+            process.exit(1);
+          }
+          console.log('Verified CLEAR 1.2.2, production HTTPS API, bundled branding and disabled native writes.');
+          CHECK
+      - name: Require already-authorized Expo build token without printing it
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::error::EXPO_TOKEN GitHub Actions secret is absent. Connect an existing Expo access token; never place it in source code or this chat."
+            exit 1
+          fi
+          echo 'Existing Expo token was found (not printed).'
+      - name: Install reproducible mobile dependencies
+        run: |
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          npm ci --no-audit --no-fund
+      - name: Validate Android code and feature gates
+        run: |
+          npm run typecheck
+          node scripts/verify-live-viewer.mjs
+          node scripts/verify-live-build-workflow.mjs
+      - name: Install official EAS CLI
+        run: npm install --global eas-cli@^25 --no-audit --no-fund
+      - name: Verify Expo project access and existing remote Android version
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          eas whoami
+          set +e
+          remote_output="$(eas build:version:get --platform android --profile production --non-interactive 2>&1)"
+          remote_status="$?"
+          set -e
+          if [ "$remote_status" -ne 0 ]; then
+            echo "::error::Cannot read the existing EAS Android version. Refusing to initialize remote code from app.json."
+            exit 1
+          fi
+          printf '%s\n' "$remote_output"
+          remote_code="$(printf '%s\n' "$remote_output" | sed -nE 's/.*Android versionCode[[:space:]]*-[[:space:]]*([0-9]+).*/\1/p' | tail -1)"
+          if ! [[ "$remote_code" =~ ^[0-9]+$ ]] || [ "$remote_code" -lt 11 ]; then
+            echo "::error::EAS remote Android versionCode is missing/unreadable or below last-known Play code 11; manual version reconciliation required."
+            exit 1
+          fi
+          echo "Remote code currently $remote_code. EAS will increment it; verify final code against ALL Play tracks before upload."
+      - name: Queue EXISTING-KEY signed Android App Bundle on Expo EAS
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo 'Build only; freeze existing Android signing credentials; no auto-submit or Play service account access.'
+          eas build --platform android --profile production --non-interactive --no-wait --freeze-credentials --message "CLEAR 1.2.2 official AAB: GitHub $GITHUB_SHA"
+          echo "EAS build QUEUED, not necessarily completed. Inspect https://expo.dev/accounts/rupert2133s-team/projects/clear-mobile/builds"
+          echo "Before Google Play upload: verify final AAB package/versionName/versionCode, target API >=36 and Play upload-key certificate."
