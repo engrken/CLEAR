@@ -117,7 +117,7 @@ test('tenant administrator portal is server-guarded, tenant-bound and GET-only',
   assert.match(root, /name="officer\/tenant-portal"/);
   const more = read('mobile/src/app/(officer)/more.tsx');
   assert.match(more, /isTenantAdmin/);
-  assert.match(more, /My tenant portal \(read-only\)/);
+  assert.match(more, /My tenant portal and settings/);
 });
 
 test('Android live viewer cannot invoke proof, payment or tenant changes', () => {
