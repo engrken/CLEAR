@@ -35,5 +35,14 @@ assert.match(http, /MOBILE_BUSINESS_WRITES_ENABLED\s*\?/);
 assert.match(http, /PAYMENT_WRITES_ENABLED\s*\?/);
 const app = JSON.parse(load('app.json'));
 assert.ok(/^com\.[A-Za-z0-9_.]+$/.test(app.expo.android.package), 'App ID must be explicit');
-assert.equal(app.expo.version, '1.2.0', 'Do not overwrite existing APK version until release plan approved');
+assert.match(app.expo.version, /^\d+\.\d+\.\d+$/, 'Android release version must be semantic major.minor.patch');
+assert.equal(app.expo.android.package, 'com.rupertbulquerin.clear', 'Play app identity must remain unchanged');
+assert.equal(app.expo.owner, 'rupert2133s-team', 'Expo project owner must remain unchanged');
+// The release icon must be packaged inside the mobile EAS project root.
+const iconPath = app.expo.icon;
+assert.match(iconPath, /^\.\/assets\/[A-Za-z0-9._-]+\.png$/, 'Launcher icon must be bundled inside mobile/assets');
+assert.equal(app.expo.android.adaptiveIcon.foregroundImage, iconPath, 'Launcher/adaptive icon source must match');
+const iconBytes = readFileSync(resolve(root, iconPath));
+assert.ok(iconBytes.length > 1024, 'Launcher icon must contain real PNG image data');
+assert.equal(iconBytes.subarray(0, 8).toString('hex'), '89504e470d0a1a0a', 'Launcher icon must be PNG');
 console.log('PASS: internal live-viewer APK profile is pinned to Production, isolated from Preview, and business writes remain disabled.');
