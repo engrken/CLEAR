@@ -101,5 +101,9 @@ test('officer and global Activity search only the authorized loaded batch and do
   assert.match(helper, /row\.kind !== 'collection'/);
   assert.doesNotMatch(helper, /fetch\(|request\(|update\(|delete\(/);
   assert.match(home, /can\('tab-overview'\)/);
+  assert.match(home, /can\('tab-payment'\)/);
+  assert.match(home, /can\('tab-void'\)/);
+  assert.match(home, /openDepartmentModule\(session\.org\.subdomain, '\/collections\/history'\)/);
+  assert.match(home, /openDepartmentModule\(session\.org\.subdomain, '\/void'\)/);
   assert.match(global, /useGlobalSession\(\)/);
 });
