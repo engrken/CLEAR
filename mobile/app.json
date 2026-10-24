@@ -3,7 +3,7 @@
     "name": "CLEAR",
     "slug": "clear-mobile",
     "owner": "rupert2133s-team",
-    "version": "1.2.0",
+    "version": "1.2.2",
     "runtimeVersion": {
       "policy": "appVersion"
     },
@@ -21,7 +21,8 @@
     "android": {
       "package": "com.rupertbulquerin.clear",
       "adaptiveIcon": {
-        "backgroundColor": "#0b1329"
+        "backgroundColor": "#0b1329",
+        "foregroundImage": "./assets/clear-launcher.png"
       },
       "predictiveBackGestureEnabled": false,
       "blockedPermissions": [
@@ -34,7 +35,8 @@
         "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "com.google.android.gms.permission.AD_ID"
-      ]
+      ],
+      "versionCode": 12
     },
     "web": {
       "output": "static"
@@ -65,6 +67,7 @@
       "eas": {
         "projectId": "cfbb6ff9-bf5b-4776-9ec6-0def41a11cb1"
       }
-    }
+    },
+    "icon": "./assets/clear-launcher.png"
   }
 }
