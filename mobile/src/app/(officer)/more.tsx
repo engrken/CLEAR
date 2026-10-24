@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { Banner, Button, Card, Icon, Screen, Text } from '@/components/ui';
 import { DataPrivacyNotice } from '@/components/privacy/DataPrivacyNotice';
-import { ACCOUNT_DELETION_URL, PRIVACY_URL, openWebPage } from '@/lib/links';
+import { ACCOUNT_DELETION_URL, PRIVACY_URL, openWebPage, openDepartmentModule } from '@/lib/links';
 import { grantedModules, type MobileAvailability } from '@/lib/module-access';
 import { useOfficerSession, useSession } from '@/lib/session';
 import { TAB_BAR_SPACE } from '@/lib/tab-bar';
@@ -16,10 +16,10 @@ const LINKS = [
 ];
 
 const state: Record<MobileAvailability, string> = {
-  available: 'Read-only',
-  'review-only': 'Review-only',
+  available: 'In app',
+  'review-only': 'Review in app',
   paused: 'Unavailable on Android',
-  'web-only': 'Web only',
+  'web-only': 'Secure web',
 };
 
 /** Grouping is presentation only. Effective tab grants still come from the server. */
@@ -44,10 +44,10 @@ export default function More() {
 
   const isTenantAdmin = ['admin', 'administrator', 'master'].includes(String(session.officer.role).trim().toLowerCase());
   const modules = grantedModules(session.officer.allowedTabs);
-  const ready = modules.filter(m => m.availability === 'available' || m.availability === 'review-only');
+  const ready = modules.filter(m => m.availability === 'available' || m.availability === 'review-only' || (m.availability === 'web-only' && !!m.webPath));
   const normalized = query.trim().toLowerCase();
   const filtered = modules.filter(m => {
-    if (!showAll && !normalized && (m.availability === 'web-only' || m.availability === 'paused')) return false;
+    if (!showAll && !normalized && m.availability === 'paused') return false;
     return !normalized || [m.name, m.detail, state[m.availability]].some(value => value.toLowerCase().includes(normalized));
   });
   const groups = GROUPS.map(group => ({
@@ -70,21 +70,27 @@ export default function More() {
 
   const moduleRow = (m: (typeof modules)[number]) => {
     const action = m.availability === 'available' || m.availability === 'review-only' ? actionFor(m.tab) : null;
+    const webAction = m.webPath && m.availability !== 'paused' ?
+      { text: 'Open secure web module', open: () => void openDepartmentModule(session.org.subdomain, m.webPath!) } : null;
     return (
       <Card key={m.tab} style={styles.module}>
         <View style={styles.moduleBody}>
           <View style={styles.moduleTitle}>
             <Text variant="bodyStrong" style={styles.grow}>{m.name}</Text>
-            <View style={[styles.badge, { backgroundColor: action ? c.mint : c.soft }]}>
-              <Text variant="caption" color={action ? 'mintInk' : 'inkMuted'}>{state[m.availability]}</Text>
+            <View style={[styles.badge, { backgroundColor: action || webAction ? c.mint : c.soft }]}>
+              <Text variant="caption" color={action || webAction ? 'mintInk' : 'inkMuted'}>{state[m.availability]}</Text>
             </View>
           </View>
           <Text variant="bodySm" color="inkMuted">{m.detail}</Text>
           {action ? (
             <Button size="sm" variant="secondary" onPress={action.open}>{action.text}</Button>
-          ) : m.availability === 'web-only' ? (
+          ) : null}
+          {webAction ? (
+            <Button size="sm" variant="secondary" onPress={webAction.open}>{webAction.text}</Button>
+          ) : null}
+          {webAction ? (
             <Text variant="caption" color="inkMuted">
-              Available through your authorized CLEAR web portal. This Android view cannot post transactions.
+              The web portal asks you to sign in separately and enforces the latest tenant permissions.
             </Text>
           ) : null}
         </View>
@@ -103,14 +109,14 @@ export default function More() {
           <View style={styles.grow}>
             <Text variant="headline" color="onAccent" numberOfLines={2}>{session.officer.fullName}</Text>
             <Text variant="caption" style={{ color: c.tabInactive }} numberOfLines={1}>{session.org.name}</Text>
-            <Text variant="caption" style={{ color: c.tabInactive }}>{session.officer.role} · Read-only Android</Text>
+            <Text variant="caption" style={{ color: c.tabInactive }}>{session.officer.role} · Authorized workspace</Text>
           </View>
         </View>
 
         <View style={styles.intro}>
           <Text variant="title" accessibilityRole="header">My modules</Text>
           <Text variant="bodySm" color="inkMuted">
-            {ready.length} ready to view · {modules.length} assigned to your role. Find a module below.
+            {ready.length} available in app or secure web · {modules.length} assigned to your role.
           </Text>
         </View>
 
@@ -149,7 +155,7 @@ export default function More() {
         </View>
 
         <Banner tone="info" title="Your permissions stay protected">
-          Modules appear only when granted to your department role. Payments, reversal and other financial posting remain disabled in this Android release.
+          Only your server-assigned modules appear. Audited transactions are accessible through a fresh web login; native financial posting remains blocked until its separate safety checks pass.
         </Banner>
 
         {groups.map(group => (
