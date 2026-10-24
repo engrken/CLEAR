@@ -1,10 +1,12 @@
-// Fail-closed mobile business-action allowlist. The app is a viewer of the
-// canonical CLEAR web ledger; client-side controls are never the security gate.
+// Fail-closed mobile business-action allowlist. Operational modules may be
+// accessed through the existing permissioned web app, and only explicitly
+// allowlisted native tenant operations can be enabled. Client controls alone
+// never authorize financial or business mutations.
 // Authentication (OTP issuance, session creation and logout) necessarily writes
 // session/throttle/audit metadata, but never financial or tenant business data.
 //
-// Preview-only provisioning is retained for the isolated Release 1.2.0 QA
-// environment; it is never admitted on Production or an unknown environment.
+// Preview provisioning remains isolated; Production tenant provisioning
+// requires an independent server opt-in and the global administrator's session.
 
 type MobileEnvironment = {
   vercelEnv?: string | null;
