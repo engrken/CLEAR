@@ -170,7 +170,8 @@ export default function Home() {
           ) : null}
           {ledger.error ? <Banner tone="danger" title="Couldn't load activity">{ledger.error.message}</Banner> : null}
           {ledger.data ? (
-            <LedgerList>
+            <>
+              <LedgerList>
               {visibleActivity.map((l, i) => (
                 <LedgerRow
                   key={l.id}
@@ -187,10 +188,11 @@ export default function Home() {
                   }
                 />
               ))}
-            </LedgerList>
-            {visibleActivity.length === 0 ? (
-              <Text variant="bodySm" color="inkMuted">No matching records in this recent batch.</Text>
-            ) : null}
+              </LedgerList>
+              {visibleActivity.length === 0 ? (
+                <Text variant="bodySm" color="inkMuted">No matching records in this recent batch.</Text>
+              ) : null}
+            </>
           ) : ledger.loading ? (
             <ActivityIndicator color={c.cobalt} />
           ) : null}
