@@ -43,13 +43,13 @@ export default function Welcome() {
           <Text variant="caption" style={styles.tagText}>SECURE CAMPUS PORTAL</Text>
         </View>
         <Text variant="display" accessibilityRole="header" style={styles.heroTitle}>
-          Financial accountability & campus clearance.
+          Check your clearance in a few simple steps.
         </Text>
         <Text variant="body" style={styles.heroBody}>
-          One place to find your organization, inquire about clearance, and view the information your role is authorized to see.
+          Find your department, verify your registered email, and securely view your own clearance status. Officers and administrators have separate workspaces.
         </Text>
         <Button block variant="light" icon="arrowRight" onPress={openWorkspace}>
-          {signedIn ? 'Open my workspace' : 'Enter organization portal'}
+          {signedIn ? 'Open my workspace' : 'Find my department'}
         </Button>
         <View style={styles.heroFoot}>
           <Icon name="shield" size={15} tint={c.onCobaltMuted} />
@@ -59,10 +59,19 @@ export default function Welcome() {
         </View>
       </View>
 
+      <View style={[styles.steps, { backgroundColor: c.mint }]}>
+        <Text variant="bodyStrong">For students · How it works</Text>
+        <View style={styles.stepRow}>
+          <Text variant="bodySm">1. Choose your department</Text>
+          <Text variant="bodySm">2. Verify your registered email</Text>
+          <Text variant="bodySm">3. View your private clearance status</Text>
+        </View>
+      </View>
+
       <View style={styles.intro}>
-        <Text variant="title">Choose how to enter</Text>
+        <Text variant="title">Other ways to access CLEAR</Text>
         <Text variant="bodySm" color="inkMuted">
-          Select your path. Your organization and verified permissions determine the information you can access.
+          Student inquiries require a verification code. Officers and administrators sign in with their assigned permissions.
         </Text>
       </View>
 
@@ -70,19 +79,19 @@ export default function Welcome() {
         <AccessCard
           icon="qr"
           title="Students"
-          description="Find your organization and start a clearance inquiry."
+          description="Check your own status using a registered email code."
           onPress={openOrganizations}
         />
         <AccessCard
           icon="people"
           title="Officers"
-          description="Sign in with your registered officer email."
+          description="Use your assigned modules in a read-only mobile workspace."
           onPress={session ? openWorkspace : openOrganizations}
         />
         <AccessCard
           icon="bank"
           title="Tenant administrators"
-          description="Review your own tenant portal after authorized sign-in."
+          description="See your tenant dashboard with authorized access."
           onPress={session ? openWorkspace : openOrganizations}
         />
         <AccessCard
@@ -169,6 +178,8 @@ const styles = StyleSheet.create({
   heroFoot: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   heroFootText: { color: '#DDE2FF', fontSize: 12, flexShrink: 1 },
   intro: { gap: spacing[2], paddingHorizontal: spacing[1], paddingTop: spacing[2] },
+  steps: { padding: spacing[4], borderRadius: radius.lg, gap: 10 },
+  stepRow: { gap: 6 },
   cards: { gap: spacing[3] },
   accessCard: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], borderWidth: 1, borderRadius: radius.md, padding: spacing[4], minHeight: 86 },
   accessText: { flex: 1, minWidth: 0, gap: 3 },

@@ -68,6 +68,9 @@ export default function Home() {
     <Screen edges={['top']} header={header} bottomInset={TAB_BAR_SPACE} contentStyle={{ gap: 12 }}>
       <OfficerWalkthrough auto />
       <OfficerPresence page="overview" session={session} />
+      <Button block variant="secondary" icon="more" onPress={() => router.push('/more')}>
+        Browse my assigned modules
+      </Button>
       {!canOverview ? (
         <Banner tone="info" title="Your assigned workspace">
           Your role does not include the financial overview. Only the modules authorized for this department are available.

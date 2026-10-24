@@ -2,6 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { api } from '@/api';
+import { MOBILE_BUSINESS_WRITES_ENABLED } from '@/api/config';
 import { BackHeader, Banner, Button, IconWell, OrgMark, Screen, TermChip, Text, type IconName } from '@/components/ui';
 import { useSession } from '@/lib/session';
 import { useAsync } from '@/lib/use-async';
@@ -41,28 +42,37 @@ export default function Portal() {
         <TermChip ay={o.activeAy} term={o.activeTerm} />
       </View>
 
-      <Text variant="label" color="inkMuted" style={styles.label}>{'I’m a student'}</Text>
+      <Text variant="label" color="inkMuted" style={styles.label}>STUDENT SERVICES</Text>
       <Choice
         icon="qr"
         title="Check my clearance"
-        body="See if you’re cleared and get your QR code"
+        body="Verify your registered email to check your private clearance status."
         bg="mint"
         bodyColor="mintInk"
         wellBg={c.inkBlock}
         wellFg={c.mint}
         onPress={() => router.push({ pathname: '/d/[dept]/clearance', params: { dept } })}
       />
-      <Choice
-        icon="upload"
-        title="I paid by GCash or Maya"
-        body="Upload the receipt for checking"
-        bg="sunTint"
-        bodyColor="sunInkSoft"
-        wellBg={c.sun}
-        wellFg={c.ink}
-        onPress={() => router.push({ pathname: '/d/[dept]/submit-proof', params: { dept } })}
-      />
+      {MOBILE_BUSINESS_WRITES_ENABLED ? (
+        <Choice
+          icon="upload"
+          title="Submit payment proof"
+          body="Upload a payment receipt for your department to review."
+          bg="sunTint"
+          bodyColor="sunInkSoft"
+          wellBg={c.sun}
+          wellFg={c.ink}
+          onPress={() => router.push({ pathname: '/d/[dept]/submit-proof', params: { dept } })}
+        />
+      ) : (
+        <Banner tone="info" title="Already paid by GCash or Maya?">
+          Proof uploads are unavailable in this Android release. Contact your department treasury office or use its authorized web portal.
+        </Banner>
+      )}
 
+      <Text variant="bodySm" color="inkMuted" style={styles.label}>
+        This inquiry is private, and only your clearance status is shown after email verification.
+      </Text>
       <View style={styles.spacer} />
 
       {signedInHere ? (

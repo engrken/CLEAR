@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon, Text, type IconName } from '@/components/ui';
+import { PAYMENT_WRITES_ENABLED } from '@/api/config';
 import { usePendingCount } from '@/lib/pending-count';
 import { useSession } from '@/lib/session';
 import { radius, size, useTheme } from '@/theme';
@@ -11,10 +12,10 @@ type TabDef = { name: string; title: string; icon: IconName; allowed: (can: (tab
 
 const TABS: TabDef[] = [
   { name: 'home', title: 'Home', icon: 'home', allowed: () => true },
-  { name: 'collect', title: 'Collect', icon: 'receipt', allowed: (can) => can('tab-payment') },
-  { name: 'verify', title: 'Verify', icon: 'shield', allowed: (can) => can('tab-remittances') },
+  { name: 'collect', title: 'Collect', icon: 'receipt', allowed: (can) => PAYMENT_WRITES_ENABLED && can('tab-payment') },
+  { name: 'verify', title: 'Review', icon: 'shield', allowed: (can) => can('tab-remittances') },
   { name: 'students', title: 'Students', icon: 'people', allowed: (can) => can('tab-students') || can('tab-payment') },
-  { name: 'more', title: 'More', icon: 'more', allowed: () => true },
+  { name: 'more', title: 'Modules', icon: 'more', allowed: () => true },
 ];
 
 type BarProps = { state: { index: number; routes: { key: string; name: string }[] } };
@@ -74,7 +75,7 @@ export default function OfficerTabs() {
       screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: c.canvas } }}>
       {/* Router guards block deep links too; hiding the tab bar alone is insufficient. */}
       <Tabs.Screen name="home" options={{ title: 'Home' }} />
-      <Tabs.Protected guard={can('tab-payment')}>
+      <Tabs.Protected guard={can('tab-payment') && PAYMENT_WRITES_ENABLED}>
         <Tabs.Screen name="collect" options={{ title: 'Collect' }} />
       </Tabs.Protected>
       <Tabs.Protected guard={can('tab-remittances')}>
@@ -83,7 +84,7 @@ export default function OfficerTabs() {
       <Tabs.Protected guard={can('tab-students') || can('tab-payment')}>
         <Tabs.Screen name="students" options={{ title: 'Students' }} />
       </Tabs.Protected>
-      <Tabs.Screen name="more" options={{ title: 'More' }} />
+      <Tabs.Screen name="more" options={{ title: 'Modules' }} />
     </Tabs>
   );
 }

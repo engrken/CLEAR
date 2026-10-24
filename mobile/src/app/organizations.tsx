@@ -1,7 +1,7 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { setStatusBarStyle } from 'expo-status-bar';
-import { useCallback } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { useCallback, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { api } from '@/api';
 import { Banner, Button, ColorHeader, Icon, OrgMark, Screen, Text } from '@/components/ui';
@@ -13,6 +13,11 @@ export default function Organizations() {
   const router = useRouter();
   const { c } = useTheme();
   const orgs = useAsync(() => api.listOrganizations(), 'orgs');
+  const [search, setSearch] = useState('');
+  const query = search.trim().toLowerCase();
+  const matchingOrganizations = orgs.data?.filter(org =>
+    !query || org.name.toLowerCase().includes(query) || org.subdomain.toLowerCase().includes(query)
+  );
 
   // The top header is cobalt, so use light system icons while it is focused.
   useFocusEffect(
@@ -30,8 +35,8 @@ export default function Organizations() {
         <ColorHeader
           tone="cobalt"
           brand
-          title="Choose your organization"
-          body="Students can inquire about clearance. Officers and tenant administrators sign in to view the data their roles permit."
+          title="Find your department"
+          body="Choose your school department or student organization to check your own clearance status. Officers can sign in after selecting it."
         />
       }>
       {orgs.error ? (
@@ -49,7 +54,25 @@ export default function Organizations() {
         </Banner>
       ) : null}
 
-      {orgs.data?.map((org, i) => (
+      {orgs.data?.length ? (
+        <View style={[styles.search, { backgroundColor: c.soft }]}>
+          <Icon name="search" size={19} color="inkMuted" />
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Search department or organization"
+            placeholderTextColor={c.inkMuted}
+            accessibilityLabel="Search departments and organizations"
+            autoCapitalize="none"
+            autoCorrect={false}
+            style={[styles.searchInput, { color: c.ink }]}
+          />
+        </View>
+      ) : null}
+      {matchingOrganizations?.length === 0 && orgs.data?.length ? (
+        <Banner tone="info" title="No matching department">Try another name or abbreviation.</Banner>
+      ) : null}
+      {matchingOrganizations?.map((org, i) => (
         <Pressable
           key={org.subdomain}
           accessibilityRole="button"
@@ -87,6 +110,8 @@ export default function Organizations() {
 const styles = StyleSheet.create({
   content: { flexGrow: 1, paddingTop: 20, gap: 10 },
   org: { flexDirection: 'row', alignItems: 'center', gap: 14, minHeight: 80, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 24 },
+  search: { flexDirection: 'row', alignItems: 'center', minHeight: 54, borderRadius: 20, paddingHorizontal: 16, gap: 12 },
+  searchInput: { flex: 1, minHeight: 50, minWidth: 0, fontSize: 16, fontFamily: 'Figtree_600SemiBold' },
   orgText: { flex: 1, minWidth: 0, gap: 2 },
   spacer: { flex: 1, minHeight: spacing[2] },
   note: { paddingHorizontal: spacing[2], textAlign: 'center', fontSize: 12, lineHeight: 17 },
