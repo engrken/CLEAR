@@ -1,0 +1,7 @@
+CLEAR Android v1.2.2 operational release native compilation request
+
+Purpose: run .github/workflows/android-gradle-validation.yml on the full
+branded + #77 Activity hotfix + #80 operational-module source code.
+This file contains no application configuration or secrets.
+The workflow emits an internal DEBUG QA artifact, NOT a signed Play AAB.
+Production tenant-operation and financial write gates stay disabled.

@@ -9,7 +9,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 
-import { MOBILE_BUSINESS_WRITES_ENABLED } from '@/api/config';
+import { MOBILE_BUSINESS_WRITES_ENABLED, TENANT_OPERATIONS_ENABLED } from '@/api/config';
 import { DataPrivacyNotice } from '@/components/privacy/DataPrivacyNotice';
 import { getItem, setItem } from '@/lib/secure-storage';
 import { SessionProvider, useSession } from '@/lib/session';
@@ -108,7 +108,7 @@ function Navigator() {
           <Stack.Screen name="global/index" />
           <Stack.Screen name="global/tenant/[org]" />
           <Stack.Screen name="global/provisions/index" />
-          <Stack.Protected guard={MOBILE_BUSINESS_WRITES_ENABLED} redirectTo="/global/provisions">
+          <Stack.Protected guard={TENANT_OPERATIONS_ENABLED} redirectTo="/global/provisions">
             <Stack.Screen name="global/provisions/new" />
           </Stack.Protected>
           <Stack.Screen name="global/provisions/[id]" />

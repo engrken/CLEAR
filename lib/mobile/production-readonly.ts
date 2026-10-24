@@ -1,14 +1,18 @@
-// Fail-closed mobile business-action allowlist. The app is a viewer of the
-// canonical CLEAR web ledger; client-side controls are never the security gate.
+// Fail-closed mobile business-action allowlist. Operational modules may be
+// accessed through the existing permissioned web app, and only explicitly
+// allowlisted native tenant operations can be enabled. Client controls alone
+// never authorize financial or business mutations.
 // Authentication (OTP issuance, session creation and logout) necessarily writes
 // session/throttle/audit metadata, but never financial or tenant business data.
 //
-// Preview-only provisioning is retained for the isolated Release 1.2.0 QA
-// environment; it is never admitted on Production or an unknown environment.
+// Preview provisioning remains isolated; Production tenant provisioning
+// requires an independent server opt-in and the global administrator's session.
 
 type MobileEnvironment = {
   vercelEnv?: string | null;
   gitRef?: string | null;
+  /** Explicit Production opt-in, configured server-side only after authorization QA. */
+  tenantOperationsEnabled?: boolean;
 };
 
 const GLOBAL_OTP = /^\/api\/mobile\/global\/auth\/(?:request-code|verify-code)$/;
@@ -55,7 +59,19 @@ export function isMobileRequestAllowed(
     PREVIEW_BUSINESS_POSTS.has(path)
   ) return true;
 
-  // Financial posting, remittance approval, proof uploads, tenant lifecycle,
+  // Production operational rollout is opt-in per capability, NOT a broad
+  // "write enabled" switch. Only two existing audited tenant-management routes
+  // qualify; authorization, confirmation and transaction validation still run
+  // inside their handlers. This cannot admit payment/receipt/proof writes.
+  if (
+    verb === 'POST' &&
+    env.vercelEnv === 'production' &&
+    env.gitRef === 'main' &&
+    env.tenantOperationsEnabled === true &&
+    PREVIEW_BUSINESS_POSTS.has(path)
+  ) return true;
+
+  // Financial posting, remittance approval, proof uploads, other tenant mutations,
   // future mutation endpoints and unrecognized methods are denied by default.
   return false;
 }

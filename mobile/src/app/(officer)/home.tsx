@@ -1,6 +1,6 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { api, type DashboardSummary, type LedgerEntry } from '@/api';
 import { PAYMENT_WRITES_ENABLED } from '@/api/config';
@@ -9,7 +9,9 @@ import { FinancialOverview } from '@/components/overview/FinancialOverview';
 import { OfficerPresence } from '@/components/collaboration/OfficerPresence';
 import { OfficerWalkthrough } from '@/components/collaboration/OfficerWalkthrough';
 import { formatWhen } from '@/lib/dates';
+import { openDepartmentModule } from '@/lib/links';
 import { fromCentavos } from '@/lib/money';
+import { filterRecentActivity, type RecentActivityFilter } from '@/lib/recent-activity-search';
 import { setPendingCount } from '@/lib/pending-count';
 import { useOfficerSession, useSession } from '@/lib/session';
 import { TAB_BAR_SPACE } from '@/lib/tab-bar';
@@ -27,6 +29,9 @@ export default function Home() {
   const canRemittances = can('tab-remittances');
   const canRoster = can('tab-students') || can('tab-payment');
   const canPayment = can('tab-payment');
+  const canVoid = can('tab-void');
+  const [ledgerQuery, setLedgerQuery] = useState('');
+  const [activityFilter, setActivityFilter] = useState<RecentActivityFilter>('all');
 
   // Do not even request financial data for users without the web tab-overview grant.
   const summary = useAsync<DashboardSummary | null>(
@@ -43,6 +48,7 @@ export default function Home() {
   useFocusEffect(useCallback(() => { reloadSummary(); reloadLedger(); }, [reloadSummary, reloadLedger]));
 
   const stats = summary.data;
+  const visibleActivity = filterRecentActivity(ledger.data ?? [], ledgerQuery, activityFilter);
 
   useEffect(() => {
     if (canOverview && stats?.pendingCount !== undefined) {
@@ -133,10 +139,40 @@ export default function Home() {
       {canOverview ? (
         <View style={{ gap: spacing[2], marginTop: 6 }}>
           <SectionHeader title="Recent activity" />
+          <TextInput value={ledgerQuery} onChangeText={setLedgerQuery} autoCorrect={false}
+            accessibilityLabel="Search recent authorized activity by student, OR or reference"
+            placeholder="Search loaded names, ORs or references" placeholderTextColor={c.inkMuted}
+            style={[styles.activitySearch, { color: c.ink, backgroundColor: c.soft }]} />
+          <View style={styles.activityFilters}>
+            {(['all', 'receipts', 'voided'] as const).map(mode => (
+              <Pressable key={mode} accessibilityRole="button"
+                accessibilityState={{ selected: activityFilter === mode }}
+                onPress={() => setActivityFilter(mode)}
+                style={[styles.activityChip, { backgroundColor: activityFilter === mode ? c.inkBlock : c.soft }]}>
+                <Text variant="caption" style={{ color: activityFilter === mode ? c.onAccent : c.ink }}>
+                  {mode === 'all' ? 'All' : mode === 'receipts' ? 'Receipts' : 'Voided receipts'}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          <Text variant="caption" color="inkMuted">
+            {visibleActivity.length} of {ledger.data?.length ?? 0} recently loaded records. This is not the complete receipt or Void Center history.
+          </Text>
+          {canPayment ? (
+            <Button block variant="secondary" onPress={() => void openDepartmentModule(session.org.subdomain, '/collections/history')}>
+              Search full receipt history (secure web)
+            </Button>
+          ) : null}
+          {canVoid ? (
+            <Button block variant="secondary" onPress={() => void openDepartmentModule(session.org.subdomain, '/void')}>
+              Search full Void Center (secure web)
+            </Button>
+          ) : null}
           {ledger.error ? <Banner tone="danger" title="Couldn't load activity">{ledger.error.message}</Banner> : null}
           {ledger.data ? (
-            <LedgerList>
-              {ledger.data.map((l, i) => (
+            <>
+              <LedgerList>
+              {visibleActivity.map((l, i) => (
                 <LedgerRow
                   key={l.id}
                   first={i === 0}
@@ -152,7 +188,11 @@ export default function Home() {
                   }
                 />
               ))}
-            </LedgerList>
+              </LedgerList>
+              {visibleActivity.length === 0 ? (
+                <Text variant="bodySm" color="inkMuted">No matching records in this recent batch.</Text>
+              ) : null}
+            </>
           ) : ledger.loading ? (
             <ActivityIndicator color={c.cobalt} />
           ) : null}
@@ -168,4 +208,7 @@ const styles = StyleSheet.create({
   greeting: { flex: 1, fontFamily: 'Figtree_600SemiBold' },
   orgName: { fontSize: 22, lineHeight: 28, letterSpacing: -0.22 },
   tiles: { flexDirection: 'row', gap: spacing[2] },
+  activitySearch: { minHeight: 48, paddingHorizontal: 16, borderRadius: 16 },
+  activityFilters: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  activityChip: { borderRadius: 999, paddingVertical: 10, paddingHorizontal: 14 },
 });

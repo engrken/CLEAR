@@ -5,6 +5,7 @@ import { api } from '@/api';
 import { MOBILE_BUSINESS_WRITES_ENABLED } from '@/api/config';
 import { BackHeader, Banner, Button, IconWell, OrgMark, Screen, TermChip, Text, type IconName } from '@/components/ui';
 import { useSession } from '@/lib/session';
+import { openDepartmentWebPortal } from '@/lib/links';
 import { useAsync } from '@/lib/use-async';
 import { radius, spacing, useTheme, type ColorTokens } from '@/theme';
 
@@ -72,6 +73,12 @@ export default function Portal() {
 
       <Text variant="bodySm" color="inkMuted" style={styles.label}>
         This inquiry is private, and only your clearance status is shown after email verification.
+      </Text>
+      <Button block variant="secondary" icon="forward" onPress={() => void openDepartmentWebPortal(o.subdomain)}>
+        More student and department services (web)
+      </Button>
+      <Text variant="caption" color="inkMuted">
+        Opens the official CLEAR website. Sign in there separately for any protected services.
       </Text>
       <View style={styles.spacer} />
 
