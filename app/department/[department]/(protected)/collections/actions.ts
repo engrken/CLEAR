@@ -1,4 +1,5 @@
 "use server";
+import { moneyNumber } from "@/lib/money-precision";
 import { createHash } from "node:crypto";
 import { parseClearAccountingDate } from '@/lib/clear-timezone';
 
@@ -67,7 +68,7 @@ export async function getStudentPaymentCredits(
     where: { organizationId: org.id, academicYear: ay, term, studentId: student.id },
     select: { itemDescription: true, amountPaid: true, status: true, paymentType: true },
   });
-  return { credits: summarizeValidCollectionCredits(receipts) };
+  return { credits: summarizeValidCollectionCredits(receipts.map(r => ({ ...r, amountPaid: moneyNumber(r.amountPaid) }))) };
 }
 
 export async function recordPayment(department: string, data: {

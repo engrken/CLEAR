@@ -98,8 +98,8 @@ model Fund {
   academicYear      String       @default("A.Y. 2026 - 2027")
   term              String       @default("1st Sem")
   fundName          String
-  initialAllocation Float        @default(0)
-  currentBalance    Float        @default(0)
+  initialAllocation Decimal        @default(0) @db.Decimal(18, 2)
+  currentBalance    Decimal        @default(0) @db.Decimal(18, 2)
   organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, academicYear, term, fundName])
@@ -131,9 +131,9 @@ model Collection {
   category                String
   itemDescription         String
   paymentType             String
-  standardRate            Float                    @default(0)
-  amountPaid              Float                    @default(0)
-  balanceDue              Float                    @default(0)
+  standardRate            Decimal                    @default(0) @db.Decimal(18, 2)
+  amountPaid              Decimal                    @default(0) @db.Decimal(18, 2)
+  balanceDue              Decimal                    @default(0) @db.Decimal(18, 2)
   fundAllocation          String
   status                  String                   @default("Valid")
   encodedBy               String?
@@ -150,7 +150,7 @@ model CollectionSetup {
   organizationId String
   category       String
   name           String
-  amount         Float
+  amount         Decimal @db.Decimal(18, 2)
   targetFund     String
   academicYear   String
   term           String
@@ -163,7 +163,7 @@ model CollectionSetup {
 
 model Penalty {
   settlementEvents PenaltySettlementEvent[]
-  assessedAmount   Float?
+  assessedAmount   Decimal? @db.Decimal(18, 2)
   penaltyType      String                   @default("SERVICE_ELIGIBLE")
   id               String                   @id @default(uuid())
   organizationId   String
@@ -175,8 +175,8 @@ model Penalty {
   studentName      String
   activity         String
   hoursLate        Float                    @default(0)
-  ratePerHour      Float                    @default(50)
-  fineAmount       Float                    @default(0)
+  ratePerHour      Decimal                    @default(50) @db.Decimal(18, 2)
+  fineAmount       Decimal                    @default(0) @db.Decimal(18, 2)
   status           String                   @default("Unsettled")
   encodedBy        String?
   organization     Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -192,7 +192,7 @@ model CashAdvance {
   dateIssued         DateTime     @default(now())
   requestor          String
   fundSource         String
-  amountApproved     Float        @default(0)
+  amountApproved     Decimal        @default(0) @db.Decimal(18, 2)
   expectedReturnDate DateTime?
   purpose            String?
   status             String       @default("Active (Unliquidated)")
@@ -210,10 +210,10 @@ model Audit {
   referenceCaId    String
   requestor        String
   fundSource       String
-  budgetRequested  Float         @default(0)
-  totalExpense     Float         @default(0)
-  varianceReturn   Float         @default(0)
-  reimbursementDue Float         @default(0)
+  budgetRequested  Decimal         @default(0) @db.Decimal(18, 2)
+  totalExpense     Decimal         @default(0) @db.Decimal(18, 2)
+  varianceReturn   Decimal         @default(0) @db.Decimal(18, 2)
+  reimbursementDue Decimal         @default(0) @db.Decimal(18, 2)
   status           String        @default("Audited & Verified")
   encodedBy        String?
   organization     Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -227,7 +227,7 @@ model ExpenseItem {
   orSiNumber      String?
   qty             Int          @default(1)
   description     String
-  subTotal        Float        @default(0)
+  subTotal        Decimal        @default(0) @db.Decimal(18, 2)
   receiptProofUrl String?
   audit           Audit        @relation(fields: [auditId], references: [auditId], onDelete: Cascade)
   organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -240,7 +240,7 @@ model Collectible {
   academicYear   String       @default("A.Y. 2026 - 2027")
   term           String       @default("1st Sem")
   headcount      Int          @default(1)
-  balanceDue     Float        @default(0)
+  balanceDue     Decimal        @default(0) @db.Decimal(18, 2)
   status         String       @default("Outstanding")
   encodedBy      String?
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -261,7 +261,7 @@ model OnlineRemittance {
   category        String
   itemDescription String
   paymentMode     String
-  amountPaid      Float        @default(0)
+  amountPaid      Decimal        @default(0) @db.Decimal(18, 2)
   proofUrl        String?
   status          String       @default("Pending Verification")
   reviewNotes     String?
@@ -278,7 +278,7 @@ model FundTransfer {
   term            String       @default("1st Sem")
   sourceFund      String
   destinationFund String
-  amount          Float        @default(0)
+  amount          Decimal        @default(0) @db.Decimal(18, 2)
   reason          String
   encodedBy       String?
   organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -333,7 +333,7 @@ model VoidTransaction {
   organizationId  String
   transactionType String
   referenceId     String
-  amount          Float
+  amount          Decimal @db.Decimal(18, 2)
   reason          String
   voidedBy        String
   date            DateTime     @default(now()) @db.Timestamptz(3)
@@ -346,7 +346,7 @@ model FundRealignment {
   date           DateTime     @default(now())
   sourceFund     String
   targetFund     String
-  amount         Float
+  amount         Decimal @db.Decimal(18, 2)
   reason         String
   authorizedBy   String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -361,7 +361,7 @@ model CashierRemittance {
   date             DateTime     @default(now())
   remittedBy       String
   fundSource       String
-  amount           Float        @default(0)
+  amount           Decimal        @default(0) @db.Decimal(18, 2)
   cashierReceiptNo String?
   remarks          String?
   status           String       @default("Remitted")
@@ -433,7 +433,7 @@ model AcademicPeriodTransition {
   sourceTerm      String
   destinationAY   String
   destinationTerm String
-  amount          Float        @default(0)
+  amount          Decimal        @default(0) @db.Decimal(18, 2)
   transferId      String?
   feePolicy       String       @default("manual")
   copiedFeesJson  String       @default("[]")
@@ -458,7 +458,7 @@ model ArrearPaymentLink {
   obligationId   String
   originAY       String
   originTerm     String
-  amount         Float
+  amount         Decimal @db.Decimal(18, 2)
   createdAt      DateTime     @default(now()) @db.Timestamptz(3)
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   receipt        Collection   @relation(fields: [receiptId], references: [id], onDelete: Restrict)
@@ -472,12 +472,12 @@ model PenaltySettlementEvent {
   penaltyRecordId String
   receiptId       String?
   method          String
-  amount          Float
+  amount          Decimal @db.Decimal(18, 2)
   minutesRendered Int          @default(0)
   accountingAY    String
   accountingTerm  String
-  balanceBefore   Float
-  balanceAfter    Float
+  balanceBefore   Decimal @db.Decimal(18, 2)
+  balanceAfter    Decimal @db.Decimal(18, 2)
   recordedBy      String
   note            String?
   createdAt       DateTime     @default(now()) @db.Timestamptz(3)

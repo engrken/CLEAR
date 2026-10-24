@@ -1,3 +1,4 @@
+import { moneyCentavos, moneyNumber } from "@/lib/money-precision";
 import { manilaDateInput } from '@/lib/clear-timezone';
 import { resolveReceiptBranding } from '@/lib/receipt-branding';
 import Link from "next/link";
@@ -25,7 +26,7 @@ export default async function PrintCollectionsReceipt({ params }: {
     new Set(rows.map(r => `${r.academicYear}|${r.term}|${r.studentId}`)).size !== 1
     ? "Inconsistent" : receiptStatus(rows);
   const first = rows.find(r => r.orNumber.toUpperCase() === orNumber) || rows[0];
-  const total = rows.reduce((sum, row) => sum + Math.round(row.amountPaid * 100), 0) / 100;
+  const total = rows.reduce((sum, row) => sum + moneyCentavos(row.amountPaid), 0) / 100;
   const branding = resolveReceiptBranding(org);
   return <>
     <style>{`@media print {
@@ -66,7 +67,7 @@ export default async function PrintCollectionsReceipt({ params }: {
       <div className="table-responsive"><table className="table table-bordered table-sm">
         <thead><tr><th>Category</th><th>Collection item</th><th>Fund allocation</th><th className="text-end">Paid</th></tr></thead>
         <tbody>{rows.map(row => <tr key={row.id}><td>{row.category}</td><td>{row.itemDescription}</td>
-          <td>{row.fundAllocation}</td><td className="text-end">{money(row.amountPaid)}</td></tr>)}</tbody>
+          <td>{row.fundAllocation}</td><td className="text-end">{money(moneyNumber(row.amountPaid))}</td></tr>)}</tbody>
         <tfoot><tr className="fw-bold"><td colSpan={3}>OR Total</td><td className="text-end">{money(total)}</td></tr></tfoot>
       </table></div>
       <p className="text-muted small mb-0 mt-3">This is a copy of a previously issued receipt. For verification, refer to the original OR and CLEAR audit records. A voided receipt is not proof of current payment.</p>

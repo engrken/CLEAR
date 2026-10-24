@@ -5,6 +5,8 @@ on:
     paths:
       - 'app/department/**'
       - 'auth.ts'
+      - 'proxy.ts'
+      - 'app/maintenance/**'
       - 'lib/**'
       - 'prisma/**'
       - 'tests/ci-financial-*'
@@ -63,11 +65,21 @@ jobs:
           pg_dsn="${DATABASE_URL%%\?*}"
           psql "$pg_dsn" -X -v ON_ERROR_STOP=1 -f /tmp/clear-decimal-rehearsal.sql > /dev/null
           retained_type="$(psql "$pg_dsn" -X -Atc "SELECT data_type FROM information_schema.columns WHERE table_schema='public' AND table_name='Collection' AND column_name='amountPaid'")"
-          test "$retained_type" = "double precision"
+          # On the synchronized Decimal branch, Prisma migrate deploy already
+          # converted this synthetic schema. The extra rehearsal must roll back
+          # and leave that pre-existing NUMERIC column unchanged.
+          test "$retained_type" = "numeric"
       - name: Verify aggregate money and historical audit on synthetic CI database
         run: CLEAR_DB_AUDIT_SCOPE=isolated node scripts/finance-readonly-audit.mjs
       - name: Measure synthetic staging SQL only (no PII)
         run: CLEAR_DB_AUDIT_SCOPE=isolated node scripts/finance-readonly-audit.mjs --benchmark
+      - name: Validate exact-centavo financial fingerprints against disposable PostgreSQL
+        run: |
+          set -euo pipefail
+          export CLEAR_DB_AUDIT_SCOPE=isolated
+          export CLEAR_CUTOVER_AUDIT_KEY=ci-disposable-fingerprint-audit-key-do-not-use-in-production
+          node scripts/finance-cutover-fingerprint.mjs > /tmp/clear-ci-money-fingerprint.json
+          node scripts/finance-cutover-fingerprint.mjs --compare /tmp/clear-ci-money-fingerprint.json
       - name: Generate CI-only route and ephemeral request token
         run: |
           mkdir -p app/api/clear-ci-finance
@@ -95,6 +107,26 @@ jobs:
             exit 1
           fi
           node --test tests/ci-financial-actions.test.mjs
+      - name: Verify maintenance mode blocks login, existing JWT sessions, mobile routes and financial POSTs
+        run: |
+          set -euo pipefail
+          CLEAR_MAINTENANCE_MODE=locked npm run start -- -H 127.0.0.1 -p 3101 > /tmp/clear-ci-maintenance.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for i in $(seq 1 45); do
+            if test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3101/maintenance || true)" = "200"; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          test "$ready" -eq 1 || (echo "Maintenance page was not ready" && exit 1)
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3101/api/auth/session)" = "503"
+          test "$(curl -s -X POST -o /dev/null -w '%{http_code}' http://127.0.0.1:3101/api/auth/callback/credentials)" = "503"
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3101/api/mobile/orgs/test/auth/session)" = "503"
+          test "$(curl -s -X POST -o /dev/null -w '%{http_code}' http://127.0.0.1:3101/department/test/collections)" = "503"
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3101/department/test/clearance)" = "307"
       - name: Confirm CI-only adapter never belongs to repository code
         run: |
           test ! -e tests/../app/api/clear-ci-finance/route.ts || test "$CLEAR_CI_FINANCE_TEST_ENABLED" = "1"

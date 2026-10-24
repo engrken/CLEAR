@@ -89,8 +89,8 @@ test('server payments validate real configured funds', () => {
 test('remittance category uses the actual fee setup for collectible posting', () => {
   const remittances = read('app/department/[department]/(protected)/remittances/actions.ts');
   assert.ok(remittances.includes('category: selection.category'));
-  assert.ok(remittances.includes('selectConfiguredRemittanceFee(periodSetups,'));
-  assert.ok(remittances.includes('selectConfiguredRemittanceFee(configuredSetups,'));
+  assert.ok(remittances.includes('selectConfiguredRemittanceFee(periodSetups.map('));
+  assert.ok(remittances.includes('selectConfiguredRemittanceFee(configuredSetups.map('));
   assert.ok(!remittances.includes('previous + amountCents;'));
   assert.ok(remittances.includes('category: entries[0].category, itemDescription, amountCents'));
 });

@@ -1,5 +1,6 @@
 // /app/department/[department]/(protected)/collections/page.tsx
 
+import { moneyNumber } from "@/lib/money-precision";
 import { prisma } from "@/lib/prisma";
 import { requireTabAccess } from "@/lib/permissions";
 import CollectionsForm from "./CollectionsForm";
@@ -171,7 +172,7 @@ export default async function CollectionsPage({
         term={term}
         students={students}
         funds={funds}
-        collectionItems={collectionSetups}
+        collectionItems={collectionSetups.map(row => ({ ...row, amount: moneyNumber(row.amount) }))}
         prefillId={linkedCollectible ? linkedCollectible.studentId : linkedPenalty ? (linkedPenalty.studentId || "") : prefillId}
         penaltyId={penaltyId}
         prefillCategory={linkedCollectible ? linkedCollectible.category : linkedPenalty ? "Others" : prefillCategory}
@@ -179,8 +180,8 @@ export default async function CollectionsPage({
         prefillAmount={linkedCollectible ? String(linkedCollectible.balanceDue) : linkedPenalty ? String(linkedPenalty.fineAmount) : prefillAmount}
         prefillFund={linkedPenalty ? PENALTY_FUND_NAME : linkedCollectible ? linkedCollectible.fund : undefined}
         penaltyState={linkedPenalty ? {
-          balance: linkedPenalty.fineAmount,
-          ratePerHour: linkedPenalty.ratePerHour,
+          balance: moneyNumber(linkedPenalty.fineAmount),
+          ratePerHour: moneyNumber(linkedPenalty.ratePerHour),
           originalHours: linkedPenalty.hoursLate,
           status: linkedPenalty.status,
         } : undefined}

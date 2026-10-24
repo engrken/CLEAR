@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
+import { moneyCentavos } from "../lib/money-precision.ts";
 import { encode } from "next-auth/jwt";
 
 const prisma = new PrismaClient();
@@ -99,12 +100,12 @@ test("authenticated cashier concurrent identical requests post once, reject alte
     } }),
   ]);
   assert.equal(receipts.length, 1, "No extra posted receipts from concurrent identical requests");
-  assert.equal(receipts[0].amountPaid, 40);
-  assert.equal(receipts[0].balanceDue, 110);
+  assert.equal(moneyCentavos(receipts[0].amountPaid), 4000);
+  assert.equal(moneyCentavos(receipts[0].balanceDue), 11000);
   const assessedAfterCashier = await prisma.collectible.findFirstOrThrow({
     where: { organizationId: org.id, category: "Membership" },
   });
-  assert.equal(assessedAfterCashier.balanceDue, 110,
+  assert.equal(moneyCentavos(assessedAfterCashier.balanceDue), 11000,
     "Cashier receipt must reduce the actual student assessment inside its transaction");
   assert.equal(requests.length, 1);
   assert.equal(requests[0].orNumber, firstOr);
@@ -145,15 +146,15 @@ test("authenticated simultaneous remittance approval produces one receipt, then 
   assert.equal(latest.status, "Verified");
   assert.equal(latest.orNumber, firstOr);
   assert.equal(receipts.length, 1, "One verified payment may create only one OR");
-  assert.equal(receipts[0].amountPaid, 20);
-  assert.equal(receipts[0].balanceDue, 90);
+  assert.equal(moneyCentavos(receipts[0].amountPaid), 2000);
+  assert.equal(moneyCentavos(receipts[0].balanceDue), 9000);
   assert.equal(receipts[0].category, "Membership",
     "Configured remittance must use the fee category instead of generic Online Remittance");
   assert.equal(receipts[0].fundAllocation, "General Fund");
   const assessedAfterRemittance = await prisma.collectible.findFirstOrThrow({
     where: { organizationId: org.id, category: "Membership" },
   });
-  assert.equal(assessedAfterRemittance.balanceDue, 90,
+  assert.equal(moneyCentavos(assessedAfterRemittance.balanceDue), 9000,
     "Verified remittance must reduce the matched student assessment rather than leaving a phantom due");
   assert.equal(logs.length, 1);
 
@@ -340,7 +341,7 @@ test("categorized package remittance cannot charge another category", async () =
   assert.equal(receiptRows.length, 1);
   assert.equal(receiptRows[0].category, "Membership");
   assert.equal(receiptRows[0].itemDescription, "Membership Fee");
-  assert.equal(receiptRows[0].amountPaid, 10);
+  assert.equal(moneyCentavos(receiptRows[0].amountPaid), 1000);
   assert.equal(await prisma.collection.count({ where: {
     organizationId: org.id, category: "Merchandise",
   } }), 0);
@@ -397,8 +398,8 @@ test("audited restoration of a receipt-backed missing Fund keeps every balance u
   const restored = await prisma.fund.findFirstOrThrow({
     where: { organizationId: org.id, academicYear: ay, term, fundName: targetFund },
   });
-  assert.equal(restored.initialAllocation, 0);
-  assert.equal(restored.currentBalance, 0);
+  assert.equal(moneyCentavos(restored.initialAllocation), 0);
+  assert.equal(moneyCentavos(restored.currentBalance), 0);
   const after = await prisma.collection.aggregate({
     where: { organizationId: org.id, fundAllocation: targetFund },
     _count: { _all: true }, _sum: { amountPaid: true },

@@ -1,4 +1,5 @@
 "use server";
+import { moneyCentavos } from "@/lib/money-precision";
 import { manilaDateInput } from '@/lib/clear-timezone';
 
 import { prisma } from "@/lib/prisma";
@@ -63,7 +64,7 @@ export async function resendCollectionsReceipt(
     if (exact.filter(r => r.orNumber.toUpperCase() === baseOr).length !== 1 || receiptStatus(exact) !== "Valid") {
       throw new Error("The receipt status changed. Refresh Receipt History.");
     }
-    const total = rows.reduce((sum, row) => sum + Math.round(row.amountPaid * 100), 0) / 100;
+    const total = rows.reduce((sum, row) => sum + moneyCentavos(row.amountPaid), 0) / 100;
     const payload = await enqueueAccountingNotice(tx, {
       organizationId: org.id,
       eventKey,

@@ -3,6 +3,7 @@
 
 
 "use server";
+import { moneyCentavos } from "@/lib/money-precision";
 import { manilaDateInput } from '@/lib/clear-timezone';
 
 import { Prisma } from "@prisma/client";
@@ -148,9 +149,22 @@ export async function saveInitialFunds(
     prepared.push({ id: undefined, fundName: PENALTY_FUND_NAME, amount: 0 });
   }
   if (!prepared.length) throw new Error("At least the system Penalty Fund must exist.");
+  // A valid saved revision can originate from a legacy numeric form or from a
+  // Prisma.Decimal object returned by authenticated server test/callers.
+  // Reject malformed or sub-cent values rather than treating Decimal as NaN.
+  const isValidSnapshotMoney = (amount: unknown): boolean => {
+    try {
+      if (amount == null || (typeof amount !== "number" && typeof amount !== "string" &&
+        (typeof amount !== "object" || typeof (amount as { toString?: unknown }).toString !== "function"))) {
+        return false;
+      }
+      moneyCentavos(amount as number | string);
+      return true;
+    } catch { return false; }
+  };
   if (!Array.isArray(savedFundSnapshot) || savedFundSnapshot.some(row =>
     !row || typeof row.id !== "string" || typeof row.fundName !== "string" ||
-    !Number.isFinite(row.amount))) {
+    !isValidSnapshotMoney(row.amount))) {
     throw new Error("Invalid fund-list revision. Refresh the Setup page.");
   }
   const known = new Map(savedFundSnapshot.map(row => [row.id, row]));
@@ -167,7 +181,7 @@ export async function saveInitialFunds(
     if (existing.some(row => {
       const previous = known.get(row.id);
       return !previous || previous.fundName !== row.fundName ||
-        Math.round(previous.amount * 100) !== Math.round(Number(row.initialAllocation) * 100);
+        moneyCentavos(previous.amount) !== moneyCentavos(row.initialAllocation);
     }) || savedFundSnapshot.length !== existing.length) {
       throw new Error("The fund list or an opening allocation changed since this page was loaded. Refresh Setup and try again.");
     }
@@ -187,7 +201,7 @@ export async function saveInitialFunds(
       const reason = usage.referenced.get(usage.refKey(academicYear,academicTerm,saved.fundName));
       const reserved = saved.fundName.toLowerCase() === PENALTY_FUND_NAME.toLowerCase();
       const changed = !incoming || incoming.fundName !== saved.fundName ||
-        Math.round(incoming.amount * 100) !== Math.round(saved.initialAllocation * 100);
+        Math.round(incoming.amount * 100) !== moneyCentavos(saved.initialAllocation);
       if (!changed) continue;
       if (reserved || reason) {
         throw new Error(`${saved.fundName} is protected (${reserved ? "System Penalty Fund" : reason}). Its name, opening allocation, and record cannot be changed.`);
@@ -508,7 +522,7 @@ export async function reverseRollover(
       if (saved.length !== metadata.copiedFeeIds.length || snapshots.length !== saved.length ||
         saved.some(f => !snapshots.some(original => original.id === f.id &&
           original.category === f.category && original.name === f.name &&
-          original.amount === f.amount && original.targetFund === f.targetFund &&
+          moneyCentavos(original.amount) === moneyCentavos(f.amount) && original.targetFund === f.targetFund &&
           original.isPackage === f.isPackage))) {
         throw new Error("Copied destination fees have been changed or removed. Reversal requires accounting reconciliation; no records were changed.");
       }

@@ -1,5 +1,6 @@
 // /app/department/[department]/clearance/page.tsx
 
+import { moneyNumber } from "@/lib/money-precision";
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/auth';
 import { fmt, money } from '@/lib/utils';
@@ -103,7 +104,7 @@ function buildTermPackage(collectionSetups: any[], _term: string) {
     total: money(pkgItems.reduce((sum: number, c: any) => sum + Number(c.amount || 0), 0)),
     items: pkgItems.map((c: any) => ({
       name: String(c.name || "").trim(),
-      rate: money(c.amount),
+      rate: money(moneyNumber(c.amount)),
       fund: String(c.targetFund || "").trim(),
     })),
   };
@@ -218,14 +219,14 @@ export default async function ClearancePage({
     const publicPackageRates = new Map<string, number>();
     for (const setup of publicFeeSetups) {
       if (!setup.isPackage || !Number.isFinite(Number(setup.amount)) || Number(setup.amount) <= 0) continue;
-      publicPackageRates.set(setup.category, (publicPackageRates.get(setup.category) || 0) + money(setup.amount));
+      publicPackageRates.set(setup.category, (publicPackageRates.get(setup.category) || 0) + money(moneyNumber(setup.amount)));
     }
     const publicFeeOptions = [
       ...Array.from(publicPackageRates, ([category, amount]) => ({
         category, name: 'Departmental Fee (Full Package)', amount,
       })),
       ...publicFeeSetups.filter(c => Number(c.amount) > 0).map(c => ({
-        category: c.category, name: c.name, amount: money(c.amount),
+        category: c.category, name: c.name, amount: money(moneyNumber(c.amount)),
       })),
     ];
     const publicPeriodLedger = await getPeriodLedger(
@@ -294,14 +295,14 @@ export default async function ClearancePage({
   const packageRates = new Map<string, number>();
   for (const setup of collectionSetups) {
     if (!setup.isPackage || !Number.isFinite(Number(setup.amount)) || Number(setup.amount) <= 0) continue;
-    packageRates.set(setup.category, (packageRates.get(setup.category) || 0) + money(setup.amount));
+    packageRates.set(setup.category, (packageRates.get(setup.category) || 0) + money(moneyNumber(setup.amount)));
   }
   const feeOptions = [
     ...Array.from(packageRates, ([category, amount]) => ({
       category, name: 'Departmental Fee (Full Package)', amount,
     })),
     ...collectionSetups.filter(c => Number(c.amount) > 0).map(c => ({
-      category: c.category, name: c.name, amount: money(c.amount),
+      category: c.category, name: c.name, amount: money(moneyNumber(c.amount)),
     })),
   ];
 

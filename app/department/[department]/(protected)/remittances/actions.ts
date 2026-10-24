@@ -2,6 +2,7 @@
 
 "use server";
 
+import { moneyNumber } from "@/lib/money-precision";
 import { prisma } from '@/lib/prisma';
 import { requireTabAccess } from '@/lib/permissions';
 import { revalidatePath } from 'next/cache';
@@ -133,7 +134,7 @@ export async function verifyOnlineRemittance(
     const periodSetups = await tx.collectionSetup.findMany({ where: {
       organizationId: org.id, academicYear: remit.academicYear, term: remit.term,
     } });
-    const selection = selectConfiguredRemittanceFee(periodSetups, {
+    const selection = selectConfiguredRemittanceFee(periodSetups.map(f => ({ ...f, amount: moneyNumber(f.amount) })), {
       category: remit.category, itemDescription,
     });
     const isPackage = selection.kind === "package";
@@ -445,7 +446,7 @@ export async function submitOnlineRemittance(
     const configuredSetups = await tx.collectionSetup.findMany({ where: {
       organizationId: orgId, academicYear: data.ay, term: data.term,
     } });
-    const resolvedFee = selectConfiguredRemittanceFee(configuredSetups, {
+    const resolvedFee = selectConfiguredRemittanceFee(configuredSetups.map(f => ({ ...f, amount: moneyNumber(f.amount) })), {
       category: String(data.category || ''),
       itemDescription: String(data.particulars || '').trim(),
     });

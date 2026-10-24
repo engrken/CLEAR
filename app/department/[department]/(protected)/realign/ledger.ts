@@ -6,6 +6,7 @@
  * NOTE: Other modules with their own balance calculators must recognize
  * rollover metadata if they need to show source-period balances after rollover.
  */
+import { moneyNumber } from "@/lib/money-precision";
 import type { Prisma } from "@prisma/client";
 import { followingPeriod, type CalendarByYear } from "@/lib/academic-periods";
 
@@ -260,7 +261,7 @@ export async function getPeriodLedger(
   if (formalClosure && !activeRollover) {
     activeRollover = { id: formalClosure.transferId || formalClosure.id,
       destinationAY: formalClosure.destinationAY, destinationTerm: formalClosure.destinationTerm,
-      amount: formalClosure.amount, legacy: false };
+      amount: moneyNumber(formalClosure.amount), legacy: false };
   }
   return {
     funds,
