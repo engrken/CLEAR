@@ -79,8 +79,8 @@ export default function GlobalTenantReadOnly() {
         </Text>
       </View>
 
-      <Banner tone="info" title="All-tenant read-only access">
-        Your verified Global Superadmin role permits viewing this tenant, even when archived. Transactions, receipts, account changes and verification actions remain disabled in Android.
+      <Banner tone="info" title="Global tenant workspace">
+        Your verified Global Superadmin role permits viewing this tenant, even when archived. Use your separately authorized Global Admin portal for tenant changes; this Activity view never posts financial transactions.
       </Banner>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs}>
