@@ -156,7 +156,17 @@ Select-String "D:\m\arm64-build.log" -Pattern 'FAILED:', 'fatal error:', 'error:
 
 Do not indiscriminately clear Gradle caches, disable React Native New Architecture, manually increase `CMAKE_OBJECT_PATH_MAX` without checking tool compatibility, or persist hand-edited generated `build.gradle` workarounds without review.
 
-## 6. Official Play release is a separate process
+## 6. Play signing attested; isolate QA installation (October 24, 2026)
+
+The owner confirmed Google Play Console **App signing key — In use** SHA-256 `E2:F9:51:EC:EF:56:C0:7D:C8:B7:7B:AB:8F:74:A3:EE:4C:D4:63:50:8C:A6:75:EC:9E:3D:0E:AE:80:F9:D5:8C`. A read-only `adb pull` of the installed base APK from an Android API **33** device was validated using `apksigner verify --min-sdk-version 33 --max-sdk-version 33`. The device's installed CLEAR APK verified via **v3**, exit code **0**, and its certificate SHA-256 **exactly matched** the Google Play fingerprint. Its SHA-1 is `6D:4B:7E:A1:CA:C3:12:8B:06:12:F9:51:7B:68:95:01:F4:EA:23:3A`.
+
+The QA APK's validated v2 **Android Debug** SHA-256 is `FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C` and **does not match** Google Play's signing key. **Never use this QA APK to update/uninstall the installed Play app.** The previously seen `ML-DSA KeyFactory not available` message came from the APK's API 37+ hybrid v3.2 signer; narrowing verification to actual API 33 successfully verified the relevant classical v3 signature.
+
+**Recommended separate QA variant, only in the disposable short-path native build:** back up the existing QA APK and generated `D:\m\android\app\build.gradle`; add `applicationIdSuffix ".qa"` inside `android { buildTypes { release { ... } } }`, not `defaultConfig`. Rebuild using the proven `cmd.exe /d /c` + `-PreactNativeArchitectures=arm64-v8a --max-workers=2` command. **Before installing**, inspect with Android SDK `aapt dump badging` and require the resulting `package: name='com.rupertbulquerin.clear.qa'` (NOT `com.rupertbulquerin.clear`). Re-verify `apksigner`, ABIs, file SHA-256, and device availability, then install with `adb install` on the authorized QA device. Do not invoke `adb install -r` on the Production package. Confirm both package IDs exist afterward.
+
+These generated-file edits are disposable and may be overwritten by Expo prebuild; no production `mobile/app.json`, `eas.json` or official keystore is modified. A separate app ID does **not** guarantee independent OAuth, Android App Links, QR or OTP callback behavior: both variants may advertise the same `clearsys://` scheme; Play App Links cannot be assumed verified for the new debug certificate. Only test with authorized accounts and stop at any ambiguous external authentication/deep-link callback. Future durable QA variants need a separately reviewed Expo config plugin and explicit test-only link configuration. Do not assume real-device login/UAT passed merely because separate installation succeeded.
+
+## 7. Official Play release is a separate process
 
 - This ARM64 internal QA APK **must not be submitted to Google Play**. The published v1.2.0 release was signed through Rupert's official signing process; keep keystores/Google Play App Signing credentials secret and never commit them.
 - For the next version, increase the actual `versionCode`, build a properly signed AAB with appropriate ABI coverage, validate certificate identity and Play Console requirements, and follow the owner-approved [Android major release issue #61](https://github.com/engrken/CLEAR/issues/61).
