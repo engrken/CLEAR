@@ -3,9 +3,10 @@ import { useCallback, useEffect } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { api, type LedgerEntry } from '@/api';
-import { Avatar, Banner, Screen, Text } from '@/components/ui';
+import { Avatar, Banner, Button, Screen, Text } from '@/components/ui';
 import { OfficerPresence } from '@/components/collaboration/OfficerPresence';
 import { formatWhen } from '@/lib/dates';
+import { openDepartmentModule } from '@/lib/links';
 import { formatPeso, fromCentavos } from '@/lib/money';
 import { setPendingCount } from '@/lib/pending-count';
 import { useOfficerSession } from '@/lib/session';
@@ -35,10 +36,13 @@ export default function VerifyQueue() {
           {count ? `${count} to check` : 'Verify'}
         </Text>
         <Text color="inkMuted" style={styles.lead}>
-          Review submitted proofs and transaction references. Android is read-only; verification and official receipt issuance remain on the authorized web app.
+          Review submitted proofs here, or use the audited web workflow to verify and issue official receipts when your role permits.
         </Text>
       </View>
       <OfficerPresence page="remittances" session={session} />
+      <Button block variant="secondary" onPress={() => void openDepartmentModule(session.org.subdomain, '/remittances')}>
+        Verify or manage proofs on secure web
+      </Button>
       {queue.error ? <Banner tone="danger" title="Couldn't load pending proofs">{queue.error.message}</Banner> : null}
       {!queue.data && queue.loading ? (
         <ActivityIndicator color={c.accent} />
