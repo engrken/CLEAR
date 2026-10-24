@@ -41,11 +41,10 @@ export default function GlobalDashboard() {
           <Button block variant="secondary" icon="plus" onPress={() => router.push('/global/provisions/new')}>
             Provision new tenant
           </Button>
-        ) : (
-          <Button block variant="secondary" icon="shield" onPress={() => void openGlobalAdministrationPortal()}>
-            Open operational Global Admin portal (web)
-          </Button>
-        )}
+        ) : null}
+        <Button block variant="secondary" icon="shield" onPress={() => void openGlobalAdministrationPortal()}>
+          Open operational Global Admin portal (web)
+        </Button>
       </View>
 
       {overview.error ? (
