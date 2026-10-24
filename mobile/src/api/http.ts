@@ -2,7 +2,7 @@
 
 import { Platform } from 'react-native';
 
-import { API_URL, MOBILE_BUSINESS_WRITES_ENABLED, PAYMENT_WRITES_ENABLED } from './config';
+import { API_URL, MOBILE_BUSINESS_WRITES_ENABLED, PAYMENT_WRITES_ENABLED, TENANT_OPERATIONS_ENABLED } from './config';
 import { fallbackMessage } from './errors';
 import { ApiError, type ClearApi, type GlobalSession, type Session } from './types';
 
@@ -144,12 +144,12 @@ export const httpApi: ClearApi = {
   },
   getGlobalOverview: (session) => request('/global/overview', { token: session.token }),
   listManagedTenants: (session) => request('/global/provisions', { token: session.token }),
-  provisionTenant: (session, payload) => MOBILE_BUSINESS_WRITES_ENABLED ?
+  provisionTenant: (session, payload) => TENANT_OPERATIONS_ENABLED ?
     request('/global/provisions', { token: session.token, method: 'POST', json: payload }) :
-    Promise.reject(new ApiError('Tenant provisioning is unavailable in the read-only viewer.', 'read_only')),
-  manageTenant: (session, payload) => MOBILE_BUSINESS_WRITES_ENABLED ?
+    Promise.reject(new ApiError('Tenant provisioning is not enabled in this Android build. Open the secure web portal.', 'read_only')),
+  manageTenant: (session, payload) => TENANT_OPERATIONS_ENABLED ?
     request('/global/provisions/manage', { token: session.token, method: 'POST', json: payload }) :
-    Promise.reject(new ApiError('Tenant changes are unavailable in the read-only viewer.', 'read_only')),
+    Promise.reject(new ApiError('Tenant changes are not enabled in this Android build. Open the secure web portal.', 'read_only')),
   getGlobalTenantDashboard: (s, slug) => request(`/global/orgs/${encodeURIComponent(slug)}/dashboard`, { token: s.token }),
   listGlobalTenantStudents: (s, slug, q) => request(`/global/orgs/${encodeURIComponent(slug)}/students`, { token: s.token, query: { q } }),
   listGlobalTenantLedger: (s, slug) => request(`/global/orgs/${encodeURIComponent(slug)}/ledger`, { token: s.token }),
