@@ -37,7 +37,7 @@ test('officer bottom tabs hide paused Collect and label remittance review clearl
   assert.match(tabs, /name: 'verify', title: 'Review'/);
   assert.match(tabs, /name: 'more', title: 'Modules'/);
   const verify = read('mobile/src/app/(officer)/verify.tsx');
-  assert.match(verify, /Android is read-only/);
+  assert.match(verify, /audited web workflow/);
 });
 
 test('module directory groups every canonical module, displays only server-authorized grants and never routes web-only actions', () => {
@@ -50,18 +50,24 @@ test('module directory groups every canonical module, displays only server-autho
   assert.match(src, /Reports & administration/);
   assert.match(src, /m\.availability === 'available' \|\| m\.availability === 'review-only'/);
   assert.match(src, /action = m\.availability === 'available' \|\| m\.availability === 'review-only'/);
+  assert.match(src, /openDepartmentModule\(session\.org\.subdomain, m\.webPath!\)/);
   assert.match(src, /Replay first-time guide/);
   assert.match(src, /Sign in as Global Superadmin/);
   assert.match(src, /router\.push\('\/officer\/tenant-portal'\)/);
   for (const module of MODULE_CATALOG) {
     assert.ok(src.includes("'" + module.tab + "'"), module.tab + ' omitted from navigation groups');
+    assert.ok(module.webPath?.startsWith('/'), module.tab + ' missing secure web counterpart');
   }
+  const links = read('mobile/src/lib/links.ts');
+  assert.match(links, /WEB_MODULE_PATHS\.has\(route\)/);
+  assert.match(links, /https:\/\/clearsys\.vercel\.app/);
+  assert.doesNotMatch(links, /Authorization:|Bearer |studentToken/);
   assert.doesNotMatch(src, /executeVoidTransaction\(|recordPayment\(|submitProof\(/);
 });
 
 test('global admin landing does not advertise unavailable provisioning as available', () => {
   const global = read('mobile/src/app/global/index.tsx');
-  assert.match(global, /MOBILE_BUSINESS_WRITES_ENABLED \? \(/);
-  assert.match(global, /Provisioning and financial transactions remain disabled on Android/);
-  assert.match(global, /Open tenant \(read-only\)/);
+  assert.match(global, /TENANT_OPERATIONS_ENABLED \? \(/);
+  assert.match(global, /Open operational Global Admin portal/);
+  assert.match(global, /Open tenant activity/);
 });
