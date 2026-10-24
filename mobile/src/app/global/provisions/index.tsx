@@ -3,8 +3,9 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { api, type ManagedTenant } from '@/api';
-import { MOBILE_BUSINESS_WRITES_ENABLED } from '@/api/config';
+import { TENANT_OPERATIONS_ENABLED } from '@/api/config';
 import { BackHeader, Banner, Button, Card, Screen, Text, TextField } from '@/components/ui';
+import { openGlobalAdministrationPortal } from '@/lib/links';
 import { useGlobalSession } from '@/lib/session';
 import { useAsync } from '@/lib/use-async';
 import { radius, spacing, useTheme } from '@/theme';
@@ -29,7 +30,7 @@ export default function TenantManagement() {
   return (
     <Screen edges={['top','bottom']} header={<BackHeader title="Tenant management" onBack={() => router.replace('/global')} />}>
       <Banner tone="info" title="Global Superadmin portal">
-        Review every tenant and its school group, subscription tier and status. This live-data viewer cannot change tenants, financial records or administrative settings.
+        Review every tenant and its school group, subscription tier and status. Native tenant changes require explicit Production authorization; existing management operations remain available on the secure web portal.
       </Banner>
       <View style={styles.metrics}>
         <Card style={styles.metric}>
@@ -41,10 +42,10 @@ export default function TenantManagement() {
           <Text variant="headline">{totals.inactive}</Text>
         </Card>
       </View>
-      {MOBILE_BUSINESS_WRITES_ENABLED ? (
+      {TENANT_OPERATIONS_ENABLED ? (
         <Button block icon="plus" onPress={() => router.push('/global/provisions/new')}>Provision new tenant</Button>
       ) : (
-        <Banner tone="info" title="View only">Tenant provisioning and management are disabled in this release.</Banner>
+        <Button block variant="secondary" onPress={() => void openGlobalAdministrationPortal()}>Manage tenants on web (sign in required)</Button>
       )}
       <TextField label="Find tenant, group or tier" value={search} onChangeText={setSearch} placeholder="JIECEP, default-school, Pro..." autoCapitalize="none" autoCorrect={false} />
       {tenants.error ? <Banner tone="danger" title="Could not load tenants">{tenants.error.message}</Banner> : null}
