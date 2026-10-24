@@ -30,6 +30,13 @@
 6. **Functional UAT:** Student OTP/status, officer role grants, cash-handling web handoff, remittance review, direct-link denial, tenant admin own-only, global cross-tenant read and provision/manage with audit, all negative authorization cases. Confirm website prompts for separate sign-in and returns 403 for unauthorized tabs.
 7. **Publish:** Stage rollout after Play Console owner authorizes it. No CI job or GitHub merge publishes the app automatically.
 
+## GitHub issue #65 — scoped mobile search (v1.2.2 incremental)
+- Authorized officer home Activity and Global Superadmin tenant Activity now have **instant client-side filtering** on the already-loaded, API-authorized bounded batch by student name, OR/reference, receipt base number, description or status. Filter chips distinguish all entries, receipts and voided receipts (voided **collections** only).
+- Global students and remittance sections filter their already-loaded tenant-scoped records without sending credentials, names or queries to third-party services.
+- A mobile officer sees **full Receipt History** and **Void Center** via dedicated fixed, first-party HTTPS web handoffs only when their current server-issued allowed tabs include `tab-payment` or `tab-void`, respectively. The independent web login and permission checks are mandatory.
+- **Explicit limitation:** on-device search is *not* full history. The ledger API returns only recent active-term rows (bounded to 100 by default); a missing match is not proof that an older OR/VOID does not exist. Full audit remains on web. No financial write APIs or SQL queries were added.
+- Still pending under #65: independent real-device search UAT and a dedicated complete native historical-OR/Void audit if desired; do not close the tracking issue solely because source CI passed.
+
 ## Explicitly excluded from this patch
 
 - Native official receipts, payment posting, OR sequence allocation, payment void/reversal, remittance approvals/invalidations, proof uploads and financial editing. Server APIs must reuse the *canonical audited transaction engine* with transaction isolation, idempotency, permissions, ledger reconciliation, exact centavo arithmetic, audit trails and test Neon before activation.
