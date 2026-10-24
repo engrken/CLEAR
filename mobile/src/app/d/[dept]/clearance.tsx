@@ -7,6 +7,7 @@ import { MOBILE_BUSINESS_WRITES_ENABLED } from '@/api/config';
 import { BackHeader, Banner, Button, ClearanceCard, Icon, OrgChip, Screen, Text, type UnpaidLine } from '@/components/ui';
 import { fromCentavos } from '@/lib/money';
 import { useSession } from '@/lib/session';
+import { StudentClearanceGuide } from '@/components/student/StudentClearanceGuide';
 import { useAsync } from '@/lib/use-async';
 import { radius, spacing, useTheme } from '@/theme';
 
@@ -115,6 +116,7 @@ export default function Clearance() {
           ? 'Only your assigned department records are accessible. All actions are read-only.'
           : 'Verify using the email on your own student record. Your status is read live from CLEAR; payment details are not shown.'}
       </Banner>
+      {!officerMode ? <StudentClearanceGuide department={dept} /> : null}
 
       {officerMode ? (
         <View style={{ gap: spacing[2] }}>
