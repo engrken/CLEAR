@@ -176,7 +176,7 @@ export default function More() {
         </Button>
         {isTenantAdmin ? (
           <Button block variant="secondary" icon="people" onPress={() => router.push('/officer/tenant-portal')}>
-            My tenant portal (read-only)
+            My tenant portal and settings
           </Button>
         ) : null}
         <Button block variant="secondary" icon="shield" onPress={() => router.push('/officer/walkthrough')}>
