@@ -1,12 +1,16 @@
-// Guard tenant lifecycle writes to the isolated Android integration Preview.
-// A future production rollout requires a separate, audited promotion decision.
+// Guard tenant lifecycle writes to isolated Preview OR explicitly authorized Production.
+// This second independent check is required even if the shared API allowlist permits a request.
 import 'server-only';
 import { ApiFailure } from '@/lib/mobile/http';
 
 export function requireAndroidProvisioningPreview() {
-  if (process.env.VERCEL_ENV !== 'preview' ||
-      process.env.VERCEL_GIT_COMMIT_REF !== 'android-parity-integration') {
-    throw new ApiFailure(403, 'forbidden', 'Tenant provisioning changes are available only in the isolated Android Preview.');
+  const preview = process.env.VERCEL_ENV === 'preview' &&
+    process.env.VERCEL_GIT_COMMIT_REF === 'android-parity-integration';
+  const authorizedProduction = process.env.VERCEL_ENV === 'production' &&
+    process.env.VERCEL_GIT_COMMIT_REF === 'main' &&
+    process.env.MOBILE_TENANT_OPERATIONS_ENABLED === 'true';
+  if (!preview && !authorizedProduction) {
+    throw new ApiFailure(403, 'forbidden', 'Android tenant changes require explicit Production authorization or isolated Preview access.');
   }
 }
 

@@ -164,6 +164,10 @@ export type LedgerEntry = {
   amountCentavos: number;
   status: string;
   at: string;
+  /** Base official receipt for package allocation suffixes, supplied by server for collections. */
+  receiptNumber?: string;
+  /** Collection line within the issued receipt; provided only for collection entries. */
+  receiptLine?: number;
 };
 
 export type RemittanceDetail = LedgerEntry & {

@@ -3,8 +3,9 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import { api } from '@/api';
-import { MOBILE_BUSINESS_WRITES_ENABLED } from '@/api/config';
+import { TENANT_OPERATIONS_ENABLED } from '@/api/config';
 import { Banner, Button, Card, Screen, SectionHeader, Text } from '@/components/ui';
+import { openGlobalAdministrationPortal } from '@/lib/links';
 import { useGlobalSession, useSession } from '@/lib/session';
 import { useAsync } from '@/lib/use-async';
 import { spacing, useTheme } from '@/theme';
@@ -28,19 +29,22 @@ export default function GlobalDashboard() {
         <Text variant="bodySm" color="inkMuted">{global.admin.fullName} · {global.admin.email}</Text>
       </View>
 
-      <Banner tone="info" title="Global Superadmin · read-only Android access">
-        Open authorized tenants to review their dashboard, student roster, financial overview and remittances. Provisioning and financial transactions remain disabled on Android.
+      <Banner tone="info" title="Global Superadmin · authorized operations">
+        Review every tenant in the mobile workspace. Approved tenant-management operations can be enabled separately; all other management modules remain available through your secure web sign-in.
       </Banner>
 
       <View style={{ gap: spacing[2] }}>
         <Button block icon="shield" onPress={() => router.push('/global/provisions')}>
           Tenant management portal
         </Button>
-        {MOBILE_BUSINESS_WRITES_ENABLED ? (
+        {TENANT_OPERATIONS_ENABLED ? (
           <Button block variant="secondary" icon="plus" onPress={() => router.push('/global/provisions/new')}>
             Provision new tenant
           </Button>
         ) : null}
+        <Button block variant="secondary" icon="shield" onPress={() => void openGlobalAdministrationPortal()}>
+          Open operational Global Admin portal (web)
+        </Button>
       </View>
 
       {overview.error ? (
@@ -86,7 +90,7 @@ export default function GlobalDashboard() {
                     pathname: '/global/tenant/[org]',
                     params: { org: org.subdomain },
                   })}>
-                  Open tenant (read-only)
+                  Open tenant activity
                 </Button>
                 {org.activeRoles?.length ? (
                   <View style={{ gap: 4 }}>

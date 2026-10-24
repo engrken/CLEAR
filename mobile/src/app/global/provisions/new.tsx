@@ -93,8 +93,8 @@ export default function ProvisionTenant() {
 
   return (
     <Screen edges={['top','bottom']} header={<BackHeader title="Provision new tenant" />}>
-      <Banner tone="warning" title="Preview provisioning — real database changes">
-        This creates an organization, its accounting calendar, and an initial department administrator in the isolated Preview database. Confirm all details before proceeding.
+      <Banner tone="warning" title="Tenant provisioning — creates real records">
+        This creates an organization, its accounting calendar, and an initial administrator in the currently authorized environment. Production changes require explicit server authorization and your Global Superadmin session. Confirm all details before proceeding.
       </Banner>
       {error ? <Banner tone="danger" title="Unable to provision">{error}</Banner> : null}
 

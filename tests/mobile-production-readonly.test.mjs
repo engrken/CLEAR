@@ -47,6 +47,29 @@ test('no tenant or finance business mutations on Production, even for superadmin
   }
 });
 
+test('Production tenant operations require explicit server opt-in, only for existing guarded global routes', () => {
+  const optIn = { ...production, tenantOperationsEnabled: true };
+  assert.equal(isMobileRequestAllowed('POST', '/api/mobile/global/provisions', optIn), true);
+  assert.equal(isMobileRequestAllowed('POST', '/api/mobile/global/provisions/manage', optIn), true);
+  assert.equal(isMobileRequestAllowed('POST', '/api/mobile/global/provisions', { ...production, tenantOperationsEnabled: false }), false);
+  assert.equal(isMobileRequestAllowed('POST', '/api/mobile/global/provisions', { vercelEnv: 'preview', gitRef: 'main', tenantOperationsEnabled: true }), false);
+  assert.equal(isMobileRequestAllowed('POST', '/api/mobile/global/provisions', { vercelEnv: 'production', gitRef: 'other', tenantOperationsEnabled: true }), false);
+  for (const path of [
+    '/api/mobile/orgs/jiecep/payments',
+    '/api/mobile/orgs/jiecep/proofs',
+    '/api/mobile/orgs/jiecep/remittances/r1/verify',
+    '/api/mobile/orgs/jiecep/remittances/r1/invalidate',
+    '/api/mobile/global/provisions/evil',
+  ]) assert.equal(isMobileRequestAllowed('POST', path, optIn), false, path);
+  const policy = read('lib/mobile/provisioning-policy.ts');
+  assert.match(policy, /MOBILE_TENANT_OPERATIONS_ENABLED === 'true'/);
+  assert.match(policy, /requireAndroidProvisioningPreview/);
+  const provisions = read('app/api/mobile/global/provisions/route.ts');
+  assert.match(provisions, /requireGlobalMobileAdmin\(req\)/);
+  const manage = read('app/api/mobile/global/provisions/manage/route.ts');
+  assert.match(manage, /requireGlobalMobileAdmin\(req\)/);
+});
+
 test('unknown environment fails closed and Preview permits only its two tenant QA actions', () => {
   for (const env of [{}, { vercelEnv: 'preview', gitRef: 'main' }, { vercelEnv: 'development' }]) {
     assert.equal(isMobileRequestAllowed('POST', '/api/mobile/global/provisions', env), false);
@@ -94,7 +117,7 @@ test('tenant administrator portal is server-guarded, tenant-bound and GET-only',
   assert.match(root, /name="officer\/tenant-portal"/);
   const more = read('mobile/src/app/(officer)/more.tsx');
   assert.match(more, /isTenantAdmin/);
-  assert.match(more, /My tenant portal \(read-only\)/);
+  assert.match(more, /My tenant portal and settings/);
 });
 
 test('Android live viewer cannot invoke proof, payment or tenant changes', () => {
@@ -102,15 +125,18 @@ test('Android live viewer cannot invoke proof, payment or tenant changes', () =>
   assert.match(config, /export const PAYMENT_WRITES_ENABLED = false;/);
   assert.match(config, /export const MOBILE_BUSINESS_WRITES_ENABLED = false;/);
   const client = read('mobile/src/api/http.ts');
-  for (const method of ['submitProof', 'provisionTenant', 'manageTenant']) {
-    assert.match(client, new RegExp(method + ':.*MOBILE_BUSINESS_WRITES_ENABLED'));
+  assert.match(client, /submitProof:.*MOBILE_BUSINESS_WRITES_ENABLED/);
+  for (const method of ['provisionTenant', 'manageTenant']) {
+    assert.match(client, new RegExp(method + ':.*TENANT_OPERATIONS_ENABLED'));
   }
+  const policy = read('lib/mobile/http.ts');
+  assert.match(policy, /tenantOperationsEnabled: process\.env\.MOBILE_TENANT_OPERATIONS_ENABLED === 'true'/);
   const layout = read('mobile/src/app/_layout.tsx');
   assert.match(layout, /Stack\.Protected guard=\{MOBILE_BUSINESS_WRITES_ENABLED\}/);
   const student = read('mobile/src/app/d/[dept]/clearance.tsx');
   assert.match(student, /status === 'hold' && MOBILE_BUSINESS_WRITES_ENABLED/);
   const globalIndex = read('mobile/src/app/global/provisions/index.tsx');
-  assert.match(globalIndex, /MOBILE_BUSINESS_WRITES_ENABLED/);
+  assert.match(globalIndex, /TENANT_OPERATIONS_ENABLED/);
   const globalDetail = read('mobile/src/app/global/provisions/[id].tsx');
-  assert.match(globalDetail, /if \(!MOBILE_BUSINESS_WRITES_ENABLED\)/);
+  assert.match(globalDetail, /if \(!TENANT_OPERATIONS_ENABLED\)/);
 });

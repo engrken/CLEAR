@@ -82,7 +82,7 @@ test('JIECEP officer path explicitly offers the separate global OTP sign-in', ()
   assert.match(portal, /pathname: '\/global\/tenant\/\[org\]'/);
   assert.match(officerLogin, /Sign in as Global Superadmin/);
   assert.match(officerSettings, /Sign in as Global Superadmin/);
-  assert.match(globalPage, /Open tenant \(read-only\)/);
+  assert.match(globalPage, /Open tenant activity/);
 });
 
 test('every mobile global tenant route separately revalidates global admin and allows GET only', () => {

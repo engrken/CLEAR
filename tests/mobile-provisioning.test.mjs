@@ -24,7 +24,7 @@ test('web and global mobile tenant lifecycle share one canonical transaction eng
   assert.match(core, /checkGroupLimit\(existingGroupMembers\.length \+ 1/);
 });
 
-test('global provisioning endpoints require registered superadmin bearer session and isolated Preview', () => {
+test('global provisioning requires registered superadmin and independently gated Preview or Production', () => {
   const paths = [
     'app/api/mobile/global/provisions/route.ts',
     'app/api/mobile/global/provisions/manage/route.ts',
@@ -36,8 +36,12 @@ test('global provisioning endpoints require registered superadmin bearer session
     assert.doesNotMatch(route, /export const DELETE|export const PATCH|export const PUT/, path);
   }
   const policy = file('lib/mobile/provisioning-policy.ts');
-  assert.match(policy, /VERCEL_ENV !== 'preview'/);
-  assert.match(policy, /VERCEL_GIT_COMMIT_REF !== 'android-parity-integration'/);
+  assert.match(policy, /VERCEL_ENV === 'preview'/);
+  assert.match(policy, /VERCEL_GIT_COMMIT_REF === 'android-parity-integration'/);
+  assert.match(policy, /VERCEL_ENV === 'production'/);
+  assert.match(policy, /VERCEL_GIT_COMMIT_REF === 'main'/);
+  assert.match(policy, /MOBILE_TENANT_OPERATIONS_ENABLED === 'true'/);
+  assert.match(policy, /if \(!preview && !authorizedProduction\)/);
 });
 
 test('tenant changes require explicit server-side confirmation, and deletion remains web-only', () => {

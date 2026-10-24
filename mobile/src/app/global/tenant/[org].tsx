@@ -1,12 +1,13 @@
 import { useCallback, useState } from 'react';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { api, type LedgerEntry, type Student } from '@/api';
 import { BackHeader, Banner, Button, Card, LedgerList, LedgerRow, Screen, Text } from '@/components/ui';
 import { FinancialOverview } from '@/components/overview/FinancialOverview';
 import { formatWhen } from '@/lib/dates';
 import { fromCentavos } from '@/lib/money';
+import { filterRecentActivity, type RecentActivityFilter } from '@/lib/recent-activity-search';
 import { useGlobalSession } from '@/lib/session';
 import { useAsync } from '@/lib/use-async';
 import { radius, spacing, useTheme } from '@/theme';
@@ -26,6 +27,8 @@ export default function GlobalTenantReadOnly() {
   const router = useRouter();
   const { c } = useTheme();
   const [section, setSection] = useState<Section>('overview');
+  const [search, setSearch] = useState('');
+  const [activityFilter, setActivityFilter] = useState<RecentActivityFilter>('all');
 
   const summary = useAsync(
     () => api.getGlobalTenantDashboard(global, slug),
@@ -53,6 +56,11 @@ export default function GlobalTenantReadOnly() {
     else selected.reload();
   };
   const financials = summary.data?.dashboard;
+  const matchingStudents = (students.data ?? []).filter(student =>
+    !search.trim() || [student.fullName, student.studentId].some(value => value.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()))
+  );
+  const matchingActivity = filterRecentActivity((selected.data ?? []) as LedgerEntry[], search,
+    section === 'activity' ? activityFilter : 'all');
 
   return (
     <Screen
@@ -71,8 +79,8 @@ export default function GlobalTenantReadOnly() {
         </Text>
       </View>
 
-      <Banner tone="info" title="All-tenant read-only access">
-        Your verified Global Superadmin role permits viewing this tenant, even when archived. Transactions, receipts, account changes and verification actions remain disabled in Android.
+      <Banner tone="info" title="Global tenant workspace">
+        Your verified Global Superadmin role permits viewing this tenant, even when archived. Use your separately authorized Global Admin portal for tenant changes; this Activity view never posts financial transactions.
       </Banner>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs}>
@@ -81,7 +89,7 @@ export default function GlobalTenantReadOnly() {
             key={tab.key}
             accessibilityRole="tab"
             accessibilityState={{ selected: tab.key === section }}
-            onPress={() => setSection(tab.key)}
+            onPress={() => { setSection(tab.key); setSearch(''); setActivityFilter('all'); }}
             style={[styles.tab, { backgroundColor: tab.key === section ? c.inkBlock : c.soft }]}>
             <Text variant="bodyStrong" style={{ color: tab.key === section ? c.onAccent : c.ink }}>
               {tab.title}
@@ -91,6 +99,28 @@ export default function GlobalTenantReadOnly() {
       </ScrollView>
 
       {summary.error ? <Banner tone="danger" title="Tenant overview unavailable">{summary.error.message}</Banner> : null}
+      {section !== 'overview' ? (
+        <View style={styles.searchWrap}>
+          <TextInput value={search} onChangeText={setSearch} autoCorrect={false}
+            accessibilityLabel="Search loaded tenant records"
+            placeholder={section === 'students' ? 'Search loaded names or student IDs' : 'Search loaded names, ORs or references'}
+            placeholderTextColor={c.inkMuted}
+            style={[styles.searchInput, { color: c.ink, backgroundColor: c.soft }]} />
+          {section === 'activity' ? (
+            <View style={styles.filters}>
+              {(['all', 'receipts', 'voided'] as const).map(mode => (
+                <Pressable key={mode} accessibilityRole="button" accessibilityState={{ selected: activityFilter === mode }}
+                  onPress={() => setActivityFilter(mode)}
+                  style={[styles.filter, { backgroundColor: activityFilter === mode ? c.inkBlock : c.soft }]}>
+                  <Text variant="caption" style={{ color: activityFilter === mode ? c.onAccent : c.ink }}>
+                    {mode === 'all' ? 'All activity' : mode === 'receipts' ? 'Receipts' : 'Voided receipts'}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+        </View>
+      ) : null}
 
       {section === 'overview' ? (
         <>
@@ -113,8 +143,8 @@ export default function GlobalTenantReadOnly() {
 
           {section === 'students' && students.data && !students.loading ? (
             <>
-              <Text variant="caption" color="inkMuted">Student roster · first {students.data.length} records</Text>
-              {students.data.map((student) => (
+              <Text variant="caption" color="inkMuted">Showing {matchingStudents.length} of {students.data.length} loaded student records; not the complete roster.</Text>
+              {matchingStudents.map((student) => (
                 <Card key={student.id} style={styles.compact}>
                   <View style={{ gap: 4 }}>
                     <Text variant="bodyStrong">{student.fullName}</Text>
@@ -124,17 +154,17 @@ export default function GlobalTenantReadOnly() {
                   </View>
                 </Card>
               ))}
-              {students.data.length === 0 ? <Text color="inkMuted">No students found.</Text> : null}
+              {matchingStudents.length === 0 ? <Text color="inkMuted">No matching records among loaded students.</Text> : null}
             </>
           ) : null}
 
           {section !== 'students' && selected.data && !selected.loading ? (
             <>
               <Text variant="caption" color="inkMuted">
-                {section === 'activity' ? 'Latest tenant financial activity' : 'Pending payment proofs'} · read-only
+                {section === 'activity' ? 'Latest tenant financial activity' : 'Pending payment proofs'} · {matchingActivity.length} of {selected.data.length} loaded records (not complete history)
               </Text>
               <LedgerList>
-                {(selected.data as LedgerEntry[]).map((item) => (
+                {matchingActivity.map((item) => (
                   <LedgerRow
                     key={item.id}
                     title={item.title}
@@ -145,7 +175,7 @@ export default function GlobalTenantReadOnly() {
                   />
                 ))}
               </LedgerList>
-              {selected.data.length === 0 ? <Text color="inkMuted">No records for this term.</Text> : null}
+              {matchingActivity.length === 0 ? <Text color="inkMuted">No matching records in the loaded batch. For historical searches use your authorized web portal.</Text> : null}
             </>
           ) : null}
         </>
@@ -162,4 +192,8 @@ const styles = StyleSheet.create({
   tabs: { flexDirection: 'row', alignItems: 'center', gap: spacing[2], paddingVertical: 4 },
   tab: { paddingVertical: 11, paddingHorizontal: 17, borderRadius: radius.pill },
   compact: { paddingVertical: 12, paddingHorizontal: 16 },
+  searchWrap: { gap: 8 },
+  searchInput: { minHeight: 48, paddingHorizontal: 16, borderRadius: radius.md },
+  filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  filter: { paddingVertical: 10, paddingHorizontal: 12, borderRadius: radius.pill },
 });

@@ -3,8 +3,9 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { api, type OrganizationStatus, type SubscriptionTier } from '@/api';
-import { MOBILE_BUSINESS_WRITES_ENABLED } from '@/api/config';
+import { TENANT_OPERATIONS_ENABLED } from '@/api/config';
 import { BackHeader, Banner, Button, Card, Screen, Text, TextField } from '@/components/ui';
+import { openGlobalAdministrationPortal } from '@/lib/links';
 import { useGlobalSession } from '@/lib/session';
 import { useAsync } from '@/lib/use-async';
 import { radius, spacing, useTheme } from '@/theme';
@@ -68,12 +69,12 @@ export default function ManageTenant() {
     }
   }
 
-  if (!MOBILE_BUSINESS_WRITES_ENABLED) {
+  if (!TENANT_OPERATIONS_ENABLED) {
     return (
       <Screen edges={['top', 'bottom']}
         header={<BackHeader title="Tenant status" onBack={() => router.replace('/global/provisions')} />}>
         <Banner tone="info" title="Read-only tenant status">
-          This viewer cannot modify tenant status, subscription tiers, school groups or records.
+          Native tenant management is not enabled in this build. The authorized web portal supports these operations.
         </Banner>
         {tenants.loading && !tenants.data ? <ActivityIndicator color={c.cobalt} /> : null}
         {tenants.error ? <Banner tone="danger" title="Unable to load tenant">{tenants.error.message}</Banner> : null}
@@ -96,6 +97,7 @@ export default function ManageTenant() {
         {org ? <Button block variant="secondary" onPress={() => router.push({
           pathname: '/global/tenant/[org]', params: { org: org.subdomain },
         })}>Open tenant overview</Button> : null}
+        <Button block variant="secondary" onPress={() => void openGlobalAdministrationPortal()}>Manage tenant on web (sign in required)</Button>
         <Button block variant="secondary" onPress={reload}>Refresh live status</Button>
         <Button block variant="ghost" onPress={() => router.replace('/global/provisions')}>Back to tenants</Button>
       </Screen>
