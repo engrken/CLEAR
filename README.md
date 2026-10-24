@@ -251,7 +251,7 @@ npm run typecheck
 
 Reserve `D:\c\mobile\android` for a separately approved **disposable native QA build**; normal `git pull` or localhost usage does not require rebuilding v1.2.0. Play signing stays private, with the release workflow coordinated with Rupert. See [major-release tracker #61](https://github.com/engrken/CLEAR/issues/61) and [historical internal-QA signing gate #58](https://github.com/engrken/CLEAR/issues/58).
 
-**Windows QA APK build (24 October 2026):** an isolated `D:\m\android` build using Ninja 1.13.2, ARM64-only, and Gradle via `cmd.exe` succeeded on the owner's workstation. The APK exists, but its SHA-256 digest, signing compatibility, and real-device acceptance have not yet been verified. See the [Windows local Android APK build guide](docs/android-local-build-guide.md) for the exact working command, historical errors, reversible Ninja fix, verification steps, and Play Store release restrictions. This internal APK is **not** a publishable Google Play AAB.
+**Windows QA APK build (24 October 2026):** an isolated `D:\m\android` build using Ninja 1.13.2, ARM64-only, and Gradle via `cmd.exe` succeeded on the owner's workstation. The APK exists and its **v2 Android Debug signature is verified**, but the file SHA-256 digest was not shared, and compatibility with the published Play signing certificate plus real-device acceptance remain unverified. See the [Windows local Android APK build guide](docs/android-local-build-guide.md) for the exact working command, historical errors, reversible Ninja fix, verification steps, and Play Store release restrictions. This internal APK is **not** a publishable Google Play AAB.
 
 ## Environment configuration
 
