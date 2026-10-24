@@ -1,6 +1,6 @@
 # CLEAR Android — Windows local QA APK build guide
 
-**Validated 24 October 2026.** Documents an owner-reported successful **ARM64-only internal QA APK** for CLEAR at GitHub commit `ef897e87a65591b1006415964166ad7671c910fa`. The APK was confirmed to exist at `D:\m\android\app\build\outputs\apk\release\app-release.apk` (36,746,427 bytes; modified 2026-10-24 20:06:39 local time). A SHA-256 hash, signing-certificate comparison, device installation, and functional QA have **not yet been reported**. Do not mark those checks passed.
+**Validated 24 October 2026.** Documents an owner-reported successful **ARM64-only internal QA APK** for CLEAR at GitHub commit `ef897e87a65591b1006415964166ad7671c910fa`. The APK was confirmed to exist at `D:\m\android\app\build\outputs\apk\release\app-release.apk` (36,746,427 bytes; modified 2026-10-24 20:06:39 local time). The APK **file** SHA-256 was calculated locally but its value has not been shared. Android `apksigner verify --verbose --print-certs` confirms that the QA APK's **v2 signature verifies**, with one **Android Debug** signer; Play-signing certificate comparison, device installation and functional QA have **not yet been reported**. Do not mark those checks passed.
 
 > **Scope:** Windows internal QA, NOT Google Play release signing. No Neon/Vercel changes, financial transactions, Android keystore edits, or app release are needed to build this APK. Play publishing requires a separately approved, signed, device-compatible AAB and verified release gates.
 
@@ -127,7 +127,9 @@ if (-not $apksigner) { throw "apksigner not found." }
 & $apksigner.FullName verify --print-certs $apk
 ```
 
-Record the **actual** SHA-256 and certificate fingerprints privately in the QA build record. `assembleRelease` may use debug signing in Expo's generated native setup: verify, do not assume equivalence to the published Play version. **Never uninstall the user's existing CLEAR app or erase its data** to force installation of an APK signed with a different certificate.
+Record the **actual** SHA-256 and certificate fingerprints privately in the QA build record. `assembleRelease` may use debug signing in Expo's generated native setup: verify, do not assume equivalence to the published Play version.
+
+**October 24 observed APK signature evidence:** `apksigner verify --verbose --print-certs` returned `Verifies` with **v2: true**, v1/v3/v3.1/v3.2/v4: false, exactly **1 signer**, certificate DN `CN=Android Debug, OU=Android, O=Unknown, L=Unknown, ST=Unknown, C=US`, SHA-256 certificate fingerprint `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`. A debug-signed QA APK is **not** the store-signed app update; compare it to the installed application's **Play App Signing certificate**, not merely the upload-key certificate. Valid v2 signing is sufficient on compatible Android 7.0+ devices; the other schemes' absence alone is not a verification failure. **Never uninstall the user's existing CLEAR app or erase its data** to force installation of an APK signed with a different certificate.
 
 For device-specific testing, `adb devices -l` must show an authorized `device` and `adb shell getprop ro.product.cpu.abilist` must include `arm64-v8a`. `adb.exe: no devices/emulators found` is a USB debugging/driver/authorization issue, not a compilation failure.
 
