@@ -32,7 +32,8 @@
       "environment": "production",
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://clearsys.vercel.app/api/mobile"
+        "EXPO_PUBLIC_API_URL": "https://clearsys.vercel.app/api/mobile",
+        "EXPO_PUBLIC_CLEAR_TENANT_OPERATIONS": "false"
       },
       "android": {
         "buildType": "app-bundle"
