@@ -72,8 +72,9 @@ export function handler<Ctx>(fn: (req: Request, ctx: Ctx) => Promise<unknown>) {
       if (!isMobileRequestAllowed(req.method, new URL(req.url).pathname, {
         vercelEnv: process.env.VERCEL_ENV,
         gitRef: process.env.VERCEL_GIT_COMMIT_REF,
+        tenantOperationsEnabled: process.env.MOBILE_TENANT_OPERATIONS_ENABLED === 'true',
       })) {
-        throw new ApiFailure(403, 'read_only', 'Mobile access is read-only. Use the CLEAR web application for transactions.');
+        throw new ApiFailure(403, 'read_only', 'This mobile operation is not enabled. Use your authorized CLEAR web portal until it is approved.');
       }
       const out = await fn(req, ctx);
       if (out instanceof Response) {
