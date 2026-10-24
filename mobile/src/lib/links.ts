@@ -16,7 +16,7 @@ export function openWebPage(url: string) {
 // independently on the web and its server performs every permission check.
 const CLEAR_WEB_APP = 'https://clearsys.vercel.app';
 const WEB_MODULE_PATHS = new Set([
-  '/summary', '/students', '/clearance', '/collections', '/remittances',
+  '/summary', '/students', '/clearance', '/collections', '/collections/history', '/remittances',
   '/penalties', '/advances', '/liquidations', '/collectibles', '/reports',
   '/void', '/realign', '/users', '/setup',
 ]);
