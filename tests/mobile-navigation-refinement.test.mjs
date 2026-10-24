@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { MODULE_CATALOG } from '../mobile/src/lib/module-access.ts';
+import { filterRecentActivity } from '../mobile/src/lib/recent-activity-search.ts';
 
 const read = (p) => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 
@@ -70,4 +71,35 @@ test('global admin landing does not advertise unavailable provisioning as availa
   assert.match(global, /TENANT_OPERATIONS_ENABLED \? \(/);
   assert.match(global, /Open operational Global Admin portal/);
   assert.match(global, /Open tenant activity/);
+});
+
+test('bounded Activity searches filter only supplied role-authorized rows, including historical OR suffixes', () => {
+  const records = [
+    { kind: 'collection', id: 'a', title: 'Test Student A', reference: 'OR-101-P02', receiptNumber: 'OR-101', subtitle: 'Package', status: 'Valid', amountCentavos: 100, at: '2026-10-01T00:00:00.000Z' },
+    { kind: 'collection', id: 'b', title: 'Test Student B', reference: 'OR-102', subtitle: 'Fee', status: 'Voided', amountCentavos: 0, at: '2026-10-02T00:00:00.000Z' },
+    { kind: 'penalty', id: 'c', title: 'Test Student C', reference: 'P-3', subtitle: 'Penalty', status: 'Voided', amountCentavos: 100, at: '2026-10-03T00:00:00.000Z' },
+  ];
+  assert.deepEqual(filterRecentActivity(records, 'or-101').map(r => r.id), ['a']);
+  assert.deepEqual(filterRecentActivity(records, ' student b ').map(r => r.id), ['b']);
+  assert.deepEqual(filterRecentActivity(records, '', 'receipts').map(r => r.id), ['a', 'b']);
+  assert.deepEqual(filterRecentActivity(records, '', 'voided').map(r => r.id), ['b']);
+  assert.deepEqual(filterRecentActivity(records, 'never-issued').map(r => r.id), []);
+  assert.equal(records.length, 3, 'filtering must not mutate or fetch records');
+});
+
+test('officer and global Activity search only the authorized loaded batch and do not expose posting actions', () => {
+  const global = read('mobile/src/app/global/tenant/[org].tsx');
+  const home = read('mobile/src/app/(officer)/home.tsx');
+  const helper = read('mobile/src/lib/recent-activity-search.ts');
+  assert.match(global, /filterRecentActivity\(/);
+  assert.match(home, /filterRecentActivity\(/);
+  assert.match(global, /onChangeText=\{setSearch\}/);
+  assert.match(home, /onChangeText=\{setLedgerQuery\}/);
+  assert.match(global, /selected\.data \?\? \[\]/);
+  assert.match(home, /ledger\.data \?\? \[\]/);
+  assert.match(helper, /kind === 'voided'/);
+  assert.match(helper, /row\.kind !== 'collection'/);
+  assert.doesNotMatch(helper, /fetch\(|request\(|update\(|delete\(/);
+  assert.match(home, /can\('tab-overview'\)/);
+  assert.match(global, /useGlobalSession\(\)/);
 });
