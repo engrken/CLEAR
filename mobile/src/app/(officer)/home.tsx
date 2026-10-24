@@ -9,6 +9,7 @@ import { FinancialOverview } from '@/components/overview/FinancialOverview';
 import { OfficerPresence } from '@/components/collaboration/OfficerPresence';
 import { OfficerWalkthrough } from '@/components/collaboration/OfficerWalkthrough';
 import { formatWhen } from '@/lib/dates';
+import { openDepartmentModule } from '@/lib/links';
 import { fromCentavos } from '@/lib/money';
 import { filterRecentActivity, type RecentActivityFilter } from '@/lib/recent-activity-search';
 import { setPendingCount } from '@/lib/pending-count';
@@ -28,6 +29,7 @@ export default function Home() {
   const canRemittances = can('tab-remittances');
   const canRoster = can('tab-students') || can('tab-payment');
   const canPayment = can('tab-payment');
+  const canVoid = can('tab-void');
   const [ledgerQuery, setLedgerQuery] = useState('');
   const [activityFilter, setActivityFilter] = useState<RecentActivityFilter>('all');
 
@@ -154,8 +156,18 @@ export default function Home() {
             ))}
           </View>
           <Text variant="caption" color="inkMuted">
-            {visibleActivity.length} of {ledger.data?.length ?? 0} recently loaded records. For full receipt or Void Center history, use your authorized web portal.
+            {visibleActivity.length} of {ledger.data?.length ?? 0} recently loaded records. This is not the complete receipt or Void Center history.
           </Text>
+          {canPayment ? (
+            <Button block variant="secondary" onPress={() => void openDepartmentModule(session.org.subdomain, '/collections/history')}>
+              Search full receipt history (secure web)
+            </Button>
+          ) : null}
+          {canVoid ? (
+            <Button block variant="secondary" onPress={() => void openDepartmentModule(session.org.subdomain, '/void')}>
+              Search full Void Center (secure web)
+            </Button>
+          ) : null}
           {ledger.error ? <Banner tone="danger" title="Couldn't load activity">{ledger.error.message}</Banner> : null}
           {ledger.data ? (
             <LedgerList>
