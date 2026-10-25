@@ -87,8 +87,26 @@ try {
       Write-Warning 'New Android launcher foreground files are byte-identical to the old generated workspace. Do not assume rebuilding will fix the icon: inspect the actual Play-installed package or restart launcher before creating another Play update.'
     }
     $releaseGradle = Get-Content -LiteralPath (Join-Path $Workspace 'android\app\build.gradle') -Raw
-    if ($releaseGradle -match 'signingConfig signingConfigs.debug') {
-      Write-Warning 'Generated Android release Gradle settings still mention DEBUG signing. Restore the OFFICIAL Play Upload signing setup from your PRIVATE backup before creating an AAB. Do not commit keystores or passwords.'
+    # Merely finding "signingConfigs.debug" anywhere in build.gradle is not a
+    # release-signing defect: the debug buildType normally references it.
+    # This is only a source-configuration hint. :app:signingReport is required
+    # to prove that the release variant uses the existing Play Upload key.
+    if ($releaseGradle -match '(?m)^\s*signingConfig\s+signingConfigs\.release\s*
+    Write-Host 'PASS: brand-new physical workspace and clean Expo prebuild with verified approved source images.'
+    Write-Host ('Generated icon proof: ' + $log)
+    Write-Host ('Native adaptive foreground count: ' + $foregrounds.Count)
+    Write-Host 'Next: visually inspect the generated launcher foreground and masks, then configure existing private Play Upload signing before bundleRelease.'
+    Write-Host 'VersionCode 14 must be unused across all Play Console tracks before upload.'
+  } finally {
+    Pop-Location
+  }
+} finally {
+  if (!$copied) { Write-Warning 'Copy was interrupted. The newly created workspace may be incomplete; inspect it before using.' }
+}
+) {
+      Write-Host 'Release buildType explicitly references signingConfigs.release. Verify the actual release SHA-256 with :app:signingReport before any bundle.'
+    } else {
+      Write-Warning 'No explicit signingConfigs.release reference was detected. Inspect ONLY buildTypes.release in app/build.gradle, then restore official private Upload signing and verify :app:signingReport.'
     }
     Write-Host 'PASS: brand-new physical workspace and clean Expo prebuild with verified approved source images.'
     Write-Host ('Generated icon proof: ' + $log)
