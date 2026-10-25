@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { readClearanceCertificate } from '@/lib/clearance-opaque-token';
 import { prisma } from '@/lib/prisma';
 import { getStudentClearance } from '@/lib/clearance';
+import { getPeriodLedger } from '@/app/department/[department]/(protected)/realign/ledger';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
@@ -21,8 +22,12 @@ export default async function VerifyCertificatePage({ searchParams }:{
     if (org && org.activeAy === claim.ay && org.activeTerm === claim.term) {
       // Verify CURRENT enrollment and obligations; signatures alone are not clearance.
       const current = await getStudentClearance(org.id, claim.studentId, claim.ay, claim.term);
-      isValid = !!current && current.student.id === claim.studentPk &&
-        current.student.studentId.toLowerCase() === claim.studentId.toLowerCase() && current.isCleared;
+      if (current?.isCleared && current.student.id === claim.studentPk &&
+          current.student.studentId.toLowerCase() === claim.studentId.toLowerCase()) {
+        // A closed/rolled-over term cannot produce a fresh valid certificate.
+        const periodLedger = await getPeriodLedger(prisma, org.id, claim.ay, claim.term);
+        isValid = !periodLedger.activeRollover;
+      }
     }
   }
   return <main className="min-vh-100 bg-body-tertiary d-flex align-items-center justify-content-center p-4">

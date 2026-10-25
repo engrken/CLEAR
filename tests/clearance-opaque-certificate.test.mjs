@@ -57,7 +57,9 @@ test('new QR URL is private, live-rechecked, expiring; old signature flow preser
   assert.doesNotMatch(api,/clearanceVerifyPath\(/,'new mobile officer QR should not expose school IDs');
   assert.match(view,/readClearanceCertificate\(/);
   assert.match(view,/current\.student\.id === claim\.studentPk/);
-  assert.match(view,/current\.isCleared/);
+  assert.match(view,/current\?\.isCleared/);
+  assert.match(view,/getPeriodLedger\(/);
+  assert.match(view,/!periodLedger\.activeRollover/);
   assert.match(view,/org\.activeAy === claim\.ay && org\.activeTerm === claim\.term/);
   assert.doesNotMatch(view,/studentName|student\.fullName|unpaidItems\.map/);
   assert.match(headers,/source: '\/clearance\/verify'/);

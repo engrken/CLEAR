@@ -649,7 +649,7 @@ export default async function ClearancePage({
         )
       : null;
 
-    const selectedStudent = queriedStudent && queriedStudent.isCleared
+    const selectedStudent = queriedStudent && queriedStudent.isCleared && !isClosed
       ? allStudents.find(s => s.studentId.toLowerCase() === queriedStudent.studentId.toLowerCase())
       : null;
     const queriedVerifyUrl = selectedStudent
