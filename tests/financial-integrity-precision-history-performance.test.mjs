@@ -67,7 +67,7 @@ test('historic arrears reader retains student marker and tenant isolation while 
   assert.match(source, /organizationId, balanceDue: \{ gt: 0 \}/);
   assert.match(source, /status: studentId/);
   assert.match(source, /encodeURIComponent\(studentId\)/);
-  assert.match(source, /\{ contains: "\\|SID:" \}/);
+  assert.ok(source.includes('{ contains: "|SID:" }'));
   assert.match(source, /mode: "insensitive"/);
   assert.match(source, /decodeStudentDue\(due\.status\)/);
   assert.match(source, /olderThan\(due\.academicYear, due\.term/);
