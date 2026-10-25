@@ -47,6 +47,12 @@ test('historical receipt review detects sub-cent entries without editing source 
   assert.match(suspicious[0].inconsistencyReason, /Sub-cent or unsafe monetary precision/);
   assert.equal(original.amountPaid, 1.005);
   assert.equal(suspicious[0].total, null, 'unsafe historical precision must not be rounded into a displayed total');
+  const legacyDecimal = { ...base, amountPaid: { toString: () => '3.005' } };
+  const invalidDecimal = buildIssuedReceipts([legacyDecimal]);
+  assert.equal(invalidDecimal[0].status, 'Inconsistent');
+  assert.equal(invalidDecimal[0].total, null);
+  const exactDecimal = { ...base, amountPaid: { toString: () => '3.05' } };
+  assert.equal(buildIssuedReceipts([exactDecimal])[0].total, 3.05);
   const normal = buildIssuedReceipts([
     { ...base, amountPaid: 100 },
     { ...base, id: 'line-2', orNumber: '26-101-P02', itemDescription: 'Other fund', amountPaid: 50 },
