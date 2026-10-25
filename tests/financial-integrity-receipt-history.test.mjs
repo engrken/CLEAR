@@ -99,3 +99,24 @@ test("receipt history page counts grouped receipts before pagination and makes n
   assert.match(client,/Only inconsistent receipts/);
   assert.match(client,/Exact OR number/);
 });
+
+test("read-only history keeps anomalous legacy amounts reviewable without inventing money", () => {
+  const original = row({ id: "sub-cent", orNumber: "26-998", amountPaid: 1.005 });
+  const abnormal = buildIssuedReceipts([original]);
+  assert.equal(abnormal.length, 1);
+  assert.equal(abnormal[0].status, "Inconsistent");
+  assert.equal(abnormal[0].total, null, "never round a suspicious receipt into a monetary total");
+  assert.match(abnormal[0].inconsistencyReason, /Sub-cent or unsafe monetary precision/);
+  assert.equal(original.amountPaid, 1.005, "never mutate historical source data");
+
+  const invalid = buildIssuedReceipts([row({ id: "nan", orNumber: "26-997", amountPaid: NaN })]);
+  assert.equal(invalid[0].status, "Inconsistent");
+  assert.equal(invalid[0].total, null);
+  assert.match(invalid[0].inconsistencyReason, /Non-finite monetary amount/);
+
+  const page = readFileSync(new URL("../app/department/[department]/(protected)/collections/history/page.tsx",import.meta.url),"utf8");
+  const client = readFileSync(new URL("../app/department/[department]/(protected)/collections/history/ReceiptHistoryClient.tsx",import.meta.url),"utf8");
+  assert.match(page, /buildIssuedReceipts\(allocationLines\)/);
+  assert.doesNotMatch(page, /moneyNumber\(row\.amountPaid\)/);
+  assert.match(client, /Requires reconciliation/);
+});

@@ -46,6 +46,7 @@ test('historical receipt review detects sub-cent entries without editing source 
   assert.equal(suspicious[0].status, 'Inconsistent');
   assert.match(suspicious[0].inconsistencyReason, /Sub-cent or unsafe monetary precision/);
   assert.equal(original.amountPaid, 1.005);
+  assert.equal(suspicious[0].total, null, 'unsafe historical precision must not be rounded into a displayed total');
   const normal = buildIssuedReceipts([
     { ...base, amountPaid: 100 },
     { ...base, id: 'line-2', orNumber: '26-101-P02', itemDescription: 'Other fund', amountPaid: 50 },

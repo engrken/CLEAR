@@ -35,7 +35,9 @@ export type IssuedReceipt = {
   encodedBy: string;
   status: "Valid" | "Voided" | "Inconsistent";
   inconsistencyReason: string;
-  total: number;
+  // Null for invalid historical monetary lines: never display a rounded
+  // invented receipt total as valid accounting evidence.
+  total: number | null;
   count: number;
   description: string;
   categories: string[];
@@ -78,15 +80,17 @@ export function buildIssuedReceipts(lines: HistoryLine[]): IssuedReceipt[] {
     if (voided > 0 && voided < group.length) {
       reasons.push("Mixed valid and voided allocation lines");
     }
-    if (group.some(row => !Number.isFinite(row.amountPaid))) {
+    const nonFinite = group.some(row => !Number.isFinite(row.amountPaid));
+    if (nonFinite) {
       reasons.push("Non-finite monetary amount in receipt allocations");
     }
     // Existing historical lines are never changed here. Surface anomalous
     // sub-cent values for supervised audit rather than rounding them away
     // silently or assigning an incorrect student/obligation association.
-    if (group.some(row => Number.isFinite(row.amountPaid) &&
+    const unsafePrecision = group.some(row => Number.isFinite(row.amountPaid) &&
       (!Number.isSafeInteger(Math.round(row.amountPaid * 100)) ||
-        Math.abs(row.amountPaid * 100 - Math.round(row.amountPaid * 100)) > 0.000001))) {
+        Math.abs(row.amountPaid * 100 - Math.round(row.amountPaid * 100)) > 0.000001));
+    if (unsafePrecision) {
       reasons.push("Sub-cent or unsafe monetary precision in receipt allocation");
     }
     const status = reasons.length
@@ -108,7 +112,8 @@ export function buildIssuedReceipts(lines: HistoryLine[]): IssuedReceipt[] {
       encodedBy: root.encodedBy || "",
       status,
       inconsistencyReason: reasons.join("; "),
-      total: group.reduce((sum, row) => sum + Math.round(row.amountPaid * 100), 0) / 100,
+      total: nonFinite || unsafePrecision ? null :
+        group.reduce((sum, row) => sum + Math.round(row.amountPaid * 100), 0) / 100,
       count: group.length,
       description: group.map(row => row.itemDescription).join("; ").slice(0, 260),
       categories: [...new Set(group.map(row => row.category).filter(Boolean))].sort(),

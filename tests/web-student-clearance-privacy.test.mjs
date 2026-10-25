@@ -57,3 +57,13 @@ test('public student clearance guide is privacy-first, replayable and contains n
   assert.doesNotMatch(guide, /fetch\(|Authorization:|studentName|registeredEmail|outstandingCentavos/,
     'the guide must never request or retain protected clearance data');
 });
+
+test('web and shared mobile certificate verifiers reject malformed signatures before HMAC work', () => {
+  const web = read('app/department/[department]/clearance/page.tsx');
+  const shared = read('lib/clearance.ts');
+  for (const source of [web, shared]) {
+    assert.match(source, /if \(!\/\^\[0-9a-f\]\{64\}\$\/i\.test\(providedSig\)\) return false;/);
+    assert.match(source, /crypto\.timingSafeEqual/);
+  }
+  assert.match(web, /if \(!isOfficer && !\(sigParam && q\)\)/);
+});

@@ -47,3 +47,38 @@ Observed source-level risks are NOT yet latency benchmarks. Prioritize:
 ## Rollback
 
 Phase A is source-only, so revert the PR/deployment if regressions occur. Legacy ORs and balances are unchanged. Phase B will require its own point-in-time snapshot and migration-specific recovery rehearsal before proceeding.
+
+## Consolidated web patch — review candidate 25 Oct 2026 (single CI run)
+
+Cross-referenced issues: **#50, #68, #69, #70**. One PR deliberately
+combines overlapping web correctness, privacy and query-load refinements,
+rather than separately triggering four CI cycles:
+
+- **Historical precision (#68/#69):** Receipt History now passes original
+  Float data into the read-only consistency checker instead of throwing at
+  `moneyNumber` on a legacy sub-cent value. Nonfinite/unsafe groups are marked
+  **Inconsistent**, with **no numeric total shown** until supervised review;
+  no record is rounded, linked, edited or renumbered. Valid totals unchanged.
+- **Void Center response (#70):** collection-category searches use a tenant-bound
+  Prisma student relation instead of first reading an unbounded student roster,
+  then building a large ID list. Returns only student full names for the
+  displayed rows, not unrelated student profile columns. Penalty/advance/
+  collectible searches retain their existing semantics; latency gains are
+  **hypotheses until staging benchmarks confirm them**.
+- **Signed certificates (#50):** web and shared mobile verifier reject malformed
+  non-64-hex signatures before HMAC calculations. Existing SHA-256 signatures,
+  officer authorization and student OTP behavior stay unchanged. Legacy
+  certificate URLs still carry student IDs; opaque IDs and first-party QR
+  restoration remain open under #57.
+
+The **already published Android v1.2.2 binary remains unchanged**. Updates to
+shared server-side certificate verification immediately serve both web and
+mobile API clients once web Production is reviewed and deployed. Platform-only
+web history/VOID UI refinements will be mirrored in the next consolidated
+signed Android release under #65/#81, not by unlocking mobile financial writes.
+
+**Release gates:** all PR checks green; independent Preview comparison with
+synthetic valid, duplicate, voided and anomalous OR lines; authenticated Void
+Center tenant/role search; no new schema changes or Production finance writes;
+owner-approved merge and Production deployment. #68, #69, #70, #50 and #57
+remain open for their larger follow-up acceptance criteria.

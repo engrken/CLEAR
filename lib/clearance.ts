@@ -68,6 +68,9 @@ export function verifyClearanceSignature(
   providedSig: string
 ): boolean {
   try {
+    // SHA-256 HMAC certificates use exactly 64 hex characters. Reject malformed
+    // public tokens before doing any signing or tenant ledger work.
+    if (!/^[0-9a-f]{64}$/i.test(providedSig)) return false;
     const expectedSig = generateClearanceSignature(orgId, studentId, ay, term);
     const a = Buffer.from(expectedSig.toLowerCase(), 'utf8');
     const b = Buffer.from(String(providedSig || '').trim().toLowerCase(), 'utf8');

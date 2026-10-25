@@ -1,4 +1,3 @@
-import { moneyNumber } from "@/lib/money-precision";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
@@ -90,7 +89,10 @@ export default async function ReceiptHistoryPage({
     },
   });
 
-  const grouped = buildIssuedReceipts(allocationLines.map(row => ({ ...row, amountPaid: moneyNumber(row.amountPaid) })));
+  // Review historical money AS RECORDED. A legacy sub-cent/unsafe Float must
+  // appear as an inconsistent receipt, not throw in strict moneyNumber() and
+  // make the entire authorized audit page unavailable. Never repair on read.
+  const grouped = buildIssuedReceipts(allocationLines);
   const categories = [...new Set(grouped.flatMap(r => r.categories))].sort();
   const paymentTypes = [...new Set(grouped.flatMap(r => r.paymentTypes))].sort();
   const matched = filterIssuedReceipts(grouped, {
