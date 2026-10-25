@@ -180,9 +180,9 @@ export async function listLedger(org: Organization, opts: { status?: string | nu
   // Convert each record only after the authorized, tenant/period-scoped reads.
   // Never silently round, replace a malformed amount with zero, or return a
   // partial ledger as a complete financial history to existing Android apps.
-  let entries: LedgerEntry[];
-  try {
-    entries = [
+  const entries: LedgerEntry[] = (() => {
+    try {
+      return [
     ...collections.map(collectionEntry),
     ...remittances.map(remittanceEntry),
     ...penalties.map(penaltyEntry),
@@ -206,8 +206,8 @@ export async function listLedger(org: Organization, opts: { status?: string | nu
       status: c.status,
       at: c.date.toISOString(),
     })),
-    ];
-  } catch (error) {
+      ];
+    } catch (error) {
     if (error instanceof LedgerReadIntegrityError) {
       // Fixed code-only metadata: no amounts, student identities, receipts,
       // organizational references, bearer tokens or financial source rows.
@@ -219,7 +219,8 @@ export async function listLedger(org: Organization, opts: { status?: string | nu
         'No amount was rounded or changed. Contact an authorized financial administrator.');
     }
     throw error;
-  }
+    }
+  })();
 
   const status = String(opts.status || '').trim();
   return entries
