@@ -258,6 +258,21 @@ export class ApiError extends Error {
 }
 
 /** Everything screens can ask of the backend. The HTTP client and the mock both implement it. */
+/** Bounded, current-period financial read-only module. Never a posting authority. */
+export type FinanceReviewKind = 'penalties' | 'advances' | 'liquidations' | 'collections';
+export type FinanceReviewEntry = {
+  id: string; reference: string; title: string; subtitle: string;
+  status: string; amountCentavos: number; when: string;
+};
+export type FinanceReviewResponse = {
+  kind: FinanceReviewKind;
+  scope: 'active_period';
+  ay: string; term: string;
+  limit: number; hasMore: boolean;
+  amountMeaning: string;
+  entries: FinanceReviewEntry[];
+};
+
 export type ReceiptReference = {
   id: string; reference: string; name: string; studentNumber: string; when: string;
   status: 'Valid' | 'Voided' | 'Inconsistent'; amountPesos: number | null;
@@ -321,6 +336,8 @@ export type ClearApi = {
   getTenantPortal(s: Session): Promise<TenantPortalStatus>;
   getDashboard(s: Session): Promise<DashboardSummary>;
   listLedger(s: Session, filter?: { status?: string; limit?: number }): Promise<LedgerEntry[]>;
+  /** Each GET independently enforces its assigned tab, organization and active period. */
+  getFinanceReview(s: Session, kind: FinanceReviewKind, limit?: number): Promise<FinanceReviewResponse>;
   /** Authorized GET-only exact reference search; no receipt/void mutations. */
   searchReceiptReferences(s: Session, q: string): Promise<ReceiptReferenceSearch>;
   searchVoidReferences(s: Session, q: string): Promise<VoidReferenceSearch>;
