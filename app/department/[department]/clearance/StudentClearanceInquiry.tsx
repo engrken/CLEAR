@@ -59,6 +59,8 @@ export default function StudentClearanceInquiry({
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  // Ephemeral local UI metrics only: no student identifiers, balances or OTP.
+  const [lookupTiming, setLookupTiming] = useState<{ totalMs: number; clearanceMs: number | null } | null>(null);
   const tokenRef = useRef<string | null>(null);
   const api = '/api/mobile/orgs/' + encodeURIComponent(department);
 
@@ -130,6 +132,8 @@ export default function StudentClearanceInquiry({
     }
     setBusy(true);
     setError('');
+    setLookupTiming(null);
+    const startedAt = performance.now();
     try {
       const auth = await postCode('/clearance/auth/verify-code', {
         studentId: studentId.trim(),
@@ -152,6 +156,13 @@ export default function StudentClearanceInquiry({
         (privateResult.status !== 'cleared' && privateResult.qrToken !== null) ||
         (privateResult.qrToken !== null && !validStudentQrUrl(privateResult.qrToken)))
         throw new Error('Verification response could not be validated.');
+      const timing = response.headers.get('Server-Timing') || '';
+      const parsed = /(?:^|,)\s*clearance;dur=([0-9.]+)/.exec(timing);
+      const clearanceMs = parsed ? Number(parsed[1]) : null;
+      setLookupTiming({
+        totalMs: Math.max(0, performance.now() - startedAt),
+        clearanceMs: clearanceMs !== null && Number.isFinite(clearanceMs) ? clearanceMs : null,
+      });
       setResult(privateResult);
       setCode('');
       setStage('result');
@@ -178,6 +189,7 @@ export default function StudentClearanceInquiry({
     setNotice('');
     setError('');
     setResult(null);
+    setLookupTiming(null);
     setStage('identity');
     if (bearer) void fetch(api + '/clearance/auth/session', {
       method: 'DELETE', credentials: 'same-origin', cache: 'no-store',
@@ -272,6 +284,14 @@ export default function StudentClearanceInquiry({
             <p className="small text-muted">
               No QR is issued while clearance is on hold or enrollment is unconfirmed.
               Ask an authorized officer for payment details.
+            </p>
+          )}
+          {lookupTiming && (
+            <p className="small text-muted" aria-label="Clearance request loading time">
+              Loaded in {(lookupTiming.totalMs / 1000).toFixed(2)} seconds
+              {lookupTiming.clearanceMs !== null
+                ? ` (clearance calculation: ${(lookupTiming.clearanceMs / 1000).toFixed(2)} s)`
+                : ''}. Timing is shown only on your screen and is not stored.
             </p>
           )}
           <button type="button" onClick={finish} className="btn btn-outline-secondary w-100">

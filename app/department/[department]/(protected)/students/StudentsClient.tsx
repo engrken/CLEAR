@@ -35,6 +35,7 @@ export default function StudentsClient({
   enrolledCount,
   notEnrolledCount,
   studentsMissingEmail,
+  missingEmailOnly,
   currentPage,
   totalPages,
   currentSearch,
@@ -50,6 +51,7 @@ export default function StudentsClient({
   enrolledCount: number;
   notEnrolledCount: number;
   studentsMissingEmail: number;
+  missingEmailOnly: boolean;
   currentPage: number;
   totalPages: number;
   currentSearch: string;
@@ -392,6 +394,15 @@ export default function StudentsClient({
         {' '}After verifying identity through the school's approved procedure, an authorized roster officer
         may use Edit Student to record the student's confirmed email address. Unverified school IDs
         cannot bypass the clearance OTP requirement.
+        <div className="mt-2">
+          <button type="button" className="btn btn-sm btn-outline-warning fw-semibold"
+            aria-pressed={missingEmailOnly}
+            onClick={() => { cancelScheduledSearch(); updateQuery({
+              email: missingEmailOnly ? '' : 'missing', page: '1',
+            }); }}>
+            {missingEmailOnly ? 'Show all students' : 'View students needing verified email'}
+          </button>
+        </div>
       </div>}
 
       <div className="row g-3 mb-4">
