@@ -58,11 +58,22 @@ export default function ReferenceSearch() {
           <Text variant="bodyStrong" color={mode==='void'?'onAccent':'ink'}>Void audit</Text>
         </Pressable>:null}
       </View>
-      <TextInput accessibilityLabel="Search authorized receipt or void references"
-        placeholder={mode==='void'?'Search VOID reference or reason':'Search OR, student number, name or item'}
-        placeholderTextColor={c.inkMuted} value={query} onChangeText={setQuery}
-        autoCorrect={false} autoCapitalize="none"
-        style={[styles.input,{backgroundColor:c.soft,color:c.ink}]} />
+      <View style={[styles.searchRow,{backgroundColor:c.soft}]}>
+        <TextInput accessibilityLabel="Search authorized receipt or void references"
+          accessibilityHint="Enter three to eighty characters; results appear automatically for your authorized tenant."
+          placeholder={mode==='void'?'Search VOID reference or reason':'Search OR, student number, name or item'}
+          placeholderTextColor={c.inkMuted} value={query} onChangeText={setQuery}
+          maxLength={80} returnKeyType="search"
+          autoCorrect={false} autoCapitalize="none"
+          style={[styles.input,{color:c.ink}]} />
+        {query.length ? (
+          <Pressable accessibilityRole="button" accessibilityLabel="Clear reference search"
+            onPress={() => { setQuery(''); setResponse(null); setError(''); }}
+            style={styles.clearSearch}>
+            <Text variant="bodyStrong" color="inkMuted">Clear</Text>
+          </Pressable>
+        ) : null}
+      </View>
       <Text variant="caption" color="inkMuted">
         {mode==='void'?'Void audit covers all periods of this tenant.':'Receipts are scoped to your tenant’s current academic period.'} Type at least 3 characters.
       </Text>
@@ -98,6 +109,8 @@ export default function ReferenceSearch() {
 const styles=StyleSheet.create({
   tabs:{flexDirection:'row',gap:spacing[2]},
   pill:{borderRadius:radius.pill,paddingVertical:12,paddingHorizontal:20},
-  input:{minHeight:52,borderRadius:radius.lg,paddingHorizontal:15,fontSize:16},
+  searchRow:{flexDirection:'row',alignItems:'center',borderRadius:radius.lg},
+  input:{flex:1,minHeight:52,paddingHorizontal:15,fontSize:16},
+  clearSearch:{minHeight:44,justifyContent:'center',paddingHorizontal:14},
   card:{borderRadius:radius.lg,padding:spacing[3],gap:spacing[1]},
 });
