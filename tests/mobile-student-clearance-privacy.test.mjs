@@ -27,7 +27,10 @@ test('anonymous student ID/email lookups no longer reveal clearance outcomes', (
   assert.match(route, /studentName: null/);
   assert.match(route, /studentId: null/);
   assert.match(route, /outstandingCentavos: null/);
-  assert.match(route, /qrToken: null/);
+  assert.match(route, /qrToken: null/, 'officer has no QR issuance');
+  assert.match(route, /qrToken: studentQrUrl/, 'student receives encrypted proof only after OTP');
+  assert.match(route, /requireStudentClearanceSession\(req, org\)/);
+  assert.match(route, /result\.student\.id !== student\.id/);
 });
 
 test('student OTP is tenant-bound, generic, single-use and stored hashed', () => {

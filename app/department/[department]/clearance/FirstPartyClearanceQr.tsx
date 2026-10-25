@@ -1,3 +1,5 @@
+'use client';
+
 import { qrcode } from '@/lib/vendor/qrcode.mjs';
 // All SVG markup comes from a locally bundled, MIT-licensed encoder.
 // URL contains only a random-nonce AES-GCM certificate, not a student ID.

@@ -8,6 +8,8 @@ import { requireStudentClearanceSession } from '@/lib/mobile/student-clearance-a
 import { toCentavos } from '@/lib/mobile/serialize';
 import { getStudentClearance } from '@/lib/clearance';
 import { issueClearanceCertificate } from '@/lib/clearance-opaque-token';
+import { prisma } from '@/lib/prisma';
+import { getPeriodLedger } from '@/app/department/[department]/(protected)/realign/ledger';
 
 type Ctx = { params: Promise<{ org: string }> };
 
@@ -36,13 +38,8 @@ export const GET = handler(async (req: Request, { params }: Ctx) => {
         kind: i.category,
         ...(i.originAy ? { academicYear: i.originAy, term: i.originTerm } : {}),
       })),
-      qrToken: result.signature
-        ? publicBaseUrl(req) + '/clearance/verify?token=' + encodeURIComponent(
-            issueClearanceCertificate({
-              orgId: org.id, studentPk: result.student.id, studentId: result.student.studentId,
-              ay: org.activeAy, term: org.activeTerm,
-            }))
-        : null,
+      // Officer checks a QR presented by the OTP-verified student, never issues it.
+      qrToken: null,
       ay: org.activeAy, term: org.activeTerm,
     };
   }
@@ -54,15 +51,26 @@ export const GET = handler(async (req: Request, { params }: Ctx) => {
   if (!result || result.student.id !== student.id) {
     throw new ApiFailure(401, 'unauthorized', 'Student clearance authorization has changed. Verify again.');
   }
+  // Only a verified student with no outstanding obligation in an open term
+  // can receive an encrypted bearer certificate for presentation to an officer.
+  const ledger = result.isCleared
+    ? await getPeriodLedger(prisma, org.id, org.activeAy, org.activeTerm)
+    : null;
+  const studentQrUrl = result.isCleared && ledger && !ledger.activeRollover
+    ? publicBaseUrl(req) + '/clearance/verify?token=' + encodeURIComponent(
+        issueClearanceCertificate({
+          orgId: org.id, studentPk: result.student.id, studentId: result.student.studentId,
+          ay: org.activeAy, term: org.activeTerm,
+        }))
+    : null;
   return {
     studentName: null,
     studentId: null,
     status: !result.isEnrolled ? 'not_enrolled' : result.isCleared ? 'cleared' : 'hold',
     outstandingCentavos: null,
     unpaidItems: null,
-    // Public QR verification paths contain school IDs; do not leak them via
-    // student-private API responses. A verified officer can issue the QR.
-    qrToken: null,
+    // Student identifier and balances remain private; URL contains opaque ciphertext.
+    qrToken: studentQrUrl,
     ay: org.activeAy, term: org.activeTerm,
   };
 });

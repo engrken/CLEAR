@@ -50,9 +50,16 @@ test('new QR URL is private, live-rechecked, expiring; old signature flow preser
   const api=read('app/api/mobile/orgs/[org]/clearance/route.ts');
   const view=read('app/clearance/verify/page.tsx');
   const headers=read('next.config.ts');
-  assert.match(web,/issueClearanceCertificate\(/);
-  assert.match(web,/<FirstPartyClearanceQr url=\{queriedVerifyUrl\}/);
+  const student = read('app/department/[department]/clearance/StudentClearanceInquiry.tsx');
+  assert.doesNotMatch(web,/issueClearanceCertificate\(/);
+  assert.doesNotMatch(web,/<FirstPartyClearanceQr/);
+  assert.match(student,/<FirstPartyClearanceQr url=\{result.qrToken\}/);
+  assert.match(student,/result.status === 'cleared' && result.qrToken/);
   assert.match(web,/verifyClearanceSignature\(/,'legacy links still verify');
+  assert.match(api,/requireStudentClearanceSession\(req, org\)/);
+  assert.match(api,/result.student.id !== student.id/);
+  assert.match(api,/getPeriodLedger\(prisma, org.id/);
+  assert.match(api,/!ledger.activeRollover/);
   assert.match(api,/issueClearanceCertificate\(/);
   assert.doesNotMatch(api,/clearanceVerifyPath\(/,'new mobile officer QR should not expose school IDs');
   assert.match(view,/readClearanceCertificate\(/);

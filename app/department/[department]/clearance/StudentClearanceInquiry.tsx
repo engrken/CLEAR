@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import FirstPartyClearanceQr from './FirstPartyClearanceQr';
 
 type Stage = 'identity' | 'code' | 'result';
 type StudentClearance = {
@@ -11,7 +12,7 @@ type StudentClearance = {
   studentId: null;
   outstandingCentavos: null;
   unpaidItems: null;
-  qrToken: null;
+  qrToken: string | null;
 };
 
 const friendlyError = (status: number) =>
@@ -21,7 +22,21 @@ const friendlyError = (status: number) =>
       ? 'The code or registered student credentials could not be verified.'
       : 'Clearance verification is unavailable at the moment. Please try again later.';
 
-/** Status-only student self-service. All authorization is rechecked by server. */
+/** Only render encrypted first-party certificate URLs returned by CLEAR. */
+function validStudentQrUrl(value: unknown): value is string {
+  if (typeof value !== 'string' || value.length > 1800) return false;
+  try {
+    const url = new URL(value);
+    const trusted = url.origin === window.location.origin ||
+      url.origin === 'https://clearsys.vercel.app';
+    return trusted && url.protocol === 'https:' &&
+      url.pathname === '/clearance/verify' && !url.hash &&
+      url.searchParams.size === 1 &&
+      /^v3\.[A-Za-z0-9_-]{60,900}$/.test(url.searchParams.get('token') || '');
+  } catch { return false; }
+}
+
+/** Status-only, OTP-gated student self-service. Authorization is server-enforced. */
 export default function StudentClearanceInquiry({
   department,
   organizationName,
@@ -131,7 +146,9 @@ export default function StudentClearanceInquiry({
       if (!['cleared', 'hold', 'not_enrolled'].includes(privateResult.status) ||
         privateResult.studentName !== null || privateResult.unpaidItems !== null ||
         privateResult.studentId !== null || privateResult.outstandingCentavos !== null ||
-        privateResult.qrToken !== null) throw new Error('Verification response could not be validated.');
+        (privateResult.status !== 'cleared' && privateResult.qrToken !== null) ||
+        (privateResult.qrToken !== null && !validStudentQrUrl(privateResult.qrToken)))
+        throw new Error('Verification response could not be validated.');
       setResult(privateResult);
       setCode('');
       setStage('result');
@@ -228,9 +245,32 @@ export default function StudentClearanceInquiry({
             <strong>{result.status === 'cleared' ? 'CLEARED' : result.status === 'not_enrolled' ? 'NOT ENROLLED THIS TERM' : 'CLEARANCE ON HOLD'}</strong>
             <p className="mb-0">As of {result.term} ({result.ay}){result.status === 'not_enrolled' ? ' — no new mandatory package fee applies' : ''}</p>
           </div>
-          <p className="small text-muted">
-            Only your status is displayed. Ask an authorized officer for payment details or a signed clearance certificate.
-          </p>
+          {result.status === 'cleared' && result.qrToken ? (
+            <div className="text-center my-3 p-3 rounded border border-success"
+              aria-label="My clearance QR certificate">
+              <h2 className="h6 text-success fw-bold">My clearance QR code</h2>
+              <p className="small text-muted">
+                Present this QR to your adviser or authorized clearance officer for scanning.
+              </p>
+              <FirstPartyClearanceQr url={result.qrToken} />
+              <p className="small text-muted mt-2 mb-1">
+                Verification checks your clearance live. The certificate expires in seven days
+                or earlier if your enrollment or financial status changes.
+              </p>
+              <p className="small text-muted mb-0">
+                A QR verifies status, not identity. Show your school ID too. Keep your QR private.
+              </p>
+            </div>
+          ) : result.status === 'cleared' ? (
+            <p className="small text-muted">
+              QR unavailable for a closed academic period. Contact your clearance officer.
+            </p>
+          ) : (
+            <p className="small text-muted">
+              No QR is issued while clearance is on hold or enrollment is unconfirmed.
+              Ask an authorized officer for payment details.
+            </p>
+          )}
           <button type="button" onClick={finish} className="btn btn-outline-secondary w-100">
             Finish private inquiry
           </button>

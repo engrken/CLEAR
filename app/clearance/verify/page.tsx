@@ -40,7 +40,8 @@ export default async function VerifyCertificatePage({ searchParams }:{
       <p className="small text-muted">{isValid
         ? 'Current enrollment and recorded financial obligations have been verified.'
         : 'An expired certificate, revoked enrollment or outstanding obligation cannot be verified as cleared.'}</p>
-      <p className="small text-muted">This public screen does not display student identities or financial balances.</p>
+      <p className="small text-muted">This public screen does not display student identities or financial balances.
+        QR validity is not proof of the presenter's identity; officers should also check the official student ID.</p>
       <Link href="/" className="btn btn-outline-secondary">Return to CLEAR</Link>
     </article>
   </main>;

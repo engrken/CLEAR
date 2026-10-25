@@ -55,12 +55,12 @@ test('Local/CI origin uses explicitly configured loopback HTTP, never public HTT
   }), OFFICIAL, 'reject origin containing credentials');
 });
 
-test('Both officer API and web signed-certificate generation use the same trusted-origin policy', () => {
+test('Private student certificate issue uses trusted-origin policy, while legacy web HMAC remains valid', () => {
   const mobile = read('lib/mobile/http.ts');
   const web = read('app/department/[department]/clearance/page.tsx');
   const route = read('app/api/mobile/orgs/[org]/clearance/route.ts');
   assert.match(mobile, /return clearanceLinkOrigin\(\)/);
-  assert.match(web, /const absoluteBaseUrl = clearanceLinkOrigin\(\)/);
+  assert.doesNotMatch(web, /clearanceLinkOrigin\(\)/, 'officer does not issue signed QR links');
   assert.match(route, /publicBaseUrl\(req\) \+ '\/clearance\/verify\?token='/);
   assert.match(route, /issueClearanceCertificate\(/);
   assert.doesNotMatch(route, /clearanceVerifyPath\(/);

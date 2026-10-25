@@ -22,6 +22,8 @@ test('student-only OTP and private response remain enforced before roster/financ
   for (const field of ['studentName: null', 'outstandingCentavos: null', 'qrToken: null']) {
     assert.ok(api.includes(field), field);
   }
+  assert.match(api, /qrToken: studentQrUrl/);
+  assert.match(api, /!ledger.activeRollover/);
   assert.match(otp, /MAX_GUESSES = 5/);
   assert.match(otp, /OTP_TTL_MS = 5 \* 60_000/);
   assert.match(otp, /verificationToken\.deleteMany/);
