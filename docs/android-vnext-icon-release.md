@@ -1,74 +1,85 @@
-# Next Android icon — approved design / release integration
+# CLEAR Android launcher correction — v1.2.4 (candidate code 14)
 
-Owner accepted redesigned CLEAR blue/gold document + verified magnifier icon for the **next Android Play update**. This work is staged independently of published Play v1.2.2.
+## Evidence and scope
 
-## GitHub assets
+On **25 October 2026**, the owner installed CLEAR **v1.2.3** (code 13 uploaded to Google Play Internal Testing) and provided an Android App Info screenshot showing the **old launcher artwork** despite version 1.2.3. This is a **confirmed on-device icon mismatch**, not proof of any security or payment issue.
 
-- `mobile/assets/clear-launcher-vnext.png` — committed compact 128px *preview* of the approved launcher.
-- `mobile/assets/clear-adaptive-foreground-vnext.png` — committed compact, alpha-bearing 128px *preview* of the approved, inset adaptive foreground.
-- `mobile/app.json` points to these distinct files; adaptive background is white.
-- These compact assets let all workstations sync the proposed branding and run preflight tests, but **must not be treated as the final Play artwork**.
+Repo assets and Expo config on PR #96 already reference the owner-approved professional blue/gold document + checked-magnifier design:
+- `mobile/assets/clear-launcher-vnext.png` (approved 1024px, SHA-256 `c1deff4bd85750a7779b566377727a83fcb7bbc1512790e8df8f93c4ebe67fc4`);
+- `mobile/assets/clear-adaptive-foreground-vnext.png` (approved 1024px, SHA-256 `23598d480fd8fe054cae0d52bf259824f20b9bf21830c4d060532cd35d72b30b`);
+- `mobile/app.json` points to **both** files, with an opaque launcher and separately padded alpha foreground on white.
 
-## Final original asset handoff and integrity
+These **full-resolution originals are already checked into GitHub**; previous 128px preview instructions are historical and no longer applicable. Do not re-upload or replace them.
 
-The owner-approved complete-resolution files are held in `CLEAR_Android_Icon_Assets_Next_Release.zip` supplied in the CLEAR project conversation. Replace the GitHub preview assets with these full-resolution originals in the **same names** before requesting the signed AAB:
+Expo documents that `android.adaptiveIcon.foregroundImage` supersedes `expo.icon` for Android and that native config changes require regeneration. Without `--clean`, Expo prebuild can layer edits on existing Android files, leaving stale resources. This is the leading hypothesis for the observed old icon, **not yet proven** without inspecting the exact v1.2.3 artifact. An Android launcher cache can also contribute, so first reboot the phone and recheck App Info and launcher before building another Play version. **Do not uninstall the live app or clear its data.**
 
-| Source in approved package | Target in the repo | Required SHA-256 |
-| --- | --- | --- |
-| `clear-launcher.png` (1024px, opaque) | `mobile/assets/clear-launcher-vnext.png` | `c1deff4bd85750a7779b566377727a83fcb7bbc1512790e8df8f93c4ebe67fc4` |
-| `clear-adaptive-foreground.png` (1024px, alpha) | `mobile/assets/clear-adaptive-foreground-vnext.png` | `23598d480fd8fe054cae0d52bf259824f20b9bf21830c4d060532cd35d72b30b` |
+- Expo configuration: https://docs.expo.dev/versions/latest/config/app/
+- Expo clean prebuild: https://docs.expo.dev/workflow/continuous-native-generation/
 
-On the authorized workstation, from repository root, after downloading the approved zip:
+## Version safety
 
-```powershell
-Expand-Archive -Path ".\CLEAR_Android_Icon_Assets_Next_Release.zip" -DestinationPath ".\icon-source" -Force
-Copy-Item ".\icon-source\clear-launcher.png" ".\mobile\assets\clear-launcher-vnext.png" -Force
-Copy-Item ".\icon-source\clear-adaptive-foreground.png" ".\mobile\assets\clear-adaptive-foreground-vnext.png" -Force
-cd mobile
-node scripts/verify-live-viewer.mjs --release
-```
+Google Play Internal Testing has already received `versionCode 13`, so any **replacement AAB** must use a **higher unused code**. PR #96 now stages **v1.2.4 / code 14** as a *candidate*. Confirm 14 is unused across **all Play tracks**. The APK package and approved Play Upload certificate must remain unchanged.
 
-The `--release` gate checks **1024×1024 + byte-for-byte approved SHA-256** for both icons. The current compact committed previews correctly FAIL that gate. Commit the final PNGs to the review branch, then check Next/Expo and run internal device QA before merging for publication. Do not remove/bypass the release gate.
+No backend database changes, financial transactions, permission expansions or Google Play submission are part of this patch. Until fixed, **do not promote icon-defective 1.2.3 to Production**.
 
-## Consolidated release acceptance
+## 1. Source synchronization — owner workstation
 
-1. Confirm correct official Android package and owner, no new signing key, and the next unused versionCode across all Play tracks and EAS remote state. Branch stages version `1.2.3` / code 13 as a local-build candidate; verify code 13 is unused on every Play track before upload.
-2. Keep web and Android backend access synced, financial and business writes denied unless independently authorized.
-3. Inspect generated icon under **round, squircle, and themed masks** on at least one small launcher and one large-screen Android device; check legibility, clipping, background and icon label.
-4. Complete the same native role/tenant/student OTP/QR and search UAT tracked in #81, then sign one AAB with the established Google Play Upload key and internal-test before Production.
-5. Preserve v1.2.2 Production binary. **This branch and its Vercel Preview do not publish Android.**
-
-## Historical workflow guard
-
-`.github/workflows/android-v122-official-aab.yml` hard-pins the **old** v1.2.2 icon and version. It is a historical release-specific workflow, not proof the new artwork is included. The next-release signing workflow must be reviewed separately and call `node mobile/scripts/verify-live-viewer.mjs --release` before requesting any final AAB.
-
-## Workstation automation (added for v1.2.3)
-
-After checking out PR #96, download `CLEAR_Android_Icon_Assets_Next_Release.zip` from the CLEAR conversation. Use the checked-in PowerShell helpers:
+In PowerShell:
 
 ```powershell
-cd D:\\clear-system-saas
+cd D:\clear-system-saas
+git status --short
 git fetch origin
 git switch feat/android-vnext-icon-and-parity-20261025
 git pull --ff-only origin feat/android-vnext-icon-and-parity-20261025
-.\\mobile\\scripts\\Sync-ClearAndroidIcon.ps1 -PackagePath "$HOME\\Downloads\\CLEAR_Android_Icon_Assets_Next_Release.zip" -StageForCommit
-.\\mobile\\scripts\\Preflight-ClearAndroidV123.ps1 -InstallDependencies
+.\mobile\scripts\Preflight-ClearAndroidV124.ps1 -InstallDependencies
 ```
 
-The asset helper SHA-256-checks both original full-resolution PNGs before writing anything. Commit/push the changed 1024px images to the PR branch, then repeat CI. Build the AAB on an owner-controlled clean/disposable short-path workspace with the **existing Play Upload keystore**, not the debug signer. After the signed bundle exists, run `mobile/scripts/Verify-ClearAndroidAAB.ps1 -BundlePath <path> -BundletoolJar <path>`, which verifies certificate fingerprint, package, version, code and target SDK. Neither helper signs, publishes, leaks credentials, or edits Production. The historical v1.2.2 workflow is not the new version's signing mechanism.
+Do not discard uncommitted changes or copy old `D:\m123\android` into the next workspace.
 
-## Bundletool 1.18.3 setup and signing-warning review (Windows)
-
-The AAB verification script defaults to `D:\tools\bundletool-all-1.18.3.jar`. It no longer assumes a nonexistent generic `bundletool-all.jar` file. Install the official Google's 1.18.3 release asset and independently check the published GitHub SHA-256:
+## 2. Produce an **entirely new** Android native project, preserving old builds
 
 ```powershell
-New-Item -ItemType Directory -Force "D:\tools" | Out-Null
-$tool = "D:\tools\bundletool-all-1.18.3.jar"
-Invoke-WebRequest -Uri "https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar" -OutFile $tool
-$expected = "A099CFA1543F55593BC2ED16A70A7C67FE54B1747BB7301F37FDFD6D91028E29"
-if ((Get-FileHash -LiteralPath $tool -Algorithm SHA256).Hash -ne $expected) { throw "Official bundletool download checksum mismatch." }
-java -jar $tool version
-.\mobile\scripts\Verify-ClearAndroidAAB.ps1 -BundlePath "D:\m123\android\app\build\outputs\bundle\release\app-release.aab"
+cd D:\clear-system-saas
+.\mobile\scripts\Prepare-ClearAndroidV124.ps1 -Workspace "D:\m124" -PreviousWorkspace "D:\m123"
 ```
 
-The verifier checks the AAB's signature, the official Upload key, bundletool structure, manifest identity, candidate code 13 and target API. `jarsigner` may print an informational `META-INF/MANIFEST.MF ... JarFile ... JarInputStream` warning even on a signature verified with exit code 0. Preserve `jarsigner -verify -verbose -certs` output and review the warning before Play rollout; an informational warning is **not** a substitute for successful verification, and do not claim that the bundle is published from local checks. Oracle documents that `internalInconsistenciesDetected` is informational. For versionCode 13, still verify all Play tracks.
+The helper:
+1. Requires the correct Git review branch, v1.2.4/code14, official package ID and approved **1024px** artwork hashes.
+2. Refuses to touch an existing `D:\m124` or any old `D:\m123` build folder.
+3. Copies the mobile source **excluding** old native `android/`, compiled dependencies, environment secrets, private keystores or credentials.
+4. Runs `npm ci`, mobile TypeScript, then `npx expo prebuild --platform android --clean --no-install` in the brand-new directory with the Production read-only API.
+5. Requires native adaptive foreground PNG/WebP and XML resources referencing the foreground. Creates `D:\m124\clear-native-launcher-resources.sha256.txt` as evidence of the generated icon resource hashes and (when available) comparisons to `D:\m123`. **If all comparable foreground resources are byte-identical to the old ones, investigate device caching or actual app resource differences before rebuilding**.
+
+Visually inspect generated icon files in `D:\m124\android\app\src\main\res\mipmap-*` or `drawable-*`. They must show the **new text-free report/checkmark design**, not the old `CLEAR system` wordmark. Compare the round and adaptive XML layers. Merely passing Gradle does not prove this visual check.
+
+## 3. Sign and build the corrected AAB **only after native icon validation**
+
+A clean Expo prebuild regenerates `android/` and may restore the default **debug-signed** release Gradle configuration. Restore the previously verified **Play Upload keystore** and signing block from the owner's **private, external** backup *after* prebuild. Never commit the keys, passwords or signing configuration.
+
+```powershell
+cd D:\m124\android
+$env:EXPO_PUBLIC_API_URL = "https://clearsys.vercel.app/api/mobile"
+$env:EXPO_PUBLIC_CLEAR_TENANT_OPERATIONS = "false"
+Remove-Item Env:\EXPO_PUBLIC_API_MODE -ErrorAction SilentlyContinue
+.\gradlew.bat :app:bundleRelease --max-workers=2 --no-daemon --console=plain
+if ($LASTEXITCODE -ne 0) { throw "Android App Bundle build failed." }
+```
+
+Check Play's versionCode 14 availability first; prefer a proper all-ABI bundle rather than the earlier ARM64-only QA workaround.
+
+## 4. Inspect bundle and test the **Play-installed** app
+
+```powershell
+cd D:\clear-system-saas
+.\mobile\scripts\Verify-ClearAndroidAAB.ps1 -BundlePath "D:\m124\android\app\build\outputs\bundle\release\app-release.aab" -BundletoolJar "D:\tools\bundletool-all-1.18.3.jar"
+```
+
+The verifier requires package `com.rupertbulquerin.clear`, version `1.2.4`, versionCode `14`, target SDK 36+, approved Upload key and successful bundletool structural validation.
+
+Upload only to **Internal Testing**, then install/update **through Google Play**. On the device:
+- Check the launcher icon **and Settings > App Info** after updating. They must show the new logo at small size, circle and squircle.
+- Verify student email OTP, status, student-owned QR, officer role-scoped Receipt/Void reference search, tenant admin and Global Superadmin visibility, and that Android finance/void/remittance/proof mutations remain disabled.
+- Confirm the exact installed version `1.2.4` and review Play pre-launch/crash reports; only then consider Production.
+
+**Do not close #61 or merge the release as completed solely because a signed AAB compiles.** The official next Google Play Production decision is separate.
