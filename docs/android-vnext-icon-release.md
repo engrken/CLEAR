@@ -45,7 +45,7 @@ cd D:\clear-system-saas
 ```
 
 The helper:
-1. Requires the correct Git review branch, v1.2.4/code14, official package ID and approved **1024px** artwork hashes.
+1. Requires the correct Git review branch, v1.2.4/code14, official package ID and approved **1024px** artwork hashes via `node scripts/verify-live-viewer.mjs --release`.
 2. Refuses to touch an existing `D:\m124` or any old `D:\m123` build folder.
 3. Copies the mobile source **excluding** old native `android/`, compiled dependencies, environment secrets, private keystores or credentials.
 4. Runs `npm ci`, mobile TypeScript, then `npx expo prebuild --platform android --clean --no-install` in the brand-new directory with the Production read-only API.
