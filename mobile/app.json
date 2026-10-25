@@ -21,8 +21,8 @@
     "android": {
       "package": "com.rupertbulquerin.clear",
       "adaptiveIcon": {
-        "backgroundColor": "#0b1329",
-        "foregroundImage": "./assets/clear-launcher.png"
+        "foregroundImage": "./assets/clear-adaptive-foreground-vnext.png",
+        "backgroundColor": "#FFFFFF"
       },
       "predictiveBackGestureEnabled": false,
       "blockedPermissions": [
@@ -68,6 +68,6 @@
         "projectId": "cfbb6ff9-bf5b-4776-9ec6-0def41a11cb1"
       }
     },
-    "icon": "./assets/clear-launcher.png"
+    "icon": "./assets/clear-launcher-vnext.png"
   }
 }
