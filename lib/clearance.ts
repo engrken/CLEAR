@@ -15,7 +15,7 @@
 import crypto from 'node:crypto';
 import { prisma } from '@/lib/prisma';
 import { money } from '@/lib/utils';
-import { isOutstandingPenalty } from '@/lib/penalty-clearance-status';
+import { isOutstandingPenalty, isCanonicalPenaltyReceipt } from '@/lib/penalty-clearance-status';
 export { isClosedPenaltyStatus } from '@/lib/penalty-clearance-status';
 import { listHistoricalDebts, type HistoricalDebt } from '@/lib/student-arrears';
 import {
@@ -168,6 +168,9 @@ export function evaluateStudentObligations(
   for (const c of myCollections) {
     const desc = String(c.itemDescription || '').trim();
     if (!desc || isPackageCollection(desc) || /^Historical (Penalty|Collectible) \[/i.test(desc)) continue;
+    // Penalty receipts (including partially paid cash ORs) are settlement
+    // evidence: only the linked live Penalty balance can impose a hold.
+    if (isCanonicalPenaltyReceipt(c, student, penalties)) continue;
     const key = desc.toLowerCase();
     const group = standaloneGroups.get(key) || {
       category: String(c.category || 'Assessment'),
