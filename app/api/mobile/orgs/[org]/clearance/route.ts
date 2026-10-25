@@ -6,7 +6,8 @@ import { getOrgOr404 } from '@/lib/mobile/data';
 import { requireMobileOfficer } from '@/lib/mobile/session';
 import { requireStudentClearanceSession } from '@/lib/mobile/student-clearance-auth';
 import { toCentavos } from '@/lib/mobile/serialize';
-import { clearanceVerifyPath, getStudentClearance } from '@/lib/clearance';
+import { getStudentClearance } from '@/lib/clearance';
+import { issueClearanceCertificate } from '@/lib/clearance-opaque-token';
 
 type Ctx = { params: Promise<{ org: string }> };
 
@@ -36,9 +37,11 @@ export const GET = handler(async (req: Request, { params }: Ctx) => {
         ...(i.originAy ? { academicYear: i.originAy, term: i.originTerm } : {}),
       })),
       qrToken: result.signature
-        ? publicBaseUrl(req) + clearanceVerifyPath(
-            org.subdomain, org.activeAy, org.activeTerm,
-            result.student.studentId, result.signature)
+        ? publicBaseUrl(req) + '/clearance/verify?token=' + encodeURIComponent(
+            issueClearanceCertificate({
+              orgId: org.id, studentPk: result.student.id, studentId: result.student.studentId,
+              ay: org.activeAy, term: org.activeTerm,
+            }))
         : null,
       ay: org.activeAy, term: org.activeTerm,
     };

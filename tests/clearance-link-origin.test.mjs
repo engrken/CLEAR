@@ -61,7 +61,9 @@ test('Both officer API and web signed-certificate generation use the same truste
   const route = read('app/api/mobile/orgs/[org]/clearance/route.ts');
   assert.match(mobile, /return clearanceLinkOrigin\(\)/);
   assert.match(web, /const absoluteBaseUrl = clearanceLinkOrigin\(\)/);
-  assert.match(route, /publicBaseUrl\(req\) \+ clearanceVerifyPath/);
+  assert.match(route, /publicBaseUrl\(req\) \+ '\/clearance\/verify\?token='/);
+  assert.match(route, /issueClearanceCertificate\(/);
+  assert.doesNotMatch(route, /clearanceVerifyPath\(/);
   assert.doesNotMatch(mobile, /req\.headers\.get\('(?:x-forwarded-host|host|x-forwarded-proto)'\)/);
   assert.doesNotMatch(web, /headersList\.get\('host'\)|rawHost/);
   assert.match(web, /verifyClearanceSignature\(/, 'existing independent signed certificate verification preserved');

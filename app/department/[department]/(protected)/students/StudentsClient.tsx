@@ -34,6 +34,7 @@ export default function StudentsClient({
   totalDirectory,
   enrolledCount,
   notEnrolledCount,
+  studentsMissingEmail,
   currentPage,
   totalPages,
   currentSearch,
@@ -48,6 +49,7 @@ export default function StudentsClient({
   totalDirectory: number;
   enrolledCount: number;
   notEnrolledCount: number;
+  studentsMissingEmail: number;
   currentPage: number;
   totalPages: number;
   currentSearch: string;
@@ -385,6 +387,12 @@ export default function StudentsClient({
         </div>
       </div>
       <p className="text-muted small fst-italic mb-3">Starting {ay} ({term}), only confirmed enrolled students are available in search lists.</p>
+      {studentsMissingEmail > 0 && <div className="alert alert-warning small mb-3" role="status">
+        <strong>{studentsMissingEmail} student roster {studentsMissingEmail === 1 ? 'record needs' : 'records need'} a registered email.</strong>
+        {' '}After verifying identity through the school's approved procedure, an authorized roster officer
+        may use Edit Student to record the student's confirmed email address. Unverified school IDs
+        cannot bypass the clearance OTP requirement.
+      </div>}
 
       <div className="row g-3 mb-4">
         <div className="col-6 col-md-3">
