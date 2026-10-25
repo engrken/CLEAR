@@ -29,7 +29,10 @@ function validStudentQrUrl(value: unknown): value is string {
     const url = new URL(value);
     const trusted = url.origin === window.location.origin ||
       url.origin === 'https://clearsys.vercel.app';
-    return trusted && url.protocol === 'https:' &&
+    const secure = url.protocol === 'https:' ||
+      (url.origin === window.location.origin && url.protocol === 'http:' &&
+        (url.hostname === 'localhost' || url.hostname === '127.0.0.1'));
+    return trusted && secure &&
       url.pathname === '/clearance/verify' && !url.hash &&
       url.searchParams.size === 1 &&
       /^v3\.[A-Za-z0-9_-]{60,900}$/.test(url.searchParams.get('token') || '');
