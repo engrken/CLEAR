@@ -66,6 +66,33 @@ export default async function ReceiptHistoryPage({
   //
   // This read-only reconciliation view intentionally never changes balances
   // or emits payment/receipt writes.
+  // #70: query candidate ORs for narrow text search, then load all
+  // allocation lines for those receipt groups before applying filters/paging.
+  // A broad search deliberately falls back to the original full tenant read.
+  let receiptCandidates: string[] | null = null;
+  if (q.length >= 3 && !exactOr) {
+    const matching = await prisma.collection.findMany({
+      where: {
+        organizationId: org.id,
+        ...(ay ? { academicYear: ay } : {}),
+        ...(term ? { term } : {}),
+        OR: [
+          { studentName: { contains: q, mode: 'insensitive' } },
+          { orNumber: { contains: q, mode: 'insensitive' } },
+          { student: { is: { organizationId: org.id, studentId: {
+            contains: q, mode: 'insensitive',
+          } } } },
+        ],
+      },
+      select: { orNumber: true },
+      take: 151,
+    });
+    if (matching.length <= 150) {
+      const bases = new Set(matching.map(row =>
+        row.orNumber.trim().toUpperCase().replace(/-P\\d+$/i, '')));
+      if (bases.size <= 60) receiptCandidates = [...bases];
+    }
+  }
   const allocationLines = await prisma.collection.findMany({
     where: {
       organizationId: org.id,
@@ -78,6 +105,10 @@ export default async function ReceiptHistoryPage({
         { orNumber: { equals: exactOr, mode: "insensitive" as const } },
         { orNumber: { startsWith: `${exactOr}-P`, mode: "insensitive" as const } },
       ] } : {}),
+      ...(receiptCandidates !== null ? { OR: receiptCandidates.flatMap(base => [
+        { orNumber: { equals: base, mode: "insensitive" as const } },
+        { orNumber: { startsWith: `${base}-P`, mode: "insensitive" as const } },
+      ]) } : {}),
     },
     orderBy: [{ timestamp: "desc" }, { id: "desc" }],
     select: {

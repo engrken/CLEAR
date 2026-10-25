@@ -7,6 +7,8 @@ import { fmt, money } from '@/lib/utils';
 import { requireTabAccess } from '@/lib/permissions';
 import { formatInTimeZone } from 'date-fns-tz';
 import { clearanceLinkOrigin } from '@/lib/clearance-link-origin';
+import { issueClearanceCertificate } from '@/lib/clearance-opaque-token';
+import FirstPartyClearanceQr from './FirstPartyClearanceQr';
 import { notFound, redirect } from 'next/navigation';
 import crypto from 'node:crypto';
 import Link from 'next/link';
@@ -647,14 +649,14 @@ export default async function ClearancePage({
         )
       : null;
 
-    const queriedClearanceSig =
-      queriedStudent && queriedStudent.isCleared
-        ? generateClearanceSignature(organization.id, queriedStudent.studentId, ay, term)
-        : '';
-    const queriedVerifyUrl =
-      queriedStudent && queriedStudent.isCleared
-        ? `${absoluteBaseUrl}${basePath}/clearance?ay=${encodeURIComponent(ay)}&term=${encodeURIComponent(term)}&q=${encodeURIComponent(queriedStudent.studentId)}&sig=${encodeURIComponent(queriedClearanceSig)}`
-        : '';
+    const selectedStudent = queriedStudent && queriedStudent.isCleared
+      ? allStudents.find(s => s.studentId.toLowerCase() === queriedStudent.studentId.toLowerCase())
+      : null;
+    const queriedVerifyUrl = selectedStudent
+      ? `${absoluteBaseUrl}/clearance/verify?token=${encodeURIComponent(issueClearanceCertificate({
+        orgId: organization.id, studentPk: selectedStudent.id,
+        studentId: selectedStudent.studentId, ay, term,
+      }))}` : '';
 
     return (
       <div className="d-flex flex-column min-vh-100 bg-body-tertiary">
@@ -685,9 +687,10 @@ export default async function ClearancePage({
                       <i className="bi bi-patch-check-fill me-2"></i> CLEARED FOR SIGNING
                     </div>
                     <p className="small text-body mb-2">
-                      The signed digital certificate can be opened below. To protect student IDs,
-                      CLEAR no longer sends verification links to an external QR-image provider.
-                    </p>
+                       Scan this locally generated QR to verify the current clearance.
+                       It expires after seven days; a change in enrollment or an unpaid balance invalidates it immediately.
+                     </p>
+                     {queriedVerifyUrl && <div className="my-3"><FirstPartyClearanceQr url={queriedVerifyUrl} /></div> 
                     <div>
                       <a href={queriedVerifyUrl} target="_blank" rel="noopener noreferrer" className="btn btn-success btn-sm fw-bold text-dark">
                         <i className="bi bi-box-arrow-up-right me-1"></i> Open Digital Certificate

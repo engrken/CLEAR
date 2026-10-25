@@ -73,7 +73,7 @@ export default async function StudentsPage({
   // The unfiltered roster count is the directory count: skip a duplicate
   // COUNT(*) on initial load and when returning to the unfiltered list.
   const unfilteredRoster = !search.trim() && yearFilter === 'ALL' && statusFilter === 'ALL';
-  const [totalDirectory, absoluteEnrolledCount, filteredCount, students] = await Promise.all([
+  const [totalDirectory, absoluteEnrolledCount, studentsMissingEmail, filteredCount, students] = await Promise.all([
     prisma.student.count({ where: { organizationId: organization.id } }),
     prisma.student.count({
       where: {
@@ -83,6 +83,9 @@ export default async function StudentsPage({
         }
       }
     }),
+    prisma.student.count({ where: {
+      organizationId: organization.id, OR: [{ email: null }, { email: '' }],
+    } }),
     unfilteredRoster ? Promise.resolve(null) : prisma.student.count({ where: whereClause }),
     prisma.student.findMany({
       where: whereClause,
@@ -133,6 +136,7 @@ export default async function StudentsPage({
         totalDirectory={totalDirectory}
         enrolledCount={enrolledCount}
         notEnrolledCount={notEnrolledCount}
+        studentsMissingEmail={studentsMissingEmail}
         currentPage={page}
         totalPages={totalPages}
         currentSearch={search}
