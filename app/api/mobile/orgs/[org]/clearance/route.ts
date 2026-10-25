@@ -1,7 +1,7 @@
 // Authenticated mobile clearance lookup; anonymous ID/email enumeration is denied.
 // Students must first verify a code delivered to their own registered email.
 // Officers may search a roster only with the live tab-clearance tenant permission.
-import { ApiFailure, handler, preflight, publicBaseUrl } from '@/lib/mobile/http';
+import { ApiFailure, handler, preflight, publicBaseUrl, json } from '@/lib/mobile/http';
 import { getOrgOr404 } from '@/lib/mobile/data';
 import { requireMobileOfficer } from '@/lib/mobile/session';
 import { requireStudentClearanceSession } from '@/lib/mobile/student-clearance-auth';
@@ -16,6 +16,7 @@ type Ctx = { params: Promise<{ org: string }> };
 export const dynamic = 'force-dynamic';
 
 export const GET = handler(async (req: Request, { params }: Ctx) => {
+  const startedAt = performance.now();
   const { org: slug } = await params;
   const org = await getOrgOr404(slug);
   const query = new URL(req.url).searchParams.get('q')?.trim() || '';
@@ -47,7 +48,9 @@ export const GET = handler(async (req: Request, { params }: Ctx) => {
   // Student tokens carry a server-validated tenant+student+academic-period.
   // Do not trust a student ID, email or period supplied by the device.
   const student = await requireStudentClearanceSession(req, org);
+  const authorizedAt = performance.now();
   const result = await getStudentClearance(org.id, student.studentId, org.activeAy, org.activeTerm, student);
+  const calculatedAt = performance.now();
   if (!result || result.student.id !== student.id) {
     throw new ApiFailure(401, 'unauthorized', 'Student clearance authorization has changed. Verify again.');
   }
@@ -63,7 +66,9 @@ export const GET = handler(async (req: Request, { params }: Ctx) => {
           ay: org.activeAy, term: org.activeTerm,
         }))
     : null;
-  return {
+  // Server-Timing contains only durations, no account, OTP, QR or ledger data.
+  const finishedAt = performance.now();
+  const response = json(req, {
     studentName: null,
     studentId: null,
     status: !result.isEnrolled ? 'not_enrolled' : result.isCleared ? 'cleared' : 'hold',
@@ -72,7 +77,15 @@ export const GET = handler(async (req: Request, { params }: Ctx) => {
     // Student identifier and balances remain private; URL contains opaque ciphertext.
     qrToken: studentQrUrl,
     ay: org.activeAy, term: org.activeTerm,
-  };
+  });
+  const ms = (value: number) => Math.max(0, value).toFixed(1);
+  response.headers.set('Server-Timing', [
+    `auth;dur=${ms(authorizedAt - startedAt)}`,
+    `clearance;dur=${ms(calculatedAt - authorizedAt)}`,
+    `certificate;dur=${ms(finishedAt - calculatedAt)}`,
+    `total;dur=${ms(finishedAt - startedAt)}`,
+  ].join(', '));
+  return response;
 });
 
 export const OPTIONS = preflight;

@@ -7,7 +7,7 @@ const read = (file) => readFileSync(new URL('../' + file, import.meta.url), 'utf
 test('default student roster avoids a redundant count without changing tenant, period or status filters', () => {
   const src = read('app/department/[department]/(protected)/students/page.tsx');
   assert.match(src, /await requireTabAccess\('tab-students', cleanDepartment\)/);
-  assert.match(src, /const unfilteredRoster = !search\.trim\(\) && yearFilter === 'ALL' && statusFilter === 'ALL'/);
+  assert.match(src, /const unfilteredRoster = !missingEmailOnly && !search\.trim\(\) && yearFilter === 'ALL' && statusFilter === 'ALL'/);
   assert.match(src, /unfilteredRoster \? Promise\.resolve\(null\) : prisma\.student\.count\(\{ where: whereClause \}\)/);
   assert.match(src, /const totalFiltered = filteredCount \?\? totalDirectory/);
   assert.match(src, /prisma\.student\.findMany\(\{\s*where: whereClause/);

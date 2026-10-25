@@ -14,7 +14,7 @@ export default async function StudentsPage({
   searchParams,
 }: {
   params: Promise<{ department: string }>;
-  searchParams?: Promise<{ search?: string; year?: string; status?: string; page?: string; ay?: string; term?: string }>;
+  searchParams?: Promise<{ search?: string; year?: string; status?: string; email?: string; page?: string; ay?: string; term?: string }>;
 }) {
   const { department } = await params;
   const cleanDepartment = decodeURIComponent(department).toLowerCase().trim();
@@ -26,6 +26,8 @@ export default async function StudentsPage({
   const search = resolvedSearch.search || '';
   const yearFilter = resolvedSearch.year || 'ALL';
   const statusFilter = resolvedSearch.status || 'ALL';
+  // Authorized student-roster-only filter for identity-verified email repair.
+  const missingEmailOnly = resolvedSearch.email === 'missing';
   const rawPage = Number(resolvedSearch.page || '1');
   const page = Number.isSafeInteger(rawPage) && rawPage >= 1 ? Math.min(rawPage, 100000) : 1;
   const pageSize = 10;
@@ -63,6 +65,7 @@ export default async function StudentsPage({
     ] });
   }
   if (yearFilter !== 'ALL') andFilters.push({ yearLevel: yearFilter });
+  if (missingEmailOnly) andFilters.push({ OR: [{ email: null }, { email: '' }] });
   if (statusFilter === 'Enrolled') {
     andFilters.push({ enrollments: { some: { academicYear: ay, term, enrollmentStatus: 'Enrolled' } } });
   } else if (statusFilter === 'Inactive') {
@@ -72,7 +75,7 @@ export default async function StudentsPage({
 
   // The unfiltered roster count is the directory count: skip a duplicate
   // COUNT(*) on initial load and when returning to the unfiltered list.
-  const unfilteredRoster = !search.trim() && yearFilter === 'ALL' && statusFilter === 'ALL';
+  const unfilteredRoster = !missingEmailOnly && !search.trim() && yearFilter === 'ALL' && statusFilter === 'ALL';
   const [totalDirectory, absoluteEnrolledCount, studentsMissingEmail, filteredCount, students] = await Promise.all([
     prisma.student.count({ where: { organizationId: organization.id } }),
     prisma.student.count({
@@ -137,6 +140,7 @@ export default async function StudentsPage({
         enrolledCount={enrolledCount}
         notEnrolledCount={notEnrolledCount}
         studentsMissingEmail={studentsMissingEmail}
+        missingEmailOnly={missingEmailOnly}
         currentPage={page}
         totalPages={totalPages}
         currentSearch={search}
