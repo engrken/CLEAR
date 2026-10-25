@@ -7,6 +7,7 @@
 import { NextResponse } from 'next/server';
 import { DomainError } from '@/lib/errors';
 import { isMobileRequestAllowed } from '@/lib/mobile/production-readonly';
+import { clearanceLinkOrigin } from '@/lib/clearance-link-origin';
 
 export class ApiFailure extends Error {
   constructor(public status: number, public code: string, message: string) {
@@ -123,11 +124,7 @@ export function requireCentavos(value: unknown, field: string): number {
   return n;
 }
 
-/** Public origin for links (QR verification URLs): AUTH_URL when set, else the forwarded host. */
-export function publicBaseUrl(req: Request) {
-  const configured = String(process.env.AUTH_URL || '').replace(/\/+$/, '');
-  if (configured) return configured;
-  const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || 'localhost:3000';
-  const proto = req.headers.get('x-forwarded-proto') || (host.startsWith('localhost') ? 'http' : 'https');
-  return `${proto}://${host}`;
+/** Official origin for signed certificate links; ignores request-controlled hosts. */
+export function publicBaseUrl(_req: Request) {
+  return clearanceLinkOrigin();
 }
