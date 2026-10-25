@@ -53,9 +53,9 @@ $code=Read-Manifest '/manifest/@android:versionCode'
 $target=Read-Manifest '/manifest/uses-sdk/@android:targetSdkVersion'
 $api=0
 if (![int]::TryParse($target, [ref]$api)) { throw ('Unable to parse targetSdkVersion: '+$target) }
-if ($pkg -ne 'com.rupertbulquerin.clear' -or $name -ne '1.2.3' -or $code -ne '13' -or $api -lt 36) {
-  throw "AAB manifest failed v1.2.3/code13/package/SDK gate: $pkg $name $code $target"
+if ($pkg -ne 'com.rupertbulquerin.clear' -or $name -ne '1.2.4' -or $code -ne '14' -or $api -lt 36) {
+  throw "AAB manifest failed v1.2.4/code14/package/SDK gate: $pkg $name $code $target"
 }
 Write-Host ('PASS: AAB signature, bundle structure, v'+$name+' code '+$code+', API '+$target+', official Upload signer.')
 Write-Host ('Bundle SHA-256: '+(Get-FileHash -LiteralPath $aab -Algorithm SHA256).Hash)
-Write-Host 'Before release: confirm versionCode 13 is unused on all Play tracks and test this exact AAB in Play Internal. No Play upload was performed by this check.'
+Write-Host 'Before release: confirm versionCode 14 is unused on all Play tracks and test this exact AAB in Play Internal. No Play upload was performed by this check.'
