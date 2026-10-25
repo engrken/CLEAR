@@ -1,14 +1,43 @@
 name: Financial checks
 on: pull_request
+permissions:
+  contents: read
 jobs:
   test:
+    name: One-shot web and Android source acceptance
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm ci
-      - run: npm run test:finance
-      - run: npx tsc --noEmit
-      - run: npm run build
+          cache: npm
+      - name: Install web dependencies and generate Prisma client
+        run: npm ci
+      - name: Run every standalone finance/privacy/receipt/role/parity regression once
+        run: node scripts/ci/run-clear-acceptance.mjs
+      - name: Validate Prisma schema
+        run: npx prisma validate
+        env:
+          DATABASE_URL: postgresql://clear_ci:clear_ci@127.0.0.1:5432/clear_ci?schema=public
+      - name: Web TypeScript
+        run: npx tsc --noEmit
+      - name: Build Next.js
+        run: npm run build
+      - name: Reconcile mobile lockfile in disposable runner only
+        working-directory: mobile
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Install Android source dependencies
+        working-directory: mobile
+        run: npm ci
+      - name: Android TypeScript
+        working-directory: mobile
+        run: npm run typecheck
+      - name: Report independent integration and manual acceptance gates
+        if: always()
+        run: |
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Additional required PR checks:** isolated student authentication, authenticated financial concurrency, receipt sequence uniqueness, and Prisma migration rehearsal must independently pass if triggered." >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Not CI-completable:** real Play device smoke, first-party QR scanning, live registered-email remediation, Production p95 benchmarks, and native financial operations." >> "$GITHUB_STEP_SUMMARY"
