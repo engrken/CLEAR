@@ -26,12 +26,14 @@ export type LedgerMoneyField =
   | 'amount';
 
 export class LedgerReadIntegrityError extends Error {
-  constructor(
-    public readonly source: LedgerMoneySource,
-    public readonly field: LedgerMoneyField,
-  ) {
+  public readonly source: LedgerMoneySource;
+  public readonly field: LedgerMoneyField;
+
+  constructor(source: LedgerMoneySource, field: LedgerMoneyField) {
     super('Ledger monetary precision requires verification.');
     this.name = 'LedgerReadIntegrityError';
+    this.source = source;
+    this.field = field;
   }
 }
 
