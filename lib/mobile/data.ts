@@ -216,11 +216,14 @@ export async function listLedger(org: Organization, opts: { status?: string | nu
  * enrollmentStatus stays 'Enrolled' | 'Dropped' for app 1.0.0; termStatus carries
  * Ken's label (the raw enrollment status, or 'Inactive' when there is none).
  */
-export async function listStudents(org: Organization, query?: string | null) {
+export async function listStudents(
+  org: Organization, query?: string | null, missingEmailOnly = false,
+) {
   const q = String(query || '').trim().slice(0, 120);
   const students = await prisma.student.findMany({
     where: {
       organizationId: org.id,
+      ...(missingEmailOnly ? { AND: [{ OR: [{ email: null }, { email: '' }] }] } : {}),
       ...(q
         ? {
             OR: [
@@ -232,8 +235,9 @@ export async function listStudents(org: Organization, query?: string | null) {
         : {}),
     },
     orderBy: { fullName: 'asc' },
-    take: 500,
-    include: {
+    take: missingEmailOnly ? 501 : 500,
+    select: {
+      id: true, studentId: true, fullName: true, yearLevel: true, email: true,
       enrollments: {
         where: { academicYear: org.activeAy, term: org.activeTerm },
         select: { enrollmentStatus: true },
@@ -241,6 +245,10 @@ export async function listStudents(org: Organization, query?: string | null) {
       },
     },
   });
+  // Never call an incomplete remediation result a full missing-email list.
+  if (missingEmailOnly && students.length > 500) {
+    throw new ApiFailure(422, 'narrow_search', 'Too many students need email registration; use the authorized paginated web Students Roster.');
+  }
 
   return students.map((s) => {
     const termStatus = s.enrollments[0]?.enrollmentStatus || 'Inactive';

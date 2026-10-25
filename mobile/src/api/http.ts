@@ -169,7 +169,9 @@ export const httpApi: ClearApi = {
     ...as(s), query: { kind: 'void', q: q.trim() },
   }),
   listPendingRemittances: (s) => request(`${org(s.org.subdomain)}/remittances/pending`, as(s)),
-  listStudents: (s, q) => request(`${org(s.org.subdomain)}/students`, { ...as(s), query: { q } }),
+  listStudents: (s, q, missingEmailOnly) => request(`${org(s.org.subdomain)}/students`, {
+    ...as(s), query: { q, ...(missingEmailOnly ? { email: 'missing' } : {}) },
+  }),
   recordPayment: (s, p) => PAYMENT_WRITES_ENABLED ? request(`${org(s.org.subdomain)}/payments`, { method: 'POST', ...as(s), idempotencyKey: p.idempotencyKey, json: { studentId: p.studentId, feeId: p.feeId, amountCentavos: p.amountCentavos, orNumber: p.orNumber.trim() } }) : Promise.reject(new ApiError('Payment posting is disabled until Android financial parity is verified.', 'unavailable')),
   getRemittance: (s, id) => request(`${org(s.org.subdomain)}/remittances/${encodeURIComponent(id)}`, as(s)),
   verifyRemittance: (s, id, p) => PAYMENT_WRITES_ENABLED ?
