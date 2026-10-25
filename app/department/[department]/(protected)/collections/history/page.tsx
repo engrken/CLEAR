@@ -89,7 +89,7 @@ export default async function ReceiptHistoryPage({
     });
     if (matching.length <= 150) {
       const bases = new Set(matching.map(row =>
-        row.orNumber.trim().toUpperCase().replace(/-P\\d+$/i, '')));
+        row.orNumber.trim().toUpperCase().replace(/-P\d+$/i, '')));
       if (bases.size <= 60) receiptCandidates = [...bases];
     }
   }

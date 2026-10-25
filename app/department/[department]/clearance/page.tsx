@@ -690,7 +690,7 @@ export default async function ClearancePage({
                        Scan this locally generated QR to verify the current clearance.
                        It expires after seven days; a change in enrollment or an unpaid balance invalidates it immediately.
                      </p>
-                     {queriedVerifyUrl && <div className="my-3"><FirstPartyClearanceQr url={queriedVerifyUrl} /></div> 
+                     {queriedVerifyUrl && <div className="my-3"><FirstPartyClearanceQr url={queriedVerifyUrl} /></div>}
                     <div>
                       <a href={queriedVerifyUrl} target="_blank" rel="noopener noreferrer" className="btn btn-success btn-sm fw-bold text-dark">
                         <i className="bi bi-box-arrow-up-right me-1"></i> Open Digital Certificate
