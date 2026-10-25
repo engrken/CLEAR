@@ -183,42 +183,42 @@ export async function listLedger(org: Organization, opts: { status?: string | nu
   const entries: LedgerEntry[] = (() => {
     try {
       return [
-    ...collections.map(collectionEntry),
-    ...remittances.map(remittanceEntry),
-    ...penalties.map(penaltyEntry),
-    ...advances.map((a) => ({
-      id: a.id,
-      kind: 'advance' as const,
-      title: a.requestor,
-      reference: a.advanceId,
-      subtitle: a.purpose || a.fundSource,
-      amountCentavos: ledgerCentavos('advance', 'amountApproved', a.amountApproved),
-      status: a.status,
-      at: a.dateIssued.toISOString(),
-    })),
-    ...cashier.map((c) => ({
-      id: c.id,
-      kind: 'cashier-remittance' as const,
-      title: c.remittedBy,
-      reference: c.cashierReceiptNo || c.remittanceId,
-      subtitle: `${c.fundSource} · ${c.type}`,
-      amountCentavos: ledgerCentavos('cashier-remittance', 'amount', c.amount),
-      status: c.status,
-      at: c.date.toISOString(),
-    })),
+        ...collections.map(collectionEntry),
+        ...remittances.map(remittanceEntry),
+        ...penalties.map(penaltyEntry),
+        ...advances.map((a) => ({
+          id: a.id,
+          kind: 'advance' as const,
+          title: a.requestor,
+          reference: a.advanceId,
+          subtitle: a.purpose || a.fundSource,
+          amountCentavos: ledgerCentavos('advance', 'amountApproved', a.amountApproved),
+          status: a.status,
+          at: a.dateIssued.toISOString(),
+        })),
+        ...cashier.map((c) => ({
+          id: c.id,
+          kind: 'cashier-remittance' as const,
+          title: c.remittedBy,
+          reference: c.cashierReceiptNo || c.remittanceId,
+          subtitle: `${c.fundSource} · ${c.type}`,
+          amountCentavos: ledgerCentavos('cashier-remittance', 'amount', c.amount),
+          status: c.status,
+          at: c.date.toISOString(),
+        })),
       ];
     } catch (error) {
-    if (error instanceof LedgerReadIntegrityError) {
-      // Fixed code-only metadata: no amounts, student identities, receipts,
-      // organizational references, bearer tokens or financial source rows.
-      console.warn('[api/mobile/ledger] exact-centavo review required', {
-        category: error.source, field: error.field,
-      });
-      throw new ApiFailure(422, 'financial_data_review',
-        'This ledger contains an amount requiring financial review. ' +
-        'No amount was rounded or changed. Contact an authorized financial administrator.');
-    }
-    throw error;
+      if (error instanceof LedgerReadIntegrityError) {
+        // Fixed code-only metadata: no amounts, student identities, receipts,
+        // organizational references, bearer tokens or financial source rows.
+        console.warn('[api/mobile/ledger] exact-centavo review required', {
+          category: error.source, field: error.field,
+        });
+        throw new ApiFailure(422, 'financial_data_review',
+          'This ledger contains an amount requiring financial review. ' +
+          'No amount was rounded or changed. Contact an authorized financial administrator.');
+      }
+      throw error;
     }
   })();
 
