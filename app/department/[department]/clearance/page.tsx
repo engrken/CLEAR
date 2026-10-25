@@ -6,7 +6,7 @@ import { auth } from '@/auth';
 import { fmt, money } from '@/lib/utils';
 import { requireTabAccess } from '@/lib/permissions';
 import { formatInTimeZone } from 'date-fns-tz';
-import { headers } from 'next/headers';
+import { clearanceLinkOrigin } from '@/lib/clearance-link-origin';
 import { notFound, redirect } from 'next/navigation';
 import crypto from 'node:crypto';
 import Link from 'next/link';
@@ -145,11 +145,9 @@ export default async function ClearancePage({
   const cleanDepartment = decodeURIComponent(department).toLowerCase().trim();
   const basePath = `/department/${encodeURIComponent(cleanDepartment)}`;
 
-  const headersList = await headers();
-  const rawHost = headersList.get('host') || 'localhost:3000';
-  const host = /^[a-z0-9.:-]+$/i.test(rawHost) ? rawHost : 'localhost:3000';
-  const protocol = process.env.NODE_ENV === 'development' ? 'http' : 'https';
-  const absoluteBaseUrl = `${protocol}://${host}`;
+  // Never include a request-supplied Host in an independently signed clearance
+  // certificate URL: a forged host could capture a student ID and signature.
+  const absoluteBaseUrl = clearanceLinkOrigin();
 
   const organization = await prisma.organization.findUnique({
     where: { subdomain: cleanDepartment },
