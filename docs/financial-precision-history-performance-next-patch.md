@@ -82,3 +82,11 @@ synthetic valid, duplicate, voided and anomalous OR lines; authenticated Void
 Center tenant/role search; no new schema changes or Production finance writes;
 owner-approved merge and Production deployment. #68, #69, #70, #50 and #57
 remain open for their larger follow-up acceptance criteria.
+
+## Production audit and read-only arrears follow-up — October 25, 2026
+
+- Production migration `20261024000000_exact_money_numeric_18_2` is **already complete**; #68 closed after verifying every monetary column has numeric(18,2), with `Penalty.hoursLate` intentionally floating-point.
+- Aggregate-only read query found 264 canonical receipt-number groups, 77 groups with multiple allocation lines, **no cross-period reuse** and **no groups with more than one linked student** under the tested grouping. These checks are narrower than a full linkage/VOID/penalty audit. No OR or money value was changed.
+- 104 Production student roster records, 10 without a usable email; private student self-inquiry must continue to deny unverified IDs. Tenant-admin controlled registered-email enrollment remains an open acceptance requirement in #47.
+- Shared historical arrears lookup now narrows the `Collectible.status` legacy `|SID:...|` marker **in SQL when a verified student ID is supplied**, instead of loading all candidate students' dues and filtering in JavaScript. Server-side ownership/period checks and `decodeStudentDue` remain authoritative, and tenant-wide officer reporting still loads its existing authorized scope. This is an optimization, not a production performance benchmark or authorization bypass.
+- Web/mobile parity: this is shared server logic consumed by both CLEAR web and the already-live Android API. No new Android AAB or business mutation needed. New native receipt/VOID UI remains deferred to #65/#81.

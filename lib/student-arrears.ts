@@ -44,7 +44,15 @@ export async function listHistoricalDebts(
       // Only rows with the existing recognized student-assessment marker can
       // ever become historical student debts. Unlinked organization dues are
       // deliberately excluded; this does not guess any legacy associations.
-      where: { organizationId, balanceDue: { gt: 0 }, status: { contains: "|SID:" } },
+      where: {
+        organizationId, balanceDue: { gt: 0 },
+        // A verified student self-check must never scan every other student's
+        // historical assessments. The encoded marker is the canonical legacy
+        // student link; keep the strict decode check below as defense in depth.
+        status: studentId
+          ? { contains: `|SID:${encodeURIComponent(studentId)}|`, mode: "insensitive" as const }
+          : { contains: "|SID:" },
+      },
       select: { id: true, status: true, academicYear: true, term: true,
         category: true, balanceDue: true },
     }),

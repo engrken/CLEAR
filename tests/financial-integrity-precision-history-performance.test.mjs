@@ -64,7 +64,11 @@ test('historical receipt review detects sub-cent entries without editing source 
 
 test('historic arrears reader retains student marker and tenant isolation while limiting rows', () => {
   const source = read('lib/student-arrears.ts');
-  assert.ok(source.includes('organizationId, balanceDue: { gt: 0 }, status: { contains: "|SID:" }'));
+  assert.match(source, /organizationId, balanceDue: \{ gt: 0 \}/);
+  assert.match(source, /status: studentId/);
+  assert.match(source, /encodeURIComponent\(studentId\)/);
+  assert.match(source, /\{ contains: "\\|SID:" \}/);
+  assert.match(source, /mode: "insensitive"/);
   assert.match(source, /decodeStudentDue\(due\.status\)/);
   assert.match(source, /olderThan\(due\.academicYear, due\.term/);
 });
