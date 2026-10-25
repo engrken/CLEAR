@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 
 const read = (p) => readFileSync(new URL('../' + p, import.meta.url));
 const text = (p) => read(p).toString('utf8');
@@ -17,7 +16,8 @@ test('next Android release tracks distinct launcher and adaptive foreground with
     assert.equal(png.readUInt32BE(16), png.readUInt32BE(20));
     assert.ok(png.readUInt32BE(16) >= 128);
   }
-  assert.equal(config.android.versionCode, 12, 'do not bump Play versionCode without a new signed release');
+  assert.equal(config.version, '1.2.3');
+  assert.equal(config.android.versionCode, 13, 'verify versionCode 13 is unused in all Play tracks before upload');
 });
 
 test('next signed Play bundle is blocked until original approved full-resolution assets replace preview PNGs', () => {

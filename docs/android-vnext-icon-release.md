@@ -32,7 +32,7 @@ The `--release` gate checks **1024×1024 + byte-for-byte approved SHA-256** for 
 
 ## Consolidated release acceptance
 
-1. Confirm correct official Android package and owner, no new signing key, and the next unused versionCode across all Play tracks and EAS remote state. Version `1.2.3` / code 13 is a candidate, not independently approved or yet set.
+1. Confirm correct official Android package and owner, no new signing key, and the next unused versionCode across all Play tracks and EAS remote state. Branch stages version `1.2.3` / code 13 as a local-build candidate; verify code 13 is unused on every Play track before upload.
 2. Keep web and Android backend access synced, financial and business writes denied unless independently authorized.
 3. Inspect generated icon under **round, squircle, and themed masks** on at least one small launcher and one large-screen Android device; check legibility, clipping, background and icon label.
 4. Complete the same native role/tenant/student OTP/QR and search UAT tracked in #81, then sign one AAB with the established Google Play Upload key and internal-test before Production.
@@ -41,3 +41,18 @@ The `--release` gate checks **1024×1024 + byte-for-byte approved SHA-256** for 
 ## Historical workflow guard
 
 `.github/workflows/android-v122-official-aab.yml` hard-pins the **old** v1.2.2 icon and version. It is a historical release-specific workflow, not proof the new artwork is included. The next-release signing workflow must be reviewed separately and call `node mobile/scripts/verify-live-viewer.mjs --release` before requesting any final AAB.
+
+## Workstation automation (added for v1.2.3)
+
+After checking out PR #96, download `CLEAR_Android_Icon_Assets_Next_Release.zip` from the CLEAR conversation. Use the checked-in PowerShell helpers:
+
+```powershell
+cd D:\\clear-system-saas
+git fetch origin
+git switch feat/android-vnext-icon-and-parity-20261025
+git pull --ff-only origin feat/android-vnext-icon-and-parity-20261025
+.\\mobile\\scripts\\Sync-ClearAndroidIcon.ps1 -PackagePath "$HOME\\Downloads\\CLEAR_Android_Icon_Assets_Next_Release.zip" -StageForCommit
+.\\mobile\\scripts\\Preflight-ClearAndroidV123.ps1 -InstallDependencies
+```
+
+The asset helper SHA-256-checks both original full-resolution PNGs before writing anything. Commit/push the changed 1024px images to the PR branch, then repeat CI. Build the AAB on an owner-controlled clean/disposable short-path workspace with the **existing Play Upload keystore**, not the debug signer. After the signed bundle exists, run `mobile/scripts/Verify-ClearAndroidAAB.ps1 -BundlePath <path> -BundletoolJar <path>`, which verifies certificate fingerprint, package, version, code and target SDK. Neither helper signs, publishes, leaks credentials, or edits Production. The historical v1.2.2 workflow is not the new version's signing mechanism.
