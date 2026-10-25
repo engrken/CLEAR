@@ -16,8 +16,8 @@ test('next Android release tracks distinct launcher and adaptive foreground with
     assert.equal(png.readUInt32BE(16), png.readUInt32BE(20));
     assert.ok(png.readUInt32BE(16) >= 128);
   }
-  assert.equal(config.version, '1.2.3');
-  assert.equal(config.android.versionCode, 13, 'verify versionCode 13 is unused in all Play tracks before upload');
+  assert.equal(config.version, '1.2.4');
+  assert.equal(config.android.versionCode, 14, 'v1.2.3 code13 already used on Play Internal; verify code14 is unused before upload');
 });
 
 test('next signed Play bundle is blocked until original approved full-resolution assets replace preview PNGs', () => {
@@ -42,6 +42,6 @@ test('workstation signed AAB verifier validates official bundletool and retains 
   assert.match(verify, /signed in JarFile but is not signed in JarInputStream/);
   assert.match(verify, /com\.rupertbulquerin\.clear/);
   assert.match(verify, /'1\.2\.3'/);
-  assert.match(verify, /'13'/);
+  assert.match(verify, /'14'/);
   assert.match(verify, /-lt 36/);
 });
