@@ -182,7 +182,7 @@ export async function listLedger(org: Organization, opts: { status?: string | nu
   // partial ledger as a complete financial history to existing Android apps.
   let entries: LedgerEntry[];
   try {
-    const entries: LedgerEntry[] = [
+    entries = [
     ...collections.map(collectionEntry),
     ...remittances.map(remittanceEntry),
     ...penalties.map(penaltyEntry),
@@ -192,7 +192,7 @@ export async function listLedger(org: Organization, opts: { status?: string | nu
       title: a.requestor,
       reference: a.advanceId,
       subtitle: a.purpose || a.fundSource,
-      amountCentavos: toCentavos(a.amountApproved),
+      amountCentavos: ledgerCentavos('advance', 'amountApproved', a.amountApproved),
       status: a.status,
       at: a.dateIssued.toISOString(),
     })),
@@ -202,7 +202,7 @@ export async function listLedger(org: Organization, opts: { status?: string | nu
       title: c.remittedBy,
       reference: c.cashierReceiptNo || c.remittanceId,
       subtitle: `${c.fundSource} · ${c.type}`,
-      amountCentavos: toCentavos(c.amount),
+      amountCentavos: ledgerCentavos('cashier-remittance', 'amount', c.amount),
       status: c.status,
       at: c.date.toISOString(),
     })),
