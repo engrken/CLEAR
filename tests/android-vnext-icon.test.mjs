@@ -32,3 +32,16 @@ test('next signed Play bundle is blocked until original approved full-resolution
   assert.match(guide, /must not be treated as the final Play artwork/);
   assert.match(guide, /node scripts\/verify-live-viewer\.mjs --release/);
 });
+
+test('workstation signed AAB verifier validates official bundletool and retains proper release identity checks', () => {
+  const verify = text('mobile/scripts/Verify-ClearAndroidAAB.ps1');
+  assert.match(verify, /bundletool-all-1\.18\.3\.jar/);
+  assert.match(verify, /expectedToolHash/);
+  assert.match(verify, /bundletool validate/);
+  assert.match(verify, /jarsigner -verify/);
+  assert.match(verify, /signed in JarFile but is not signed in JarInputStream/);
+  assert.match(verify, /com\.rupertbulquerin\.clear/);
+  assert.match(verify, /'1\.2\.3'/);
+  assert.match(verify, /'13'/);
+  assert.match(verify, /-lt 36/);
+});
