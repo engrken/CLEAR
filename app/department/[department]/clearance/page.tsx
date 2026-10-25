@@ -17,7 +17,7 @@ import ClearanceManager from './ClearanceManager';
 import DataPrivacyModal from '../components/DataPrivacyModal';
 import { Metadata } from 'next';
 import { decodeStudentDue, activeCollectibleDue } from '../(protected)/collectibles/due-link';
-import { getPeriodLedger } from '../(protected)/realign/ledger';
+import { getPeriodLedger, isAcademicPeriodClosed } from '../(protected)/realign/ledger';
 import { listHistoricalDebts, type HistoricalDebt } from '@/lib/student-arrears';
 import { isOutstandingPenalty, isCanonicalPenaltyReceipt } from '@/lib/penalty-clearance-status';
 
@@ -225,7 +225,7 @@ export default async function ClearancePage({
         category: c.category, name: c.name, amount: money(moneyNumber(c.amount)),
       })),
     ];
-    const publicPeriodLedger = await getPeriodLedger(
+    const publicPeriodClosed = await isAcademicPeriodClosed(
       prisma, organization.id, organization.activeAy, organization.activeTerm
     );
 
@@ -251,7 +251,7 @@ export default async function ClearancePage({
               defaultEmail=""
               feeOptions={publicFeeOptions}
               packageRate={publicPackage.total}
-              closed={Boolean(publicPeriodLedger.activeRollover)}
+              closed={publicPeriodClosed}
             />
           </div>
         </main>

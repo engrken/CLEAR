@@ -312,7 +312,11 @@ export async function loadStudentObligationRecords(
     prisma.cashAdvance.findMany({
       where: { organizationId, academicYear: ay, term, requestor: { contains: student.studentId, mode: 'insensitive' } },
     }),
-    prisma.collectible.findMany({ where: { organizationId, academicYear: ay, term } }),
+    prisma.collectible.findMany({
+      where: { organizationId, academicYear: ay, term,
+        status: { contains: `|SID:${encodeURIComponent(student.studentId)}|`,
+          mode: 'insensitive' as const } },
+    }),
     loadHistoricalDebts(organizationId, ay, term, student.studentId),
   ]);
   return { collections, penalties, cashAdvances, collectibles, historicalDebts };
@@ -322,10 +326,14 @@ export async function loadStudentObligationRecords(
  * Looks a student up by school ID or email (as Ken's public portal, ~657-665) and
  * evaluates their clearance for the term. Returns null when no student matches.
  */
-export async function getStudentClearance(organizationId: string, query: string, ay: string, term: string) {
+export async function getStudentClearance(
+  organizationId: string, query: string, ay: string, term: string,
+  /** Trusted only when returned by requireStudentClearanceSession; never client input. */
+  verifiedStudent?: { id: string; studentId: string; fullName: string },
+) {
   const q = String(query || '').trim();
   if (!q) return null;
-  const student = await prisma.student.findFirst({
+  const student = verifiedStudent ?? await prisma.student.findFirst({
     where: {
       organizationId,
       OR: [{ studentId: { equals: q, mode: 'insensitive' } }, { email: { equals: q, mode: 'insensitive' } }],
@@ -334,7 +342,7 @@ export async function getStudentClearance(organizationId: string, query: string,
   if (!student) return null;
 
   // An existing student directory entry is not evidence of enrollment in this term.
-  const [setups, enrollment] = await Promise.all([
+  const [setups, enrollment, records] = await Promise.all([
     prisma.collectionSetup.findMany({
       where: { organizationId, academicYear: ay, term },
       orderBy: { name: 'asc' },
@@ -343,9 +351,9 @@ export async function getStudentClearance(organizationId: string, query: string,
       where: { organizationId, academicYear: ay, term, studentId: student.id, enrollmentStatus: 'Enrolled' },
       select: { id: true },
     }),
+    loadStudentObligationRecords(organizationId, student, ay, term),
   ]);
   const termPkg = buildTermPackage(setups, term);
-  const records = await loadStudentObligationRecords(organizationId, student, ay, term);
   const unpaidItems = evaluateStudentObligations(
     termPkg,
     student,
