@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 
-test('next Android 1.2.3 candidate identity preserves disabled financial writes', () => {
+test('next Android 1.2.4 launcher correction preserves identity and disabled financial writes', () => {
   const app = JSON.parse(read('mobile/app.json')).expo;
   assert.equal(app.android.package, 'com.rupertbulquerin.clear');
-  assert.equal(app.version, '1.2.3');
-  assert.equal(app.android.versionCode, 13);
+  assert.equal(app.version, '1.2.4');
+  assert.equal(app.android.versionCode, 14);
   const config = read('mobile/src/api/config.ts');
   assert.match(config, /PAYMENT_WRITES_ENABLED = false/);
   assert.match(config, /MOBILE_BUSINESS_WRITES_ENABLED = false/);
