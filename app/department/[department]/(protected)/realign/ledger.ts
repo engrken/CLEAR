@@ -275,3 +275,33 @@ export async function getPeriodLedger(
     carriedOut: fromCents(carriedOutCents),
   };
 }
+
+/** Read-only closed-period probe; avoids recalculating the treasury ledger.
+ * Mirrors full-ledger formal closure, source rollover and reversal behavior.
+ * Uncached so new holds/reversals/closures are effective next request.
+ */
+export async function isAcademicPeriodClosed(
+  db: Pick<Prisma.TransactionClient, "academicPeriodTransition" | "fundTransfer" | "voidTransaction">,
+  organizationId: string, ay: string, term: string,
+): Promise<boolean> {
+  const [formal, candidates] = await Promise.all([
+    db.academicPeriodTransition.findFirst({
+      where: { organizationId, sourceAY: ay, sourceTerm: term, status: "Closed" },
+      select: { id: true },
+    }),
+    db.fundTransfer.findMany({
+      where: { organizationId, sourceFund: { contains: "Rollover", mode: "insensitive" } },
+      select: { id: true, sourceFund: true },
+    }),
+  ]);
+  if (formal) return true;
+  const relevant = candidates.filter(x => matchesRolloverSource(x.sourceFund, ay, term));
+  if (!relevant.length) return false;
+  const voids = await db.voidTransaction.findMany({
+    where: { organizationId, transactionType: "ROLLOVER_REVERSAL",
+      referenceId: { in: relevant.map(x => x.id) } },
+    select: { referenceId: true },
+  });
+  const reversed = new Set(voids.map(x => norm(x.referenceId)));
+  return relevant.some(x => !reversed.has(norm(x.id)));
+}

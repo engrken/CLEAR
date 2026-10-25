@@ -9,7 +9,7 @@ import { toCentavos } from '@/lib/mobile/serialize';
 import { getStudentClearance } from '@/lib/clearance';
 import { issueClearanceCertificate } from '@/lib/clearance-opaque-token';
 import { prisma } from '@/lib/prisma';
-import { getPeriodLedger } from '@/app/department/[department]/(protected)/realign/ledger';
+import { isAcademicPeriodClosed } from '@/app/department/[department]/(protected)/realign/ledger';
 
 type Ctx = { params: Promise<{ org: string }> };
 
@@ -47,16 +47,16 @@ export const GET = handler(async (req: Request, { params }: Ctx) => {
   // Student tokens carry a server-validated tenant+student+academic-period.
   // Do not trust a student ID, email or period supplied by the device.
   const student = await requireStudentClearanceSession(req, org);
-  const result = await getStudentClearance(org.id, student.studentId, org.activeAy, org.activeTerm);
+  const result = await getStudentClearance(org.id, student.studentId, org.activeAy, org.activeTerm, student);
   if (!result || result.student.id !== student.id) {
     throw new ApiFailure(401, 'unauthorized', 'Student clearance authorization has changed. Verify again.');
   }
   // Only a verified student with no outstanding obligation in an open term
   // can receive an encrypted bearer certificate for presentation to an officer.
-  const ledger = result.isCleared
-    ? await getPeriodLedger(prisma, org.id, org.activeAy, org.activeTerm)
-    : null;
-  const studentQrUrl = result.isCleared && ledger && !ledger.activeRollover
+  const closed = result.isCleared
+    ? await isAcademicPeriodClosed(prisma, org.id, org.activeAy, org.activeTerm)
+    : true;
+  const studentQrUrl = result.isCleared && !closed
     ? publicBaseUrl(req) + '/clearance/verify?token=' + encodeURIComponent(
         issueClearanceCertificate({
           orgId: org.id, studentPk: result.student.id, studentId: result.student.studentId,

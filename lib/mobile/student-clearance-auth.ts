@@ -239,7 +239,7 @@ function readToken(req: Request) {
 export async function requireStudentClearanceSession(
   req: Request,
   org: Pick<Organization, 'id' | 'activeAy' | 'activeTerm'>
-): Promise<Pick<Student, 'id' | 'studentId'>> {
+): Promise<Pick<Student, 'id' | 'studentId' | 'fullName'>> {
   const token = readToken(req);
   const row = await prisma.verificationToken.findUnique({
     where: { identifier: sessionIdentifier(token) },
@@ -256,12 +256,12 @@ export async function requireStudentClearanceSession(
   }
   const student = await prisma.student.findFirst({
     where: { id: p.studentId, organizationId: org.id },
-    select: { id: true, studentId: true, email: true },
+    select: { id: true, studentId: true, fullName: true, email: true },
   });
   if (!student?.email || p.emailHash !== digest('email', norm(student.email))) {
     throw new ApiFailure(401, 'unauthorized', 'Student authorization has changed. Verify again.');
   }
-  return { id: student.id, studentId: student.studentId };
+  return { id: student.id, studentId: student.studentId, fullName: student.fullName };
 }
 
 export async function revokeStudentClearanceSession(
