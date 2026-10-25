@@ -14,6 +14,7 @@ import { computeDepartmentFinancials, isVoidedRecord } from '@/lib/financials';
 import { isOrganizationActive, normalizeDepartmentSlug } from '@/lib/roles';
 import { ApiFailure } from '@/lib/mobile/http';
 import { toCentavos } from '@/lib/mobile/serialize';
+import { LedgerReadIntegrityError, ledgerCentavos, legacyPenaltyAssessedCentavos } from '@/lib/mobile/ledger-precision';
 import type { MoneyScalar } from '@/lib/money-precision';
 import {
   isRolloverSource,
@@ -98,11 +99,11 @@ export function collectionEntry(c: CollectionRow): LedgerEntry {
     title: c.studentName,
     reference: c.orNumber,
     subtitle: c.itemDescription,
-    amountCentavos: toCentavos(c.amountPaid),
+    amountCentavos: ledgerCentavos('collection', 'amountPaid', c.amountPaid),
     status: isVoidedRecord(c) ? 'Voided' : c.status,
     at: c.timestamp.toISOString(),
     ...receiptParts(c.orNumber),
-    ...(c.balanceDue != null ? { balanceCentavos: toCentavos(c.balanceDue) } : {}),
+    ...(c.balanceDue != null ? { balanceCentavos: ledgerCentavos('collection', 'balanceDue', c.balanceDue) } : {}),
   };
 }
 
@@ -118,7 +119,7 @@ export function remittanceEntry(r: RemittanceRow): LedgerEntry {
     title: r.studentName,
     reference: r.referenceNumber,
     subtitle: [r.itemDescription, r.paymentChannel].filter(Boolean).join(' · '),
-    amountCentavos: toCentavos(r.amountPaid),
+    amountCentavos: ledgerCentavos('online-remittance', 'amountPaid', r.amountPaid),
     status: r.status,
     at: r.timestamp.toISOString(),
   };
@@ -148,15 +149,14 @@ export function penaltyEntry(p: PenaltyRow): LedgerEntry {
     title: p.studentName,
     reference: p.penaltyId,
     subtitle: penaltySubtitle(p),
-    amountCentavos: toCentavos(p.fineAmount),
+    amountCentavos: ledgerCentavos('penalty', 'fineAmount', p.fineAmount),
     status: p.status,
     at: p.date.toISOString(),
-    // Legacy penalty assessments can be null. Convert the exact hourly rate to
-    // centavos before multiplying fractional hours, matching the settlement guard.
-    // Do not pass a floating-point peso product to the strict money parser.
+    // Legacy null assessedAmount: reconstruct from integer minutes and exact
+    // hourly centavos using the same rounding rule as the web penalty actions.
     assessedCentavos: p.assessedAmount != null
-      ? toCentavos(p.assessedAmount)
-      : Math.round(Number(p.hoursLate) * toCentavos(p.ratePerHour)),
+      ? ledgerCentavos('penalty', 'assessedAmount', p.assessedAmount)
+      : legacyPenaltyAssessedCentavos(p.hoursLate, p.ratePerHour),
     penaltyType: p.penaltyType,
   };
 }
@@ -177,7 +177,12 @@ export async function listLedger(org: Organization, opts: { status?: string | nu
     prisma.cashierRemittance.findMany({ where, orderBy: { date: 'desc' }, take }),
   ]);
 
-  const entries: LedgerEntry[] = [
+  // Convert each record only after the authorized, tenant/period-scoped reads.
+  // Never silently round, replace a malformed amount with zero, or return a
+  // partial ledger as a complete financial history to existing Android apps.
+  let entries: LedgerEntry[];
+  try {
+    const entries: LedgerEntry[] = [
     ...collections.map(collectionEntry),
     ...remittances.map(remittanceEntry),
     ...penalties.map(penaltyEntry),
@@ -201,7 +206,20 @@ export async function listLedger(org: Organization, opts: { status?: string | nu
       status: c.status,
       at: c.date.toISOString(),
     })),
-  ];
+    ];
+  } catch (error) {
+    if (error instanceof LedgerReadIntegrityError) {
+      // Fixed code-only metadata: no amounts, student identities, receipts,
+      // organizational references, bearer tokens or financial source rows.
+      console.warn('[api/mobile/ledger] exact-centavo review required', {
+        category: error.source, field: error.field,
+      });
+      throw new ApiFailure(422, 'financial_data_review',
+        'This ledger contains an amount requiring financial review. ' +
+        'No amount was rounded or changed. Contact an authorized financial administrator.');
+    }
+    throw error;
+  }
 
   const status = String(opts.status || '').trim();
   return entries
