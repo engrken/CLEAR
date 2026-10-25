@@ -25,3 +25,16 @@ test('public clearance guide stops polling after privacy notice is accepted', ()
   assert.match(src, /window\.localStorage\.setItem\(storageKey, 'true'\)/);
   assert.doesNotMatch(src, /Authorization:|studentName|registeredEmail|outstandingCentavos/);
 });
+
+test('Void Center collections search uses bounded tenant SQL relation rather than an unbounded roster scan', () => {
+  const page = read('app/department/[department]/(protected)/void/page.tsx');
+  assert.match(page, /requireTabAccess\('tab-void', slug\)/);
+  assert.match(page, /if \(q && category !== 'collections'\)/);
+  assert.match(page, /student: \{ is: \{/);
+  assert.match(page, /organizationId: organization\.id/);
+  assert.match(page, /select: \{ studentId: true \}/);
+  assert.match(page, /include: \{ student: \{ select: \{ fullName: true \} \} \}/);
+  assert.doesNotMatch(page, /matchedDbIds|include: \{ student: true \}/);
+  assert.match(page, /prisma\.collection\.count\(\{ where \}\)/);
+  assert.match(page, /skip, take: pageSize/);
+});

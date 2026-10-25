@@ -20,7 +20,7 @@ export type HistoryLine = {
   itemDescription: string;
   paymentType: string;
   status: string;
-  amountPaid: number;
+  amountPaid: number | string | { toString(): string };
 };
 
 export type IssuedReceipt = {
@@ -35,13 +35,27 @@ export type IssuedReceipt = {
   encodedBy: string;
   status: "Valid" | "Voided" | "Inconsistent";
   inconsistencyReason: string;
-  total: number;
+  // Null for invalid historical monetary lines: never display a rounded
+  // invented receipt total as valid accounting evidence.
+  total: number | null;
   count: number;
   description: string;
   categories: string[];
   descriptions: string[];
   paymentTypes: string[];
 };
+
+/** Validate raw Prisma Decimal/legacy Float text before any rounding. */
+function exactReceiptCents(amount: HistoryLine['amountPaid']): number | null {
+  const match = /^(-?)(0|[1-9]\d*)(?:\.(\d{1,2}))?$/.exec(String(amount));
+  if (!match) return null;
+  const magnitude = BigInt(match[2]) * BigInt(100) +
+    BigInt((match[3] ?? '').padEnd(2, '0') || '0');
+  const signed = match[1] === '-' ? -magnitude : magnitude;
+  return signed >= BigInt(Number.MIN_SAFE_INTEGER) &&
+    signed <= BigInt(Number.MAX_SAFE_INTEGER)
+    ? Number(signed) : null;
+}
 
 const VOID_RE = /VOID|CANCEL|REJECT/i;
 const formatOR = (value: string) => value.trim().toUpperCase();
@@ -78,17 +92,23 @@ export function buildIssuedReceipts(lines: HistoryLine[]): IssuedReceipt[] {
     if (voided > 0 && voided < group.length) {
       reasons.push("Mixed valid and voided allocation lines");
     }
-    if (group.some(row => !Number.isFinite(row.amountPaid))) {
+    // Prisma returns Decimal in the current schema; older financial records
+    // may have originated as Float. Inspect the exact string of either type.
+    // Strict numeric conversion here would throw before the audit could show
+    // the offending source line, or silently round a fractional cent.
+    const rawCents = group.map(row => exactReceiptCents(row.amountPaid));
+    const nonFinite = group.some(row => !Number.isFinite(Number(row.amountPaid)));
+    if (nonFinite) {
       reasons.push("Non-finite monetary amount in receipt allocations");
     }
-    // Existing historical lines are never changed here. Surface anomalous
-    // sub-cent values for supervised audit rather than rounding them away
-    // silently or assigning an incorrect student/obligation association.
-    if (group.some(row => Number.isFinite(row.amountPaid) &&
-      (!Number.isSafeInteger(Math.round(row.amountPaid * 100)) ||
-        Math.abs(row.amountPaid * 100 - Math.round(row.amountPaid * 100)) > 0.000001))) {
+    const unsafePrecision = group.some((row, index) =>
+      Number.isFinite(Number(row.amountPaid)) && rawCents[index] === null);
+    if (unsafePrecision) {
       reasons.push("Sub-cent or unsafe monetary precision in receipt allocation");
     }
+    const totalCents = rawCents.reduce<number>((sum, cents) => sum + (cents ?? 0), 0);
+    const unsafeTotal = !Number.isSafeInteger(totalCents);
+    if (unsafeTotal) reasons.push("Unsafe cumulative receipt amount");
     const status = reasons.length
       ? "Inconsistent"
       : voided === group.length ? "Voided" : "Valid";
@@ -108,7 +128,7 @@ export function buildIssuedReceipts(lines: HistoryLine[]): IssuedReceipt[] {
       encodedBy: root.encodedBy || "",
       status,
       inconsistencyReason: reasons.join("; "),
-      total: group.reduce((sum, row) => sum + Math.round(row.amountPaid * 100), 0) / 100,
+      total: nonFinite || unsafePrecision || unsafeTotal ? null : totalCents / 100,
       count: group.length,
       description: group.map(row => row.itemDescription).join("; ").slice(0, 260),
       categories: [...new Set(group.map(row => row.category).filter(Boolean))].sort(),

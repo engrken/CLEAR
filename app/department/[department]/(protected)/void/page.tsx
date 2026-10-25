@@ -61,8 +61,11 @@ export default async function VoidTransactionsPage({ params, searchParams }: {
 
   // Search all matching database records BEFORE applying pagination. Never filter
   // just the currently visible page or merge records across organizations.
-  let matchingStudents: Array<{ id: string; studentId: string; fullName: string }> = [];
-  if (q) {
+  // Collections can match the linked student with a database relation
+  // predicate. Do not materialize every matching roster ID in JavaScript
+  // on the most frequently viewed Void Center tab.
+  let matchingStudents: Array<{ studentId: string }> = [];
+  if (q && category !== 'collections') {
     matchingStudents = await prisma.student.findMany({
       where: {
         organizationId: organization.id,
@@ -71,10 +74,9 @@ export default async function VoidTransactionsPage({ params, searchParams }: {
           { studentId: { contains: q, mode: 'insensitive' } },
         ],
       },
-      select: { id: true, studentId: true, fullName: true },
+      select: { studentId: true },
     });
   }
-  const matchedDbIds = matchingStudents.map(s => s.id);
   const matchedRosterIds = matchingStudents.map(s => s.studentId);
 
   let totalCount = 0;
@@ -100,12 +102,19 @@ export default async function VoidTransactionsPage({ params, searchParams }: {
         { orNumber: { contains: q, mode: 'insensitive' as const } },
         { itemDescription: { contains: q, mode: 'insensitive' as const } },
         { category: { contains: q, mode: 'insensitive' as const } },
-        ...(matchedDbIds.length ? [{ studentId: { in: matchedDbIds } }] : []),
+        { student: { is: {
+          organizationId: organization.id,
+          OR: [
+            { fullName: { contains: q, mode: 'insensitive' as const } },
+            { studentId: { contains: q, mode: 'insensitive' as const } },
+          ],
+        } } },
+
       ] } : {}),
     };
     const rows = await paging(
       () => prisma.collection.count({ where }),
-      (skip) => prisma.collection.findMany({ where, include: { student: true },
+      (skip) => prisma.collection.findMany({ where, include: { student: { select: { fullName: true } } },
         orderBy: [{ date: 'desc' }, { id: 'desc' }], skip, take: pageSize }),
     );
     records = rows.map(row => ({

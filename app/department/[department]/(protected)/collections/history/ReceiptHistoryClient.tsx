@@ -9,7 +9,7 @@ import { resendCollectionsReceipt } from "./actions";
 
 type Receipt = { orNumber: string; studentName: string; studentNumber: string;
   date: string; timestamp: string; academicYear: string; term: string;
-  encodedBy: string; status: string; inconsistencyReason: string; total: number;
+  encodedBy: string; status: string; inconsistencyReason: string; total: number | null;
   count: number; description: string; key: string };
 type Props = {
   department: string; receipts: Receipt[]; ay: string; term: string;
@@ -18,7 +18,9 @@ type Props = {
   inconsistentOnly: boolean; categories: string[]; paymentTypes: string[];
   page: number; pageSize: number; total: number; maxPage: number;
 };
-const peso = (n: number) => `₱${n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const peso = (n: number | null) => n === null || !Number.isFinite(n)
+  ? "Requires reconciliation"
+  : `₱${n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default function ReceiptHistoryClient(p: Props) {
   const router = useRouter();
