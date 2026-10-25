@@ -67,3 +67,13 @@ test('web and shared mobile certificate verifiers reject malformed signatures be
   }
   assert.match(web, /if \(!isOfficer && !\(sigParam && q\)\)/);
 });
+
+test('both website and Android server clearance skip only validated canonical penalty payment receipts', () => {
+  const page = read('app/department/[department]/clearance/page.tsx');
+  const mobile = read('lib/clearance.ts');
+  for (const code of [page, mobile]) {
+    assert.match(code, /isCanonicalPenaltyReceipt\(c, student, penalties\)/);
+    assert.match(code, /isOutstandingPenalty\(p\)/);
+    assert.match(code, /isPackageCollection\(desc\)/);
+  }
+});

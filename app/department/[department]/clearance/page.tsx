@@ -22,7 +22,7 @@ import { Metadata } from 'next';
 import { decodeStudentDue, activeCollectibleDue } from '../(protected)/collectibles/due-link';
 import { getPeriodLedger } from '../(protected)/realign/ledger';
 import { listHistoricalDebts, type HistoricalDebt } from '@/lib/student-arrears';
-import { isOutstandingPenalty } from '@/lib/penalty-clearance-status';
+import { isOutstandingPenalty, isCanonicalPenaltyReceipt } from '@/lib/penalty-clearance-status';
 
 export const dynamic = 'force-dynamic';
 
@@ -366,6 +366,8 @@ export default async function ClearancePage({
     for (const c of myCollections) {
       const desc = String(c.itemDescription || '').trim();
       if (!desc || isPackageCollection(desc) || /^Historical (Penalty|Collectible) \[/i.test(desc)) continue;
+      // Cash OR remainder is not a second fee after linked community service.
+      if (isCanonicalPenaltyReceipt(c, student, penalties)) continue;
       const key = desc.toLowerCase();
       const group = standaloneGroups.get(key) || {
         category: String(c.category || 'Assessment'),
