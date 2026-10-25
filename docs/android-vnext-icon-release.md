@@ -56,3 +56,19 @@ git pull --ff-only origin feat/android-vnext-icon-and-parity-20261025
 ```
 
 The asset helper SHA-256-checks both original full-resolution PNGs before writing anything. Commit/push the changed 1024px images to the PR branch, then repeat CI. Build the AAB on an owner-controlled clean/disposable short-path workspace with the **existing Play Upload keystore**, not the debug signer. After the signed bundle exists, run `mobile/scripts/Verify-ClearAndroidAAB.ps1 -BundlePath <path> -BundletoolJar <path>`, which verifies certificate fingerprint, package, version, code and target SDK. Neither helper signs, publishes, leaks credentials, or edits Production. The historical v1.2.2 workflow is not the new version's signing mechanism.
+
+## Bundletool 1.18.3 setup and signing-warning review (Windows)
+
+The AAB verification script defaults to `D:\tools\bundletool-all-1.18.3.jar`. It no longer assumes a nonexistent generic `bundletool-all.jar` file. Install the official Google's 1.18.3 release asset and independently check the published GitHub SHA-256:
+
+```powershell
+New-Item -ItemType Directory -Force "D:\tools" | Out-Null
+$tool = "D:\tools\bundletool-all-1.18.3.jar"
+Invoke-WebRequest -Uri "https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar" -OutFile $tool
+$expected = "A099CFA1543F55593BC2ED16A70A7C67FE54B1747BB7301F37FDFD6D91028E29"
+if ((Get-FileHash -LiteralPath $tool -Algorithm SHA256).Hash -ne $expected) { throw "Official bundletool download checksum mismatch." }
+java -jar $tool version
+.\mobile\scripts\Verify-ClearAndroidAAB.ps1 -BundlePath "D:\m123\android\app\build\outputs\bundle\release\app-release.aab"
+```
+
+The verifier checks the AAB's signature, the official Upload key, bundletool structure, manifest identity, candidate code 13 and target API. `jarsigner` may print an informational `META-INF/MANIFEST.MF ... JarFile ... JarInputStream` warning even on a signature verified with exit code 0. Preserve `jarsigner -verify -verbose -certs` output and review the warning before Play rollout; an informational warning is **not** a substitute for successful verification, and do not claim that the bundle is published from local checks. Oracle documents that `internalInconsistenciesDetected` is informational. For versionCode 13, still verify all Play tracks.
