@@ -103,7 +103,11 @@ test('officer and global Activity search only the authorized loaded batch and do
   assert.match(home, /can\('tab-overview'\)/);
   assert.match(home, /can\('tab-payment'\)/);
   assert.match(home, /can\('tab-void'\)/);
-  assert.match(home, /openDepartmentModule\(session\.org\.subdomain, '\/collections\/history'\)/);
-  assert.match(home, /openDepartmentModule\(session\.org\.subdomain, '\/void'\)/);
+  const reference = read('mobile/src/app/(officer)/reference-search.tsx');
+  assert.match(home, /router.push\(\{ pathname: '\/reference-search'/);
+  assert.match(reference, /openDepartmentModule\(s\.org\.subdomain,'\/collections\/history'\)/);
+  assert.match(reference, /openDepartmentModule\(s\.org\.subdomain,'\/void'\)/);
+  assert.match(reference, /api\.searchReceiptReferences\(/);
+  assert.match(reference, /api\.searchVoidReferences\(/);
   assert.match(global, /useGlobalSession\(\)/);
 });

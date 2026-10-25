@@ -159,13 +159,13 @@ export default function Home() {
             {visibleActivity.length} of {ledger.data?.length ?? 0} recently loaded records. This is not the complete receipt or Void Center history.
           </Text>
           {canPayment ? (
-            <Button block variant="secondary" onPress={() => void openDepartmentModule(session.org.subdomain, '/collections/history')}>
-              Search full receipt history (secure web)
+            <Button block variant="secondary" onPress={() => router.push({ pathname: '/reference-search', params: { kind: 'receipts' } })}>
+              Search receipts (read-only)
             </Button>
           ) : null}
           {canVoid ? (
-            <Button block variant="secondary" onPress={() => void openDepartmentModule(session.org.subdomain, '/void')}>
-              Search full Void Center (secure web)
+            <Button block variant="secondary" onPress={() => router.push({ pathname: '/reference-search', params: { kind: 'void' } })}>
+              Search Void references (read-only)
             </Button>
           ) : null}
           {ledger.error ? <Banner tone="danger" title="Couldn't load activity">{ledger.error.message}</Banner> : null}

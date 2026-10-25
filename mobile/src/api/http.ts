@@ -162,6 +162,12 @@ export const httpApi: ClearApi = {
   getTenantPortal: (s) => request(`${org(s.org.subdomain)}/portal`, as(s)),
   getDashboard: (s) => request(`${org(s.org.subdomain)}/dashboard`, as(s)),
   listLedger: (s, f) => request(`${org(s.org.subdomain)}/ledger`, { ...as(s), query: { status: f?.status, limit: f?.limit } }),
+  searchReceiptReferences: (s, q) => request(`${org(s.org.subdomain)}/reference-search`, {
+    ...as(s), query: { kind: 'receipts', q: q.trim() },
+  }),
+  searchVoidReferences: (s, q) => request(`${org(s.org.subdomain)}/reference-search`, {
+    ...as(s), query: { kind: 'void', q: q.trim() },
+  }),
   listPendingRemittances: (s) => request(`${org(s.org.subdomain)}/remittances/pending`, as(s)),
   listStudents: (s, q) => request(`${org(s.org.subdomain)}/students`, { ...as(s), query: { q } }),
   recordPayment: (s, p) => PAYMENT_WRITES_ENABLED ? request(`${org(s.org.subdomain)}/payments`, { method: 'POST', ...as(s), idempotencyKey: p.idempotencyKey, json: { studentId: p.studentId, feeId: p.feeId, amountCentavos: p.amountCentavos, orNumber: p.orNumber.trim() } }) : Promise.reject(new ApiError('Payment posting is disabled until Android financial parity is verified.', 'unavailable')),
