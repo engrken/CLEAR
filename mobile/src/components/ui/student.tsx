@@ -45,15 +45,17 @@ export function ClearanceCard({ studentName, studentId, status, outstanding = nu
           </Text>
           {studentId ? <Text variant="bodyStrong" color="mintInk" style={{ fontSize: 15 }}>{studentId}</Text> : null}
         </View>
-        <View style={styles.inset}>
-          <View style={[styles.qr, { backgroundColor: c.qrGround }]} accessible accessibilityRole="image" accessibilityLabel="Clearance QR code">
-            {qrToken ? <QRCode value={qrToken} size={112} color={c.qrInk} backgroundColor={c.qrGround} /> : null}
+        {qrToken ? (
+          <View style={styles.inset}>
+            <View style={[styles.qr, { backgroundColor: c.qrGround }]} accessible accessibilityRole="image" accessibilityLabel="My clearance QR code">
+              <QRCode value={qrToken} size={112} color={c.qrInk} backgroundColor={c.qrGround} />
+            </View>
+            <View style={{ flex: 1, gap: 6 }}>
+              <Text variant="headline" style={{ fontSize: 18, lineHeight: 23 }}>Show this to your adviser</Text>
+              <Text variant="bodySm" color="inkMuted">Scan for live clearance validity. Also show your school ID.</Text>
+            </View>
           </View>
-          <View style={{ flex: 1, gap: 6 }}>
-            <Text variant="headline" style={{ fontSize: 18, lineHeight: 23 }}>Show this to your adviser</Text>
-            <Text variant="bodySm" color="inkMuted">{"It's checked live against the department ledger."}</Text>
-          </View>
-        </View>
+        ) : null}
         <TermChip ay={ay} term={term} onColor />
       </ResultBlock>
     );

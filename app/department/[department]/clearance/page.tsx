@@ -6,9 +6,6 @@ import { auth } from '@/auth';
 import { fmt, money } from '@/lib/utils';
 import { requireTabAccess } from '@/lib/permissions';
 import { formatInTimeZone } from 'date-fns-tz';
-import { clearanceLinkOrigin } from '@/lib/clearance-link-origin';
-import { issueClearanceCertificate } from '@/lib/clearance-opaque-token';
-import FirstPartyClearanceQr from './FirstPartyClearanceQr';
 import { notFound, redirect } from 'next/navigation';
 import crypto from 'node:crypto';
 import Link from 'next/link';
@@ -149,10 +146,6 @@ export default async function ClearancePage({
 
   const cleanDepartment = decodeURIComponent(department).toLowerCase().trim();
   const basePath = `/department/${encodeURIComponent(cleanDepartment)}`;
-
-  // Never include a request-supplied Host in an independently signed clearance
-  // certificate URL: a forged host could capture a student ID and signature.
-  const absoluteBaseUrl = clearanceLinkOrigin();
 
   const organization = await prisma.organization.findUnique({
     where: { subdomain: cleanDepartment },
@@ -651,15 +644,6 @@ export default async function ClearancePage({
         )
       : null;
 
-    const selectedStudent = queriedStudent && queriedStudent.isCleared && !isClosed
-      ? allStudents.find(s => s.studentId.toLowerCase() === queriedStudent.studentId.toLowerCase())
-      : null;
-    const queriedVerifyUrl = selectedStudent
-      ? `${absoluteBaseUrl}/clearance/verify?token=${encodeURIComponent(issueClearanceCertificate({
-        orgId: organization.id, studentPk: selectedStudent.id,
-        studentId: selectedStudent.studentId, ay, term,
-      }))}` : '';
-
     return (
       <div className="d-flex flex-column min-vh-100 bg-body-tertiary">
         <main className="flex-grow-1 p-3 p-md-5 mx-auto w-100" style={{ maxWidth: '1200px' }}>
@@ -688,16 +672,11 @@ export default async function ClearancePage({
                     <div className="fw-bold mb-2">
                       <i className="bi bi-patch-check-fill me-2"></i> CLEARED FOR SIGNING
                     </div>
-                    <p className="small text-body mb-2">
-                       Scan this locally generated QR to verify the current clearance.
-                       It expires after seven days; a change in enrollment or an unpaid balance invalidates it immediately.
-                     </p>
-                     {queriedVerifyUrl && <div className="my-3"><FirstPartyClearanceQr url={queriedVerifyUrl} /></div>}
-                    <div>
-                      <a href={queriedVerifyUrl} target="_blank" rel="noopener noreferrer" className="btn btn-success btn-sm fw-bold text-dark">
-                        <i className="bi bi-box-arrow-up-right me-1"></i> Open Digital Certificate
-                      </a>
-                    </div>
+                    <p className="small text-body mb-0">
+                      Students obtain their own QR after completing the private email OTP check.
+                      Scan the QR presented by the student with your phone camera to verify current
+                      clearance validity. Confirm the presenter's identity separately.
+                    </p>
                   </div>
                 ) : (
                   <div className="mt-2">

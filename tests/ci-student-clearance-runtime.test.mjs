@@ -375,7 +375,15 @@ test('student-only OTP, reuse, guesses, tenant/period isolation, minimal status,
     assert.equal(mine.body.studentName, null);
     assert.equal(mine.body.outstandingCentavos, null);
     assert.equal(mine.body.unpaidItems, null);
-    assert.equal(mine.body.qrToken, null);
+    assert.match(mine.body.qrToken || '', /^https?:\/\/[^/]+\/clearance\/verify\?token=v3\.[A-Za-z0-9_-]+$/, 'verified cleared student receives opaque QR');
+    assert.ok(!mine.body.qrToken.includes(a.studentId), 'QR URL cannot expose the school ID');
+    const publicProof = await fetch(mine.body.qrToken);
+    assert.equal(publicProof.status, 200);
+    const proofHtml = await publicProof.text();
+    assert.match(proofHtml, /OFFICIAL CLEARANCE VALID/);
+    assert.doesNotMatch(proofHtml, /Synthetic Student A|CI-ONLY-A-007/, 'public QR displays status only');
+    const badProof = await fetch(root + '/clearance/verify?token=v3.INVALID');
+    assert.match(await badProof.text(), /CERTIFICATE INVALID, EXPIRED OR ON HOLD/);
     assert.match(mine.cache || '', /no-store/);
     assert.equal(mine.body.ay, 'A.Y. CI-ONLY-2026');
 
@@ -396,6 +404,9 @@ test('student-only OTP, reuse, guesses, tenant/period isolation, minimal status,
     await prisma.organization.update({
       where: { id: tenantA }, data: { activeTerm: '2nd Sem' },
     });
+    const staleQr = await fetch(mine.body.qrToken);
+    assert.match(await staleQr.text(), /CERTIFICATE INVALID, EXPIRED OR ON HOLD/,
+      'active term change must invalidate the earlier student QR');
     assert.equal((await request(tenantA, '/clearance', 'GET', undefined, renewed.body.token)).status, 401,
       'academic period rollover invalidates existing student credentials');
 

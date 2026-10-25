@@ -22,6 +22,8 @@ test('student-only OTP and private response remain enforced before roster/financ
   for (const field of ['studentName: null', 'outstandingCentavos: null', 'qrToken: null']) {
     assert.ok(api.includes(field), field);
   }
+  assert.match(api, /qrToken: studentQrUrl/);
+  assert.match(api, /!ledger.activeRollover/);
   assert.match(otp, /MAX_GUESSES = 5/);
   assert.match(otp, /OTP_TTL_MS = 5 \* 60_000/);
   assert.match(otp, /verificationToken\.deleteMany/);
@@ -30,7 +32,10 @@ test('signed certificates use official origin and no external QR generator', () 
   const web = read('app/department/[department]/clearance/page.tsx');
   const resolver = read('lib/clearance-link-origin.ts');
   assert.doesNotMatch(web, /api\.qrserver\.com|chart\.googleapis\.com\/chart/);
-  assert.match(web, /const absoluteBaseUrl = clearanceLinkOrigin\(\)/);
+  assert.doesNotMatch(web, /clearanceLinkOrigin\(\)/, 'officers verify student-owned QR instead of issuing one');
+  const api = read('app/api/mobile/orgs/[org]/clearance/route.ts');
+  assert.match(api, /publicBaseUrl\(req\) \+ '\/clearance\/verify\?token='/);
+  assert.match(api, /qrToken: studentQrUrl/);
   assert.match(resolver, /PRODUCTION_ORIGIN = 'https:\/\/clearsys\.vercel\.app'/);
   assert.match(read('lib/clearance.ts'), /crypto\.timingSafeEqual/);
 });

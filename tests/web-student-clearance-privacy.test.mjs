@@ -33,6 +33,11 @@ test('private web student UI protects bearer credentials, financial fields and s
   assert.match(src, /visibilitychange/);
   assert.match(src, /privateResult\.studentName !== null/);
   assert.match(src, /privateResult\.unpaidItems !== null/);
+  assert.match(src, /privateResult\.status !== 'cleared' && privateResult\.qrToken !== null/);
+  assert.match(src, /validStudentQrUrl\(privateResult\.qrToken\)/);
+  assert.match(src, /result\.status === 'cleared' && result\.qrToken/);
+  assert.match(src, /<FirstPartyClearanceQr url=\{result\.qrToken\}/);
+  assert.match(src, /setResult\(null\)/);
 });
 
 test('public student clearance guide is privacy-first, replayable and contains no student session data', () => {
