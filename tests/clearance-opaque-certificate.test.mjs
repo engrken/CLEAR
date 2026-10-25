@@ -58,15 +58,14 @@ test('new QR URL is private, live-rechecked, expiring; old signature flow preser
   assert.match(web,/verifyClearanceSignature\(/,'legacy links still verify');
   assert.match(api,/requireStudentClearanceSession\(req, org\)/);
   assert.match(api,/result.student.id !== student.id/);
-  assert.match(api,/getPeriodLedger\(prisma, org.id/);
-  assert.match(api,/!ledger.activeRollover/);
+  assert.match(api,/isAcademicPeriodClosed\(prisma, org.id, org.activeAy, org.activeTerm\)/);
+  assert.match(api,/result.isCleared && !closed/);
   assert.match(api,/issueClearanceCertificate\(/);
   assert.doesNotMatch(api,/clearanceVerifyPath\(/,'new mobile officer QR should not expose school IDs');
   assert.match(view,/readClearanceCertificate\(/);
   assert.match(view,/current\.student\.id === claim\.studentPk/);
   assert.match(view,/current\?\.isCleared/);
-  assert.match(view,/getPeriodLedger\(/);
-  assert.match(view,/!periodLedger\.activeRollover/);
+  assert.match(view,/isAcademicPeriodClosed\(prisma, org.id, claim.ay, claim.term\)/);
   assert.match(view,/org\.activeAy === claim\.ay && org\.activeTerm === claim\.term/);
   assert.doesNotMatch(view,/studentName|student\.fullName|unpaidItems\.map/);
   assert.match(headers,/source: '\/clearance\/verify'/);

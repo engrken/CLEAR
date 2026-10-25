@@ -23,7 +23,8 @@ test('student-only OTP and private response remain enforced before roster/financ
     assert.ok(api.includes(field), field);
   }
   assert.match(api, /qrToken: studentQrUrl/);
-  assert.match(api, /!ledger.activeRollover/);
+  assert.match(api, /result.isCleared && !closed/);
+  assert.match(api, /isAcademicPeriodClosed\(prisma, org.id, org.activeAy, org.activeTerm\)/);
   assert.match(otp, /MAX_GUESSES = 5/);
   assert.match(otp, /OTP_TTL_MS = 5 \* 60_000/);
   assert.match(otp, /verificationToken\.deleteMany/);
