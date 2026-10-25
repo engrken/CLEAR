@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { ActivityIndicator, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { api, type Student } from '@/api';
 import { Avatar, Banner, Icon, Screen, StatusPill, Text, type Tone } from '@/components/ui';
 import { OfficerPresence } from '@/components/collaboration/OfficerPresence';
 import { enrollmentLabel, isEnrolled } from '@/lib/enrollment';
-import { useOfficerSession } from '@/lib/session';
+import { useOfficerSession, useSession } from '@/lib/session';
 import { TAB_BAR_SPACE } from '@/lib/tab-bar';
 import { useAsync } from '@/lib/use-async';
 import { radius, spacing, type, useTheme } from '@/theme';
@@ -21,20 +21,29 @@ const avatarTone = (name: string): Tone => {
 /** The department roster for the active term. */
 export default function Students() {
   const session = useOfficerSession();
+  const { can } = useSession();
   const { c } = useTheme();
-  const students = useAsync(() => api.listStudents(session), session.token);
+  const [missingEmailOnly, setMissingEmailOnly] = useState(false);
+  const students = useAsync(
+    () => api.listStudents(session, undefined, can('tab-students') && missingEmailOnly),
+    `${session.token}:missing-email:${can('tab-students') && missingEmailOnly}`,
+  );
   const [q, setQ] = useState('');
   const [focused, setFocused] = useState(false);
 
-  const list = (students.data ?? []).filter(
+  // Avoid showing the previous filter's roster while a scoped query loads.
+  const current = students.loading ? undefined : students.data;
+  const list = (current ?? []).filter(
     (s) => !q.trim() || s.fullName.toLowerCase().includes(q.toLowerCase()) || s.studentId.toLowerCase().includes(q.toLowerCase())
   );
 
   const header = (
     <View style={styles.header}>
       <Text variant="title" accessibilityRole="header" style={styles.heading}>Students</Text>
-      {students.data ? (
-        <Text variant="label" color="inkMuted">{students.data.length} on roster</Text>
+      {current ? (
+        <Text variant="label" color="inkMuted">
+          {current.length} {missingEmailOnly ? 'need email' : 'on roster'}
+        </Text>
       ) : null}
     </View>
   );
@@ -57,12 +66,27 @@ export default function Students() {
         />
       </View>
 
+      {can('tab-students') ? (
+        <View style={{ gap: spacing[2] }}>
+          <Pressable accessibilityRole="button"
+            accessibilityState={{ selected: missingEmailOnly }}
+            onPress={() => { setMissingEmailOnly(v => !v); setQ(''); }}
+            style={[styles.emailFilter, { backgroundColor: missingEmailOnly ? c.inkBlock : c.soft }]}>
+            <Text variant="bodyStrong" color={missingEmailOnly ? 'onAccent' : 'ink'}>
+              {missingEmailOnly ? 'Show full student roster' : 'Students needing verified email'}
+            </Text>
+          </Pressable>
+          {missingEmailOnly ? <Banner tone="info" title="Identity verification required">
+            This is a read-only list. An authorized registrar must verify the student's identity before correcting their email in the secure web Students Roster. School ID alone cannot bypass OTP.
+          </Banner> : null}
+        </View>
+      ) : null}
       {students.error ? (
         <Banner tone="danger" title="Couldn't load student roster">{students.error.message}</Banner>
       ) : null}
-      {students.loading && !students.data ? (
+      {students.loading ? (
         <ActivityIndicator color={c.cobalt} />
-      ) : students.data ? (
+      ) : current ? (
         <View style={{ gap: 6 }}>
           {list.map((s) => (
             <RosterRow key={s.id} student={s} />
@@ -118,4 +142,5 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
   },
   rowMain: { flex: 1, minWidth: 0, gap: 1 },
+  emailFilter: { paddingVertical: 13, paddingHorizontal: 15, borderRadius: radius.md, alignItems: 'center' },
 });
