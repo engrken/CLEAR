@@ -43,7 +43,7 @@ assert.equal(app.expo.owner, 'rupert2133s-team', 'Expo project owner must remain
 const iconPath = app.expo.icon;
 const adaptivePath = app.expo.android.adaptiveIcon.foregroundImage;
 function readPngAsset(path, label) {
-  assert.match(path, /^\\.\\/assets\\/[A-Za-z0-9._-]+\\.png$/, label + ' must be bundled in mobile/assets');
+  assert.ok(path.startsWith('./assets/') && /^[A-Za-z0-9._-]+[.]png$/.test(path.slice('./assets/'.length)), label + ' must be bundled in mobile/assets');
   const bytes = readFileSync(resolve(root, path));
   assert.ok(bytes.length > 1024, label + ' must contain real PNG image data');
   assert.equal(bytes.subarray(0, 8).toString('hex'), '89504e470d0a1a0a', label + ' must be a PNG');
