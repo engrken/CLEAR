@@ -293,13 +293,14 @@ export default function StudentsClient({
       yearLevel: formData.get("yearLevel") as string,
       email: formData.get("email") as string,
       enrollmentStatus: formData.get("enrollmentStatus") as string,
+      emailChangeIdentityVerified: formData.get("emailChangeIdentityVerified") === "on",
       isEdit: !!editStudent,
     };
 
     if (!await confirmCommittedChange({
       action: editStudent ? 'Confirm student roster update' : 'Confirm new student',
       target: `${payload.fullName} · ${payload.studentId} · ${ay} ${term}`,
-      consequence: 'This updates the authorized tenant roster and enrollment details. Check the Student ID and email before saving.',
+      consequence: 'This updates the tenant roster. Registered email changes require student identity review and acknowledgment; students must still pass their own email OTP before private clearance access.',
       confirmText: editStudent ? 'Update Student' : 'Add Student',
     })) return;
     setIsSubmitting(true);
@@ -340,7 +341,7 @@ export default function StudentsClient({
     const res = await ThemedAlert.fire({
       icon: 'question',
       title: 'Import Students?',
-      text: `Import ${parsedRecords.length} student records into the directory?`,
+      text: `Import ${parsedRecords.length} student records? Existing students' registered emails are preserved even if CSV contains blanks or changes. Review changes one by one after identity verification.`,
       showCancelButton: true,
       confirmButtonText: 'Import',
     });
@@ -639,6 +640,15 @@ export default function StudentsClient({
                   <div className="mb-3">
                     <label className="form-label text-muted small fw-semibold">Notification Email</label>
                     <input type="email" name="email" defaultValue={editStudent?.email || ""} className="form-control border-secondary" placeholder="student@domain.edu.ph" />
+                    {editStudent && (
+                      <div className="form-check mt-2">
+                        <input className="form-check-input" type="checkbox" name="emailChangeIdentityVerified" id="roster-email-identity-reviewed" />
+                        <label className="form-check-label small" htmlFor="roster-email-identity-reviewed">
+                          If changing this email: I confirmed the student's identity and address with the student using the school's approved procedure.
+                        </label>
+                      </div>
+                    )}
+                    <small className="text-muted">The student must still verify their email by OTP before viewing private clearance. This checkbox records staff review, not mailbox possession.</small>
                   </div>
                 </div>
                 <div className="modal-footer border-secondary">
@@ -662,7 +672,7 @@ export default function StudentsClient({
                 <button type="button" className="btn-close" onClick={() => setShowImportModal(false)}></button>
               </div>
               <div className="modal-body">
-                <p className="text-muted small mb-3">Upload a CSV file or paste CSV data. Expected columns: <code>Student ID, Full Name, Year Level, Email</code> (with header row).</p>
+                <p className="text-muted small mb-3">Upload a CSV file or paste CSV data. Expected columns: <code>Student ID, Full Name, Year Level, Email</code> (with header row). <strong>Existing students' registered emails will not be overwritten by CSV</strong>, including blank fields. For individual email changes, verify identity and use Edit Student.</p>
                 <div className="mb-3">
                   <label className="form-label text-muted small fw-semibold">Select CSV File</label>
                   <input 

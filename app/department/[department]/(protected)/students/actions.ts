@@ -147,6 +147,8 @@ export async function promoteSelectedYearLevels(
 export async function saveStudent(department: string, _clientOrgId: string, ay: string, term: string, formData: {
   id?: string; studentId: string; fullName: string; yearLevel: string; email?: string;
   enrollmentStatus?: string; isEdit: boolean; originalId?: string;
+  // Recorded officer attestation is not proof of new mailbox ownership.
+  emailChangeIdentityVerified?: boolean;
 }) {
   const { dept, orgId, officer } = await scope(department);
   const academicYear = validTerm(ay, 'Academic year');
@@ -156,7 +158,7 @@ export async function saveStudent(department: string, _clientOrgId: string, ay: 
   const yearLevel = str(formData?.yearLevel) || 'Unassigned';
   const email = str(formData?.email).toLowerCase() || null;
   if (!studentId || studentId.length > 100 || !fullName || fullName.length > 200) throw new Error('Valid student ID and name are required.');
-  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('Invalid email address.');
+  if (email && (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) throw new Error('Invalid email address.');
   const enrolled = formData.enrollmentStatus || 'Enrolled';
   if (!['Enrolled', 'Inactive'].includes(enrolled)) throw new Error('Invalid enrollment status.');
   await prisma.$transaction(async tx => {
@@ -166,6 +168,20 @@ export async function saveStudent(department: string, _clientOrgId: string, ay: 
       const old = await tx.student.findFirst({ where: { id: str(formData.id), organizationId: orgId } });
       if (!old) throw new Error('Student does not belong to this organization.');
       if (duplicate && duplicate.id !== old.id) throw new Error('Student ID is already registered.');
+      const previousEmail = str(old.email).toLowerCase() || null;
+      const emailChanged = previousEmail !== email;
+      if (emailChanged) {
+        if (!formData.emailChangeIdentityVerified) {
+          throw new Error('Before changing a registered email, verify the student identity under school policy and confirm that review.');
+        }
+        // Fail closed: blanking the OTP destination is not routine roster editing.
+        if (!email) throw new Error('Do not clear a registered email through roster editing. Contact the tenant administrator for identity recovery.');
+        const emailOwner = await tx.student.findFirst({
+          where: { organizationId: orgId, id: { not: old.id }, email: { equals: email, mode: 'insensitive' } },
+          select: { id: true },
+        });
+        if (emailOwner) throw new Error('Email address is already assigned to another student in this organization.');
+      }
       if (studentId !== old.studentId) {
         const [payments, penalties, remittances] = await Promise.all([
           tx.collection.count({ where: { organizationId: orgId, studentId: old.id } }),
@@ -176,15 +192,29 @@ export async function saveStudent(department: string, _clientOrgId: string, ay: 
         if (payments + penalties + remittances > 0 || due) throw new Error('Student ID cannot be changed when payment, penalty, remittance, or collectible history exists.');
       }
       await tx.student.update({ where: { id: old.id }, data: { studentId, fullName, yearLevel, email } });
+      if (emailChanged) {
+        // No addresses, OTPs or bearer tokens in the audit log.
+        await tx.systemLog.create({
+          data: {
+            organizationId: orgId, user: officer, action: 'STUDENT_EMAIL_IDENTITY_REVIEW',
+            details: 'Student record ' + old.id + ': officer attested school-policy identity check; ' +
+              (previousEmail ? 'address changed' : 'initial address entered') + '; student OTP still required',
+          },
+        });
+      }
       internalId = old.id;
     } else {
       if (duplicate) throw new Error('Student ID is already registered.');
+      if (email && await tx.student.findFirst({
+        where: { organizationId: orgId, email: { equals: email, mode: 'insensitive' } },
+        select: { id: true },
+      })) throw new Error('Email address is already assigned to another student in this organization.');
       const student = await tx.student.create({ data: { organizationId: orgId, studentId, fullName, yearLevel, email } });
       internalId = student.id;
     }
     await enrollmentStatus(tx, internalId, orgId, academicYear, academicTerm, enrolled, officer);
     await tx.systemLog.create({ data: { organizationId: orgId, user: officer, action: formData.isEdit ? 'UPDATE_STUDENT' : 'CREATE_STUDENT', details: `${studentId} — ${fullName}` } });
-  });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 15000 });
   refresh(dept);
   return { success: true };
 }
@@ -242,23 +272,33 @@ export async function bulkImportStudents(department: string, _clientOrgId: strin
     unique.add(studentId.toLowerCase());
     return { studentId, fullName, yearLevel: str(row.yearLevel) || '1st Year', email };
   });
-  const { added, updated } = await prisma.$transaction(async tx => {
-    let added = 0, updated = 0;
+  const { added, updated, preservedEmails } = await prisma.$transaction(async tx => {
+    let added = 0, updated = 0, preservedEmails = 0;
     for (const row of cleanRecords) {
       const existing = await tx.student.findFirst({ where: { organizationId: orgId, studentId: { equals: row.studentId, mode: 'insensitive' } } });
       let id: string;
       if (existing) {
-        await tx.student.update({ where: { id: existing.id }, data: { fullName: row.fullName, yearLevel: row.yearLevel, email: row.email } });
+        // A CSV import must not overwrite/erase an existing OTP destination.
+        if ((str(existing.email).toLowerCase() || null) !== row.email) preservedEmails++;
+        await tx.student.update({ where: { id: existing.id }, data: { fullName: row.fullName, yearLevel: row.yearLevel } });
         id = existing.id; updated++;
       } else {
+        if (row.email && await tx.student.findFirst({
+          where: { organizationId: orgId, email: { equals: row.email, mode: 'insensitive' } },
+          select: { id: true },
+        })) throw new Error('An imported email is already assigned to a student in this organization. Review the CSV.');
         const created = await tx.student.create({ data: { organizationId: orgId, ...row } });
         id = created.id; added++;
       }
       await enrollmentStatus(tx, id, orgId, academicYear, academicTerm, 'Enrolled', officer);
     }
     await tx.systemLog.create({ data: { organizationId: orgId, user: officer, action: 'BULK_IMPORT_STUDENTS', details: `${added} added, ${updated} updated (${academicYear} ${academicTerm})` } });
-    return { added, updated };
-  }, { timeout: 60000 });
+    return { added, updated, preservedEmails };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 60000 });
   refresh(dept);
-  return { success: true, message: `Successfully imported: ${added} added, ${updated} updated.`, added, updated };
+  return {
+    success: true,
+    message: `Successfully imported: ${added} added, ${updated} updated. Existing emails preserved for ${preservedEmails} CSV mismatch(es); review individually after verifying identity.`,
+    added, updated, preservedEmails,
+  };
 }
