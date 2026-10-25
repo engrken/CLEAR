@@ -258,6 +258,19 @@ export class ApiError extends Error {
 }
 
 /** Everything screens can ask of the backend. The HTTP client and the mock both implement it. */
+export type ReceiptReference = {
+  id: string; reference: string; name: string; studentNumber: string; when: string;
+  status: 'Valid' | 'Voided' | 'Inconsistent'; amountPesos: number | null;
+  inconsistent: string; allocationCount: number; description: string;
+};
+export type VoidReference = {
+  id: string; reference: string; kind: string; when: string; reason: string; amountCentavos: number;
+};
+export type ReceiptReferenceSearch = { kind: 'receipts'; scope: 'active_period';
+  ay: string; term: string; query: string; records: ReceiptReference[] };
+export type VoidReferenceSearch = { kind: 'void'; scope: 'tenant_all_periods';
+  query: string; records: VoidReference[] };
+
 export type ClearApi = {
   mode: 'http' | 'mock';
   // public
@@ -308,6 +321,9 @@ export type ClearApi = {
   getTenantPortal(s: Session): Promise<TenantPortalStatus>;
   getDashboard(s: Session): Promise<DashboardSummary>;
   listLedger(s: Session, filter?: { status?: string; limit?: number }): Promise<LedgerEntry[]>;
+  /** Authorized GET-only exact reference search; no receipt/void mutations. */
+  searchReceiptReferences(s: Session, q: string): Promise<ReceiptReferenceSearch>;
+  searchVoidReferences(s: Session, q: string): Promise<VoidReferenceSearch>;
   /** Accessible to tab-remittances even without tab-overview. */
   listPendingRemittances(s: Session): Promise<LedgerEntry[]>;
   listStudents(s: Session, q?: string): Promise<Student[]>;

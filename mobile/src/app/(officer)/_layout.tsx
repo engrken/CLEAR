@@ -84,6 +84,9 @@ export default function OfficerTabs() {
       <Tabs.Protected guard={can('tab-students') || can('tab-payment')}>
         <Tabs.Screen name="students" options={{ title: 'Students' }} />
       </Tabs.Protected>
+      <Tabs.Protected guard={can('tab-payment') || can('tab-void')}>
+        <Tabs.Screen name="reference-search" options={{ title: 'Reference search' }} />
+      </Tabs.Protected>
       <Tabs.Screen name="more" options={{ title: 'Modules' }} />
     </Tabs>
   );
