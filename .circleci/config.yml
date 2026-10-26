@@ -1,0 +1,70 @@
+version: 2.1
+
+jobs:
+  web:
+    docker:
+      - image: cimg/node:22.23
+    working_directory: ~/project
+    environment:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - v1-web-npm-{{ checksum "package-lock.json" }}
+      - run:
+          name: Install web dependencies
+          command: npm ci --no-audit --no-fund
+      - save_cache:
+          key: v1-web-npm-{{ checksum "package-lock.json" }}
+          paths:
+            - ~/.npm
+      - run:
+          name: Build Next.js application
+          command: npm run build
+      - run:
+          name: Run standalone source regression tests
+          command: node scripts/ci/run-clear-acceptance.mjs
+      - run:
+          name: Lint web application
+          command: npm run lint
+
+  mobile:
+    docker:
+      - image: cimg/node:22.23
+    working_directory: ~/project
+    environment:
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - v1-mobile-npm-{{ checksum "mobile/package-lock.json" }}
+      - run:
+          name: Install Expo dependencies
+          command: |
+            cd mobile
+            # Existing GitHub CI reconciles the mobile lockfile before npm ci.
+            # Restore the committed lockfile afterwards to keep cache keys stable.
+            npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+            npm ci --no-audit --no-fund
+            git restore -- package-lock.json
+      - save_cache:
+          key: v1-mobile-npm-{{ checksum "mobile/package-lock.json" }}
+          paths:
+            - ~/.npm
+      # mobile/package.json has no build or test script; existing CI checks TypeScript.
+      - run:
+          name: Type-check Expo application
+          command: cd mobile && npm run typecheck
+      - run:
+          name: Lint Expo application
+          command: cd mobile && npm run lint
+
+workflows:
+  starter:
+    jobs:
+      - web
+      - mobile
