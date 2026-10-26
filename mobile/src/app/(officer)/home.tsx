@@ -9,7 +9,6 @@ import { FinancialOverview } from '@/components/overview/FinancialOverview';
 import { OfficerPresence } from '@/components/collaboration/OfficerPresence';
 import { OfficerWalkthrough } from '@/components/collaboration/OfficerWalkthrough';
 import { formatWhen } from '@/lib/dates';
-import { openDepartmentModule } from '@/lib/links';
 import { fromCentavos } from '@/lib/money';
 import { filterRecentActivity, type RecentActivityFilter } from '@/lib/recent-activity-search';
 import { setPendingCount } from '@/lib/pending-count';
