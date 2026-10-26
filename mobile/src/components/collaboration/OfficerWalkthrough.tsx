@@ -29,12 +29,13 @@ export function OfficerWalkthrough({ auto = true, onClose }: { auto?: boolean; o
   const [tabs, setTabs] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const tabsKey = tabs.join('|');
   const steps = useMemo(() => [
     { title: 'Welcome to CLEAR', detail: 'Your guide is based only on your current department role and its authorized modules.' },
     ...MODULES.filter(m => tabs.includes(m.tab)).map(m => ({ title: m.title, detail: m.detail })),
     { title: 'Confirm before changing data', detail: 'On web, review the student, amount, period, consequences and audit trail before confirming. Mobile financial actions remain read-only.' },
     { title: 'Privacy and collaboration', detail: 'Your role limits access to student and officer information. Initials are visible only to authorized officers viewing the same page and term.' },
-  ], [tabs.join('|')]);
+  ], [tabsKey]);
 
   useEffect(() => {
     if (exempt) return;

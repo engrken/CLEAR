@@ -25,9 +25,7 @@ export default function ReferenceSearch() {
 
   useEffect(() => {
     let active = true;
-    setResponse(null);
-    setError('');
-    if (!allowed || query.trim().length < 3) { setBusy(false); return () => { active = false; }; }
+    if (!allowed || query.trim().length < 3) { setResponse(null); setError(''); setBusy(false); return () => { active = false; }; }
     setBusy(true);
     // Reactive search is debounced, so each keystroke does not cause a DB read.
     const timer = setTimeout(() => {
