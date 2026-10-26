@@ -18,46 +18,30 @@ export default function ReferenceSearch() {
   const canReceipts = can('tab-payment'), canVoid = can('tab-void');
   const [mode, setMode] = useState<Mode>(kind === 'void' && canVoid ? 'void' : canReceipts ? 'receipts' : 'void');
   const [query, setQuery] = useState('');
-  // Results are keyed to the exact query, tenant session, and search mode.
-  // This prevents prior receipts/VOID results from appearing while a new search is pending.
-  const [completedSearch, setCompletedSearch] = useState<{
-    key: string;
-    data?: ReceiptReferenceSearch | VoidReferenceSearch;
-    error?: string;
-  } | null>(null);
+  const [response, setResponse] = useState<ReceiptReferenceSearch | VoidReferenceSearch | null>(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
   const allowed = mode === 'void' ? canVoid : canReceipts;
-  const searchKey = allowed && query.trim().length >= 3
-    ? JSON.stringify([mode, s.token, query])
-    : null;
-  const currentSearch = searchKey && completedSearch?.key === searchKey ? completedSearch : null;
-  const response = currentSearch?.data ?? null;
-  const error = currentSearch?.error ?? '';
-  const busy = Boolean(searchKey && !currentSearch);
-
-  const changeQuery = (next: string) => {
-    setQuery(next);
-    setCompletedSearch(null);
-  };
-  const changeMode = (next: Mode) => {
-    setMode(next);
-    setCompletedSearch(null);
-  };
 
   useEffect(() => {
-    if (!searchKey) return;
     let active = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setResponse(null);
+    setError('');
+    if (!allowed || query.trim().length < 3) { setBusy(false); return () => { active = false; }; }
+    setBusy(true);
     // Reactive search is debounced, so each keystroke does not cause a DB read.
     const timer = setTimeout(() => {
       const lookup = mode === 'void'
         ? api.searchVoidReferences(s, query) : api.searchReceiptReferences(s, query);
       void lookup.then(data => {
-        if (active) setCompletedSearch({ key: searchKey, data });
+        if (active) { setResponse(data); setBusy(false); }
       }).catch(e => {
-        if (active) setCompletedSearch({ key: searchKey, error: (e as Error).message });
+        if (active) { setError((e as Error).message); setBusy(false); }
       });
     }, 450);
     return () => { active = false; clearTimeout(timer); };
-  }, [searchKey, mode, query, s]);
+  }, [query, mode, s.token, allowed]);
 
   return (
     <Screen contentStyle={{ gap: spacing[3], paddingTop: spacing[3] }}>
@@ -67,17 +51,17 @@ export default function ReferenceSearch() {
       </Banner>
       <View style={styles.tabs}>
         {canReceipts ? <Pressable accessibilityRole="button" accessibilityState={{selected:mode==='receipts'}}
-          onPress={() => changeMode('receipts')} style={[styles.pill,{backgroundColor:mode==='receipts'?c.inkBlock:c.soft}]}>
+          onPress={() => setMode('receipts')} style={[styles.pill,{backgroundColor:mode==='receipts'?c.inkBlock:c.soft}]}>
           <Text variant="bodyStrong" color={mode==='receipts'?'onAccent':'ink'}>Receipts</Text>
         </Pressable>:null}
         {canVoid ? <Pressable accessibilityRole="button" accessibilityState={{selected:mode==='void'}}
-          onPress={() => changeMode('void')} style={[styles.pill,{backgroundColor:mode==='void'?c.inkBlock:c.soft}]}>
+          onPress={() => setMode('void')} style={[styles.pill,{backgroundColor:mode==='void'?c.inkBlock:c.soft}]}>
           <Text variant="bodyStrong" color={mode==='void'?'onAccent':'ink'}>Void audit</Text>
         </Pressable>:null}
       </View>
       <TextInput accessibilityLabel="Search authorized receipt or void references"
         placeholder={mode==='void'?'Search VOID reference or reason':'Search OR, student number, name or item'}
-        placeholderTextColor={c.inkMuted} value={query} onChangeText={changeQuery}
+        placeholderTextColor={c.inkMuted} value={query} onChangeText={setQuery}
         autoCorrect={false} autoCapitalize="none"
         style={[styles.input,{backgroundColor:c.soft,color:c.ink}]} />
       <Text variant="caption" color="inkMuted">
