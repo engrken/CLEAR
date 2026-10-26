@@ -77,7 +77,7 @@ export default function Students() {
             </Text>
           </Pressable>
           {missingEmailOnly ? <Banner tone="info" title="Identity verification required">
-            This is a read-only list. An authorized registrar must verify the student's identity before correcting their email in the secure web Students Roster. School ID alone cannot bypass OTP.
+            This is a read-only list. An authorized registrar must verify the student&apos;s identity before correcting their email in the secure web Students Roster. School ID alone cannot bypass OTP.
           </Banner> : null}
         </View>
       ) : null}

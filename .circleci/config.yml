@@ -1,0 +1,194 @@
+version: 2.1
+
+jobs:
+  web:
+    docker:
+      - image: cimg/node:22.23
+    working_directory: ~/project
+    environment:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - v1-web-npm-{{ checksum "package-lock.json" }}
+      - run:
+          name: Install web dependencies
+          command: npm ci --no-audit --no-fund
+      - save_cache:
+          key: v1-web-npm-{{ checksum "package-lock.json" }}
+          paths:
+            - ~/.npm
+      - run:
+          name: Build Next.js application
+          command: npm run build
+      - run:
+          name: Run standalone source regression tests
+          command: node scripts/ci/run-clear-acceptance.mjs
+      - run:
+          name: Lint web application (existing debt baseline)
+          command: |
+            # Run the actual root lint command. The initial CircleCI run recorded
+            # 474 errors and 2345 warnings in existing source; don't hide the log.
+            # This temporary baseline fails on any increase, or if lint crashes.
+            set +e
+            npm run lint > /tmp/clear-web-eslint.log 2>&1
+            lint_exit=$?
+            set -e
+            tail -n 60 /tmp/clear-web-eslint.log
+            if [ "$lint_exit" -eq 0 ]; then
+              echo "Web ESLint passed without errors."
+              exit 0
+            fi
+            summary="$(grep -E '[0-9]+ problems? \([0-9]+ errors?, [0-9]+ warnings?\)' /tmp/clear-web-eslint.log | tail -n 1 || true)"
+            if [ -z "$summary" ]; then
+              echo "ESLint failed without a recognizable results summary."
+              exit "$lint_exit"
+            fi
+            errors="$(printf '%s\n' "$summary" | sed -nE 's/.*\(([0-9]+) errors?, [0-9]+ warnings?\).*/\1/p')"
+            warnings="$(printf '%s\n' "$summary" | sed -nE 's/.*\([0-9]+ errors?, ([0-9]+) warnings?\).*/\1/p')"
+            if [ -z "$errors" ] || [ -z "$warnings" ]; then
+              echo "Failed to parse ESLint results."
+              exit 1
+            fi
+            echo "Existing web lint debt: $errors errors, $warnings warnings (baseline limits: 474/2345)."
+            if [ "$errors" -gt 474 ] || [ "$warnings" -gt 2345 ]; then
+              echo "Web lint debt grew above its baseline; failing the job."
+              exit 1
+            fi
+            echo "Web lint debt did not grow. This is NOT a clean lint pass."
+      - store_artifacts:
+          path: /tmp/clear-web-eslint.log
+          destination: lint/web-eslint.log
+
+  mobile:
+    docker:
+      - image: cimg/node:22.23
+    working_directory: ~/project
+    environment:
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - v1-mobile-npm-{{ checksum "mobile/package-lock.json" }}
+      - run:
+          name: Install Expo dependencies
+          command: |
+            cd mobile
+            # Existing GitHub CI reconciles the mobile lockfile before npm ci.
+            # Restore the committed lockfile afterwards to keep cache keys stable.
+            npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+            npm ci --no-audit --no-fund
+            git restore -- package-lock.json
+      - save_cache:
+          key: v1-mobile-npm-{{ checksum "mobile/package-lock.json" }}
+          paths:
+            - ~/.npm
+      # mobile/package.json has no build or test script; existing CI checks TypeScript.
+      - run:
+          name: Type-check Expo application
+          command: cd mobile && npm run typecheck
+      - run:
+          name: Lint Expo application
+          command: cd mobile && npm run lint
+
+
+  financial-security:
+    # GitHub Actions quota-independent equivalent of the isolated financial
+    # migration and signed-action regression checks. Never connect to Neon.
+    docker:
+      - image: cimg/node:22.23
+      - image: postgres:16
+        environment:
+          POSTGRES_USER: clear_ci
+          POSTGRES_PASSWORD: clear_ci
+          POSTGRES_DB: clear_ci
+    working_directory: ~/project
+    environment:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+      DATABASE_URL: postgresql://clear_ci:clear_ci@127.0.0.1:5432/clear_ci?schema=public
+      AUTH_SECRET: ci-only-circle-finance-auth-key-not-for-production
+      NEXTAUTH_SECRET: ci-only-circle-finance-auth-key-not-for-production
+      AUTH_URL: http://127.0.0.1:3100
+      AUTH_TRUST_HOST: "true"
+      SUPER_ADMIN_EMAIL: ci-super-admin@example.invalid
+      CLEAR_CI_FINANCE_TEST_ENABLED: "1"
+      CLEAR_DB_AUDIT_SCOPE: isolated
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - v1-web-npm-{{ checksum "package-lock.json" }}
+      - run:
+          name: Install financial security test dependencies
+          command: npm ci --no-audit --no-fund
+      - save_cache:
+          key: v1-web-npm-{{ checksum "package-lock.json" }}
+          paths:
+            - ~/.npm
+      - run:
+          name: Await isolated PostgreSQL service
+          command: |
+            set -euo pipefail
+            ready=0
+            for i in $(seq 1 60); do
+              if node -e 'const s=require("node:net").connect(5432,"127.0.0.1");s.on("connect",()=>{s.end();process.exit(0)});s.on("error",()=>process.exit(1));s.setTimeout(2000,()=>process.exit(1))'; then
+                ready=1
+                break
+              fi
+              sleep 1
+            done
+            test "$ready" -eq 1 || (echo "Isolated PostgreSQL did not start" && exit 1)
+      - run:
+          name: Rehearse committed Prisma migrations and verify zero schema drift
+          command: |
+            set -euo pipefail
+            npx prisma migrate deploy
+            npx prisma migrate status
+            npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code
+      - run:
+          name: Seed synthetic finance records and run isolated audit
+          command: |
+            set -euo pipefail
+            node tests/ci-financial-seed.mjs
+            node scripts/finance-readonly-audit.mjs
+      - run:
+          name: Test real signed cashier and remittance concurrency
+          command: |
+            set -euo pipefail
+            # This guarded route exists ONLY in this disposable CI job.
+            mkdir -p app/api/clear-ci-finance
+            cp tests/ci-financial-route.ts app/api/clear-ci-finance/route.ts
+            export CLEAR_CI_FINANCE_TEST_TOKEN="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')"
+            npm run build
+            npm run start -- -H 127.0.0.1 -p 3100 >/tmp/clear-ci-finance-server.log 2>&1 &
+            server_pid=$!
+            trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+            ready=0
+            for i in $(seq 1 60); do
+              if curl -fsS http://127.0.0.1:3100/api/auth/session >/dev/null 2>&1; then
+                ready=1
+                break
+              fi
+              sleep 1
+            done
+            if [ "$ready" -ne 1 ]; then
+              echo "Isolated Next.js server failed to start"
+              tail -n 80 /tmp/clear-ci-finance-server.log
+              exit 1
+            fi
+            node --experimental-strip-types --test tests/ci-financial-actions.test.mjs
+      - store_artifacts:
+          path: /tmp/clear-ci-finance-server.log
+          destination: finance/ci-server.log
+
+workflows:
+  starter:
+    jobs:
+      - web
+      - mobile
+      - financial-security

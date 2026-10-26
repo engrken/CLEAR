@@ -52,7 +52,7 @@ export function OfficerPresence({ session, page }: { session: Session; page: Pag
       if (status === 'active') void send(); else leave();
     });
     return () => { active = false; clearInterval(interval); listener.remove(); leave(); };
-  }, [session.token, page, allowed]));
+  }, [session, page, allowed]));
 
   if (!allowed || count === 0) return null;
   return (
