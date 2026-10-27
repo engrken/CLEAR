@@ -17,7 +17,11 @@ test('financial cutover gate blocks login, old sessions, mobile APIs and transac
 test('maintenance notice remains accessible but does not allow financial writes', () => {
   const source = read('proxy.ts');
   const view = read('app/maintenance/page.tsx');
-  assert.match(source, /pathname === '\/maintenance' && request\.method === 'GET'/);
+  // Emergency GET-only access is expanded solely to the safe status probe.
+  assert.match(source, /request\.method === 'GET'/);
+  assert.match(source, /pathname === '\/maintenance'/);
+  assert.match(source, /pathname === '\/api\/maintenance\/status'/);
+  assert.match(source, /pathname\.startsWith\('\/api\/'\) \|\| request\.method !== 'GET'/);
   assert.match(view, /Scheduled system maintenance/);
   assert.match(view, /financial transactions are temporarily unavailable/);
   assert.match(view, /Do not resubmit a payment/);
