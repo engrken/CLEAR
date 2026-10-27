@@ -20,6 +20,12 @@ export default async function MaintenanceAdminPage() {
       <div className="card bg-dark border-info p-4">
         <h1 className="h3">Global Administrator maintenance recovery</h1>
         <p>Authenticate with the authorized Global Administrator email and OTP to access maintenance controls.</p>
+        {process.env.VERCEL_ENV === 'preview' ? <p className="small text-warning">
+          Staging verification only. Request a NEW code from this staging page and
+          use the email titled &quot;CLEAR STAGING ONLY&quot; within five minutes.
+          Production verification codes do not work here. A generic confirmation
+          does not guarantee delivery; check your inbox and spam folder.
+        </p> : null}
         <button type="button" className="btn btn-info" data-bs-toggle="modal"
           data-bs-target="#otpAuthModal">Authenticate with email OTP</button>
       </div>
