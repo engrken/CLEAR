@@ -7,22 +7,22 @@
  */
 export type MobileAvailability = 'available' | 'review-only' | 'paused' | 'web-only';
 
-export const MODULE_CATALOG: readonly {
+export const MODULE_CATALOG: ReadonlyArray<{
   tab: string;
   name: string;
   availability: MobileAvailability;
   detail: string;
   /** Existing web route. Web re-authentication and role checks are mandatory. */
   webPath?: string;
-}[] = [
+}> = [
   { tab: 'tab-overview', name: 'Financial overview', availability: 'available', detail: 'Financial dashboard and recent activity; web actions require separate sign-in', webPath: '/summary' },
   { tab: 'tab-students', name: 'Student roster', availability: 'available', detail: 'View your department roster', webPath: '/students' },
   { tab: 'tab-clearance', name: 'Clearance', availability: 'available', detail: 'Public student clearance inquiry; officer details require server authorization', webPath: '/clearance' },
-  { tab: 'tab-payment', name: 'Payment collection', availability: 'web-only', detail: 'Payment posting remains on the audited web collections page until native accounting parity passes', webPath: '/collections' },
+  { tab: 'tab-payment', name: 'Collections', availability: 'review-only', detail: 'Review recent receipt allocation lines in app; audited payment posting and complete OR history remain on web', webPath: '/collections' },
   { tab: 'tab-remittances', name: 'Online remittances', availability: 'review-only', detail: 'Review proofs in app; verify or invalidate in the audited web workflow', webPath: '/remittances' },
-  { tab: 'tab-penalties', name: 'Penalties', availability: 'web-only', detail: 'Use the web system for penalty management', webPath: '/penalties' },
-  { tab: 'tab-advances', name: 'Cash advances', availability: 'web-only', detail: 'Use the web system for advances and liquidation', webPath: '/advances' },
-  { tab: 'tab-audit', name: 'Liquidations and audit', availability: 'web-only', detail: 'Use the web system for auditing', webPath: '/liquidations' },
+  { tab: 'tab-penalties', name: 'Penalties', availability: 'review-only', detail: 'View recent assessments and remaining balances; settlements require secure web access', webPath: '/penalties' },
+  { tab: 'tab-advances', name: 'Cash advances', availability: 'review-only', detail: 'Review approved advances; issuing or changing them remains on the audited web app', webPath: '/advances' },
+  { tab: 'tab-audit', name: 'Liquidations and audit', availability: 'review-only', detail: 'Review recorded liquidation expenses and audit status; web remains authoritative', webPath: '/liquidations' },
   { tab: 'tab-collectibles', name: 'Collectibles', availability: 'web-only', detail: 'Use the web system for collectibles', webPath: '/collectibles' },
   { tab: 'tab-reports', name: 'Financial reports', availability: 'web-only', detail: 'Use the web system for official financial reports', webPath: '/reports' },
   { tab: 'tab-void', name: 'Void center', availability: 'web-only', detail: 'Use the web system for financial reversals', webPath: '/void' },

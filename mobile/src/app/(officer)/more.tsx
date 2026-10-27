@@ -65,6 +65,16 @@ export default function More() {
       open: () => router.push({ pathname: '/d/[dept]/clearance', params: { dept: session.org.subdomain } }),
     };
     if (tab === 'tab-remittances') return { text: 'Review payment proofs', open: () => router.push('/verify') };
+    const financeKinds: Record<string, string> = {
+      'tab-penalties': 'penalties',
+      'tab-advances': 'advances',
+      'tab-audit': 'liquidations',
+      'tab-payment': 'collections',
+    };
+    if (financeKinds[tab]) return {
+      text: 'Review recent records',
+      open: () => router.push({ pathname: '/finance-review', params: { kind: financeKinds[tab] } }),
+    };
     return null;
   };
 

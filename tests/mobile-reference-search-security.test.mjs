@@ -29,6 +29,9 @@ test('native reference screen searches reactively and hides restricted tabs',()=
  assert.match(ui,/can\('tab-void'\)/);
  assert.match(ui,/api.searchReceiptReferences\(/);
  assert.match(ui,/api.searchVoidReferences\(/);
+ assert.match(ui,/maxLength=\{80\}/);
+ assert.match(ui,/accessibilityLabel="Clear reference search"/);
+ assert.match(ui,/setQuery\(''\)/);
  assert.match(ui,/response\?\.kind==='receipts'/);
  assert.match(ui,/response\?\.kind==='void'/);
  assert.match(layout,/Tabs.Protected guard=\{can\('tab-payment'\) \|\| can\('tab-void'\)\}/);

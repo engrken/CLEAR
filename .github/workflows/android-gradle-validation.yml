@@ -80,7 +80,17 @@ jobs:
       - name: Check TypeScript
         run: npm run typecheck
       - name: Generate native Android project without publishing
-        run: npx expo prebuild --platform android --non-interactive --no-install
+        run: npx expo prebuild --platform android --clean --non-interactive --no-install
+      - name: Verify generated adaptive launcher sources for next Play hotfix
+        run: |
+          set -euo pipefail
+          # This is an additional v1.2.4 gate; older releases continue unchanged.
+          if [ "$(node -p "require('./app.json').expo.version")" = "1.2.4" ]; then
+            node scripts/verify-live-viewer.mjs --release
+            test -n "$(find android/app/src/main/res -type f \( -name 'ic_launcher_foreground.png' -o -name 'ic_launcher_foreground.webp' \) -print -quit)"
+            test -n "$(find android/app/src/main/res -type f -name 'ic_launcher*.xml' -print -quit)"
+            grep -rl 'ic_launcher_foreground' android/app/src/main/res --include='ic_launcher*.xml'
+          fi
       - name: Build unsigned debug APK with Gradle
         env:
           ORG_GRADLE_PROJECT_reactNativeArchitectures: arm64-v8a
