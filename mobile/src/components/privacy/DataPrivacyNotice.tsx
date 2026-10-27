@@ -53,10 +53,10 @@ export function DataPrivacyNotice({ visible, onDismiss, required = false }: {
 
           <Text variant="bodyStrong">3. Access and Storage</Text>
           <Text variant="bodySm" color="inkMuted">
-            Itemized ledgers are available only to officers explicitly authorized for the
-            relevant tenant and module. Students can view only their own clearance status
-            after registered-email verification; financial details are not disclosed
-            through the student inquiry.
+            Complete itemized ledgers remain limited to officers authorized for the relevant
+            tenant and module. After registered-email verification, students may see their
+            own pending clearance requirements and unpaid balances, but not receipts,
+            transaction references or other students' records.
           </Text>
           <Text variant="bodySm" color="inkMuted">
             Your mobile access is read-only. No acknowledgement changes your institutional
