@@ -16,12 +16,12 @@ The list is a limited explanation of **existing** live records, not a transactio
 1. Only the student branch of `GET /api/mobile/orgs/:org/clearance` receives `holdReasons`, after `requireStudentClearanceSession` revalidates the token, selected tenant, academic period, roster ownership, and `result.student.id === student.id`.
 2. An arbitrary `?q=...` requires an authorized tenant officer with `tab-clearance`. It cannot disclose `holdReasons` without that student's OTP; officer existing `unpaidItems` access is unchanged.
 3. Signed QR verification and public certificate view remain **status-only**. Never attach explanations or financial data to QR payload, a public URL, notices, analytics or logging.
-4. No-store HTTP responses and browser/mobile memory-only sessions remain in place. Web clears result and token after two minutes or tab hide. Native client source now clears on background or timeout. No local/private persistence.
+4. No-store HTTP responses and browser/mobile memory-only sessions remain in place. Web clears result and token after two minutes or tab hide. Native UI changes are deferred to a separate stacked draft PR, which will clear on background or timeout. No local/private persistence.
 5. UI privacy notices and onboarding explain the new limited verified disclosure.
 6. Strict integer centavo conversion for displayed payable amounts; do not round arbitrary subcent data or “fix” stored source data.
 
 ## Rollout and acceptance
-No Prisma schema change, migration, backfill, receipt/penalty mutation, or Android binary. The API is additive: older published Android clients ignore `holdReasons`, and native rendering will appear **only in the next separately signed and approved Play release**. Do not merge/deploy to production until complete CI, real tenant/role negative UAT and explicit owner approval.
+No Prisma schema change, migration, backfill, receipt/penalty mutation, or Android binary. The API is additive: the published Android clients ignore `holdReasons`. Native rendering, native privacy notice updates and app background clearing are being prepared **in a separate stacked PR** for the next signed and approved Play release. Do not merge/deploy to production until complete CI, real tenant/role negative UAT and explicit owner approval.
 
 ### Verification checklist
 - [ ] Node helper tests for amount fidelity, unsafe input and advance-vs-payable distinction.
@@ -30,5 +30,5 @@ No Prisma schema change, migration, backfill, receipt/penalty mutation, or Andro
 - [ ] Real authenticated student OTP valid/expired/replayed/cross-tenant/cross-term/non-owner sessions. All unauthenticated detail queries denied; no student-data enumeration.
 - [ ] Officers retain original authorized lookup; no `holdReasons` in signed QR verifier or public pages.
 - [ ] Web private result disappears when tab hidden or after two minutes; no browser history/query, cache, logs, print or analytics exposure.
-- [ ] Android internal-test device: result visible only to student OTP session; background/timeout wipes the explanation; no binary shipped in this web patch.
+- [ ] Follow-up Android PR: internal-test device shows student-only reasons and background/timeout clearing; no binary shipped in this web patch.
 - [ ] Confirm zero writes to financial records and no changes to eligibility logic, OR sequence, fees, money values or historical debt recovery.
