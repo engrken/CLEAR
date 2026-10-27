@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AppState, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { API_URL } from '@/api';
@@ -13,10 +13,9 @@ export function ServiceAdvisory({ tenant, enabled }: { tenant: string | null; en
   const [snapshot, setSnapshot] = useState<{ key: string; data: ServiceStatus } | null>(null);
   const [unknownScope, setUnknownScope] = useState<string | null>(null);
   const [openScope, setOpenScope] = useState<string | null>(null);
-  const prompted = useRef(new Set<string>());
+  const [dismissedNotices, setDismissedNotices] = useState<Set<string>>(() => new Set());
   const key = tenant || 'global';
   const unknown = unknownScope === key;
-  const opened = openScope === key;
 
   useEffect(() => {
     let alive = true;
@@ -43,11 +42,15 @@ export function ServiceAdvisory({ tenant, enabled }: { tenant: string | null; en
 
   const status = snapshot?.key === key ? snapshot.data : null;
   const noticeKey = status ? serviceAdvisoryKey(status, tenant) : '';
-  useEffect(() => {
-    if (!enabled || !noticeKey || prompted.current.has(noticeKey)) return;
-    prompted.current.add(noticeKey);
-    setOpenScope(key);
-  }, [enabled, noticeKey, key]);
+  // Auto-show each notice/revision once; derive modal visibility from the
+  // latest scoped policy instead of synchronously opening it in an effect.
+  // Dismissals are scoped to the notice key, which includes the tenant.
+  const opened = enabled && (openScope === key ||
+    (!!noticeKey && !dismissedNotices.has(noticeKey)));
+  const dismiss = () => {
+    setOpenScope(null);
+    if (noticeKey) setDismissedNotices(previous => new Set(previous).add(noticeKey));
+  };
 
   if (!enabled) return null;
   const active = Boolean(status && status.mode !== 'NORMAL');
@@ -71,7 +74,7 @@ export function ServiceAdvisory({ tenant, enabled }: { tenant: string | null; en
         <Text variant="bodyStrong">{label}</Text>
         <Text variant="caption" color="inkMuted">View details</Text>
       </Pressable>
-      <Modal visible={opened} animationType="slide" onRequestClose={() => setOpenScope(null)}>
+      <Modal visible={opened} animationType="slide" onRequestClose={dismiss}>
         <ScrollView contentContainerStyle={[styles.modal, { backgroundColor: c.canvas }]}>
           <Text variant="title" accessibilityRole="header">{label}</Text>
           {unknown ? (
@@ -97,7 +100,7 @@ export function ServiceAdvisory({ tenant, enabled }: { tenant: string | null; en
               ))}
             </>
           )}
-          <Button block onPress={() => setOpenScope(null)}>I understand</Button>
+          <Button block onPress={dismiss}>I understand</Button>
           <Text variant="caption" color="inkMuted">Times shown in Philippine Time (PHT). Advisory only:
             server-side maintenance and role permissions are authoritative.</Text>
         </ScrollView>
