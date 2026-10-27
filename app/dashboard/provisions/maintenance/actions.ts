@@ -37,7 +37,7 @@ function auditPolicy(row: { mode: string; reason: string; expiresAt: Date | null
 }
 
 export async function setMaintenancePolicy(form: FormData) {
-  const admin = await requireSuperAdmin();
+  const admin = await requireSuperAdmin(true);
   const actor = String(admin.email ?? '').trim().toLowerCase();
   const scopeKey = await resolveScope(form);
   const mode = field(form, 'mode', 20);
@@ -80,7 +80,7 @@ function noticeAudit(row: { title: string; message: string; startsAt: Date; ends
     endsAt: row.endsAt.toISOString(), state: row.state, version: row.version };
 }
 export async function createMaintenanceNotice(form: FormData) {
-  const admin = await requireSuperAdmin();
+  const admin = await requireSuperAdmin(true);
   const actor = String(admin.email ?? '').trim().toLowerCase();
   const scopeKey = await resolveScope(form);
   const title = field(form, 'title', 140);
@@ -108,7 +108,7 @@ export async function createMaintenanceNotice(form: FormData) {
   updatedPages();
 }
 export async function editMaintenanceNotice(form: FormData) {
-  const admin = await requireSuperAdmin();
+  const admin = await requireSuperAdmin(true);
   const actor = String(admin.email ?? '').trim().toLowerCase();
   const id = field(form, 'id', 128);
   const command = field(form, 'command', 20);
