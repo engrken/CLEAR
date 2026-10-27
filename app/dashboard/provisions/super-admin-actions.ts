@@ -10,7 +10,11 @@ import { validateTenantPromotion } from '@/lib/global-admin-promotion-policy';
 const MANAGE_PATH = '/dashboard/provisions';
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-function refresh() { revalidatePath(MANAGE_PATH); }
+function refresh() {
+  revalidatePath(MANAGE_PATH);
+  revalidatePath(MANAGE_PATH + '/administrators');
+  revalidatePath(MANAGE_PATH + '/security-audit');
+}
 async function sendGlobalAdminInvitation(email: string, name: string) {
   // Notification only; NEVER email a login token or impersonation link.
   // If SMTP is unavailable, authorization remains Pending and the admin can
