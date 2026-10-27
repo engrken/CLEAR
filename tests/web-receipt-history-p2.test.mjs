@@ -52,9 +52,12 @@ test('web P2 instrumentation is opt-in and contains only timing/aggregate metada
   assert.match(page,/buildIssuedReceipts\(allocationLines\)/);
   assert.match(page,/matched\.slice\(/);
   assert.match(page,/baseOfficialReceiptNumber\(get\(query\.or, 50\)\)/);
-  const log=page.match(/console\.info\('\[clear\/perf\/receipt-history\]'[\s\S]*?\}\);/);
-  assert.ok(log,'Must emit only non-sensitive profiling fields');
+  const start = page.indexOf("console.info('[clear/perf/receipt-history]', {");
+  assert.ok(start >= 0, 'Must emit profiling only in the opt-in branch');
+  const end = page.indexOf('\n    });', start);
+  assert.ok(end > start, 'Logging object must remain bounded');
+  const log = page.slice(start, end);
   for(const secret of ['studentName','orNumber','organizationId','email','token','amountPaid','query','slug']){
-    assert.doesNotMatch(log[0],new RegExp('\\b'+secret+'\\b','i'));
+    assert.doesNotMatch(log,new RegExp('\\b'+secret+'\\b','i'));
   }
 });
