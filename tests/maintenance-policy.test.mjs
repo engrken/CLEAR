@@ -74,3 +74,26 @@ test('maintenance banner and proxy resolve tenant consistently across web naviga
   assert.equal(tenantFromLocation('/dashboard','clearsys.vercel.app'),null);
   assert.equal(tenantFromLocation('/department/jiecep','engineering.localhost'),'jiecep');
 });
+
+
+test('web OTP challenge is narrowly allowed for POST only during READ_ONLY', () => {
+  const route = '/api/department/jiecep/auth/request-code';
+  assert.equal(requestDecision('READ_ONLY','POST',route),'ALLOW');
+  assert.equal(requestDecision('NORMAL','POST',route),'ALLOW');
+  assert.equal(requestDecision('FULL','POST',route),'FULL_BLOCK');
+  for (const method of ['PUT','PATCH','DELETE']) {
+    assert.equal(requestDecision('READ_ONLY',method,route),'READ_ONLY_BLOCK');
+  }
+  for (const path of [
+    '/department/jiecep',
+    '/department/jiecep/collections',
+    '/api/department/jiecep/auth/request-code/anything',
+    '/api/department/jiecep/auth/modify',
+    '/api/department/jiecep/transactions',
+  ]) {
+    assert.equal(requestDecision('READ_ONLY','POST',path),'READ_ONLY_BLOCK',path);
+  }
+  assert.equal(isRecoveryPath(route),false,
+    'Web OTP challenge must NOT bypass GLOBAL FULL operator-only recovery');
+  assert.equal(tenantSlugFromPath(route),'jiecep');
+});
