@@ -172,7 +172,7 @@ export type ReceiptFilter = {
 
 export function filterIssuedReceipts(receipts: IssuedReceipt[], filter: ReceiptFilter) {
   const q = filter.q.trim().toLowerCase();
-  const exactOr = formatOR(filter.exactOr);
+  const exactOr = baseOfficialReceiptNumber(filter.exactOr);
   const category = filter.category.trim().toLowerCase();
   const description = filter.description.trim().toLowerCase();
   const payment = filter.paymentType.trim().toLowerCase();
