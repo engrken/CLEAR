@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { activeMode, effectivePolicy, tenantSlugFromPath, requestDecision,
+import { activeMode, effectivePolicy, tenantSlugFromPath, tenantFromLocation, requestDecision,
   isRecoveryPath, NORMAL } from '../lib/maintenance/rules.ts';
 
 const at = new Date('2026-10-27T09:00:00.000Z');
@@ -64,4 +64,13 @@ test('officer and student OTP authentication is allowed only in read-only mode',
 test('recovery exception cannot be broadened to hidden control subpaths', () => {
   assert.equal(isRecoveryPath('/dashboard/provisions/maintenance/backdoor'),false);
   assert.equal(isRecoveryPath('/api/mobile/global/provisions/manage'),false);
+});
+
+test('maintenance banner and proxy resolve tenant consistently across web navigation', () => {
+  assert.equal(tenantFromLocation('/department/jiecep/clearance','clearsys.vercel.app'),'jiecep');
+  assert.equal(tenantFromLocation('/department/betatester','clearsys.vercel.app'),'betatester');
+  assert.equal(tenantFromLocation('/','engineering.localhost'),'engineering');
+  assert.equal(tenantFromLocation('/dashboard','www.localhost'),null);
+  assert.equal(tenantFromLocation('/dashboard','clearsys.vercel.app'),null);
+  assert.equal(tenantFromLocation('/department/jiecep','engineering.localhost'),'jiecep');
 });

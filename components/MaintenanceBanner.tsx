@@ -1,5 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
+import { tenantFromLocation } from '@/lib/maintenance/rules';
 
 type Status = {
   mode: string; reason: string; scope: string; effectiveUntil: string | null;
@@ -9,27 +11,24 @@ type Status = {
 const pht = (s: string) => new Date(s).toLocaleString('en-PH', {
   timeZone: 'Asia/Manila', dateStyle: 'medium', timeStyle: 'short',
 }) + ' PHT';
-function currentTenant(): string | null {
-  const slug = /^\/department\/([a-z0-9-]+)/.exec(window.location.pathname);
-  return slug ? slug[1] : null;
-}
-
 export default function MaintenanceBanner() {
-  const [data, setData] = useState<Status | null>(null);
+  const pathname = usePathname();
+  // Client transitions between tenants must not keep stale notices visible.
+  const [snapshot, setSnapshot] = useState<{ path: string; data: Status } | null>(null);
   const [dismissed, setDismissed] = useState<string[]>([]);
   useEffect(() => {
     let alive = true;
     const refresh = async () => {
       if (document.visibilityState === 'hidden') return;
       try {
-        const tenant = currentTenant();
+        const tenant = tenantFromLocation(pathname, window.location.hostname);
         const url = '/api/maintenance/status' + (tenant ? '?tenant=' + encodeURIComponent(tenant) : '');
         const res = await fetch(url, { cache: 'no-store', credentials: 'same-origin' });
         const payload = await res.json();
         if (!alive) return;
-        if (res.ok) setData(payload as Status);
-        else setData(null);
-      } catch { if (alive) setData(null); }
+        if (res.ok) setSnapshot({ path: pathname, data: payload as Status });
+        else setSnapshot(null);
+      } catch { if (alive) setSnapshot(null); }
     };
     void refresh();
     const interval = window.setInterval(() => { void refresh(); }, 45000);
@@ -37,7 +36,8 @@ export default function MaintenanceBanner() {
     document.addEventListener('visibilitychange', resume);
     return () => { alive = false; window.clearInterval(interval);
       document.removeEventListener('visibilitychange', resume); };
-  }, []);
+  }, [pathname]);
+  const data = snapshot?.path === pathname ? snapshot.data : null;
   if (!data || (data.mode === 'NORMAL' && !data.notices.length)) return null;
   const items = data.notices.filter(n => !dismissed.includes(n.id + ':' + n.revision));
   return <div className="container py-2" role="region" aria-label="CLEAR service status">

@@ -4,7 +4,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { maintenanceForTenant } from '@/lib/maintenance/service';
-import { isRecoveryPath, requestDecision, tenantSlugFromPath } from '@/lib/maintenance/rules';
+import { isRecoveryPath, requestDecision, tenantFromLocation } from '@/lib/maintenance/rules';
 
 export async function proxy(request: NextRequest) {
   // Hard maintenance gate for the synchronized money-type cutover. Applies to
@@ -34,10 +34,7 @@ export async function proxy(request: NextRequest) {
   const scopedPath = request.nextUrl.pathname;
   if (!isRecoveryPath(scopedPath)) {
     try {
-      const scopedHost = request.nextUrl.hostname.toLowerCase();
-      const tenantHostMatch = /^([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)\.localhost$/.exec(scopedHost);
-      const tenant = tenantSlugFromPath(scopedPath) ||
-        (tenantHostMatch?.[1] === 'www' ? null : tenantHostMatch?.[1] || null);
+      const tenant = tenantFromLocation(scopedPath, request.nextUrl.hostname);
       const policy = await maintenanceForTenant(tenant);
       const decision = requestDecision(policy.mode, request.method, scopedPath);
       if (decision !== 'ALLOW') {

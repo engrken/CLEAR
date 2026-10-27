@@ -35,6 +35,18 @@ export function tenantSlugFromPath(pathname: string): string | null {
 /** Admin console mutations are checked in requireSuperAdmin before any DB write.
  * Auth callbacks are permitted solely for operator recovery, not for finance.
  */
+
+/** Tenant routing is shared by the server proxy and the web notice banner.
+ * A localhost tenant hostname is used only in the established local workflow;
+ * ordinary public domains must derive tenancy from the URL path.
+ */
+export function tenantFromLocation(pathname: string, hostname: string): string | null {
+  const routeTenant = tenantSlugFromPath(pathname);
+  if (routeTenant) return routeTenant;
+  const tenant = /^([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)\.localhost$/.exec(hostname.toLowerCase())?.[1];
+  return tenant && tenant !== 'www' ? tenant : null;
+}
+
 export function isRecoveryPath(path: string): boolean {
   return path === '/maintenance' ||
     path === '/api/maintenance/status' ||
