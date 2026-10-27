@@ -17,7 +17,7 @@ const STEPS = [
   },
   {
     title: 'Understand your clearance status',
-    detail: 'CLEARED means your clearance is complete for the displayed period. CLEARANCE ON HOLD means an authorized officer can explain the outstanding requirements. NOT ENROLLED THIS TERM is not a clearance approval. This student view never shows itemized balances or other students’ records.',
+    detail: 'CLEARED means your clearance is complete for the displayed period. CLEARANCE ON HOLD shows your own pending items and any payable amounts after email-code verification. NOT ENROLLED THIS TERM means your enrollment is not confirmed. An approved cash advance awaiting liquidation is not a payable balance. No other student records are shown.',
   },
   {
     title: 'Finish securely',
