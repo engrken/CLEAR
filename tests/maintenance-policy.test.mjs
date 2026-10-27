@@ -47,3 +47,21 @@ test('recovery exception paths are narrow', () => {
     '/dashboard/provisions/maintenance-forged','/api/mobile/orgs/jiecep/payments'])
     assert.equal(isRecoveryPath(path),false);
 });
+
+test('officer and student OTP authentication is allowed only in read-only mode', () => {
+  for (const suffix of ['/auth/request-code','/auth/verify-code',
+    '/clearance/auth/request-code','/clearance/auth/verify-code']) {
+    const path = '/api/mobile/orgs/jiecep' + suffix;
+    assert.equal(requestDecision('READ_ONLY','POST',path),'ALLOW');
+    assert.equal(requestDecision('FULL','POST',path),'FULL_BLOCK');
+  }
+  for(const path of ['/api/mobile/orgs/jiecep/payments',
+    '/api/mobile/orgs/jiecep/profile/email/confirm',
+    '/api/mobile/orgs/jiecep/clearance/email-change/confirm']) {
+    assert.equal(requestDecision('READ_ONLY','POST',path),'READ_ONLY_BLOCK');
+  }
+});
+test('recovery exception cannot be broadened to hidden control subpaths', () => {
+  assert.equal(isRecoveryPath('/dashboard/provisions/maintenance/backdoor'),false);
+  assert.equal(isRecoveryPath('/api/mobile/global/provisions/manage'),false);
+});

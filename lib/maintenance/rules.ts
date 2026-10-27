@@ -40,9 +40,13 @@ export function isRecoveryPath(path: string): boolean {
     path === '/api/maintenance/status' ||
     path === '/api/maintenance/notices' ||
     path === '/dashboard/provisions/maintenance' ||
-    path.startsWith('/dashboard/provisions/maintenance/') ||
     path.startsWith('/api/auth/') ||
     path.startsWith('/api/mobile/global/auth/');
+}
+export function isReadOnlyAuthenticationPath(pathname: string): boolean {
+  // Allow ONLY challenge/login/session lifecycle in read-only mode. Payment
+  // proofs, profile/email updates and onboarding writes must remain blocked.
+  return /^\/api\/mobile\/orgs\/[a-z0-9-]+\/(?:auth|clearance\/auth)\/(?:request-code|verify-code|session)$/.test(pathname);
 }
 export function requestDecision(mode: MaintenanceMode, method: string, pathname: string):
   'ALLOW' | 'READ_ONLY_BLOCK' | 'FULL_BLOCK' {
@@ -50,7 +54,8 @@ export function requestDecision(mode: MaintenanceMode, method: string, pathname:
   if (mode === 'FULL') return 'FULL_BLOCK';
   // HEAD, GET and OPTIONS are read-only; prohibit all other methods including
   // RSC Server Action POSTs and direct API writes. Authorization still applies.
-  if (mode === 'READ_ONLY' && !['GET', 'HEAD', 'OPTIONS'].includes(method.toUpperCase())) {
+  if (mode === 'READ_ONLY' && !['GET', 'HEAD', 'OPTIONS'].includes(method.toUpperCase()) &&
+      !isReadOnlyAuthenticationPath(pathname)) {
     return 'READ_ONLY_BLOCK';
   }
   return 'ALLOW';

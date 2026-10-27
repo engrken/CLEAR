@@ -194,7 +194,8 @@ export async function getAuthenticatedEntityAdmin():
   Promise<EntityAdminContext | null> {
 	  // A forged cross-page Next Server Action invocation cannot use the maintenance
   // operator recovery route to execute entity provisioning transactions.
-  if ((await headers()).has('next-action')) {
+  const headerStore = await headers();
+  if (headerStore.has('next-action') || headerStore.has('content-type')) {
     const policy = await maintenanceForTenant();
     if (policy.mode !== 'NORMAL') return null;
   }

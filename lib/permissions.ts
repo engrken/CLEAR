@@ -36,7 +36,10 @@ async function assertActionMaintenanceWritable(department?: string) {
   // sensitive permission guard rechecks the effective maintenance policy,
   // independently of proxy routing and misleading caller-controlled paths.
   const headerStore = await headers();
-  if (!headerStore.has('next-action')) return;
+  // Modern Server Actions carry next-action; progressive-enhancement forms
+  // may instead POST multipart/form-urlencoded with only Content-Type.
+  // Neither signal is present on ordinary page GETs.
+  if (!headerStore.has('next-action') && !headerStore.has('content-type')) return;
   const current = await maintenanceForTenant(department);
   if (current.mode !== 'NORMAL') {
     throw new Error('503 Maintenance: This operation is temporarily unavailable.');
