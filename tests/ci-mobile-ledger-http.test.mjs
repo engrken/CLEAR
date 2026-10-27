@@ -154,3 +154,97 @@ test('real tenant-scoped mobile ledger: exact cents, safe 422 and no financial s
     await prisma.$disconnect();
   }
 });
+
+test('complete cross-period Activity keyset pagination has no gaps, duplicates or cross-tenant leaks', {
+  timeout: 120000,
+}, async () => {
+  const suffix = randomUUID().slice(0, 8);
+  const slug = 'ci-activity-' + suffix;
+  const otherSlug = 'ci-activity-other-' + suffix;
+  const org = await prisma.organization.create({
+    data: { subdomain: slug, name: 'CI Activity Pagination',
+      activeAy: ay, activeTerm: term, status: 'Active' },
+  });
+  const other = await prisma.organization.create({
+    data: { subdomain: otherSlug, name: 'CI Activity Foreign',
+      activeAy: ay, activeTerm: term, status: 'Active' },
+  });
+  try {
+    const session = await createOfficerSession(org, 'Admin', ['tab-overview']);
+    const otherSession = await createOfficerSession(other, 'Admin', ['tab-overview']);
+    const viewer = await createOfficerSession(org, 'Officer', ['tab-students']);
+    const when = new Date('2026-10-24T12:00:00.000Z');
+    const collectionRows = Array.from({ length: 150 }, (_, i) => ({
+      organizationId: org.id, academicYear: i < 137 ? ay : 'A.Y. CI Prior',
+      term: i < 137 ? term : 'Prior Term',
+      timestamp: when, date: when, studentName: 'CI Paginated Synthetic',
+      orNumber: 'CI-PAGE-' + suffix + '-' + String(i).padStart(4, '0'),
+      category: 'CI Test', itemDescription: 'Pagination test allocation',
+      paymentType: 'Full Payment', fundAllocation: 'Synthetic Fund',
+      amountPaid: 1.01, balanceDue: 0, status: 'Valid',
+    }));
+    await prisma.collection.createMany({ data: collectionRows });
+    const penalties = Array.from({ length: 35 }, (_, i) => ({
+      organizationId: org.id, academicYear: ay, term,
+      penaltyId: 'CI-PAGE-PEN-' + suffix + '-' + String(i).padStart(4, '0'),
+      date: when, studentName: 'CI Paginated Synthetic',
+      activity: 'Pagination test fine', penaltyType: 'SERVICE_ELIGIBLE',
+      hoursLate: 1, ratePerHour: 50, fineAmount: 50,
+      assessedAmount: 50, status: 'Unsettled',
+    }));
+    await prisma.penalty.createMany({ data: penalties });
+
+    const get = async (token, target, cursor, scope = 'all') => {
+      const url = new URL(root + '/api/mobile/orgs/' + target + '/ledger/page');
+      url.searchParams.set('limit', '50');
+      url.searchParams.set('scope', scope);
+      if (cursor) url.searchParams.set('cursor', cursor);
+      const res = await fetch(url, {
+        headers: token ? { authorization: 'Bearer ' + token } : {},
+        signal: AbortSignal.timeout(15000),
+      });
+      return { status: res.status, body: await res.json() };
+    };
+    const absent = await get(null, slug);
+    assert.equal(absent.status, 401);
+    assert.equal((await get(viewer, slug)).status, 403);
+    assert.equal((await get(otherSession, slug)).status, 403);
+
+    const observed = [];
+    let cursor;
+    for (let page = 0; page < 8; page++) {
+      const resp = await get(session, slug, cursor);
+      assert.equal(resp.status, 200, JSON.stringify(resp.body));
+      assert.ok(resp.body.records.length <= 50);
+      assert.equal(resp.body.scope, 'all');
+      observed.push(...resp.body.records);
+      if (!resp.body.hasMore) {
+        assert.equal(resp.body.nextCursor, null);
+        break;
+      }
+      assert.ok(typeof resp.body.nextCursor === 'string');
+      cursor = resp.body.nextCursor;
+      if (page === 0) {
+        // Every requested page must recheck the tenant, scope and tab grants.
+        assert.equal((await get(otherSession, slug, cursor)).status, 403);
+        assert.equal((await get(session, otherSlug, cursor)).status, 403);
+        assert.equal((await get(session, slug, cursor, 'active')).status, 400);
+        assert.equal((await get(session, slug, 'bad-!')).status, 400);
+      }
+    }
+    assert.equal(observed.length, 185, 'All periods and both financial tables must be traversed');
+    const keys = observed.map(r => r.kind + ':' + r.id);
+    assert.equal(new Set(keys).size, 185, 'No duplicated pages at tied timestamps');
+    assert.equal(observed.filter(r => r.kind === 'collection').length, 150);
+    assert.equal(observed.filter(r => r.kind === 'penalty').length, 35);
+    assert.equal(observed.filter(r => r.academicYear === 'A.Y. CI Prior').length, 13,
+      'Historic period records must remain reachable');
+    assert.ok(observed.every(r => Number.isSafeInteger(r.amountCentavos)));
+    assert.equal(await prisma.collection.count({ where: { organizationId: org.id } }), 150,
+      'Activity GET cannot mutate or erase receipt rows');
+    assert.equal(await prisma.penalty.count({ where: { organizationId: org.id } }), 35);
+  } finally {
+    await prisma.organization.delete({ where: { id: org.id } });
+    await prisma.organization.delete({ where: { id: other.id } });
+  }
+});
