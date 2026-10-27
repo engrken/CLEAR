@@ -1,6 +1,6 @@
 import 'server-only';
 import { prisma } from '@/lib/prisma';
-import { effectivePolicy, NORMAL, type MaintenanceMode, type MaintenanceSnapshot } from './rules';
+import { effectivePolicy, type MaintenanceMode, type MaintenanceSnapshot } from './rules';
 
 /** This module requires committed migration before deploying the proxy.
  * DB errors propagate and are treated as 503 (fail-closed), never NORMAL.
