@@ -75,8 +75,9 @@ test('only student OTP branch receives itemized reasons; public QR and officers 
   assert.match(web, /Why your clearance is not ready for signing/);
   assert.match(web, /setResult\(null\)/);
   assert.match(web, /visibilitychange/);
-  assert.match(mobile, /AppState\.addEventListener\('change'/);
-  assert.match(mobile, /holdReasons=\{!officerMode \? result\.holdReasons : undefined\}/);
+  // Existing published Android client still uses the additive authenticated GET.
+  // Native rendering/auto-clear changes are deliberately a separate stacked draft PR.
+  assert.match(mobile, /getOwnClearance\(dept, verified\.token\)/);
   const publicVerifier = read('app/clearance/verify/page.tsx');
   assert.doesNotMatch(publicVerifier, /holdReasons|buildVerifiedStudentReasons/);
 });
