@@ -85,7 +85,11 @@ export default function ReferenceSearch() {
       </Text>
       {busy?<ActivityIndicator color={c.cobalt}/>:null}
       {error?<Banner tone="warning" title="Search unavailable">{error}</Banner>:null}
-      {response && !response.records.length?<Banner tone="info" title="No matching references">Try a more specific reference or use the secure web ledger.</Banner>:null}
+      {response && !response.records.length?<Banner tone="info" title={mode==='void'?'No matching Void audit records':'No matching receipts'}>
+        {mode==='void'
+          ? 'No Void audit record matches this search for your tenant. There may be no void transactions; the secure web Void Center provides the full audit.'
+          : 'No receipt matches this query in the current period. Try a more specific reference or use secure web Receipt History.'}
+      </Banner>:null}
       {response?.kind==='receipts' ? response.records.map(r=>(
         <View key={r.id} style={[styles.card,{backgroundColor:c.soft}]}>
           <Text variant="headline">{r.reference} · {r.status}</Text>

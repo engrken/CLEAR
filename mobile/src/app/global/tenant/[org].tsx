@@ -176,7 +176,7 @@ export default function GlobalTenantReadOnly() {
                   />
                 ))}
               </LedgerList>
-              {matchingActivity.length === 0 ? <Text color="inkMuted">{section === 'activity' && activityFilter === 'voided' ? 'No voided receipts found in the loaded Activity. Older pages may contain records; use the authorized Void Center to inspect the complete audit.' : 'No matching records in the loaded batch. Load older Activity or use the authorized web portal.'}</Text> : null}
+              {matchingActivity.length === 0 ? <Text color="inkMuted">{section === 'activity' && activityFilter === 'voided' ? activity.hasMore ? 'No voided receipts in the loaded pages. Load older Activity to search further; the Void Center audit is separate.' : 'No voided receipts recorded in this tenant’s loaded Activity history. Void audit entries are separate.' : 'No matching records in the loaded batch. Load older Activity or use the authorized web portal.'}</Text> : null}
               {section === 'activity' && activity.pageError ? <Banner tone="danger" title="Could not load older Activity">{activity.pageError.message}</Banner> : null}
               {section === 'activity' && activity.hasMore ? <Button block variant="secondary" onPress={() => void activity.loadMore()}>
                 {activity.loadingMore ? 'Loading older Activity…' : 'Load older Activity'}

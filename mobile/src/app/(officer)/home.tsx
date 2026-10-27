@@ -194,7 +194,7 @@ export default function Home() {
                 {ledger.loadingMore ? 'Loading older Activity…' : 'Load older Activity'}
               </Button> : null}
               {visibleActivity.length === 0 ? (
-                <Text variant="bodySm" color="inkMuted">{activityFilter === 'voided' ? 'No voided receipts in the loaded Activity. Older pages may contain records.' : 'No matching records in loaded Activity.'}</Text>
+                <Text variant="bodySm" color="inkMuted">{activityFilter === 'voided' ? ledger.hasMore ? 'No voided receipts in the loaded pages. Load older Activity to search further.' : 'No voided receipts found in the complete loaded Activity history for this tenant.' : 'No matching records in loaded Activity.'}</Text>
               ) : null}
             </>
           ) : ledger.loading ? (
