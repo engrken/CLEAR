@@ -60,7 +60,10 @@ test('v1.2.4 clean native launcher regeneration guards against old icon reuse', 
   assert.match(prepare, /npx expo prebuild --platform android --clean --no-install/);
   assert.match(prepare, /ic_launcher_foreground/);
   assert.match(prepare, /clear-native-launcher-resources\.sha256\.txt/);
-  assert.match(prepare, /signingConfig signingConfigs\.debug/);
+  // The release must never accept debug signing as a valid Play Upload identity.
+  assert.match(prepare, /signingConfigs\.release/);
+  assert.match(prepare, /:app:signingReport/);
+  assert.match(prepare, /private Play Upload signing/);
   assert.match(workflow, /npx expo prebuild --platform android --clean/);
   assert.match(workflow, /Verify generated adaptive launcher sources/);
 });
