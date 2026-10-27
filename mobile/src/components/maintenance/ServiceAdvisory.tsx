@@ -11,14 +11,15 @@ import { spacing, useTheme } from '@/theme';
 export function ServiceAdvisory({ tenant, enabled }: { tenant: string | null; enabled: boolean }) {
   const { c } = useTheme();
   const [snapshot, setSnapshot] = useState<{ key: string; data: ServiceStatus } | null>(null);
-  const [unknown, setUnknown] = useState(false);
-  const [opened, setOpened] = useState(false);
+  const [unknownScope, setUnknownScope] = useState<string | null>(null);
+  const [openScope, setOpenScope] = useState<string | null>(null);
   const prompted = useRef(new Set<string>());
   const key = tenant || 'global';
+  const unknown = unknownScope === key;
+  const opened = openScope === key;
 
   useEffect(() => {
     let alive = true;
-    setSnapshot(null); setUnknown(false); setOpened(false);
     const refresh = async () => {
       try {
         const url = serviceStatusUrl(API_URL, tenant);
@@ -26,10 +27,10 @@ export function ServiceAdvisory({ tenant, enabled }: { tenant: string | null; en
         if (!res.ok) throw new Error('Maintenance service unavailable');
         const parsed = parseServiceStatus(await res.json());
         if (!parsed) throw new Error('Invalid maintenance status');
-        if (alive) { setSnapshot({ key, data: parsed }); setUnknown(false); }
+        if (alive) { setSnapshot({ key, data: parsed }); setUnknownScope(null); }
       } catch {
         // Never label a missing/unreachable server response as NORMAL.
-        if (alive) { setSnapshot(null); setUnknown(true); }
+        if (alive) { setSnapshot(null); setUnknownScope(key); }
       }
     };
     void refresh();
@@ -45,8 +46,8 @@ export function ServiceAdvisory({ tenant, enabled }: { tenant: string | null; en
   useEffect(() => {
     if (!enabled || !noticeKey || prompted.current.has(noticeKey)) return;
     prompted.current.add(noticeKey);
-    setOpened(true);
-  }, [enabled, noticeKey]);
+    setOpenScope(key);
+  }, [enabled, noticeKey, key]);
 
   if (!enabled) return null;
   const active = Boolean(status && status.mode !== 'NORMAL');
@@ -65,12 +66,12 @@ export function ServiceAdvisory({ tenant, enabled }: { tenant: string | null; en
   return (
     <>
       <Pressable accessibilityRole="button" accessibilityLabel="View CLEAR maintenance status"
-        onPress={() => setOpened(true)}
+        onPress={() => setOpenScope(key)}
         style={[styles.banner, { backgroundColor: c.soft, borderColor: c.border }]}>
         <Text variant="bodyStrong">{label}</Text>
         <Text variant="caption" color="inkMuted">View details</Text>
       </Pressable>
-      <Modal visible={opened} animationType="slide" onRequestClose={() => setOpened(false)}>
+      <Modal visible={opened} animationType="slide" onRequestClose={() => setOpenScope(null)}>
         <ScrollView contentContainerStyle={[styles.modal, { backgroundColor: c.canvas }]}>
           <Text variant="title" accessibilityRole="header">{label}</Text>
           {unknown ? (
@@ -96,7 +97,7 @@ export function ServiceAdvisory({ tenant, enabled }: { tenant: string | null; en
               ))}
             </>
           )}
-          <Button block onPress={() => setOpened(false)}>I understand</Button>
+          <Button block onPress={() => setOpenScope(null)}>I understand</Button>
           <Text variant="caption" color="inkMuted">Times shown in Philippine Time (PHT). Advisory only:
             server-side maintenance and role permissions are authoritative.</Text>
         </ScrollView>
