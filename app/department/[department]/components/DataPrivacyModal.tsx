@@ -80,8 +80,10 @@ export default function DataPrivacyModal() {
           </ul>
           <h3 className="h6 text-info small fw-bold">3. Access and Storage</h3>
           <p className="small text-secondary mb-0">
-            Access to itemized individual ledgers is restricted to authorized and administrative officers.
-            Public lookup displays clearance sign-off statuses without detailed itemized transactions.
+            Access to complete individual financial ledgers remains restricted to authorized officers.
+            Students can see their own pending clearance requirements and payable balances only after
+            registered-email verification. Unauthenticated and public QR checks disclose status only;
+            student inquiry does not reveal receipts, transaction identifiers, or other students’ records.
           </p>
         </div>
         <div className="p-3 p-md-4 border-top border-secondary d-flex gap-3 flex-wrap align-items-center justify-content-between">
