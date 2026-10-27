@@ -55,7 +55,7 @@ export default function DataPrivacyModal() {
         <div className="p-4 border-bottom border-secondary">
           <h2 className="h5 text-info fw-bold mb-0" id="dataPrivacyTitle">
             <i className="bi bi-shield-check me-2" aria-hidden="true" />
-            Data Privacy Notice &amp; Consent
+            Data Privacy Notice & Consent
           </h2>
         </div>
         <div className="p-4 clear-privacy-dialog-body">
