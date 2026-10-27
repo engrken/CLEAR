@@ -8,7 +8,7 @@ const filter = exactOr => ({ q:'', exactOr, status:'all', category:'', descripti
   paymentType:'', from:'', to:'', inconsistentOnly:false });
 
 const row = (base, code, n, academicYear='A.Y. 2026 - 2027') => ({
-  id: code, orNumber: code, studentId:'synthetic-student', studentName:'Synthetic',
+  id: base + ':' + code, orNumber: code, studentId:'synthetic-student', studentName:'Synthetic',
   student: { studentId: 'SYN-0001' }, academicYear, term:'1st Sem',
   date:'2026-10-20T00:00:00.000Z', timestamp:'2026-10-20T00:00:00.000Z',
   encodedBy:'Synthetic', category:'Membership', itemDescription:'Package allocation',
