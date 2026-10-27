@@ -17,7 +17,8 @@ const obj = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 const safeText = (value: unknown, max: number): string | null =>
   typeof value === 'string' && value.length <= max &&
-    !/[\u0000-\u001f\u007f]/.test(value) ? value : null;
+    [...value].every(ch => ch.charCodeAt(0) >= 32 && ch.charCodeAt(0) !== 127)
+    ? value : null;
 const safeDate = (value: unknown): value is string =>
   typeof value === 'string' && value.length <= 40 &&
   Number.isFinite(Date.parse(value));
