@@ -51,6 +51,9 @@ export default async function ProvisionsPage() {
           <Link href="/dashboard/entity/portal" className="text-info small text-decoration-none fw-bold">
             <i className="bi bi-building-fill-gear me-1" />Entity Admin Portal
           </Link>
+          <Link href="/dashboard/provisions/maintenance" className="text-warning small text-decoration-none fw-bold">
+            <i className="bi bi-tools me-1" />Maintenance Control &amp; Notice Board
+          </Link>
         </div>
         <div className="d-flex align-items-center gap-3">
           <span className="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25 px-3 py-2">
