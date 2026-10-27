@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, AppState, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { api, type ClearanceResult, type Organization, type UnpaidItem } from '@/api';
 import { MOBILE_BUSINESS_WRITES_ENABLED } from '@/api/config';
@@ -102,22 +102,6 @@ export default function Clearance() {
     setCodeRequested(false); setOfficerQuery(''); setResult(null); setError(undefined);
   }
 
-  // Financial hold explanations contain private account information. Clear them
-  // on backgrounding or after two minutes, matching the web's shared-device UX.
-  useEffect(() => {
-    if (!studentToken || !result || officerMode) return;
-    const clearPrivateInquiry = () => {
-      void api.revokeStudentClearance(dept, studentToken);
-      setStudentToken(null); setResult(null); setStudentId(''); setEmail('');
-      setCode(''); setCodeRequested(false);
-    };
-    const timeout = setTimeout(clearPrivateInquiry, 2 * 60_000);
-    const subscription = AppState.addEventListener('change', state => {
-      if (state !== 'active') clearPrivateInquiry();
-    });
-    return () => { clearTimeout(timeout); subscription.remove(); };
-  }, [dept, officerMode, result, studentToken]);
-
   const fieldStyle = [styles.field, { backgroundColor: c.soft, color: c.ink }];
 
   return (
@@ -130,7 +114,7 @@ export default function Clearance() {
       <Banner tone="info" title="Secure live clearance · Read-only">
         {officerMode
           ? 'Only your assigned department records are accessible. All actions are read-only.'
-          : 'Verify the email on your student record to see your private live status and why any requirements are pending.'}
+          : 'Verify using the email on your own student record. Your status is read live from CLEAR; payment details are not shown.'}
       </Banner>
       {!officerMode ? <StudentClearanceGuide department={dept} /> : null}
 
@@ -235,7 +219,6 @@ export default function Clearance() {
             ay={result.ay}
             term={result.term}
             unpaidItems={unpaidLines(result.unpaidItems, result.ay, result.term)}
-            holdReasons={!officerMode ? result.holdReasons : undefined}
           />
           {!officerMode ? (
             <Button block variant="secondary" onPress={restart}>Finish secure inquiry</Button>
@@ -252,9 +235,8 @@ export default function Clearance() {
       ) : null}
 
       <Text variant="caption" color="inkMuted" style={styles.note}>
-        Verified students may view only their own pending clearance requirements. Officers see
-        records only with assigned permissions. If a result looks incorrect, contact your department
-        treasury office. All transactions remain on the CLEAR web application.
+        Students see only their clearance status, not roster identities or payment amounts.
+        Ask your department treasury office if a result looks incorrect. All transactions remain on the CLEAR web application.
       </Text>
     </Screen>
   );
