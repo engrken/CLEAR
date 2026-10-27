@@ -125,16 +125,6 @@ export type TenantPortalStatus = {
   asOf: string;
 };
 
-/** Student-owned, OTP-verified status explanations. No transaction IDs or raw ledger data. */
-export type StudentHoldReason = {
-  kind: 'enrollment' | 'package' | 'penalty' | 'collectible' | 'previous_period' | 'cash_advance' | 'assessment';
-  label: string;
-  /** Null for non-payable requirements, including cash advances awaiting liquidation. */
-  amountCentavos: number | null;
-  academicYear?: string;
-  term?: string;
-};
-
 export type ClearanceResult = {
   /** Hidden on anonymous public lookups; present for authorized officers. */
   studentName: string | null;
@@ -151,8 +141,6 @@ export type ClearanceResult = {
    * Officer tokens with tab-clearance only; null on public lookups.
    */
   unpaidItems?: UnpaidItem[] | null;
-  /** Student-only after registered-email OTP; omitted for officer lookups and older servers. */
-  holdReasons?: StudentHoldReason[];
 };
 
 /** One unpaid fee or penalty behind an on-hold clearance. */
