@@ -19,6 +19,7 @@ test('all-period paginated ledger enforces global/officer auth on every new GET'
   const officer = read('app/api/mobile/orgs/[org]/ledger/page/route.ts');
   assert.match(global, /requireGlobalMobileTenant\(req, slug\)/);
   assert.match(officer, /requireMobileOfficer\(req, slug, 'tab-overview'\)/);
+  assert.match(officer, /hasTabAccess\(officer\.role, officer\.allowedTabs, 'tab-reports'\)/);
   for (const route of [global, officer]) {
     assert.match(route, /listLedgerPage\(org/);
     assert.doesNotMatch(route, /export const (POST|PUT|PATCH|DELETE)/);

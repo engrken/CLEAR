@@ -173,6 +173,7 @@ test('complete cross-period Activity keyset pagination has no gaps, duplicates o
     const session = await createOfficerSession(org, 'Admin', ['tab-overview']);
     const otherSession = await createOfficerSession(other, 'Admin', ['tab-overview']);
     const viewer = await createOfficerSession(org, 'Officer', ['tab-students']);
+    const overviewOnly = await createOfficerSession(org, 'Officer', ['tab-overview']);
     const when = new Date('2026-10-24T12:00:00.000Z');
     const collectionRows = Array.from({ length: 520 }, (_, i) => ({
       organizationId: org.id, academicYear: i < 507 ? ay : 'A.Y. CI Prior',
@@ -208,6 +209,8 @@ test('complete cross-period Activity keyset pagination has no gaps, duplicates o
     const absent = await get(null, slug);
     assert.equal(absent.status, 401);
     assert.equal((await get(viewer, slug)).status, 403);
+    assert.equal((await get(overviewOnly, slug, undefined, 'all')).status, 403);
+    assert.equal((await get(overviewOnly, slug, undefined, 'active')).status, 200);
     assert.equal((await get(otherSession, slug)).status, 403);
 
     const observed = [];

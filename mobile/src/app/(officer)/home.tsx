@@ -138,7 +138,7 @@ export default function Home() {
 
       {canOverview ? (
         <View style={{ gap: spacing[2], marginTop: 6 }}>
-          <SectionHeader title="Activity · all academic periods" />
+          <SectionHeader title="Activity · current academic period" />
           <TextInput value={ledgerQuery} onChangeText={setLedgerQuery} autoCorrect={false}
             accessibilityLabel="Search recent authorized activity by student, OR or reference"
             placeholder="Search loaded names, ORs or references" placeholderTextColor={c.inkMuted}

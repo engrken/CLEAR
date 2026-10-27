@@ -166,7 +166,7 @@ export const httpApi: ClearApi = {
   getDashboard: (s) => request(`${org(s.org.subdomain)}/dashboard`, as(s)),
   listLedger: (s, f) => request(`${org(s.org.subdomain)}/ledger`, { ...as(s), query: { status: f?.status, limit: f?.limit } }),
   listLedgerPage: (s, cursor) => request(`${org(s.org.subdomain)}/ledger/page`, {
-    ...as(s), query: { scope: 'all', limit: 50, cursor },
+    ...as(s), query: { scope: 'active', limit: 50, cursor },
   }),
   searchReceiptReferences: (s, q) => request(`${org(s.org.subdomain)}/reference-search`, {
     ...as(s), query: { kind: 'receipts', q: q.trim() },
