@@ -14,7 +14,7 @@ export function useLedgerPages(
   enabled: boolean,
 ) {
   const fetchRef = useRef(fetchPage);
-  fetchRef.current = fetchPage;
+  useEffect(() => { fetchRef.current = fetchPage; });
   const generation = useRef(0);
   const busyRef = useRef(false);
   const [version, setVersion] = useState(0);
@@ -23,13 +23,7 @@ export function useLedgerPages(
   useEffect(() => {
     const id = ++generation.current;
     busyRef.current = false;
-    if (!enabled) {
-      setView({ key: viewKey, data: [], cursor: null, hasMore: false,
-        loading: false, loadingMore: false });
-      return () => { generation.current++; };
-    }
-    setView({ key: viewKey, data: [], cursor: null, hasMore: false,
-      loading: true, loadingMore: false });
+    if (!enabled) return () => { generation.current++; };
     void fetchRef.current().then(page => {
       if (generation.current !== id) return;
       setView({ key: viewKey, data: page.records, cursor: page.nextCursor,
@@ -74,7 +68,7 @@ export function useLedgerPages(
   return {
     data: current?.data, error: current?.error,
     pageError: current?.pageError,
-    loading: !current || current.loading,
+    loading: enabled && (!current || current.loading),
     loadingMore: current?.loadingMore ?? false,
     hasMore: current?.hasMore ?? false, loadMore, reload,
   };

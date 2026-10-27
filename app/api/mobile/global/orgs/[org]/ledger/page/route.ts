@@ -9,7 +9,8 @@ export const GET = handler(async (req: Request, { params }: Ctx) => {
   const query = new URL(req.url).searchParams;
   const value = Number(query.get('limit') ?? 50);
   if (!Number.isSafeInteger(value)) throw new ApiFailure(400, 'invalid', 'Invalid page size.');
-  return listLedgerPage(org, { limit: value, cursor: query.get('cursor'),
-    scope: query.get('scope') === 'active' ? 'active' : 'all' });
+  const scope = query.get('scope') ?? 'all';
+  if (scope !== 'active' && scope !== 'all') throw new ApiFailure(400, 'invalid', 'Invalid Activity scope.');
+  return listLedgerPage(org, { limit: value, cursor: query.get('cursor'), scope });
 });
 export const OPTIONS = preflight;
