@@ -163,6 +163,12 @@ jobs:
             # This guarded route exists ONLY in this disposable CI job.
             mkdir -p app/api/clear-ci-finance
             cp tests/ci-financial-route.ts app/api/clear-ci-finance/route.ts
+            # Test-only routes are created after checkout and never committed to
+            # app/api. Both benchmark paths share identical handler code.
+            mkdir -p app/api/auth/ci-maintenance-bench app/api/ci-maintenance-bench app/api/ci-maintenance-admin-negative
+            cp tests/ci-maintenance-bench-route.ts app/api/auth/ci-maintenance-bench/route.ts
+            cp tests/ci-maintenance-bench-route.ts app/api/ci-maintenance-bench/route.ts
+            cp tests/ci-maintenance-negative-route.ts app/api/ci-maintenance-admin-negative/route.ts
             export CLEAR_CI_FINANCE_TEST_TOKEN="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')"
             npm run build
             npm run start -- -H 127.0.0.1 -p 3100 >/tmp/clear-ci-finance-server.log 2>&1 &
@@ -184,9 +190,14 @@ jobs:
             node --experimental-strip-types --test tests/ci-financial-actions.test.mjs
             node --test tests/ci-mobile-ledger-http.test.mjs
             node --test tests/ci-maintenance-http.test.mjs
+            node --test tests/ci-maintenance-admin-negative.test.mjs
+            node --test tests/ci-maintenance-proxy-benchmark.test.mjs
       - store_artifacts:
           path: /tmp/clear-ci-finance-server.log
           destination: finance/ci-server.log
+      - store_artifacts:
+          path: /tmp/clear-ci-maintenance-benchmark.json
+          destination: performance/maintenance-proxy-benchmark.json
 
 workflows:
   starter:
