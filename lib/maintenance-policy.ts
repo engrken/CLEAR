@@ -32,7 +32,11 @@ function active(rule: MaintenanceRule, at: Date): boolean {
     rule.startsAt.getTime() <= at.getTime() && at.getTime() < rule.endsAt.getTime();
 }
 function safeReason(reason: string): string {
-  return String(reason ?? '').replace(/[<>\x00-\x1F]/g, ' ').trim().slice(0, 240) ||
+  // Character classification avoids a control-character regex lint violation.
+  const safe = [...String(reason ?? '')]
+    .map(ch => ch === '<' || ch === '>' || ch.charCodeAt(0) < 32 ? ' ' : ch)
+    .join('');
+  return safe.trim().slice(0, 240) ||
     'Scheduled CLEAR maintenance';
 }
 /** Global scope takes precedence over tenant scope, then most restrictive
