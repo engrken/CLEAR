@@ -78,11 +78,12 @@ export default function ReferenceSearch() {
       <TextInput accessibilityLabel="Search authorized receipt or void references"
         placeholder={mode==='void'?'Search VOID reference or reason':'Search OR, student number, name or item'}
         placeholderTextColor={c.inkMuted} value={query} onChangeText={changeQuery}
+        maxLength={80} returnKeyType="search"
         autoCorrect={false} autoCapitalize="none"
         style={[styles.input,{backgroundColor:c.soft,color:c.ink}]} />
       {query.length ? (
         <Pressable accessibilityRole="button" accessibilityLabel="Clear reference search"
-          onPress={() => changeQuery('')}
+          onPress={() => { setQuery(''); setCompletedSearch(null); }}
           style={{ alignSelf: 'flex-end', paddingVertical: 8, paddingHorizontal: 14 }}>
           <Text variant="bodyStrong" color="inkMuted">Clear search</Text>
         </Pressable>
