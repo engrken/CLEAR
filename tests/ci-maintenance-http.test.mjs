@@ -47,7 +47,7 @@ test('maintenance HTTP: OFF, scoped READ_ONLY, global FULL, recovery, expiry and
     assert.equal(JSON.parse(full.body).error.code,'maintenance');
     const landing = await request('/department/ci-financial');
     assert.equal(landing.status,200,landing.body.slice(0,200));
-    assert.match(landing.body,/temporarily under maintenance/i);
+    assert.match(landing.body,/Scheduled system maintenance/i);
     const stateFull = await request('/api/maintenance/status?tenant=ci-financial');
     assert.equal(stateFull.status,200);
     assert.equal(JSON.parse(stateFull.body).mode,'FULL');
