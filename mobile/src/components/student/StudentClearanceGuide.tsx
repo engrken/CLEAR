@@ -21,7 +21,7 @@ const STEPS = [
   },
   {
     title: 'Understand your status',
-    detail: 'CLEARED means your clearance is complete for the displayed term. CLEARANCE ON HOLD shows your verified own pending requirements and payable balances. NOT ENROLLED THIS TERM is not cleared. Cash advances awaiting liquidation are not payable balances. No other student records or receipts are shown.',
+    detail: 'CLEARED means your clearance is complete for the displayed term. CLEARANCE ON HOLD means you should contact an authorized officer for details. NOT ENROLLED THIS TERM does not mean cleared. Student results do not show itemized transactions.',
   },
   {
     title: 'Finish securely',
