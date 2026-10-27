@@ -39,7 +39,7 @@ function Navigator() {
   const { c } = useTheme();
   const { session, globalSession, restoring } = useSession();
   const pathname = usePathname();
-  const routeTenant = /^\\/(?:d|global\\/tenant)\\/([a-z0-9-]+)/.exec(pathname)?.[1] || null;
+  const routeTenant = /^\/(?:d|global\/tenant)\/([a-z0-9-]+)/.exec(pathname)?.[1] || null;
   const advisoryTenant = routeTenant || session?.org.subdomain || null;
   const [privacyReady, setPrivacyReady] = useState(false);
   const [privacyAcknowledged, setPrivacyAcknowledged] = useState(false);
