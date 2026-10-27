@@ -128,8 +128,7 @@ export function ClearanceCard({ studentName, studentId, status, outstanding = nu
           </View>
         ) : null}
         <VerifiedHoldReasons reasons={holdReasons} />
-        <VerifiedHoldReasons reasons={holdReasons} />
-      <TermChip ay={ay} term={term} onColor />
+        <TermChip ay={ay} term={term} onColor />
       </ResultBlock>
     );
   }
@@ -163,6 +162,7 @@ export function ClearanceCard({ studentName, studentId, status, outstanding = nu
           ))}
         </View>
       ) : null}
+      <VerifiedHoldReasons reasons={holdReasons} />
       <TermChip ay={ay} term={term} onColor />
     </ResultBlock>
   );
