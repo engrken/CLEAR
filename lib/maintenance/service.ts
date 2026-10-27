@@ -1,5 +1,6 @@
 import 'server-only';
 import { prisma } from '@/lib/prisma';
+import type { Prisma } from '@prisma/client';
 import { effectivePolicy, type MaintenanceMode, type MaintenanceSnapshot } from './rules';
 
 /** This module requires committed migration before deploying the proxy.
@@ -43,4 +44,35 @@ export async function maintenancePublicState(tenant?: string | null) {
       state: n.startsAt <= now ? 'ACTIVE' : 'UPCOMING',
     })),
   };
+}
+
+/** Server-side tenant-targeted write gate for provisioning, including Global
+ * Administrator requests whose URL cannot reveal the affected organization.
+ * A transaction client allows this check to use the same PostgreSQL snapshot
+ * as any subsequent group / tenant mutations.
+ */
+export async function assertMaintenanceWritesAllowed(
+  tenantSlugs: string[],
+  tx?: Prisma.TransactionClient,
+): Promise<void> {
+  const slugs = [...new Set(tenantSlugs)];
+  const keys = ['GLOBAL', ...slugs.map(slug => 'tenant:' + slug)];
+  const rows = await (tx ?? prisma).maintenancePolicy.findMany({
+    where: { scopeKey: { in: keys } },
+  });
+  const scoped = (key: string): MaintenanceSnapshot | null => {
+    const row = rows.find(record => record.scopeKey === key);
+    return row ? { mode: row.mode as MaintenanceMode, reason: row.reason,
+      expiresAt: row.expiresAt, updatedAt: row.updatedAt, scope: row.scopeKey } : null;
+  };
+  const global = scoped('GLOBAL');
+  // Also enforce platform policy when provisioning a completely new tenant.
+  if (effectivePolicy(global, null).mode !== 'NORMAL') {
+    throw new Error('503 Maintenance: Platform changes are temporarily unavailable.');
+  }
+  for (const slug of slugs) {
+    if (effectivePolicy(global, scoped('tenant:' + slug)).mode !== 'NORMAL') {
+      throw new Error('503 Maintenance: Tenant changes are temporarily unavailable.');
+    }
+  }
 }

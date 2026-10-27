@@ -9,6 +9,7 @@ import { signOut } from '@/auth';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { getAuthenticatedEntityAdmin } from '@/lib/entity-session';
+import { assertMaintenanceWritesAllowed } from '@/lib/maintenance/service';
 import { PRESET_ROLE_TABS } from '@/lib/role-permissions';
 
 const DEFAULT_GROUP = 'default-school';
@@ -66,6 +67,7 @@ export async function provisionSubEntityAction(formData: FormData) {
       'Use the Master Provisions Panel to create organizations as Super Admin.'
     );
   }
+  await assertMaintenanceWritesAllowed(session.subdomain ? [session.subdomain] : []);
 
   const name = String(formData.get('name') ?? '').trim();
   const subdomain = normalizeSlug(
