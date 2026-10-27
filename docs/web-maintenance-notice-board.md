@@ -35,3 +35,20 @@
 - Database policy availability is required while proxy is active; status verification failures intentionally produce 503 to avoid accidental financial writes.
 - Global administrative maintenance recovery must remain protected even if caller supplies a forged request path/action ID; review each privileged mutation guard and test direct Server Action POSTs.
 - No scheduled automatic activation and no background mobile push were implemented; they require separate opt-in and safe delivery semantics.
+
+## Notice presentation and official report printing (October 27 update)
+
+- The former full-width alerts were replaced with a 34px compact service-status strip, including a **View details** action. This is informational UI only; backend maintenance gates remain authoritative.
+- Before signing in at the system gateway, department entry, student clearance entry or entity-administrator login, an accessible native dialog presents the active/upcoming announcements and any read-only restrictions. The user can continue to sign in after acknowledging. It is shown once per **browser tab/session, tenant scope, maintenance-policy update, notice revision and upcoming-to-active transition**, rather than interrupting every navigation.
+- On protected pages, only the compact status strip remains; users may reopen the full dialog at any time with **View details**. On mobile it truncates long status text rather than covering the screen.
+- Both the strip and dialog are marked as print-excluded and explicitly hidden with `@media print`. They must never appear in printed receipts, financial summary reports, browser Print-to-PDF, or other official hard copies.
+- No schema, financial data, authentication, authorization, maintenance enforcement, or Android changes are included in this presentation update.
+
+### UX acceptance on isolated staging
+
+1. Open the latest **new immutable** P3 Preview URL while a scheduled global or tenant notice exists. Verify the entry dialog, PHT date range, and **Continue to CLEAR**.
+2. Navigate between dashboard and authorized department pages. The dialog must not repeatedly appear for the same notice revision in the same tab; the slim status line and View details remain available.
+3. Revise an announcement or switch maintenance from NORMAL to READ_ONLY. Verify the newer notice/mode is presented once on the next entry-screen encounter.
+4. View an authenticated department financial report, run browser Print Preview / Save to PDF, and confirm **zero** maintenance headers, colored notice boxes, modal text, or extra printed page. Verify report figures and signature layout are unchanged.
+5. Check light/dark theme, mobile viewport, keyboard focus and Escape behavior, and that FULL-mode recovery access remains unchanged.
+6. Do not merge or migrate Production until the existing P3 authenticated UAT, proxy latency, and historical URL protection gates also pass.
