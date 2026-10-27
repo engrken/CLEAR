@@ -154,9 +154,14 @@ export function penaltyEntry(p: PenaltyRow): LedgerEntry {
     at: p.date.toISOString(),
     // Legacy null assessedAmount: reconstruct from integer minutes and exact
     // hourly centavos using the same rounding rule as the web penalty actions.
-    assessedCentavos: p.assessedAmount != null
-      ? ledgerCentavos('penalty', 'assessedAmount', p.assessedAmount)
-      : legacyPenaltyAssessedCentavos(p.hoursLate, p.ratePerHour),
+    // A flat legacy late fee has no duration-based assessment to reconstruct.
+    // When its original assessedAmount is absent, do not mislabel its current
+    // (possibly partially paid) balance as the original assessment.
+    ...(p.assessedAmount != null
+      ? { assessedCentavos: ledgerCentavos('penalty', 'assessedAmount', p.assessedAmount) }
+      : p.penaltyType === 'LATE_FEE'
+        ? {}
+        : { assessedCentavos: legacyPenaltyAssessedCentavos(p.hoursLate, p.ratePerHour) }),
     penaltyType: p.penaltyType,
   };
 }

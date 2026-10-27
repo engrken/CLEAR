@@ -66,6 +66,9 @@ test('ledger read never fabricates zero or silently rounds sub-cent amounts', ()
     "ledgerCentavos('cashier-remittance', 'amount'",
   ]) assert.ok(data.includes(label), 'strict money conversion missing: ' + label);
   assert.match(data, /legacyPenaltyAssessedCentavos\(p\.hoursLate, p\.ratePerHour\)/);
+  // A legacy cash-only flat fee has no hours/rate-based original assessment.
+  // The API must omit the optional field rather than falsely report ₱0.00.
+  assert.match(data, /p\.penaltyType === 'LATE_FEE'\s*\? \{\}/);
   assert.match(data, /error instanceof LedgerReadIntegrityError/);
   assert.match(data, /new ApiFailure\(422, 'financial_data_review'/);
   assert.match(data, /No amount was rounded or changed/);

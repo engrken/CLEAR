@@ -45,7 +45,7 @@ export type GlobalAdmin = { id: string; fullName: string; email: string; role: '
 export type GlobalSession = { token: string; admin: GlobalAdmin; expiresAt: string };
 export type GlobalOverview = {
   generatedAt: string;
-  organizations: Array<{
+  organizations: {
     subdomain: string;
     name: string;
     type: string;
@@ -54,8 +54,8 @@ export type GlobalOverview = {
     activeTerm: string;
     studentsCount: number;
     officersCount: number;
-    activeRoles?: Array<{ role: string; count: number }>;
-  }>;
+    activeRoles?: { role: string; count: number }[];
+  }[];
   globalAdmins: { active: number; pending: number };
 };
 
@@ -201,7 +201,7 @@ export type DashboardSummary = {
   depositedCentavos?: number;
   withdrawnCentavos?: number;
   periodClosed?: boolean;
-  funds?: Array<{
+  funds?: {
     name: string;
     initialCentavos: number;
     transfersCentavos: number;
@@ -209,8 +209,8 @@ export type DashboardSummary = {
     disbursedCentavos: number;
     unliquidatedCentavos: number;
     balanceCentavos: number;
-  }>;
-  pendingAdvances?: Array<{
+  }[];
+  pendingAdvances?: {
     id: string;
     advanceId: string;
     requestor: string;
@@ -219,7 +219,7 @@ export type DashboardSummary = {
     date: string;
     due: string;
     status: string;
-  }>;
+  }[];
 };
 
 export type Student = {
@@ -316,7 +316,7 @@ export type ClearApi = {
   /** Session metadata only; all server requests independently check tenant and tab permissions. */
   getOfficerOnboarding(s: Session): Promise<{ exempt: boolean; completed: boolean; tabs: string[] }>;
   completeOfficerOnboarding(s: Session): Promise<{ exempt: boolean; completed: boolean }>;
-  pulseOfficerPresence(s: Session, page: 'overview' | 'students' | 'remittances', tabId: string): Promise<{ colleagues: Array<{ id: string; name: string }>; count: number }>;
+  pulseOfficerPresence(s: Session, page: 'overview' | 'students' | 'remittances', tabId: string): Promise<{ colleagues: { id: string; name: string }[]; count: number }>;
   leaveOfficerPresence(s: Session, tabId: string): Promise<{ ok: true }>;
   getTenantPortal(s: Session): Promise<TenantPortalStatus>;
   getDashboard(s: Session): Promise<DashboardSummary>;

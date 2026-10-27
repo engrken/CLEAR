@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, StyleSheet, TextInput } from 'react-native';
 
 import { api } from '@/api';
 import { BackHeader, Banner, Button, Card, Screen, Text } from '@/components/ui';
