@@ -575,3 +575,47 @@ model GlobalMobileSession {
   @@index([adminEmail])
   @@index([expiresAt])
 }
+
+  
+// A missing row means NORMAL. The singleton GLOBAL row takes precedence over
+// any tenant policy; expired policies evaluate as NORMAL without writes.
+model MaintenancePolicy {
+  scopeKey  String   @id
+  mode      String   @default("NORMAL")
+  reason    String   @default("")
+  expiresAt DateTime? @db.Timestamptz(3)
+  updatedBy String
+  version   Int      @default(1)
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+}
+
+// Notices are announcements, NOT a way to activate enforcement.
+model MaintenanceNotice {
+  id        String   @id @default(cuid())
+  scopeKey  String
+  title     String   @db.VarChar(140)
+  message   String   @db.VarChar(800)
+  startsAt  DateTime @db.Timestamptz(3)
+  endsAt    DateTime @db.Timestamptz(3)
+  state     String   @default("DRAFT")
+  version   Int      @default(1)
+  createdBy String
+  updatedBy String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+
+  @@index([scopeKey, state, startsAt, endsAt])
+}
+
+// Append-only record of changes. No app delete/update functions.
+model MaintenanceAudit {
+  id        String   @id @default(cuid())
+  scopeKey  String
+  action    String
+  actor     String
+  before    Json?
+  after     Json?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  
+  @@index([scopeKey, createdAt])
+}

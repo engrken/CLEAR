@@ -5,6 +5,7 @@ import Credentials from "next-auth/providers/credentials";
 import { isReservedGlobalAdminEmail } from "@/lib/super-admin";
 import { verifySuperAdminOtp } from "@/lib/super-admin-otp";
 import { verifyDepartmentOtp } from "@/lib/department-otp";
+import { maintenanceForTenant } from "@/lib/maintenance/service";
 
 class CustomAuthError extends CredentialsSignin {
   constructor(message: string) {
@@ -80,6 +81,13 @@ export const {
           throw new CustomAuthError("Department is required.");
         }
 
+        // NextAuth callback must remain reachable for Global Administrator
+        // recovery during FULL. Tenant users, however, may authenticate only
+        // during NORMAL or READ_ONLY; the shared callback is not a FULL bypass.
+        const maintenance = await maintenanceForTenant(department);
+        if (maintenance.mode === 'FULL') {
+          throw new CustomAuthError('Tenant sign-in is unavailable during full maintenance.');
+        }
         const result = await verifyDepartmentOtp(department, email, code);
         if (!result.ok) throw new CustomAuthError(result.message);
 

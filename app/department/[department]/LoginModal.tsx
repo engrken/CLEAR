@@ -2,7 +2,7 @@
 "use client";
 import { useState } from "react";
 import { signIn } from "next-auth/react";
-import { requestOtp } from "./auth-actions";
+import { requestTenantLoginOtp } from "@/lib/tenant-login-otp-client";
 import { useRouter } from "next/navigation";
 export default function LoginModal({
   show,
@@ -69,10 +69,7 @@ export default function LoginModal({
     }
     setLoading(true);
     try {
-      const result = await requestOtp(
-        department,
-        cleanEmail
-      );
+      const result = await requestTenantLoginOtp(department, cleanEmail);
       if (!result?.success) {
         setError(
           result?.message ||

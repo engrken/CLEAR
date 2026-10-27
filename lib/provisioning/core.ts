@@ -3,6 +3,7 @@
 import 'server-only';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { assertMaintenanceWritesAllowed } from '@/lib/maintenance/service';
 import { isReservedGlobalAdminEmail } from '@/lib/super-admin';
 import { PRESET_ROLE_TABS } from '@/lib/role-permissions';
 import { academicYearStart, isCalendarMode, periodsFor, type CalendarMode } from '@/lib/academic-periods';
@@ -75,6 +76,7 @@ export async function provisionEntityWithTierCore(actor: string, data: {
   calendarMode: CalendarMode;
   includeSummer: boolean;
 }) {
+  await assertMaintenanceWritesAllowed([]);
   const name = normal(data?.name);
   const subdomain = assertIdentifier(data?.subdomain, 'Subdomain');
   const schoolGroup = assertIdentifier(data?.schoolGroup || 'default-school', 'School group');
@@ -207,8 +209,9 @@ export async function updateOrganizationTierCore(actor: string, orgId: string, n
 
       const isNamedGroup = Boolean(org.schoolGroup && org.schoolGroup !== 'default-school');
       const affected = isNamedGroup
-        ? await tx.organization.findMany({ where: { schoolGroup: org.schoolGroup }, select: { id: true } })
-        : [{ id }];
+        ? await tx.organization.findMany({ where: { schoolGroup: org.schoolGroup }, select: { id: true, subdomain: true } })
+        : [{ id, subdomain: org.subdomain }];
+      await assertMaintenanceWritesAllowed(affected.map(entry => entry.subdomain), tx);
       checkGroupLimit(affected.length, tier, org.schoolGroup || 'default-school');
 
       if (isNamedGroup) {
@@ -237,6 +240,7 @@ export async function updateOrganizationStatusCore(actor: string, orgId: string,
     await prisma.$transaction(async (tx) => {
       const original = await tx.organization.findUnique({ where: { id }, select: { id: true, status: true, subdomain: true } });
       if (!original) throw new Error('Organization not found.');
+      await assertMaintenanceWritesAllowed([original.subdomain], tx);
       if (original.status === status) return;
       await tx.organization.update({ where: { id }, data: { status } });
       await tx.systemLog.create({
@@ -258,6 +262,7 @@ export async function updateOrganizationSchoolGroupCore(actor: string, orgId: st
     await prisma.$transaction(async (tx) => {
       const org = await tx.organization.findUnique({ where: { id } });
       if (!org) throw new Error('Organization not found.');
+      await assertMaintenanceWritesAllowed([org.subdomain], tx);
       if (org.schoolGroup === schoolGroup) return;
 
       // A transferred entity adopts the target group's common tier. A group cannot exceed its cap.

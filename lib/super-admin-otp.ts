@@ -18,6 +18,11 @@ export const SENT_MESSAGE =
   'If you entered several wrong codes recently, wait 30 minutes before trying again.';
 const FAIL = 'Invalid or expired verification code.';
 
+// Preview verification emails must be visibly distinct from Production ones.
+// Never put OTPs, recipients, signing secrets, hashes or internal email identity
+// validation results in server logs or HTTP responses.
+const isPreviewOtp = () => process.env.VERCEL_ENV === 'preview';
+
 const norm = (v: unknown) => String(v ?? '').trim().toLowerCase();
 const hash = (code: string) => {
   const secret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
@@ -37,13 +42,19 @@ function safeEqual(a: string, b: string) {
 export async function issueSuperAdminOtp(email: string) {
   const generic = { success: true as const, message: SENT_MESSAGE };
   const e = norm(email);
-  if (!(await findEligibleGlobalAdmin(e))) return generic;           // same answer, nothing is sent
+  if (!(await findEligibleGlobalAdmin(e))) {
+    if (isPreviewOtp()) console.info('[admin-otp] preview request suppressed: identity not eligible');
+    return generic; // same public answer: never disclose membership
+  }
 
   const now = new Date();
 
   // No new codes while locked (stops an attacker from feeding themselves fresh codes).
   const lock = await prisma.authThrottle.findUnique({ where: { key: guessKey(e) } });
-  if (lock?.lockedUntil && lock.lockedUntil > now) return generic;
+  if (lock?.lockedUntil && lock.lockedUntil > now) {
+    if (isPreviewOtp()) console.info('[admin-otp] preview request suppressed: temporary lock');
+    return generic;
+  }
 
   // Send budget. Columns are reused: failedCount = sends in window, lastSentAt = window start,
   // updatedAt = time of last send.
@@ -65,7 +76,10 @@ export async function issueSuperAdminOtp(email: string) {
     },
     data: { failedCount: { increment: 1 }, updatedAt: now },
   });
-  if (admitted.count !== 1) return generic;            // cooldown or hourly cap hit
+  if (admitted.count !== 1) {
+    if (isPreviewOtp()) console.info('[admin-otp] preview request suppressed: cooldown or rate cap');
+    return generic;
+  }
 
   const code = crypto.randomInt(100000, 1000000).toString();
   const expires = new Date(now.getTime() + TTL_MS);
@@ -78,10 +92,13 @@ export async function issueSuperAdminOtp(email: string) {
   try {
     await sendEmail({
       to: e,
-      subject: 'CLEAR System: System Admin Verification Code',
+      subject: isPreviewOtp()
+        ? 'CLEAR STAGING ONLY: Global Administrator Verification Code'
+        : 'CLEAR System: System Admin Verification Code',
       html: `
         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;border:1px solid #e0e0e0;border-radius:8px;">
           <h2 style="color:#0dcaf0;margin-bottom:20px;">CLEAR System Authorization</h2>
+          ${isPreviewOtp() ? '<p style="color:#b45309;font-weight:bold;">STAGING TEST ONLY — do not enter this code on the Production website.</p>' : ''}
           <p style="color:#555;font-size:15px;">You are attempting to access the System Admin Setup Module.</p>
           <p style="color:#555;font-size:15px;">Your one-time verification code is:</p>
           <div style="background:#f8f9fa;padding:15px;text-align:center;border-radius:6px;margin:25px 0;">
@@ -91,10 +108,13 @@ export async function issueSuperAdminOtp(email: string) {
             This code expires in 5 minutes. If you did not request this access, ignore this email.
           </p>
         </div>`,
-      text: `Your CLEAR System verification code is: ${code}`,
+      text: `${isPreviewOtp() ? 'STAGING TEST ONLY. Use this code only on the CLEAR Preview website.\\n' : ''}Your CLEAR System verification code is: ${code}`,
     });
-  } catch (err) {
-    console.error('Super Admin OTP email failed:', err);
+    if (isPreviewOtp()) console.info('[admin-otp] preview mail provider accepted dispatch');
+  } catch {
+    // Do not log SMTP provider errors verbatim: they may contain addresses
+    // or connection secrets. The public response is still enumeration-safe.
+    console.error('[admin-otp] delivery failure (details suppressed)');
     await prisma.verificationToken.deleteMany({ where: { identifier: e, token: hash(code) } });
   }
   return generic;
