@@ -2,7 +2,7 @@
 // No transaction action is available from this screen. Each API request is
 // independently tenant/role-scoped even if a deep link is manually crafted.
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { api, type FinanceReviewKind, type FinanceReviewResponse } from '@/api';
@@ -28,22 +28,18 @@ export default function FinanceReview() {
   const { kind: requestedKind } = useLocalSearchParams<{ kind?: string }>();
   const { c } = useTheme();
   const allowed = MODES.filter(m => can(m.tab));
-  const [selected, setSelected] = useState<FinanceReviewKind>(
-    MODES.find(m => m.kind === requestedKind)?.kind ?? 'penalties'
-  );
-  const [query, setQuery] = useState('');
-  const [limit, setLimit] = useState(20);
-
-  useEffect(() => {
-    const requested = MODES.find(m => m.kind === requestedKind);
-    if (requested && can(requested.tab)) {
-      setSelected(requested.kind);
-      setQuery('');
-      setLimit(20);
-    }
-  }, [requestedKind, session.token, session.officer.allowedTabs.join(',')]);
-
-  const mode = allowed.find(m => m.kind === selected) ?? allowed[0];
+  // Derive the requested module from the authenticated route rather than
+  // synchronously resetting state in an effect. A previous tenant/session's
+  // selection and search can never be reused on a new authenticated route.
+  const routeKey = JSON.stringify([session.token, session.org.subdomain, requestedKind ?? null]);
+  const [selection, setSelection] = useState<{ key: string; kind: FinanceReviewKind } | null>(null);
+  const [filter, setFilter] = useState<{ key: string; query: string; limit: number }>({
+    key: routeKey, query: '', limit: 20,
+  });
+  const query = filter.key === routeKey ? filter.query : '';
+  const limit = filter.key === routeKey ? filter.limit : 20;
+  const preferred = selection?.key === routeKey ? selection.kind : requestedKind;
+  const mode = allowed.find(m => m.kind === preferred) ?? allowed[0];
   const authorized = !!mode && can(mode.tab);
   const review = useAsync<FinanceReviewResponse | null>(
     () => authorized && mode ? api.getFinanceReview(session, mode.kind, limit) : Promise.resolve(null),
@@ -78,7 +74,7 @@ export default function FinanceReview() {
             {allowed.map(item => (
               <Pressable key={item.kind} accessibilityRole="tab"
                 accessibilityState={{ selected: mode?.kind === item.kind }}
-                onPress={() => { setSelected(item.kind); setQuery(''); setLimit(20); }}
+                onPress={() => { setSelection({ key: routeKey, kind: item.kind }); setFilter({ key: routeKey, query: '', limit: 20 }); }}
                 style={[styles.tab, { backgroundColor: mode?.kind === item.kind ? c.inkBlock : c.soft }]}>
                 <Text variant="bodySm" color={mode?.kind === item.kind ? 'onAccent' : 'ink'}>
                   {item.label}
@@ -102,14 +98,14 @@ export default function FinanceReview() {
             </Banner>
           ) : null}
           <TextInput
-            value={query} onChangeText={setQuery} maxLength={80}
+            value={query} onChangeText={next => setFilter({ key: routeKey, query: next, limit })} maxLength={80}
             accessibilityLabel="Filter loaded financial records"
             placeholder="Filter loaded references, names or status"
             placeholderTextColor={c.inkMuted}
             autoCorrect={false} autoCapitalize="none"
             style={[styles.search, { backgroundColor: c.soft, color: c.ink }]}
           />
-          {query ? <Button size="sm" variant="secondary" onPress={() => setQuery('')}>
+          {query ? <Button size="sm" variant="secondary" onPress={() => setFilter({ key: routeKey, query: '', limit })}>
             Clear filter
           </Button> : null}
           {review.loading ? <ActivityIndicator color={c.cobalt}/> : null}
@@ -152,7 +148,7 @@ export default function FinanceReview() {
                 </Banner>
               ) : null}
               {limit === 20 && data.hasMore ? (
-                <Button block variant="secondary" onPress={() => { setLimit(40); setQuery(''); }}>
+                <Button block variant="secondary" onPress={() => setFilter({ key: routeKey, query: '', limit: 40 })}>
                   Show up to 40 recent records
                 </Button>
               ) : null}
