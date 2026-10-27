@@ -80,6 +80,13 @@ export default function ReferenceSearch() {
         placeholderTextColor={c.inkMuted} value={query} onChangeText={changeQuery}
         autoCorrect={false} autoCapitalize="none"
         style={[styles.input,{backgroundColor:c.soft,color:c.ink}]} />
+      {query.length ? (
+        <Pressable accessibilityRole="button" accessibilityLabel="Clear reference search"
+          onPress={() => changeQuery('')}
+          style={{ alignSelf: 'flex-end', paddingVertical: 8, paddingHorizontal: 14 }}>
+          <Text variant="bodyStrong" color="inkMuted">Clear search</Text>
+        </Pressable>
+      ) : null}
       <Text variant="caption" color="inkMuted">
         {mode==='void'?'Void audit covers all periods of this tenant.':'Receipts are scoped to your tenant’s current academic period.'} Type at least 3 characters.
       </Text>

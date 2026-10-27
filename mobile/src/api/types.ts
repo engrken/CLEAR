@@ -182,6 +182,11 @@ export type LedgerEntry = {
   receiptLine?: number;
 };
 
+export type LedgerPage = {
+  records: LedgerEntry[]; nextCursor: string | null; hasMore: boolean;
+  scope: 'active' | 'all'; pageSize: number;
+};
+
 export type RemittanceDetail = LedgerEntry & {
   studentId: string;
   studentEmail: string | null;
@@ -270,6 +275,21 @@ export class ApiError extends Error {
 }
 
 /** Everything screens can ask of the backend. The HTTP client and the mock both implement it. */
+/** Bounded, current-period financial read-only module. Never a posting authority. */
+export type FinanceReviewKind = 'penalties' | 'advances' | 'liquidations' | 'collections';
+export type FinanceReviewEntry = {
+  id: string; reference: string; title: string; subtitle: string;
+  status: string; amountCentavos: number; when: string;
+};
+export type FinanceReviewResponse = {
+  kind: FinanceReviewKind;
+  scope: 'active_period';
+  ay: string; term: string;
+  limit: number; hasMore: boolean;
+  amountMeaning: string;
+  entries: FinanceReviewEntry[];
+};
+
 export type ReceiptReference = {
   id: string; reference: string; name: string; studentNumber: string; when: string;
   status: 'Valid' | 'Voided' | 'Inconsistent'; amountPesos: number | null;
@@ -323,6 +343,7 @@ export type ClearApi = {
   getGlobalTenantDashboard(session: GlobalSession, slug: string): Promise<GlobalTenantDashboard>;
   listGlobalTenantStudents(session: GlobalSession, slug: string, q?: string): Promise<Student[]>;
   listGlobalTenantLedger(session: GlobalSession, slug: string): Promise<LedgerEntry[]>;
+  listGlobalTenantLedgerPage(session: GlobalSession, slug: string, cursor?: string): Promise<LedgerPage>;
   listGlobalTenantRemittances(session: GlobalSession, slug: string): Promise<LedgerEntry[]>;
   // officer
   /** Session metadata only; all server requests independently check tenant and tab permissions. */
@@ -333,6 +354,9 @@ export type ClearApi = {
   getTenantPortal(s: Session): Promise<TenantPortalStatus>;
   getDashboard(s: Session): Promise<DashboardSummary>;
   listLedger(s: Session, filter?: { status?: string; limit?: number }): Promise<LedgerEntry[]>;
+  listLedgerPage(s: Session, cursor?: string): Promise<LedgerPage>;
+  /** Independently permission-checked, current period and read-only. */
+  getFinanceReview(s: Session, kind: FinanceReviewKind, limit?: number): Promise<FinanceReviewResponse>;
   /** Authorized GET-only exact reference search; no receipt/void mutations. */
   searchReceiptReferences(s: Session, q: string): Promise<ReceiptReferenceSearch>;
   searchVoidReferences(s: Session, q: string): Promise<VoidReferenceSearch>;
