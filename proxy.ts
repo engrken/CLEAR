@@ -10,7 +10,10 @@ export function proxy(request: NextRequest) {
   // routes, not only to new logins. The deployment must be verified first.
   if (process.env.CLEAR_MAINTENANCE_MODE === 'locked') {
     const pathname = request.nextUrl.pathname;
-    if (pathname === '/maintenance' && request.method === 'GET') {
+    // The public health/status probe stays reachable during a full lock.
+    // Never exempt arbitrary API paths or mutation methods.
+    if (request.method === 'GET' &&
+        (pathname === '/maintenance' || pathname === '/api/maintenance/status')) {
       return NextResponse.next();
     }
     const headers = { 'Cache-Control': 'no-store, max-age=0', 'X-Robots-Tag': 'noindex, nofollow' };
