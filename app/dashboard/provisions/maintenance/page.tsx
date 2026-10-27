@@ -33,13 +33,19 @@ export default async function MaintenanceAdminPage() {
   ]);
   const options = [{ key: 'global', name: 'GLOBAL — all tenants' },
     ...orgs.map(o => ({ key: o.subdomain, name: o.name + ' (' + o.subdomain + ')' }))];
+  const globalPolicy = policies.find(p => p.scopeKey === 'GLOBAL');
+  const globalMode = globalPolicy && globalPolicy.mode !== 'NORMAL' &&
+    (!globalPolicy.expiresAt || globalPolicy.expiresAt > new Date())
+    ? globalPolicy.mode : 'NORMAL';
   const defaultEnd = inputTime(new Date(Date.now() + 2 * 3600000));
   return <main className="container py-4 text-white" style={{ maxWidth: 1200 }}>
     <div className="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-4">
       <div><Link href="/dashboard/provisions" className="text-info">Back to Global Administrator</Link>
         <h1 className="h2 mt-3">Maintenance Control &amp; Notice Board</h1>
         <p className="text-secondary">Server-enforced protection · Times entered and displayed in Asia/Manila (PHT)</p></div>
-      <span className="badge bg-success fs-6">Default: NORMAL · OFF</span>
+      <span className={`badge fs-6 ${globalMode === 'NORMAL' ? 'bg-success' : 'bg-warning text-dark'}`}>
+        Global: {globalMode} · {globalMode === 'NORMAL' ? 'OFF' : 'ON'}
+      </span>
     </div>
     <div className="alert alert-warning">
       <strong>Global Administrator only.</strong> Mode changes are active immediately on the web API.
