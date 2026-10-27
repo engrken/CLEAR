@@ -36,12 +36,24 @@ test('maintenance HTTP: OFF, scoped READ_ONLY, global FULL, recovery, expiry and
     await policy('tenant:ci-financial','READ_ONLY');
     assert.equal(JSON.parse((await request('/api/maintenance/status?tenant=ci-financial')).body).mode,'READ_ONLY');
     assert.equal(JSON.parse((await request('/api/maintenance/status?tenant=other-ci-tenant')).body).mode,'NORMAL');
+    // Only an OTP challenge is allowed to POST during READ_ONLY, never a
+    // department page Server Action or a financial write.
+    const challenge = await fetch(base + '/api/department/ci-financial/auth/request-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'unregistered-ci@example.invalid' }),
+      signal: AbortSignal.timeout(16000),
+    });
+    assert.equal(challenge.status, 200, await challenge.text());
+    assert.equal((await request('/department/ci-financial','POST')).status, 503);
     const denied = await request('/api/mobile/orgs/ci-financial/payments','POST');
     assert.equal(denied.status,503,denied.body);
     assert.equal(JSON.parse(denied.body).error.code,'maintenance');
     assert.notEqual((await request('/api/mobile/orgs/ci-financial/ledger')).status,503);
 
     await policy('GLOBAL','FULL');
+    assert.equal((await request('/api/department/ci-financial/auth/request-code','POST')).status,503,
+      'Web OTP challenge is blocked during FULL, retaining operator recovery only');
     const full = await request('/api/mobile/orgs/ci-financial/ledger');
     assert.equal(full.status,503,full.body);
     assert.equal(JSON.parse(full.body).error.code,'maintenance');
