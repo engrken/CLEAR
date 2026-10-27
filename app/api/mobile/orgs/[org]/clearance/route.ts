@@ -6,6 +6,7 @@ import { getOrgOr404 } from '@/lib/mobile/data';
 import { requireMobileOfficer } from '@/lib/mobile/session';
 import { requireStudentClearanceSession } from '@/lib/mobile/student-clearance-auth';
 import { toCentavos } from '@/lib/mobile/serialize';
+import { buildVerifiedStudentReasons } from '@/lib/student-clearance-reasons';
 import { getStudentClearance } from '@/lib/clearance';
 import { issueClearanceCertificate } from '@/lib/clearance-opaque-token';
 import { prisma } from '@/lib/prisma';
@@ -66,6 +67,11 @@ export const GET = handler(async (req: Request, { params }: Ctx) => {
           ay: org.activeAy, term: org.activeTerm,
         }))
     : null;
+  // These explanations are disclosed ONLY after OTP session + own-record revalidation.
+  // No transaction references, student identity, raw fine notes or receipt history.
+  const holdReasons = result.isCleared
+    ? []
+    : buildVerifiedStudentReasons(result.isEnrolled, result.unpaidItems, toCentavos);
   // Server-Timing contains only durations, no account, OTP, QR or ledger data.
   const finishedAt = performance.now();
   const response = json(req, {
@@ -74,6 +80,7 @@ export const GET = handler(async (req: Request, { params }: Ctx) => {
     status: !result.isEnrolled ? 'not_enrolled' : result.isCleared ? 'cleared' : 'hold',
     outstandingCentavos: null,
     unpaidItems: null,
+    holdReasons,
     // Student identifier and balances remain private; URL contains opaque ciphertext.
     qrToken: studentQrUrl,
     ay: org.activeAy, term: org.activeTerm,
