@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build && node scripts/ci/run-clear-acceptance.mjs",
+    "build": "next build && node scripts/ci/run-clear-acceptance.mjs && npm --prefix mobile install --package-lock-only --ignore-scripts --no-audit --no-fund && npm --prefix mobile ci --no-audit --no-fund && npm --prefix mobile run typecheck && npm --prefix mobile run lint",
     "start": "next start",
     "lint": "eslint",
     "postinstall": "prisma generate",
