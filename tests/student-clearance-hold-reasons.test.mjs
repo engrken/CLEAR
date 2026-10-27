@@ -50,10 +50,10 @@ test('financial precision errors fail closed; arbitrary source labels are bounde
     category: 'Assessment', itemDescription: 'Fee', balanceDue: 1.001,
   }], exactCents), /precision/);
   const reasons = buildVerifiedStudentReasons(true, [{
-    category: 'Collectible', itemDescription: ' Lab\\nCharge ' + 'A'.repeat(200), balanceDue: 2,
+    category: 'Collectible', itemDescription: ' Lab\nCharge ' + 'A'.repeat(200), balanceDue: 2,
   }], exactCents);
   assert.ok(reasons[0].label.length <= 110);
-  assert.doesNotMatch(reasons[0].label, /[\\n\\r]/);
+  assert.doesNotMatch(reasons[0].label, /[\n\r]/);
 });
 
 test('only student OTP branch receives itemized reasons; public QR and officers are unchanged', () => {
@@ -64,19 +64,19 @@ test('only student OTP branch receives itemized reasons; public QR and officers 
   const session = api.indexOf('const student = await requireStudentClearanceSession(req, org)');
   const reasons = api.indexOf('const holdReasons = result.isCleared');
   assert.ok(routeOfficer >= 0 && routeOfficer < session && session < reasons);
-  assert.match(api, /result\\.student\\.id !== student\\.id/);
-  assert.match(api, /buildVerifiedStudentReasons\\(result\\.isEnrolled, result\\.unpaidItems, toCentavos\\)/);
+  assert.match(api, /result\.student\.id !== student\.id/);
+  assert.match(api, /buildVerifiedStudentReasons\(result\.isEnrolled, result\.unpaidItems, toCentavos\)/);
   assert.match(api, /studentName: null/);
   assert.match(api, /outstandingCentavos: null/);
   assert.match(api, /unpaidItems: null/);
   assert.match(api, /qrToken: studentQrUrl/);
   assert.doesNotMatch(api.slice(routeOfficer, session), /holdReasons/);
-  assert.match(web, /validReasons\\(privateResult\\.holdReasons\\)/);
+  assert.match(web, /validReasons\(privateResult\.holdReasons\)/);
   assert.match(web, /Why your clearance is not ready for signing/);
-  assert.match(web, /setResult\\(null\\)/);
+  assert.match(web, /setResult\(null\)/);
   assert.match(web, /visibilitychange/);
-  assert.match(mobile, /AppState\\.addEventListener\\('change'/);
-  assert.match(mobile, /holdReasons=\\{!officerMode \\? result\\.holdReasons : undefined\\}/);
+  assert.match(mobile, /AppState\.addEventListener\('change'/);
+  assert.match(mobile, /holdReasons=\{!officerMode \? result\.holdReasons : undefined\}/);
   const publicVerifier = read('app/clearance/verify/page.tsx');
   assert.doesNotMatch(publicVerifier, /holdReasons|buildVerifiedStudentReasons/);
 });
