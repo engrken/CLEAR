@@ -7,7 +7,6 @@ import { requireSuperAdmin } from '@/lib/permissions';
 import { logoutProvisioningAction } from './actions';
 import { MasterProvisionForm } from './MasterProvisionForm';
 import { ProvisionRow } from './ProvisionRow';
-import { GlobalAdminManager } from './GlobalAdminManager';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
@@ -23,14 +22,6 @@ export default async function ProvisionsPage() {
   } catch {
     redirect('/dashboard');
   }
-
-  const [additionalAdmins, globalAdminAudit] = await Promise.all([
-    prisma.globalSuperAdmin.findMany({ orderBy: { createdAt: 'desc' },
-      select: { id: true, email: true, fullName: true, status: true, invitedBy: true,
-        invitationExpiresAt: true, lastLoginAt: true, activatedAt: true, createdAt: true } }),
-    prisma.globalAdminAudit.findMany({ orderBy: { createdAt: 'desc' }, take: 30,
-      select: { id: true, actorEmail: true, targetEmail: true, action: true, createdAt: true } }),
-  ]);
 
   const organizations = await prisma.organization.findMany({
     orderBy: [{ schoolGroup: 'asc' }, { name: 'asc' }],
@@ -57,7 +48,7 @@ export default async function ProvisionsPage() {
         </div>
         <div className="d-flex align-items-center gap-3">
           <span className="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25 px-3 py-2">
-            <i className="bi bi-shield-check me-1" />Master SuperAdmin: {email}
+            <i className="bi bi-shield-check me-1" />Global Administrator: {email}
           </span>
           <form action={logoutProvisioningAction}>
             <button type="submit" className="btn btn-sm btn-outline-secondary">
@@ -74,7 +65,14 @@ export default async function ProvisionsPage() {
         </p>
       </div>
 
-      <GlobalAdminManager accounts={additionalAdmins} audit={globalAdminAudit} actorEmail={email} />
+      <nav className="d-flex flex-wrap gap-2 mb-4" aria-label="Global administration tools">
+        <Link href="/dashboard/provisions/administrators" className="btn btn-outline-info fw-semibold">
+          <i className="bi bi-people me-2" aria-hidden="true" />Global Administrator Accounts
+        </Link>
+        <Link href="/dashboard/provisions/security-audit" className="btn btn-outline-secondary fw-semibold">
+          <i className="bi bi-shield-check me-2" aria-hidden="true" />Security Audit Logs
+        </Link>
+      </nav>
       <div className="row g-4">
         <div className="col-12 col-lg-4">
           <div className="p-4 rounded-4 shadow-lg border border-secondary border-opacity-50 h-100" style={{ backgroundColor: '#1e293b' }}>
