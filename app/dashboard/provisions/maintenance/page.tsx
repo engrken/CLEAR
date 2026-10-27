@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import { requireSuperAdmin } from '@/lib/permissions';
-import { createMaintenanceNotice, editMaintenanceNotice, setMaintenancePolicy } from './actions';
+import { MaintenancePolicyForm, MaintenanceNoticeCreateForm, MaintenanceNoticeEditForms } from './MaintenanceForms';
 
 export const dynamic = 'force-dynamic';
 const pht = (d: Date) => d.toLocaleString('en-PH', {
@@ -62,22 +62,7 @@ export default async function MaintenanceAdminPage() {
       <section className="col-lg-6">
         <div className="card bg-dark border-info p-4 h-100">
           <h2 className="h5">Set effective maintenance policy</h2>
-          <form action={setMaintenancePolicy} className="d-grid gap-3 mt-3">
-            <label>Scope<select name="scope" className="form-select" required>{options.map(o =>
-              <option key={o.key} value={o.key}>{o.name}</option>)}</select></label>
-            <label>Mode<select name="mode" className="form-select" defaultValue="NORMAL">
-              <option value="NORMAL">NORMAL — maintenance OFF</option>
-              <option value="READ_ONLY">READ_ONLY — disable mutations</option>
-              <option value="FULL">FULL — maintenance landing only</option>
-            </select></label>
-            <label>Public reason<textarea name="reason" className="form-control" maxLength={240}
-              placeholder="Explain the outage without including private student or staff details."/></label>
-            <label>Expires (PHT, required for active modes)<input name="expiresAt"
-              type="datetime-local" className="form-control" defaultValue={defaultEnd}/></label>
-            <label>Confirmation<input name="confirmation" className="form-control"
-              placeholder="APPLY MAINTENANCE or RESTORE NORMAL" required autoComplete="off"/></label>
-            <button type="submit" className="btn btn-outline-warning">Confirm policy update</button>
-          </form>
+          <MaintenancePolicyForm options={options} expiresDefault={defaultEnd} />
           <h3 className="h6 mt-4">Current policies</h3>
           {policies.length === 0 ? <p className="small text-success">No policy rows. All scopes are NORMAL (OFF).</p> :
             <ul className="list-group">{policies.map(p => <li key={p.scopeKey}
@@ -90,23 +75,7 @@ export default async function MaintenanceAdminPage() {
       <section className="col-lg-6">
         <div className="card bg-dark border-info p-4 h-100">
           <h2 className="h5">Create Notice Board announcement</h2>
-          <form action={createMaintenanceNotice} className="d-grid gap-3 mt-3">
-            <label>Audience / scope<select name="scope" className="form-select" required>{options.map(o =>
-              <option key={o.key} value={o.key}>{o.name}</option>)}</select></label>
-            <label>Title<input name="title" className="form-control" maxLength={140}
-              placeholder="Scheduled CLEAR service maintenance" required/></label>
-            <label>Description<textarea name="message" className="form-control" maxLength={800} required
-              placeholder="Brief details, impacted services and expected service restoration."/></label>
-            <label>Starts (PHT)<input name="startsAt" type="datetime-local"
-              className="form-control" defaultValue={inputTime(new Date(Date.now() + 3600000))} required/></label>
-            <label>Ends (PHT)<input name="endsAt" type="datetime-local"
-              className="form-control" defaultValue={defaultEnd} required/></label>
-            <label>Publication<select name="state" className="form-select">
-              <option value="DRAFT">DRAFT — invisible to public</option>
-              <option value="SCHEDULED">SCHEDULED — publish notice only</option>
-            </select></label>
-            <button type="submit" className="btn btn-outline-info">Create announcement</button>
-          </form>
+          <MaintenanceNoticeCreateForm options={options} startsDefault={inputTime(new Date(Date.now() + 3600000))} endsDefault={defaultEnd} />
         </div>
       </section>
     </div>
@@ -120,27 +89,11 @@ export default async function MaintenanceAdminPage() {
           <span className="text-info ms-2">{n.scopeKey}</span>
           <p className="small mb-1">{n.message}</p>
           <p className="small text-secondary">{pht(n.startsAt)} – {pht(n.endsAt)} · revision {n.version}</p>
-          {n.state !== 'CANCELLED' ? <div className="d-flex flex-wrap gap-2">
-            {n.state === 'DRAFT' ? <form action={editMaintenanceNotice} className="d-flex gap-2 align-items-center">
-              <input type="hidden" name="id" value={n.id}/><input type="hidden" name="command" value="PUBLISH"/>
-              <input name="confirmation" className="form-control form-control-sm" placeholder="PUBLISH" required/>
-              <button className="btn btn-outline-info btn-sm">Publish</button>
-            </form> : null}
-            <form action={editMaintenanceNotice} className="d-flex gap-2 flex-wrap align-items-center">
-              <input type="hidden" name="id" value={n.id}/><input type="hidden" name="command" value="RESCHEDULE"/>
-              <input type="datetime-local" name="startsAt" defaultValue={inputTime(n.startsAt)}
-                className="form-control form-control-sm" aria-label="New start time PHT" required/>
-              <input type="datetime-local" name="endsAt" defaultValue={inputTime(n.endsAt)}
-                className="form-control form-control-sm" aria-label="New end time PHT" required/>
-              <input name="confirmation" className="form-control form-control-sm" placeholder="RESCHEDULE" required/>
-              <button className="btn btn-outline-warning btn-sm">Reschedule</button>
-            </form>
-            <form action={editMaintenanceNotice} className="d-flex gap-2 align-items-center">
-              <input type="hidden" name="id" value={n.id}/><input type="hidden" name="command" value="CANCEL"/>
-              <input name="confirmation" className="form-control form-control-sm" placeholder="CANCEL" required/>
-              <button className="btn btn-outline-danger btn-sm">Cancel</button>
-            </form>
-          </div> : null}
+          {n.state !== 'CANCELLED' ?
+            <MaintenanceNoticeEditForms key={n.id + ':' + n.version} id={n.id}
+              draft={n.state === 'DRAFT'} startsDefault={inputTime(n.startsAt)}
+              endsDefault={inputTime(n.endsAt)} />
+            : null}
         </div>)}
     </section>
     <section className="card bg-dark border-secondary p-4 mt-4">
