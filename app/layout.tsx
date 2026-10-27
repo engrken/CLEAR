@@ -1,6 +1,7 @@
 // app/layout.tsx
 import Script from 'next/script';
 import { Analytics } from '@vercel/analytics/next';
+import { SpeedInsights } from '@vercel/speed-insights/next';
 import '@/app/globals.css';
 import DataPrivacyModal from "@/app/department/[department]/components/DataPrivacyModal";
 
@@ -31,6 +32,7 @@ export default function RootLayout({
         <DataPrivacyModal />
         
         <Analytics />
+        <SpeedInsights />
         
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" async />
 		
