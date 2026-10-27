@@ -4,13 +4,14 @@ import {
 import {
   Figtree_400Regular, Figtree_500Medium, Figtree_600SemiBold, Figtree_700Bold, useFonts,
 } from '@expo-google-fonts/figtree';
-import { DefaultTheme, Stack, ThemeProvider as NavThemeProvider } from 'expo-router';
+import { DefaultTheme, Stack, ThemeProvider as NavThemeProvider, usePathname } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 
 import { MOBILE_BUSINESS_WRITES_ENABLED, TENANT_OPERATIONS_ENABLED } from '@/api/config';
 import { DataPrivacyNotice } from '@/components/privacy/DataPrivacyNotice';
+import { ServiceAdvisory } from '@/components/maintenance/ServiceAdvisory';
 import { getItem, setItem } from '@/lib/secure-storage';
 import { SessionProvider, useSession } from '@/lib/session';
 import { ThemeProvider, useTheme } from '@/theme';
@@ -37,6 +38,9 @@ export default function RootLayout() {
 function Navigator() {
   const { c } = useTheme();
   const { session, globalSession, restoring } = useSession();
+  const pathname = usePathname();
+  const routeTenant = /^\\/(?:d|global\\/tenant)\\/([a-z0-9-]+)/.exec(pathname)?.[1] || null;
+  const advisoryTenant = routeTenant || session?.org.subdomain || null;
   const [privacyReady, setPrivacyReady] = useState(false);
   const [privacyAcknowledged, setPrivacyAcknowledged] = useState(false);
 
@@ -119,6 +123,7 @@ function Navigator() {
         required
         onDismiss={acknowledgePrivacy}
       />
+      <ServiceAdvisory tenant={advisoryTenant} enabled={privacyAcknowledged} />
     </NavThemeProvider>
   );
 }
