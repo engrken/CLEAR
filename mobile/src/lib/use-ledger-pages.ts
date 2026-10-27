@@ -23,7 +23,7 @@ export function useLedgerPages(
   useEffect(() => {
     const id = ++generation.current;
     busyRef.current = false;
-    if (!enabled) return () => { generation.current++; };
+    if (!enabled) return () => { generation.current = id + 1; };
     void fetchRef.current().then(page => {
       if (generation.current !== id) return;
       setView({ key: viewKey, data: page.records, cursor: page.nextCursor,
@@ -34,7 +34,7 @@ export function useLedgerPages(
         loading: false, loadingMore: false,
         error: error instanceof Error ? error : new Error('Could not load Activity') });
     });
-    return () => { generation.current++; };
+    return () => { generation.current = id + 1; };
   }, [viewKey, enabled]);
 
   const loadMore = useCallback(async () => {

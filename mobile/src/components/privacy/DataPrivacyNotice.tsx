@@ -56,7 +56,7 @@ export function DataPrivacyNotice({ visible, onDismiss, required = false }: {
             Complete itemized ledgers remain limited to officers authorized for the relevant
             tenant and module. After registered-email verification, students may see their
             own pending clearance requirements and unpaid balances, but not receipts,
-            transaction references or other students' records.
+            transaction references or other students&apos; records.
           </Text>
           <Text variant="bodySm" color="inkMuted">
             Your mobile access is read-only. No acknowledgement changes your institutional

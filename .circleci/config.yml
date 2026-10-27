@@ -96,44 +96,6 @@ jobs:
           command: cd mobile && npm run lint
 
 
-  # TEMPORARY PR #115 diagnostics. Keep the original full mobile job
-  # unchanged. Separate statuses distinguish installation/lockfile failure,
-  # TypeScript failure and Expo ESLint failure without relaxing any gate.
-  diagnose-mobile-install:
-    docker:
-      - image: cimg/node:22.23
-    working_directory: ~/project
-    environment:
-      CI: "true"
-      EXPO_NO_TELEMETRY: "1"
-    steps:
-      - checkout
-      - run:
-          name: Check clean Expo dependency installation
-          command: |
-            cd mobile
-            npm install --package-lock-only --ignore-scripts --no-audit --no-fund
-            npm ci --no-audit --no-fund
-
-  diagnose-mobile-typecheck:
-    docker:
-      - image: cimg/node:22.23
-    working_directory: ~/project
-    environment:
-      CI: "true"
-      EXPO_NO_TELEMETRY: "1"
-    steps:
-      - checkout
-      - run:
-          name: Install Expo dependencies for TypeScript validation
-          command: |
-            cd mobile
-            npm install --package-lock-only --ignore-scripts --no-audit --no-fund
-            npm ci --no-audit --no-fund
-      - run:
-          name: Type-check Expo without executing ESLint
-          command: cd mobile && npm run typecheck
-
   financial-security:
     # GitHub Actions quota-independent equivalent of the isolated financial
     # migration and signed-action regression checks. Never connect to Neon.
@@ -242,6 +204,4 @@ workflows:
     jobs:
       - web
       - mobile
-      - diagnose-mobile-install
-      - diagnose-mobile-typecheck
       - financial-security

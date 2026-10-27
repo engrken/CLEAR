@@ -15,7 +15,7 @@ import { TAB_BAR_SPACE } from '@/lib/tab-bar';
 import { useAsync } from '@/lib/use-async';
 import { radius, spacing, useTheme } from '@/theme';
 
-const MODES: ReadonlyArray<{ kind: FinanceReviewKind; tab: string; label: string; web: string }> = [
+const MODES: readonly { kind: FinanceReviewKind; tab: string; label: string; web: string }[] = [
   { kind: 'penalties', tab: 'tab-penalties', label: 'Penalties', web: '/penalties' },
   { kind: 'advances', tab: 'tab-advances', label: 'Cash advances', web: '/advances' },
   { kind: 'liquidations', tab: 'tab-audit', label: 'Liquidations', web: '/liquidations' },
@@ -61,7 +61,7 @@ export default function FinanceReview() {
       contentStyle={{ gap: spacing[3], paddingTop: spacing[3] }}>
       <Text variant="title" accessibilityRole="header">Financial records</Text>
       <Banner tone="info" title="Authorized · read only">
-        You can review assigned financial records for this department's active academic period.
+        You can review assigned financial records for this department&apos;s active academic period.
         Posting, approval, settlement and liquidation changes remain on the audited web system.
       </Banner>
       {allowed.length === 0 ? (
@@ -158,7 +158,7 @@ export default function FinanceReview() {
             <Button block variant="secondary" onPress={() =>
               void openDepartmentModule(session.org.subdomain, mode.web)
             }>
-              Open complete {mode.label} records (secure web)
+              {`Open complete ${mode.label} records (secure web)`}
             </Button>
           ) : null}
           <Text variant="caption" color="inkMuted">

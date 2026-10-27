@@ -7,14 +7,14 @@
  */
 export type MobileAvailability = 'available' | 'review-only' | 'paused' | 'web-only';
 
-export const MODULE_CATALOG: ReadonlyArray<{
+export const MODULE_CATALOG: readonly {
   tab: string;
   name: string;
   availability: MobileAvailability;
   detail: string;
   /** Existing web route. Web re-authentication and role checks are mandatory. */
   webPath?: string;
-}> = [
+}[] = [
   { tab: 'tab-overview', name: 'Financial overview', availability: 'available', detail: 'Financial dashboard and recent activity; web actions require separate sign-in', webPath: '/summary' },
   { tab: 'tab-students', name: 'Student roster', availability: 'available', detail: 'View your department roster', webPath: '/students' },
   { tab: 'tab-clearance', name: 'Clearance', availability: 'available', detail: 'Public student clearance inquiry; officer details require server authorization', webPath: '/clearance' },
