@@ -189,6 +189,7 @@ jobs:
             fi
             node --experimental-strip-types --test tests/ci-financial-actions.test.mjs
             node --test tests/ci-mobile-ledger-http.test.mjs
+            node --test tests/ci-mobile-finance-review-http.test.mjs
             node --test tests/ci-maintenance-http.test.mjs
             node --test tests/ci-maintenance-admin-negative.test.mjs
             node --test tests/ci-maintenance-proxy-benchmark.test.mjs
