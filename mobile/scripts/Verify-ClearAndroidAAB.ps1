@@ -3,7 +3,8 @@
 [CmdletBinding()]
 param(
   [Parameter(Mandatory=$true)][string]$BundlePath,
-  [string]$BundletoolJar = 'D:\tools\bundletool-all-1.18.3.jar'
+  [string]$BundletoolJar = 'D:\tools\bundletool-all-1.18.3.jar',
+  [ValidateRange(15,999999)][int]$MinVersionCode = 15
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
@@ -53,9 +54,11 @@ $code=Read-Manifest '/manifest/@android:versionCode'
 $target=Read-Manifest '/manifest/uses-sdk/@android:targetSdkVersion'
 $api=0
 if (![int]::TryParse($target, [ref]$api)) { throw ('Unable to parse targetSdkVersion: '+$target) }
-if ($pkg -ne 'com.rupertbulquerin.clear' -or $name -ne '1.2.4' -or $code -ne '14' -or $api -lt 36) {
-  throw "AAB manifest failed v1.2.4/code14/package/SDK gate: $pkg $name $code $target"
+$numericCode=0
+if (![int]::TryParse($code, [ref]$numericCode)) { throw ('Unable to parse AAB versionCode: '+$code) }
+if ($pkg -ne 'com.rupertbulquerin.clear' -or $name -ne '1.3.0' -or $numericCode -lt $MinVersionCode -or $api -lt 36) {
+  throw "AAB manifest failed v1.3.0/minCode$MinVersionCode/package/SDK gate: $pkg $name $code $target"
 }
 Write-Host ('PASS: AAB signature, bundle structure, v'+$name+' code '+$code+', API '+$target+', official Upload signer.')
 Write-Host ('Bundle SHA-256: '+(Get-FileHash -LiteralPath $aab -Algorithm SHA256).Hash)
-Write-Host 'Before release: confirm versionCode 14 is unused on all Play tracks and test this exact AAB in Play Internal. No Play upload was performed by this check.'
+Write-Host ('Before Play Internal upload: independently verify versionCode '+$code+' is UNUSED across all Play tracks. No Play upload was performed by this check.')

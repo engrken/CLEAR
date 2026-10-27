@@ -36,6 +36,7 @@
         "EXPO_PUBLIC_CLEAR_TENANT_OPERATIONS": "false"
       },
       "android": {
+        "image": "latest",
         "buildType": "app-bundle"
       }
     },

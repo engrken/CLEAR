@@ -16,8 +16,8 @@ test('next Android release tracks distinct launcher and adaptive foreground with
     assert.equal(png.readUInt32BE(16), png.readUInt32BE(20));
     assert.ok(png.readUInt32BE(16) >= 128);
   }
-  assert.equal(config.version, '1.2.4');
-  assert.equal(config.android.versionCode, 14, 'v1.2.3 code13 already used on Play Internal; verify code14 is unused before upload');
+  assert.equal(config.version, '1.3.0');
+  assert.equal(config.android.versionCode, 15, 'candidate only: verify all Play tracks below 15');
 });
 
 test('Play release gates require approved full-resolution original artwork', () => {
@@ -41,17 +41,14 @@ test('workstation signed AAB verifier validates official bundletool and retains 
   assert.match(verify, /jarsigner -verify/);
   assert.match(verify, /signed in JarFile but is not signed in JarInputStream/);
   assert.match(verify, /com\.rupertbulquerin\.clear/);
-  assert.match(verify, /'1\.2\.4'/);
-  assert.match(verify, /'14'/);
+  assert.match(verify, /'1\.3\.0'/);
+  assert.match(verify, /MinVersionCode/);
   assert.match(verify, /-lt 36/);
 });
 
 test('v1.2.4 clean native launcher regeneration guards against old icon reuse', () => {
   const prepare = text('mobile/scripts/Prepare-ClearAndroidV124.ps1');
-  const config = JSON.parse(text('mobile/app.json')).expo;
   const workflow = text('.github/workflows/android-gradle-validation.yml');
-  assert.equal(config.version, '1.2.4');
-  assert.equal(config.android.versionCode, 14);
   assert.match(prepare, /old android\/ directory/);
   assert.match(prepare, /-ne '1\.2\.4'/);
   assert.match(prepare, /versionCode -ne 14/);
