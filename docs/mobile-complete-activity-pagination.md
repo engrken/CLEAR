@@ -5,9 +5,9 @@ This is an **unreleased** source-only Android/Web API improvement, stacked on PR
 
 New additive endpoints:
 - `GET /api/mobile/global/orgs/:org/ledger/page?scope=all&limit=50&cursor=...`
-- `GET /api/mobile/orgs/:org/ledger/page?scope=all&limit=50&cursor=...`
+- `GET /api/mobile/orgs/:org/ledger/page?scope=active&limit=50&cursor=...`
 
-Response: `{ records: LedgerEntry[], nextCursor: string|null, hasMore: boolean, scope: "all"|"active", pageSize: number }`. `scope=all` includes all academic periods for the authorized tenant; `scope=active` follows the current term. The cursor is opaque to clients and bound to the tenant, active-term values, scope, event timestamp and stable record ID. Every page separately rechecks its bearer-session role and tenant grants. A changed academic period invalidates the old cursor (refresh required). The server never returns an unbounded collection or any financial mutations.
+Response: `{ records: LedgerEntry[], nextCursor: string|null, hasMore: boolean, scope: "all"|"active", pageSize: number }`. `scope=all` includes all academic periods for Global Administrators and tenant officers with explicit reporting access (including Administrator). Ordinary officers with only `tab-overview` can page through their complete active term using `scope=active`; they cannot use another cursor or alter `scope` to gain historical access. The cursor is opaque to clients and bound to the tenant, active-term values, scope, event timestamp and stable record ID. Every page separately rechecks its bearer-session role and tenant grants. A changed academic period invalidates the old cursor (refresh required). The server never returns an unbounded collection or any financial mutations.
 
 The first page loads 50 rows; **Load older Activity** requests subsequent bounded pages. Web and mobile exact-centavo integrity is unchanged: a record containing invalid money on the requested page fails with HTTP 422 `financial_data_review`, rather than silently replacing a value with zero or misrepresenting a partial page as complete. Legacy penalty reconstruction comes from PR #101. Voided Collection entries are distinct from the separate `VoidTransaction` audit trail; zero JIECEP void records is an expected valid empty state.
 
@@ -19,6 +19,6 @@ The first page loads 50 rows; **Load older Activity** requests subsequent bounde
 - Existing dashboard requests remain limited and lightweight. No bulk load on initial login, no private-data offline cache, no Play signing or deployment, no production finance DB writes.
 
 ## Release gates
-1. All required CircleCI web/mobile/financial-security jobs; isolated PG HTTP integration with 185 synthetic records across periods, 50-row pages, same-timestamp ties, invalid cursor, cross-tenant/role negatives, 422 tests inherited from PR #101.
+1. All required CircleCI web/mobile/financial-security jobs; isolated PG HTTP integration with 555 synthetic records across periods, 50-row pages, same-timestamp ties, invalid cursor, cross-tenant/role negatives, 422 tests inherited from PR #101.
 2. Verify account/tenant switching, Refresh, Load older, search/filter, zero-void state and history completeness on physical Play Internal Testing device.
 3. Merge PR #101 first, then rebase/retarget this stacked PR to `main`. Include Android UI only with the **single future consolidated Android AAB** after PR #96 source release reconciliation and owner acceptance.
