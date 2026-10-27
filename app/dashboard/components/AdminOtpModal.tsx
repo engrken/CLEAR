@@ -156,7 +156,9 @@ export default function AdminOtpModal() {
       // GO TO MASTER ADMIN
       // ------------------------------------------------
       router.push(
-        '/dashboard/provisions'
+        window.location.pathname.startsWith('/dashboard/provisions/maintenance')
+          ? '/dashboard/provisions/maintenance'
+          : '/dashboard/provisions'
       );
       router.refresh();
     } catch (error) {

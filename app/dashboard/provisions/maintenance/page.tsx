@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { requireSuperAdmin } from '@/lib/permissions';
 import { createMaintenanceNotice, editMaintenanceNotice, setMaintenancePolicy } from './actions';
@@ -13,7 +12,19 @@ const inputTime = (d: Date) => new Date(d.getTime() + 8 * 3600000).toISOString()
 export default async function MaintenanceAdminPage() {
   let admin;
   try { admin = await requireSuperAdmin(); }
-  catch { redirect('/dashboard'); }
+  catch {
+    // Full-maintenance recovery must remain reachable BEFORE authentication,
+    // but the actual console and all mutations still require a verified Global
+    // Administrator session. Never redirect into the blocked public dashboard.
+    return <main className="container py-5 text-white" style={{ maxWidth: 660 }}>
+      <div className="card bg-dark border-info p-4">
+        <h1 className="h3">Global Administrator maintenance recovery</h1>
+        <p>Authenticate with the authorized Global Administrator email and OTP to access maintenance controls.</p>
+        <button type="button" className="btn btn-info" data-bs-toggle="modal"
+          data-bs-target="#otpAuthModal">Authenticate with email OTP</button>
+      </div>
+    </main>;
+  }
   const [policies, notices, audits, orgs] = await Promise.all([
     prisma.maintenancePolicy.findMany({ orderBy: { scopeKey: 'asc' } }),
     prisma.maintenanceNotice.findMany({ orderBy: { createdAt: 'desc' }, take: 30 }),
