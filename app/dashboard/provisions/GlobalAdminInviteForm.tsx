@@ -24,7 +24,7 @@ export default function GlobalAdminInviteForm() {
       </div>
       <div className="col-md-3">
         <button className="btn btn-info w-100 fw-semibold text-dark" disabled={pending} type="submit">
-          {pending ? 'Checking…' : promote ? 'Invite for Promotion' : 'Invite Super Admin'}
+          {pending ? 'Checking…' : promote ? 'Invite for Promotion' : 'Invite Global Administrator'}
         </button>
       </div>
       <div className="col-12 mt-3">
@@ -36,7 +36,7 @@ export default function GlobalAdminInviteForm() {
             <span className="d-block small text-secondary">
               Explicitly authorize promotion of a person already registered in a college, department or organization.
               Their tenant record and transaction history remain; old tenant OTPs and mobile sessions are invalidated.
-              After this invitation, this email authenticates through the global Super Admin OTP only.
+              After this invitation, this email authenticates through the Global Administrator OTP only.
             </span>
           </span>
         </label>

@@ -7,7 +7,7 @@ import { clearAlert, clearConfirm, clearPrompt } from "@/lib/clear-dialogs";
 
 import { useState } from "react";
 import { signIn } from "next-auth/react";
-import { requestOtp } from "../auth-actions";
+import { requestTenantLoginOtp } from "@/lib/tenant-login-otp-client";
 
 export default function OtpModal({
   department,
@@ -34,12 +34,10 @@ export default function OtpModal({
 
     try {
       const cleanEmail = email.trim().toLowerCase();
-      const result = await requestOtp(department, cleanEmail);
+      const result = await requestTenantLoginOtp(department, cleanEmail);
 
-      if (result.success) {
-        setDevNotice(result.message);
-        setStep("code");
-      }
+      setDevNotice(result.message);
+      setStep("code");
     } catch (error) {
       console.error("OTP request error:", error);
       void clearAlert(

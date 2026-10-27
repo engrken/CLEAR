@@ -4,6 +4,14 @@ import { useEffect, useRef, useState } from 'react';
 import FirstPartyClearanceQr from './FirstPartyClearanceQr';
 
 type Stage = 'identity' | 'code' | 'result';
+type HoldReason = {
+  kind: 'enrollment' | 'package' | 'penalty' | 'collectible' | 'previous_period' | 'cash_advance' | 'assessment';
+  label: string;
+  amountCentavos: number | null;
+  academicYear?: string;
+  term?: string;
+};
+
 type StudentClearance = {
   status: 'cleared' | 'hold' | 'not_enrolled';
   ay: string;
@@ -12,8 +20,37 @@ type StudentClearance = {
   studentId: null;
   outstandingCentavos: null;
   unpaidItems: null;
+  holdReasons: HoldReason[];
   qrToken: string | null;
 };
+
+const moneyLabel = (cents: number) =>
+  new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(cents / 100);
+
+const requiredAction: Record<HoldReason['kind'], string> = {
+  enrollment: 'Ask your department administrator to confirm your enrollment for this term.',
+  package: 'Review your departmental package payment with the authorized treasurer.',
+  penalty: 'Contact your assigned officer to confirm fine settlement or approved community-service credit.',
+  collectible: 'Ask the authorized treasury officer how to settle or correct this assessment.',
+  previous_period: 'This obligation is from an earlier term. Request previous-period arrears assistance.',
+  cash_advance: 'Submit the required liquidation records to the responsible officer. This is not a payment balance.',
+  assessment: 'Check the assessment with your department treasurer or authorized officer.',
+};
+
+function validReasons(value: unknown): value is HoldReason[] {
+  return Array.isArray(value) && value.length <= 500 && value.every(reason => {
+    if (!reason || typeof reason !== 'object') return false;
+    const r = reason as Record<string, unknown>;
+    return Object.hasOwn(requiredAction, r.kind as string) &&
+      typeof r.label === 'string' && r.label.length > 0 && r.label.length <= 110 &&
+      (r.amountCentavos === null ||
+        (typeof r.amountCentavos === 'number' && Number.isSafeInteger(r.amountCentavos) && r.amountCentavos >= 0)) &&
+      (r.academicYear === undefined || (typeof r.academicYear === 'string' && r.academicYear.length <= 110)) &&
+      (r.term === undefined || (typeof r.term === 'string' && r.term.length <= 110)) &&
+      (r.kind !== 'cash_advance' || r.amountCentavos === null) &&
+      (r.kind !== 'enrollment' || r.amountCentavos === null);
+  });
+}
 
 const friendlyError = (status: number) =>
   status === 429
@@ -39,7 +76,7 @@ function validStudentQrUrl(value: unknown): value is string {
   } catch { return false; }
 }
 
-/** Status-only, OTP-gated student self-service. Authorization is server-enforced. */
+/** OTP-gated student self-service with own-record hold reasons. Authorization is server-enforced. */
 export default function StudentClearanceInquiry({
   department,
   organizationName,
@@ -153,6 +190,11 @@ export default function StudentClearanceInquiry({
       if (!['cleared', 'hold', 'not_enrolled'].includes(privateResult.status) ||
         privateResult.studentName !== null || privateResult.unpaidItems !== null ||
         privateResult.studentId !== null || privateResult.outstandingCentavos !== null ||
+        !validReasons(privateResult.holdReasons) ||
+        (privateResult.status === 'cleared' && privateResult.holdReasons.length !== 0) ||
+        (privateResult.status !== 'cleared' && privateResult.holdReasons.length === 0) ||
+        (privateResult.status === 'not_enrolled' &&
+          !privateResult.holdReasons.some(r => r.kind === 'enrollment')) ||
         (privateResult.status !== 'cleared' && privateResult.qrToken !== null) ||
         (privateResult.qrToken !== null && !validStudentQrUrl(privateResult.qrToken)))
         throw new Error('Verification response could not be validated.');
@@ -217,7 +259,7 @@ export default function StudentClearanceInquiry({
       <h1 className="h4 text-info fw-bold">Private student clearance inquiry</h1>
       <p className="text-muted">
         {organizationName} · {term} ({academicYear}). Verify the email linked to your
-        official student record to see your own live clearance status.
+        official student record to see your own live clearance status and pending requirements.
       </p>
       {notice && <div className="alert alert-info" role="status">{notice}</div>}
       {error && <div className="alert alert-danger" role="alert">{error}</div>}
@@ -281,10 +323,42 @@ export default function StudentClearanceInquiry({
               QR unavailable for a closed academic period. Contact your clearance officer.
             </p>
           ) : (
-            <p className="small text-muted">
-              No QR is issued while clearance is on hold or enrollment is unconfirmed.
-              Ask an authorized officer for payment details.
-            </p>
+            <>
+              <section className="card border-secondary bg-body p-3 mb-3" aria-label="Reasons clearance cannot be signed">
+                <h2 className="h6 fw-bold mb-2">Why your clearance is not ready for signing</h2>
+                <p className="small text-muted">
+                  These are your own recorded pending requirements as of this check.
+                  Only your verified student session can see them.
+                </p>
+                <ul className="list-group list-group-flush">
+                  {result.holdReasons.map((reason, index) => (
+                    <li key={index} className="list-group-item bg-transparent px-0 py-3">
+                      <div className="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                        <strong>{reason.label}</strong>
+                        {reason.amountCentavos !== null ? (
+                          <span className="fw-bold text-danger">
+                            {moneyLabel(reason.amountCentavos)}
+                          </span>
+                        ) : (
+                          <span className="badge bg-warning text-dark">Action required</span>
+                        )}
+                      </div>
+                      {(reason.academicYear || reason.term) && (
+                        <p className="small text-muted mb-1">
+                          Previous period: {[reason.term, reason.academicYear].filter(Boolean).join(' · ')}
+                        </p>
+                      )}
+                      <p className="small text-muted mb-0">{requiredAction[reason.kind]}</p>
+                    </li>
+                  ))}
+                </ul>
+                <p className="small text-muted mt-3 mb-0">
+                  This is a live clearance explanation, not a receipt or payment instruction.
+                  If you have already settled an item, ask the appropriate officer to verify
+                  and update its official record. No QR can be issued until requirements are cleared.
+                </p>
+              </section>
+            </>
           )}
           {lookupTiming && (
             <p className="small text-muted" aria-label="Clearance request loading time">

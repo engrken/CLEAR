@@ -1,5 +1,6 @@
 // app/layout.tsx
 import Script from 'next/script';
+import MaintenanceBanner from '@/components/MaintenanceBanner';
 import { Analytics } from '@vercel/analytics/next';
 import '@/app/globals.css';
 import DataPrivacyModal from "@/app/department/[department]/components/DataPrivacyModal";
@@ -25,6 +26,7 @@ export default function RootLayout({
       </head>
       <body className="bg-body text-body min-vh-100 d-flex flex-column">
         {/* Global Content Mount Point */}
+        <MaintenanceBanner />
         {children}
         
         {/* Components must be strictly inside the body */}
