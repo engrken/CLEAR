@@ -3,8 +3,10 @@
 // Old deployment URLs must also be isolated during maintenance.
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { maintenanceForTenant } from '@/lib/maintenance/service';
+import { isRecoveryPath, requestDecision, tenantFromLocation } from '@/lib/maintenance/rules';
 
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   // Hard maintenance gate for the synchronized money-type cutover. Applies to
   // all HTTP methods and all previously authenticated web, student and mobile
   // routes, not only to new logins. The deployment must be verified first.
@@ -24,6 +26,40 @@ export function proxy(request: NextRequest) {
     maintenanceUrl.pathname = '/maintenance';
     maintenanceUrl.search = '';
     return NextResponse.redirect(maintenanceUrl, { status: 307, headers });
+  }
+
+  // P3 operational maintenance layers ON TOP OF (never replacing) the
+  // emergency CLEAR_MAINTENANCE_MODE=locked financial-cutover switch.
+  // Both web Server Action POSTs and direct API requests must obey it.
+  const scopedPath = request.nextUrl.pathname;
+  if (!isRecoveryPath(scopedPath)) {
+    try {
+      const tenant = tenantFromLocation(scopedPath, request.nextUrl.hostname);
+      const policy = await maintenanceForTenant(tenant);
+      const decision = requestDecision(policy.mode, request.method, scopedPath);
+      if (decision !== 'ALLOW') {
+        const maintenanceHeaders = {
+          'Cache-Control': 'private, no-store, max-age=0',
+          'Retry-After': '60', 'X-Clear-Maintenance': policy.mode,
+          'X-Robots-Tag': 'noindex, nofollow',
+        };
+        if (decision === 'READ_ONLY_BLOCK' || scopedPath.startsWith('/api/')) {
+          return NextResponse.json({
+            error: { code: 'maintenance', message: 'CLEAR is temporarily unavailable for this operation.' },
+          }, { status: 503, headers: maintenanceHeaders });
+        }
+        const page = request.nextUrl.clone();
+        page.pathname = '/maintenance';
+        page.search = '';
+        return NextResponse.redirect(page, { status: 307, headers: maintenanceHeaders });
+      }
+    } catch {
+      // A policy lookup failure must never authorize a financial mutation.
+      return NextResponse.json({
+        error: { code: 'maintenance_state_unavailable',
+          message: 'CLEAR maintenance status cannot be verified. Please try again later.' },
+      }, { status: 503, headers: { 'Cache-Control': 'no-store', 'Retry-After': '60' } });
+    }
   }
 
   const hostname = request.nextUrl.hostname.toLowerCase();

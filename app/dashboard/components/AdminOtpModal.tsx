@@ -5,7 +5,6 @@ import { clearAlert, clearConfirm, clearPrompt } from "@/lib/clear-dialogs";
 
 import { useState, useEffect } from 'react';
 import { signIn } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
 
 export default function AdminOtpModal() {
   const [step, setStep] = useState<'email' | 'code'>('email');
@@ -14,7 +13,6 @@ export default function AdminOtpModal() {
   const [loading, setLoading] = useState(false);
   const [devNotice, setDevNotice] = useState('');
   const [resendTimer, setResendTimer] = useState(0);
-  const router = useRouter();
 
   // --------------------------------------------------
   // RESEND COUNTDOWN
@@ -113,52 +111,14 @@ export default function AdminOtpModal() {
         return;
       }
 
-      // ------------------------------------------------
-      // CLOSE BOOTSTRAP MODAL
-      // ------------------------------------------------
-      const modalEl =
-        document.getElementById(
-          'otpAuthModal'
-        );
-      if (
-        modalEl &&
-        typeof window !== 'undefined' &&
-        (window as any).bootstrap
-      ) {
-        const modal =
-          (window as any).bootstrap.Modal
-            .getInstance(modalEl);
-        modal?.hide();
-      }
-
-      // ------------------------------------------------
-      // CLEAN BOOTSTRAP BACKDROP
-      // ------------------------------------------------
-      document.body.classList.remove(
-        'modal-open'
-      );
-      document.body.style.overflow = '';
-      document.body.style.paddingRight = '';
-      document
-        .querySelectorAll(
-          '.modal-backdrop'
-        )
-        .forEach((el) => el.remove());
-
-      // ------------------------------------------------
-      // RESET COMPONENT
-      // ------------------------------------------------
-      setCode('');
-      setDevNotice('');
-      setResendTimer(0);
-
-      // ------------------------------------------------
-      // GO TO MASTER ADMIN
-      // ------------------------------------------------
-      router.push(
-        '/dashboard/provisions'
-      );
-      router.refresh();
+      // Bootstrap modals apply scroll locks to <body> while they animate.
+      // Client routing before hidden.bs.modal can preserve that lock across
+      // the persistent dashboard layout. A document navigation removes all
+      // modal instances/backdrops without manipulating unrelated dialogs.
+      const destination = window.location.pathname.startsWith('/dashboard/provisions/maintenance')
+        ? '/dashboard/provisions/maintenance'
+        : '/dashboard/provisions';
+      window.location.assign(destination);
     } catch (error) {
       console.error(
         'OTP verification error:',

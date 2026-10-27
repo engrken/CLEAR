@@ -2,7 +2,8 @@
 import 'server-only';
 
 import crypto from 'node:crypto';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
+import { maintenanceForTenant } from '@/lib/maintenance/service';
 import { prisma } from '@/lib/prisma';
 import { isReservedGlobalAdminEmail, verifyGlobalAdminSession } from '@/lib/super-admin';
 
@@ -191,7 +192,14 @@ export function verifyEntityToken(
  */
 export async function getAuthenticatedEntityAdmin():
   Promise<EntityAdminContext | null> {
-	  const cookieStore = await cookies();
+	  // A forged cross-page Next Server Action invocation cannot use the maintenance
+  // operator recovery route to execute entity provisioning transactions.
+  const headerStore = await headers();
+  if (headerStore.has('next-action') || headerStore.has('content-type')) {
+    const policy = await maintenanceForTenant();
+    if (policy.mode !== 'NORMAL') return null;
+  }
+  const cookieStore = await cookies();
     const token = cookieStore.get('clear_entity_session')?.value;
     const claims = verifyEntityToken(token);
 

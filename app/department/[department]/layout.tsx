@@ -9,7 +9,6 @@ import { verifyGlobalAdminSession } from '@/lib/super-admin';
 import DepartmentSidebar from '@/app/department/[department]/Sidebar';
 import TopHeader from '@/app/department/[department]/TopHeader';
 import Footer from '@/app/department/[department]/components/Footer';
-import DataPrivacyModal from '@/app/department/[department]/components/DataPrivacyModal';
 
 interface ProtectedDepartmentLayoutProps {
   children: ReactNode;
@@ -232,7 +231,6 @@ export default async function ProtectedDepartmentLayout({
         </main>
 
         <Footer />
-        <DataPrivacyModal />
       </div>
     </div>
   );

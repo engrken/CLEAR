@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { requireTabAccess } from "@/lib/permissions";
 import ReceiptHistoryClient from "./ReceiptHistoryClient";
-import { buildIssuedReceipts, filterIssuedReceipts } from "./receipt-grouping";
+import { baseOfficialReceiptNumber, buildIssuedReceipts, filterIssuedReceipts } from "./receipt-grouping";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Issued Receipt History | CLEAR System" };
@@ -47,7 +47,9 @@ export default async function ReceiptHistoryPage({
   const term = query.term === "all" ? "" : get(query.term, 60) ||
     (query.ay === "all" ? "" : org.activeTerm || "");
   const q = get(query.q, 80);
-  const exactOr = get(query.or, 50);
+  // Accept a package allocation suffix (e.g. OR-P02) as a search for the
+  // complete issued receipt, never only one allocation from a package.
+  const exactOr = baseOfficialReceiptNumber(get(query.or, 50));
   const status = ["all", "valid", "voided", "inconsistent"].includes(query.status || "")
     ? query.status! : "all";
   const category = get(query.category, 100);
@@ -69,6 +71,10 @@ export default async function ReceiptHistoryPage({
   // #70: query candidate ORs for narrow text search, then load all
   // allocation lines for those receipt groups before applying filters/paging.
   // A broad search deliberately falls back to the original full tenant read.
+  // Opt-in privacy-safe instrumentation: no student identifiers, OR numbers,
+  // tenant slugs, search terms, tokens or amounts may enter timing logs.
+  const profile = process.env.CLEAR_PROFILE_RECEIPT_HISTORY === '1';
+  const queryStartedAt = profile ? performance.now() : 0;
   let receiptCandidates: string[] | null = null;
   if (q.length >= 3 && !exactOr) {
     const matching = await prisma.collection.findMany({
@@ -120,6 +126,9 @@ export default async function ReceiptHistoryPage({
     },
   });
 
+  const queryDurationMs = profile ? performance.now() - queryStartedAt : 0;
+  const groupingStartedAt = profile ? performance.now() : 0;
+
   // Review historical money AS RECORDED. A legacy sub-cent/unsafe Float must
   // appear as an inconsistent receipt, not throw in strict moneyNumber() and
   // make the entire authorized audit page unavailable. Never repair on read.
@@ -134,6 +143,17 @@ export default async function ReceiptHistoryPage({
   const maxPage = Math.max(1, Math.ceil(total / pageSize));
   const page = Math.min(requestedPage, maxPage);
   const receipts = matched.slice((page - 1) * pageSize, page * pageSize);
+  if (profile) {
+    console.info('[clear/perf/receipt-history]', {
+      dbMs: Math.round(queryDurationMs),
+      groupingMs: Math.round(performance.now() - groupingStartedAt),
+      allocationLines: allocationLines.length,
+      receiptGroups: grouped.length,
+      resultGroups: total,
+      pageSize,
+      narrowed: Boolean(exactOr || receiptCandidates !== null),
+    });
+  }
 
   return (
     <section className="module card shadow-sm border-secondary p-3 p-md-4">

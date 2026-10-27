@@ -5,6 +5,7 @@ import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { signOut } from '@/auth';
 import { prisma } from '@/lib/prisma';
+import { assertMaintenanceWritesAllowed } from '@/lib/maintenance/service';
 import { requireSuperAdmin } from '@/lib/permissions';
 import { provisionEntityWithTierCore, updateOrganizationTierCore, updateOrganizationStatusCore, updateOrganizationSchoolGroupCore } from '@/lib/provisioning/core';
 
@@ -72,6 +73,7 @@ export async function deleteOrganization(orgId: string) {
     await prisma.$transaction(async (tx) => {
       const org = await tx.organization.findUnique({ where: { id }, select: { id: true, subdomain: true } });
       if (!org) throw new Error('Organization not found.');
+      await assertMaintenanceWritesAllowed([org.subdomain], tx);
       const scope = { organizationId: id };
       const counts = await Promise.all([
         tx.student.count({ where: scope }),

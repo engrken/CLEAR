@@ -1,6 +1,8 @@
 import 'server-only';
 
 import { auth } from '@/auth';
+import { headers } from 'next/headers';
+import { maintenanceForTenant } from '@/lib/maintenance/service';
 import { prisma } from '@/lib/prisma';
 import { isSuperAdminEmail, isReservedGlobalAdminEmail, verifyGlobalAdminSession } from '@/lib/super-admin';
 import { PRESET_ROLE_TABS, parseAllowedTabs } from '@/lib/role-permissions';
@@ -29,7 +31,23 @@ async function isSignedInSuperAdmin(user: any): Promise<boolean> {
   }));
 }
 
-export async function requireSuperAdmin() {
+async function assertActionMaintenanceWritable(department?: string) {
+  // Server Actions may be POSTed directly to a different page path. Every
+  // sensitive permission guard rechecks the effective maintenance policy,
+  // independently of proxy routing and misleading caller-controlled paths.
+  const headerStore = await headers();
+  // Modern Server Actions carry next-action; progressive-enhancement forms
+  // may instead POST multipart/form-urlencoded with only Content-Type.
+  // Neither signal is present on ordinary page GETs.
+  if (!headerStore.has('next-action') && !headerStore.has('content-type')) return;
+  const current = await maintenanceForTenant(department);
+  if (current.mode !== 'NORMAL') {
+    throw new Error('503 Maintenance: This operation is temporarily unavailable.');
+  }
+}
+
+export async function requireSuperAdmin(allowMaintenanceControl = false) {
+  if (!allowMaintenanceControl) await assertActionMaintenanceWritable();
   const session = await auth();
   if (!session?.user) throw new Error('401 Unauthorized: Session expired or invalid.');
   if (!(await isSignedInSuperAdmin(session.user))) {
@@ -39,6 +57,7 @@ export async function requireSuperAdmin() {
 }
 
 async function loadAccess(department: string) {
+  await assertActionMaintenanceWritable(department);
   const session = await auth();
   if (!session?.user?.email) throw new Error('401 Unauthorized: Session expired or invalid.');
   const sessionUser = session.user as any;
