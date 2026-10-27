@@ -174,9 +174,9 @@ test('complete cross-period Activity keyset pagination has no gaps, duplicates o
     const otherSession = await createOfficerSession(other, 'Admin', ['tab-overview']);
     const viewer = await createOfficerSession(org, 'Officer', ['tab-students']);
     const when = new Date('2026-10-24T12:00:00.000Z');
-    const collectionRows = Array.from({ length: 150 }, (_, i) => ({
-      organizationId: org.id, academicYear: i < 137 ? ay : 'A.Y. CI Prior',
-      term: i < 137 ? term : 'Prior Term',
+    const collectionRows = Array.from({ length: 520 }, (_, i) => ({
+      organizationId: org.id, academicYear: i < 507 ? ay : 'A.Y. CI Prior',
+      term: i < 507 ? term : 'Prior Term',
       timestamp: when, date: when, studentName: 'CI Paginated Synthetic',
       orNumber: 'CI-PAGE-' + suffix + '-' + String(i).padStart(4, '0'),
       category: 'CI Test', itemDescription: 'Pagination test allocation',
@@ -212,7 +212,7 @@ test('complete cross-period Activity keyset pagination has no gaps, duplicates o
 
     const observed = [];
     let cursor;
-    for (let page = 0; page < 8; page++) {
+    for (let page = 0; page < 15; page++) {
       const resp = await get(session, slug, cursor);
       assert.equal(resp.status, 200, JSON.stringify(resp.body));
       assert.ok(resp.body.records.length <= 50);
@@ -232,15 +232,15 @@ test('complete cross-period Activity keyset pagination has no gaps, duplicates o
         assert.equal((await get(session, slug, 'bad-!')).status, 400);
       }
     }
-    assert.equal(observed.length, 185, 'All periods and both financial tables must be traversed');
+    assert.equal(observed.length, 555, 'All periods and both financial tables must be traversed');
     const keys = observed.map(r => r.kind + ':' + r.id);
-    assert.equal(new Set(keys).size, 185, 'No duplicated pages at tied timestamps');
-    assert.equal(observed.filter(r => r.kind === 'collection').length, 150);
+    assert.equal(new Set(keys).size, 555, 'No duplicated pages at tied timestamps');
+    assert.equal(observed.filter(r => r.kind === 'collection').length, 520);
     assert.equal(observed.filter(r => r.kind === 'penalty').length, 35);
     assert.equal(observed.filter(r => r.academicYear === 'A.Y. CI Prior').length, 13,
       'Historic period records must remain reachable');
     assert.ok(observed.every(r => Number.isSafeInteger(r.amountCentavos)));
-    assert.equal(await prisma.collection.count({ where: { organizationId: org.id } }), 150,
+    assert.equal(await prisma.collection.count({ where: { organizationId: org.id } }), 520,
       'Activity GET cannot mutate or erase receipt rows');
     assert.equal(await prisma.penalty.count({ where: { organizationId: org.id } }), 35);
   } finally {
