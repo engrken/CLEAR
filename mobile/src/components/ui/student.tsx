@@ -3,7 +3,6 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 
 import { radius, spacing, useTheme } from '@/theme';
-import type { StudentHoldReason } from '@/api/types';
 import { IconWell, ResultBlock } from './blocks';
 import { TermChip } from './cards';
 import { Icon } from './icon';
@@ -28,48 +27,10 @@ type ClearanceProps = {
   term: string;
   /** What is still unpaid, when the server lists it (officer lookups). */
   unpaidItems?: UnpaidLine[];
-  /** Server-filtered explanations for this student's OTP session only. */
-  holdReasons?: StudentHoldReason[];
 };
-
-const resolutionSteps: Record<StudentHoldReason['kind'], string> = {
-  enrollment: "Ask your department administrator to confirm this term's enrollment.",
-  package: 'Verify your departmental package balance with your treasurer.',
-  penalty: 'Confirm penalty settlement or approved community-service credit with your officer.',
-  collectible: 'Ask your treasurer how to settle or correct the assessment.',
-  previous_period: 'Request assistance with this previous-term obligation.',
-  cash_advance: 'Submit liquidation records. An approved advance is not a payable balance.',
-  assessment: 'Check the assessment with your department treasurer.',
-};
-
-function VerifiedHoldReasons({ reasons }: { reasons?: StudentHoldReason[] }) {
-  if (!Array.isArray(reasons) || !reasons.length) return null;
-  return (
-    <View style={[styles.inset, styles.items]} accessibilityLabel="Why your clearance is not ready for signing">
-      <Text variant="bodyStrong">Why your clearance is not ready</Text>
-      {reasons.map((reason, index) => (
-        <View key={index} style={{ gap: 4 }}>
-          <View style={styles.item}>
-            <Text variant="bodyStrong" style={{ flex: 1, minWidth: 0 }}>{reason.label}</Text>
-            {reason.amountCentavos !== null && Number.isSafeInteger(reason.amountCentavos) && reason.amountCentavos >= 0
-              ? <Money value={reason.amountCentavos / 100} size="sm" />
-              : <Text variant="caption" color="inkMuted">Action required</Text>}
-          </View>
-          {reason.academicYear || reason.term
-            ? <Text variant="caption" color="inkMuted">{[reason.term, reason.academicYear].filter(Boolean).join(' · ')}</Text>
-            : null}
-          <Text variant="bodySm" color="inkMuted">{resolutionSteps[reason.kind] ?? 'Contact your authorized clearance officer.'}</Text>
-        </View>
-      ))}
-      <Text variant="caption" color="inkMuted">
-        This live summary is not a receipt. If you already settled an item, ask your officer to verify the record.
-      </Text>
-    </View>
-  );
-}
 
 /** The lookup result as a full-colour block: mint when cleared (with the QR), coral when on hold. */
-export function ClearanceCard({ studentName, studentId, status, outstanding = null, qrToken, ay, term, unpaidItems, holdReasons }: ClearanceProps) {
+export function ClearanceCard({ studentName, studentId, status, outstanding = null, qrToken, ay, term, unpaidItems }: ClearanceProps) {
   const { c } = useTheme();
   const cleared = status === 'cleared';
   const items = unpaidItems?.length ? unpaidItems : null;
@@ -127,7 +88,6 @@ export function ClearanceCard({ studentName, studentId, status, outstanding = nu
             ))}
           </View>
         ) : null}
-        <VerifiedHoldReasons reasons={holdReasons} />
         <TermChip ay={ay} term={term} onColor />
       </ResultBlock>
     );
@@ -141,7 +101,7 @@ export function ClearanceCard({ studentName, studentId, status, outstanding = nu
       {studentId ? <Text variant="bodyStrong" color="coralInk" style={{ fontSize: 15 }}>{`${studentId} · On hold`}</Text> : null}
       {outstanding === null ? (
         <Text variant="body" color="coralDeep">
-          {holdReasons?.length ? 'Review the requirements below before requesting clearance sign-off.' : "You still have dues to settle. Ask your treasurer for the amount, or send a GCash or Maya receipt if you've already paid."}
+          {"You still have dues to settle. Ask your treasurer for the amount, or send a GCash or Maya receipt if you've already paid."}
         </Text>
       ) : (
         <View style={{ gap: 2 }}>
@@ -162,7 +122,6 @@ export function ClearanceCard({ studentName, studentId, status, outstanding = nu
           ))}
         </View>
       ) : null}
-      <VerifiedHoldReasons reasons={holdReasons} />
       <TermChip ay={ay} term={term} onColor />
     </ResultBlock>
   );
