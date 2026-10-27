@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { api, type ClearanceResult, type Organization, type UnpaidItem } from '@/api';
@@ -40,6 +40,7 @@ export default function Clearance() {
   const [code, setCode] = useState('');
   const [codeRequested, setCodeRequested] = useState(false);
   const [studentToken, setStudentToken] = useState<string | null>(null);
+  const studentTokenRef = useRef<string | null>(null);
   const [officerQuery, setOfficerQuery] = useState('');
   const [result, setResult] = useState<ClearanceResult | null>(null);
   const [error, setError] = useState<string>();
@@ -71,8 +72,15 @@ export default function Clearance() {
     try {
       const verified = await api.verifyStudentClearanceCode(dept, studentId, email, code);
       // This token is held only in React memory, never persisted in storage.
+      studentTokenRef.current = verified.token;
       setStudentToken(verified.token);
-      setResult(await api.getOwnClearance(dept, verified.token));
+      const privateResult = await api.getOwnClearance(dept, verified.token);
+      if (studentTokenRef.current === verified.token && AppState.currentState === 'active') {
+        setResult(privateResult);
+      } else {
+        // A previous/closed/backgrounded OTP inquiry cannot resurrect private details.
+        void api.revokeStudentClearance(dept, verified.token);
+      }
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -97,7 +105,8 @@ export default function Clearance() {
   }
 
   function restart() {
-    if (studentToken) void api.revokeStudentClearance(dept, studentToken);
+    if (studentTokenRef.current) void api.revokeStudentClearance(dept, studentTokenRef.current);
+    studentTokenRef.current = null;
     setStudentToken(null); setStudentId(''); setEmail(''); setCode('');
     setCodeRequested(false); setOfficerQuery(''); setResult(null); setError(undefined);
   }
@@ -105,8 +114,9 @@ export default function Clearance() {
   // Financial hold explanations contain private account information. Clear them
   // on backgrounding or after two minutes, matching the web's shared-device UX.
   useEffect(() => {
-    if (!studentToken || !result || officerMode) return;
+    if (!studentToken || officerMode) return;
     const clearPrivateInquiry = () => {
+      studentTokenRef.current = null;
       void api.revokeStudentClearance(dept, studentToken);
       setStudentToken(null); setResult(null); setStudentId(''); setEmail('');
       setCode(''); setCodeRequested(false);
@@ -116,7 +126,7 @@ export default function Clearance() {
       if (state !== 'active') clearPrivateInquiry();
     });
     return () => { clearTimeout(timeout); subscription.remove(); };
-  }, [dept, officerMode, result, studentToken]);
+  }, [dept, officerMode, studentToken]);
 
   const fieldStyle = [styles.field, { backgroundColor: c.soft, color: c.ink }];
 
