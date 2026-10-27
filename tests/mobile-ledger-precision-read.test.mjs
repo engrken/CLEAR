@@ -42,11 +42,12 @@ test('the legacy penalty time conversion matches web nearest-cent business rules
   assert.equal(legacyPenaltyAssessedCentavos(1 / 60, '50.00'), 83);
   assert.equal(legacyPenaltyAssessedCentavos(2 / 60, '50.00'), 167);
   assert.equal(legacyPenaltyAssessedCentavos(5 / 60, '50.00'), 417);
+  assert.equal(legacyPenaltyAssessedCentavos(4.4333, '50.00'), 22167); // legacy 4dp hours = 266 minutes
   assert.equal(legacyPenaltyAssessedCentavos(1, '50.00'), 5000);
   assert.equal(legacyPenaltyAssessedCentavos(0, '50.00'), 0);
   assert.equal(legacyPenaltyAssessedCentavos(2 / 60, { toString: () => '50.00' }), 167);
   assert.throws(() => legacyPenaltyAssessedCentavos(2 / 60, '50.005'), LedgerReadIntegrityError);
-  for (const hours of [-1, NaN, Infinity, 0.0001, 1e16]) {
+  for (const hours of [-1, NaN, Infinity, 0.0001, 4.4334, 1e16]) {
     assert.throws(() => legacyPenaltyAssessedCentavos(hours, '50.00'), LedgerReadIntegrityError);
   }
 });

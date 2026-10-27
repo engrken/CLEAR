@@ -71,7 +71,10 @@ export function legacyPenaltyAssessedCentavos(
   const minuteCount = Math.round(minuteFloat);
   if (!Number.isFinite(minuteFloat) || minuteFloat < 0 ||
       !Number.isSafeInteger(minuteCount) ||
-      Math.abs(minuteFloat - minuteCount) > 0.0001) {
+      // Four-decimal legacy hour values such as 4.4333 mean 266 minutes:
+      // converting them back yields up to 0.003 minute of representation drift.
+      // This tolerance must not allow genuinely fractional service minutes.
+      Math.abs(minuteFloat - minuteCount) > 0.003001) {
     throw new LedgerReadIntegrityError('penalty', 'hoursLate');
   }
   const rateCents = ledgerCentavos('penalty', 'ratePerHour', ratePerHour);

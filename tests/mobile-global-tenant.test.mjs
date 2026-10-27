@@ -56,13 +56,18 @@ test('tenant endpoints keep the tenant id in all data lookups', () => {
   assert.match(proofs, /status: 'Pending Verification'/);
 });
 
-test('global tenant activity rounds fractional-hour legacy penalties in centavos', () => {
+test('global tenant activity reconstructs legacy rounded hours in exact centavos', () => {
   const data = source('lib/mobile/data.ts');
-  assert.match(data, /assessedCentavos: p\.assessedAmount != null/);
-  assert.match(data, /Math\.round\(Number\(p\.hoursLate\) \* toCentavos\(p\.ratePerHour\)\)/);
+  const helper = source('lib/mobile/ledger-precision.ts');
+  // Original assessments are reconstructed only for duration-based penalties;
+  // cash-only late fees without an original assessment cannot be inferred.
+  assert.match(data, /legacyPenaltyAssessedCentavos\(p\.hoursLate, p\.ratePerHour\)/);
+  assert.match(data, /p\.penaltyType === 'LATE_FEE'/);
+  assert.match(data, /ledgerCentavos\('penalty', 'fineAmount', p\.fineAmount\)/);
   assert.doesNotMatch(data, /toCentavos\(p\.assessedAmount \?\? Number\(p\.hoursLate\)/);
-  // Production legacy data includes hours such as 4.4333 with a 50-peso rate.
-  // The old peso product (221.665) is rejected by strict monetary parsing.
+  assert.match(helper, /Math\.round\(minuteCount \* rateCents \/ 60\)/);
+  // A real historical 4dp hour representation of 266 whole minutes at ₱50/hr.
+  // It is not a valid exact peso amount, so calculate from whole minutes instead.
   assert.equal(String(4.4333 * 50), '221.665');
-  assert.equal(Math.round(4.4333 * 5000), 22167);
+  assert.equal(Math.round(266 * 5000 / 60), 22167);
 });
