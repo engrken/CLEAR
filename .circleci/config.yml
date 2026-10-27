@@ -183,6 +183,7 @@ jobs:
             fi
             node --experimental-strip-types --test tests/ci-financial-actions.test.mjs
             node --test tests/ci-mobile-ledger-http.test.mjs
+            node --test tests/ci-maintenance-http.test.mjs
       - store_artifacts:
           path: /tmp/clear-ci-finance-server.log
           destination: finance/ci-server.log
