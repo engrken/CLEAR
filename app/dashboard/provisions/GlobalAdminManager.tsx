@@ -6,12 +6,11 @@ type Account = {
   invitationExpiresAt: Date; lastLoginAt: Date | null; activatedAt: Date | null;
   createdAt: Date;
 };
-type Audit = { id: string; actorEmail: string; targetEmail: string; action: string; createdAt: Date };
-export function GlobalAdminManager({ accounts, audit, actorEmail }: {
-  accounts: Account[]; audit: Audit[]; actorEmail: string;
+export function GlobalAdminManager({ accounts, actorEmail }: {
+  accounts: Account[]; actorEmail: string;
 }) {
-  return <section className="card bg-dark border-info border-opacity-50 p-4 mt-4" aria-label="Global Super Admin accounts">
-    <h2 className="h5 text-info mb-2">Global Super Admin Accounts</h2>
+  return <section className="card bg-dark border-info border-opacity-50 p-4 mt-4" aria-label="Global Administrator accounts">
+    <h2 className="h5 text-info mb-2">Global Administrator Accounts</h2>
     <p className="small text-secondary">
       The original SUPER_ADMIN_EMAIL remains the protected bootstrap administrator.
       Each additional administrator has an independent verified email, audit identity and revocable access.
@@ -23,7 +22,7 @@ export function GlobalAdminManager({ accounts, audit, actorEmail }: {
     <GlobalAdminInviteForm />
     <p className="small text-secondary">
       Invitation expires after 7 days. The invited administrator activates their account by
-      opening the main dashboard, choosing System SuperAdmin Access and completing their first email OTP.
+      opening the main dashboard, choosing Global Administrator Access and completing their first email OTP.
       No access is granted before the OTP is verified.
     </p>
     <div className="table-responsive">
@@ -62,13 +61,5 @@ export function GlobalAdminManager({ accounts, audit, actorEmail }: {
         </tbody>
       </table>
     </div>
-    <h3 className="h6 text-info mt-3">Recent Super Admin Security Audit</h3>
-    <div className="table-responsive"><table className="table table-sm table-dark">
-      <thead><tr><th>Time (PHT)</th><th>Action</th><th>Actor</th><th>Target</th></tr></thead>
-      <tbody>{audit.map(event => <tr key={event.id}>
-        <td>{event.createdAt.toLocaleString('en-PH', { timeZone: 'Asia/Manila' })}</td>
-        <td>{event.action}</td><td>{event.actorEmail}</td><td>{event.targetEmail}</td>
-      </tr>)}</tbody>
-    </table></div>
   </section>;
 }
