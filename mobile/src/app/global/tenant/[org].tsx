@@ -10,6 +10,7 @@ import { fromCentavos } from '@/lib/money';
 import { filterRecentActivity, type RecentActivityFilter } from '@/lib/recent-activity-search';
 import { useGlobalSession } from '@/lib/session';
 import { useAsync } from '@/lib/use-async';
+import { useLedgerPages } from '@/lib/use-ledger-pages';
 import { radius, spacing, useTheme } from '@/theme';
 
 type Section = 'overview' | 'students' | 'activity' | 'remittances';
@@ -38,9 +39,9 @@ export default function GlobalTenantReadOnly() {
     () => section === 'students' ? api.listGlobalTenantStudents(global, slug) : Promise.resolve([]),
     `${global.token}:${slug}:students:${section === 'students'}`,
   );
-  const activity = useAsync<LedgerEntry[]>(
-    () => section === 'activity' ? api.listGlobalTenantLedger(global, slug) : Promise.resolve([]),
-    `${global.token}:${slug}:activity:${section === 'activity'}`,
+  const activity = useLedgerPages(
+    (cursor) => api.listGlobalTenantLedgerPage(global, slug, cursor),
+    `${global.token}:${slug}:activity`, section === 'activity',
   );
   const remittances = useAsync<LedgerEntry[]>(
     () => section === 'remittances' ? api.listGlobalTenantRemittances(global, slug) : Promise.resolve([]),
@@ -161,7 +162,7 @@ export default function GlobalTenantReadOnly() {
           {section !== 'students' && selected.data && !selected.loading ? (
             <>
               <Text variant="caption" color="inkMuted">
-                {section === 'activity' ? 'Latest tenant financial activity' : 'Pending payment proofs'} · {matchingActivity.length} of {selected.data.length} loaded records (not complete history)
+                {section === 'activity' ? 'Tenant financial activity · all academic periods' : 'Pending payment proofs'} · {matchingActivity.length} of {selected.data.length} loaded records{section === 'activity' && activity.hasMore ? ' (older records available)' : ''}
               </Text>
               <LedgerList>
                 {matchingActivity.map((item) => (
@@ -175,7 +176,11 @@ export default function GlobalTenantReadOnly() {
                   />
                 ))}
               </LedgerList>
-              {matchingActivity.length === 0 ? <Text color="inkMuted">No matching records in the loaded batch. For historical searches use your authorized web portal.</Text> : null}
+              {matchingActivity.length === 0 ? <Text color="inkMuted">{section === 'activity' && activityFilter === 'voided' ? 'No voided receipts found in the loaded Activity. Older pages may contain records; use the authorized Void Center to inspect the complete audit.' : 'No matching records in the loaded batch. Load older Activity or use the authorized web portal.'}</Text> : null}
+              {section === 'activity' && activity.pageError ? <Banner tone="danger" title="Could not load older Activity">{activity.pageError.message}</Banner> : null}
+              {section === 'activity' && activity.hasMore ? <Button block variant="secondary" onPress={() => void activity.loadMore()}>
+                {activity.loadingMore ? 'Loading older Activity…' : 'Load older Activity'}
+              </Button> : null}
             </>
           ) : null}
         </>

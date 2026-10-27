@@ -164,10 +164,18 @@ export type LedgerEntry = {
   amountCentavos: number;
   status: string;
   at: string;
+  /** New paginated Activity may show earlier academic periods. */
+  academicYear?: string;
+  term?: string;
   /** Base official receipt for package allocation suffixes, supplied by server for collections. */
   receiptNumber?: string;
   /** Collection line within the issued receipt; provided only for collection entries. */
   receiptLine?: number;
+};
+
+export type LedgerPage = {
+  records: LedgerEntry[]; nextCursor: string | null; hasMore: boolean;
+  scope: 'active' | 'all'; pageSize: number;
 };
 
 export type RemittanceDetail = LedgerEntry & {
@@ -311,6 +319,7 @@ export type ClearApi = {
   getGlobalTenantDashboard(session: GlobalSession, slug: string): Promise<GlobalTenantDashboard>;
   listGlobalTenantStudents(session: GlobalSession, slug: string, q?: string): Promise<Student[]>;
   listGlobalTenantLedger(session: GlobalSession, slug: string): Promise<LedgerEntry[]>;
+  listGlobalTenantLedgerPage(session: GlobalSession, slug: string, cursor?: string): Promise<LedgerPage>;
   listGlobalTenantRemittances(session: GlobalSession, slug: string): Promise<LedgerEntry[]>;
   // officer
   /** Session metadata only; all server requests independently check tenant and tab permissions. */
@@ -321,6 +330,7 @@ export type ClearApi = {
   getTenantPortal(s: Session): Promise<TenantPortalStatus>;
   getDashboard(s: Session): Promise<DashboardSummary>;
   listLedger(s: Session, filter?: { status?: string; limit?: number }): Promise<LedgerEntry[]>;
+  listLedgerPage(s: Session, cursor?: string): Promise<LedgerPage>;
   /** Authorized GET-only exact reference search; no receipt/void mutations. */
   searchReceiptReferences(s: Session, q: string): Promise<ReceiptReferenceSearch>;
   searchVoidReferences(s: Session, q: string): Promise<VoidReferenceSearch>;
