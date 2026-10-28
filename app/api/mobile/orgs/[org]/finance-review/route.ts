@@ -7,6 +7,19 @@ import { ApiFailure, handler, preflight } from '@/lib/mobile/http';
 import { requireMobileOfficer } from '@/lib/mobile/session';
 import { toCentavos } from '@/lib/mobile/serialize';
 
+// Financial reads must never silently display a missing source amount as zero.
+// Exact money conversion errors are treated as a sanitized, read-only 422.
+function readOnlyCentavos(value: Parameters<typeof toCentavos>[0]): number {
+  if (value == null) {
+    throw new ApiFailure(422, 'financial_data_review', 'This financial record requires review. No amount was changed.');
+  }
+  try {
+    return toCentavos(value);
+  } catch {
+    throw new ApiFailure(422, 'financial_data_review', 'This financial record requires review. No amount was changed.');
+  }
+}
+
 type Ctx = { params: Promise<{ org: string }> };
 type Kind = 'penalties' | 'advances' | 'liquidations' | 'collections';
 const PERMISSION: Readonly<Record<Kind, string>> = {
@@ -48,7 +61,7 @@ export const GET = handler(async (req: Request, { params }: Ctx) => {
       entries: rows.slice(0, limit).map(p => ({
         id: p.id, reference: p.penaltyId, title: p.studentName,
         subtitle: p.activity, status: p.status,
-        amountCentavos: toCentavos(p.fineAmount),
+        amountCentavos: readOnlyCentavos(p.fineAmount),
         when: p.date.toISOString(),
       })),
     };
@@ -66,7 +79,7 @@ export const GET = handler(async (req: Request, { params }: Ctx) => {
       entries: rows.slice(0, limit).map(a => ({
         id: a.id, reference: a.advanceId, title: a.requestor,
         subtitle: [a.fundSource, a.purpose].filter(Boolean).join(' · '),
-        status: a.status, amountCentavos: toCentavos(a.amountApproved),
+        status: a.status, amountCentavos: readOnlyCentavos(a.amountApproved),
         when: a.dateIssued.toISOString(),
       })),
     };
@@ -84,7 +97,7 @@ export const GET = handler(async (req: Request, { params }: Ctx) => {
       entries: rows.slice(0, limit).map(a => ({
         id: a.id, reference: a.auditId, title: a.requestor,
         subtitle: [a.referenceCaId, a.fundSource].filter(Boolean).join(' · '),
-        status: a.status, amountCentavos: toCentavos(a.totalExpense),
+        status: a.status, amountCentavos: readOnlyCentavos(a.totalExpense),
         when: a.date.toISOString(),
       })),
     };
@@ -105,7 +118,7 @@ export const GET = handler(async (req: Request, { params }: Ctx) => {
     entries: rows.slice(0, limit).map(c => ({
       id: c.id, reference: c.orNumber, title: c.studentName,
       subtitle: [c.category, c.itemDescription].filter(Boolean).join(' · '),
-      status: c.status, amountCentavos: toCentavos(c.amountPaid),
+      status: c.status, amountCentavos: readOnlyCentavos(c.amountPaid),
       when: c.timestamp.toISOString(),
     })),
   };
