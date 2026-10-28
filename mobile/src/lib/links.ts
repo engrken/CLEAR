@@ -1,10 +1,11 @@
 import * as WebBrowser from 'expo-web-browser';
 
 // Public pages on the web app. Always production: the policy is the same for every build.
-const WEB_URL = 'https://clear.rupertbulquerin.com';
-
-export const PRIVACY_URL = `${WEB_URL}/privacy`;
-export const ACCOUNT_DELETION_URL = `${WEB_URL}/account-deletion`;
+// The privacy policy is the one on the CLEAR web app (clearsys.vercel.app).
+export const PRIVACY_URL = 'https://clearsys.vercel.app/privacy';
+// The deletion page exists only on clear.rupertbulquerin.com so far; move it here
+// once clearsys.vercel.app serves /account-deletion (Google Play links to it).
+export const ACCOUNT_DELETION_URL = 'https://clear.rupertbulquerin.com/account-deletion';
 
 /** Open a web page in the in-app browser tab. */
 export function openWebPage(url: string) {
