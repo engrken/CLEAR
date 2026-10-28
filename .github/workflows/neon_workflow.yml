@@ -1,5 +1,8 @@
 name: Create/Delete Branch for Pull Request
 
+# A preview database is needed for schema and migration changes, not every
+# Android/web UI pull request. Keep the close event to tear down branches created
+# for schema PRs; Neon preview branches also have a 14-day expiry.
 on:
   pull_request:
     types:
@@ -7,6 +10,11 @@ on:
       - reopened
       - synchronize
       - closed
+    paths:
+      - 'prisma/schema.prisma'
+      - 'prisma/migrations/**'
+      - 'scripts/sql/**'
+      - '.github/workflows/neon_workflow.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
