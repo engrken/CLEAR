@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, AppState, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { api, type ClearanceResult, type Organization, type UnpaidItem } from '@/api';
 import { MOBILE_BUSINESS_WRITES_ENABLED } from '@/api/config';
@@ -40,6 +40,7 @@ export default function Clearance() {
   const [code, setCode] = useState('');
   const [codeRequested, setCodeRequested] = useState(false);
   const [studentToken, setStudentToken] = useState<string | null>(null);
+  const studentTokenRef = useRef<string | null>(null);
   const [officerQuery, setOfficerQuery] = useState('');
   const [result, setResult] = useState<ClearanceResult | null>(null);
   const [error, setError] = useState<string>();
@@ -71,8 +72,15 @@ export default function Clearance() {
     try {
       const verified = await api.verifyStudentClearanceCode(dept, studentId, email, code);
       // This token is held only in React memory, never persisted in storage.
+      studentTokenRef.current = verified.token;
       setStudentToken(verified.token);
-      setResult(await api.getOwnClearance(dept, verified.token));
+      const privateResult = await api.getOwnClearance(dept, verified.token);
+      if (studentTokenRef.current === verified.token && AppState.currentState === 'active') {
+        setResult(privateResult);
+      } else {
+        // A previous/closed/backgrounded OTP inquiry cannot resurrect private details.
+        void api.revokeStudentClearance(dept, verified.token);
+      }
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -97,10 +105,28 @@ export default function Clearance() {
   }
 
   function restart() {
-    if (studentToken) void api.revokeStudentClearance(dept, studentToken);
+    if (studentTokenRef.current) void api.revokeStudentClearance(dept, studentTokenRef.current);
+    studentTokenRef.current = null;
     setStudentToken(null); setStudentId(''); setEmail(''); setCode('');
     setCodeRequested(false); setOfficerQuery(''); setResult(null); setError(undefined);
   }
+
+  // Financial hold explanations contain private account information. Clear them
+  // on backgrounding or after two minutes, matching the web's shared-device UX.
+  useEffect(() => {
+    if (!studentToken || officerMode) return;
+    const clearPrivateInquiry = () => {
+      studentTokenRef.current = null;
+      void api.revokeStudentClearance(dept, studentToken);
+      setStudentToken(null); setResult(null); setStudentId(''); setEmail('');
+      setCode(''); setCodeRequested(false);
+    };
+    const timeout = setTimeout(clearPrivateInquiry, 2 * 60_000);
+    const subscription = AppState.addEventListener('change', state => {
+      if (state !== 'active') clearPrivateInquiry();
+    });
+    return () => { clearTimeout(timeout); subscription.remove(); };
+  }, [dept, officerMode, studentToken]);
 
   const fieldStyle = [styles.field, { backgroundColor: c.soft, color: c.ink }];
 
@@ -114,7 +140,7 @@ export default function Clearance() {
       <Banner tone="info" title="Secure live clearance · Read-only">
         {officerMode
           ? 'Only your assigned department records are accessible. All actions are read-only.'
-          : 'Verify using the email on your own student record. Your status is read live from CLEAR; payment details are not shown.'}
+          : 'Verify the email on your student record to see your private live status and why any requirements are pending.'}
       </Banner>
       {!officerMode ? <StudentClearanceGuide department={dept} /> : null}
 
@@ -219,6 +245,7 @@ export default function Clearance() {
             ay={result.ay}
             term={result.term}
             unpaidItems={unpaidLines(result.unpaidItems, result.ay, result.term)}
+            holdReasons={!officerMode ? result.holdReasons : undefined}
           />
           {!officerMode ? (
             <Button block variant="secondary" onPress={restart}>Finish secure inquiry</Button>
@@ -235,8 +262,9 @@ export default function Clearance() {
       ) : null}
 
       <Text variant="caption" color="inkMuted" style={styles.note}>
-        Students see only their clearance status, not roster identities or payment amounts.
-        Ask your department treasury office if a result looks incorrect. All transactions remain on the CLEAR web application.
+        Verified students may view only their own pending clearance requirements. Officers see
+        records only with assigned permissions. If a result looks incorrect, contact your department
+        treasury office. All transactions remain on the CLEAR web application.
       </Text>
     </Screen>
   );

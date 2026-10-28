@@ -2,7 +2,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
-import { api, type DashboardSummary, type LedgerEntry } from '@/api';
+import { api, type DashboardSummary } from '@/api';
 import { PAYMENT_WRITES_ENABLED } from '@/api/config';
 import { Banner, Button, ColorTile, HeroStat, LedgerList, LedgerRow, Screen, SectionHeader, TermChip, Text } from '@/components/ui';
 import { FinancialOverview } from '@/components/overview/FinancialOverview';
@@ -15,6 +15,7 @@ import { setPendingCount } from '@/lib/pending-count';
 import { useOfficerSession, useSession } from '@/lib/session';
 import { TAB_BAR_SPACE } from '@/lib/tab-bar';
 import { useAsync } from '@/lib/use-async';
+import { useLedgerPages } from '@/lib/use-ledger-pages';
 import { spacing, useTheme } from '@/theme';
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
@@ -37,9 +38,9 @@ export default function Home() {
     () => canOverview ? api.getDashboard(session) : Promise.resolve(null),
     `${session.token}:overview:${canOverview}`
   );
-  const ledger = useAsync<LedgerEntry[] | null>(
-    () => canOverview ? api.listLedger(session) : Promise.resolve(null),
-    `${session.token}:ledger:${canOverview}`
+  const ledger = useLedgerPages(
+    (cursor) => api.listLedgerPage(session, cursor),
+    `${session.token}:ledger`, canOverview,
   );
 
   const { reload: reloadSummary } = summary;
@@ -137,7 +138,7 @@ export default function Home() {
 
       {canOverview ? (
         <View style={{ gap: spacing[2], marginTop: 6 }}>
-          <SectionHeader title="Recent activity" />
+          <SectionHeader title="Activity · current academic period" />
           <TextInput value={ledgerQuery} onChangeText={setLedgerQuery} autoCorrect={false}
             accessibilityLabel="Search recent authorized activity by student, OR or reference"
             placeholder="Search loaded names, ORs or references" placeholderTextColor={c.inkMuted}
@@ -155,7 +156,7 @@ export default function Home() {
             ))}
           </View>
           <Text variant="caption" color="inkMuted">
-            {visibleActivity.length} of {ledger.data?.length ?? 0} recently loaded records. This is not the complete receipt or Void Center history.
+            {visibleActivity.length} of {ledger.data?.length ?? 0} loaded Activity records{ledger.hasMore ? ' · Older records available' : ' · All available Activity pages loaded'}. Search covers loaded pages only; Void Center maintains a separate audit.
           </Text>
           {canPayment ? (
             <Button block variant="secondary" onPress={() => router.push({ pathname: '/reference-search', params: { kind: 'receipts' } })}>
@@ -188,8 +189,12 @@ export default function Home() {
                 />
               ))}
               </LedgerList>
+              {ledger.pageError ? <Banner tone="danger" title="Could not load older Activity">{ledger.pageError.message}</Banner> : null}
+              {ledger.hasMore ? <Button block variant="secondary" onPress={() => void ledger.loadMore()}>
+                {ledger.loadingMore ? 'Loading older Activity…' : 'Load older Activity'}
+              </Button> : null}
               {visibleActivity.length === 0 ? (
-                <Text variant="bodySm" color="inkMuted">No matching records in this recent batch.</Text>
+                <Text variant="bodySm" color="inkMuted">{activityFilter === 'voided' ? ledger.hasMore ? 'No voided receipts in the loaded pages. Load older Activity to search further.' : 'No voided receipts found in the complete loaded Activity history for this tenant.' : 'No matching records in loaded Activity.'}</Text>
               ) : null}
             </>
           ) : ledger.loading ? (

@@ -79,7 +79,7 @@ export default function Welcome() {
         <AccessCard
           icon="qr"
           title="Students"
-          description="Check your own status using a registered email code."
+          description="Verify your registered email to see your status and pending clearance requirements."
           onPress={openOrganizations}
         />
         <AccessCard
@@ -90,13 +90,13 @@ export default function Welcome() {
         />
         <AccessCard
           icon="bank"
-          title="Tenant administrators"
+          title="Administrators"
           description="See your tenant dashboard with authorized access."
           onPress={session ? openWorkspace : openOrganizations}
         />
         <AccessCard
           icon="shield"
-          title="Global Superadmin"
+          title="Global Administrator"
           description="Access the global overview and authorized tenants."
           onPress={() => router.push(globalSession ? '/global' : '/global/sign-in')}
         />

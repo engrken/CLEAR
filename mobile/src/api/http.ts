@@ -153,6 +153,9 @@ export const httpApi: ClearApi = {
   getGlobalTenantDashboard: (s, slug) => request(`/global/orgs/${encodeURIComponent(slug)}/dashboard`, { token: s.token }),
   listGlobalTenantStudents: (s, slug, q) => request(`/global/orgs/${encodeURIComponent(slug)}/students`, { token: s.token, query: { q } }),
   listGlobalTenantLedger: (s, slug) => request(`/global/orgs/${encodeURIComponent(slug)}/ledger`, { token: s.token }),
+  listGlobalTenantLedgerPage: (s, slug, cursor) => request(`/global/orgs/${encodeURIComponent(slug)}/ledger/page`, {
+    token: s.token, query: { scope: 'all', limit: 50, cursor },
+  }),
   listGlobalTenantRemittances: (s, slug) => request(`/global/orgs/${encodeURIComponent(slug)}/remittances`, { token: s.token }),
 
   getOfficerOnboarding: (s) => request(`${org(s.org.subdomain)}/onboarding`, as(s)),
@@ -162,6 +165,12 @@ export const httpApi: ClearApi = {
   getTenantPortal: (s) => request(`${org(s.org.subdomain)}/portal`, as(s)),
   getDashboard: (s) => request(`${org(s.org.subdomain)}/dashboard`, as(s)),
   listLedger: (s, f) => request(`${org(s.org.subdomain)}/ledger`, { ...as(s), query: { status: f?.status, limit: f?.limit } }),
+  getFinanceReview: (s, kind, limit = 20) => request(`${org(s.org.subdomain)}/finance-review`, {
+    ...as(s), query: { kind, limit },
+  }),
+  listLedgerPage: (s, cursor) => request(`${org(s.org.subdomain)}/ledger/page`, {
+    ...as(s), query: { scope: 'active', limit: 50, cursor },
+  }),
   searchReceiptReferences: (s, q) => request(`${org(s.org.subdomain)}/reference-search`, {
     ...as(s), query: { kind: 'receipts', q: q.trim() },
   }),

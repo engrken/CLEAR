@@ -15,7 +15,7 @@ const env = { ...process.env, DATABASE_URL: '', DATABASE_URL_UNPOOLED: '',
   DIRECT_URL: '', NEON_DATABASE_URL: '', CLEAR_CI_FINANCE_TEST_ENABLED: '',
   CLEAR_CI_STUDENT_AUTH_TEST_ENABLED: '' };
 const result = spawnSync(process.execPath,
-  ['--experimental-strip-types', '--test', ...files],
+  ['--experimental-strip-types', '--test', '--test-reporter=tap', ...files],
   { cwd: root, env, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024,
     timeout: 8 * 60_000 });
 const log = [result.stdout || '', result.stderr || ''].join('\n');
