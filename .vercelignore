@@ -1,0 +1,16 @@
+# CLEAR web-only deployment payload. Keep prisma/, app/, lib/, public/,
+# Next.js config, package manifests and any runtime/server imports intact.
+# Android remains built by its separate Expo/CircleCI pipeline.
+/mobile/
+/docs/
+/tests/
+/.github/
+/.circleci/
+/.clear-placeholder-backup/
+/*.xlsx
+/*.zip
+/*.log
+/change-report.json
+/add-department-arg.sh
+/AGENTS.md
+/CLAUDE.md
