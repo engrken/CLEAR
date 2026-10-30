@@ -589,10 +589,11 @@ model MaintenancePolicy {
   updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(3)
 }
 
-// Notices are announcements, NOT a way to activate enforcement.
+// Published notices may also act as scheduled maintenance windows when mode is non-NORMAL.
 model MaintenanceNotice {
   id        String   @id @default(cuid())
   scopeKey  String
+  mode      String   @default("NORMAL")
   title     String   @db.VarChar(140)
   message   String   @db.VarChar(800)
   startsAt  DateTime @db.Timestamptz(3)
