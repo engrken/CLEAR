@@ -84,6 +84,26 @@ test('maintenance HTTP: OFF, scoped READ_ONLY, global FULL, recovery, expiry and
     const foreign = JSON.parse((await request('/api/maintenance/status?tenant=other-ci-tenant')).body);
     assert.ok(!foreign.notices.some(n=>n.id===notice.id));
     assert.equal((await request('/api/maintenance/notices?tenant=ci-financial')).status,200);
+    // Active server-clock window, scoped enforcement, immediate early cancellation,
+    // and automatic expiry all use the same public/proxy/financial gates.
+    const scheduled = await prisma.maintenanceNotice.create({ data: {
+      scopeKey: 'tenant:ci-financial', mode: 'READ_ONLY',
+      title: 'CI window activating now', message: 'CI-only restriction with no real traffic.',
+      startsAt: new Date(Date.now() - 30000), endsAt: new Date(Date.now() + 600000),
+      state: 'SCHEDULED', createdBy: 'ci@example.invalid', updatedBy: 'ci@example.invalid',
+    } });
+    assert.equal(JSON.parse((await request('/api/maintenance/status?tenant=ci-financial')).body).mode, 'READ_ONLY');
+    assert.equal(JSON.parse((await request('/api/maintenance/status?tenant=other-ci-tenant')).body).mode, 'NORMAL');
+    assert.equal((await request('/api/mobile/orgs/ci-financial/payments', 'POST')).status, 503);
+    await prisma.maintenanceNotice.update({where: {id: scheduled.id}, data: {state: 'CANCELLED'}});
+    assert.equal(JSON.parse((await request('/api/maintenance/status?tenant=ci-financial')).body).mode, 'NORMAL',
+      'Ending maintenance early immediately removes the server-enforced restriction');
+    await prisma.maintenanceNotice.update({where: {id: scheduled.id}, data: {
+      state: 'SCHEDULED', endsAt: new Date(Date.now() + 10), startsAt: new Date(Date.now() - 30000),
+    }});
+    await new Promise(resolve => setTimeout(resolve, 30));
+    assert.equal(JSON.parse((await request('/api/maintenance/status?tenant=ci-financial')).body).mode, 'NORMAL',
+      'A completed schedule expires even if no operator manually changes its status');
     assert.equal(await prisma.collection.count(),beforeCollections,'No receipt mutations');
     assert.equal(await prisma.penalty.count(),beforePenalties,'No penalty mutations');
   } finally {
