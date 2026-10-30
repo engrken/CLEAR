@@ -606,6 +606,7 @@ model MaintenanceNotice {
   updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(3)
 
   @@index([scopeKey, state, startsAt, endsAt])
+  @@index([scopeKey, state, mode, startsAt, endsAt])
 }
 
 // Append-only record of changes. No app delete/update functions.
