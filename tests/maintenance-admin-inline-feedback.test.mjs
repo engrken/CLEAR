@@ -6,7 +6,10 @@ const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 test('maintenance forms use inline useActionState feedback and do not submit raw error-throwing actions', () => {
   const page = read('app/dashboard/provisions/maintenance/page.tsx');
   const forms = read('app/dashboard/provisions/maintenance/MaintenanceForms.tsx');
-  assert.match(page, /<MaintenancePolicyForm options=\{options\}/);
+  assert.match(page, /<MaintenanceNoticeCreateForm options=\{options\}/);
+  assert.match(page, /<LegacyMaintenanceRestoreForm/);
+  assert.match(page, /Maintenance &amp; Notice Board settings/);
+  assert.match(page, /logsPage/);
   assert.match(page, /<MaintenanceNoticeCreateForm options=\{options\}/);
   assert.match(page, /<MaintenanceNoticeEditForms/);
   assert.doesNotMatch(page, /<form action=\{(?:setMaintenancePolicy|createMaintenanceNotice|editMaintenanceNotice)\}/);
