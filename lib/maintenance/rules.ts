@@ -74,3 +74,39 @@ export function requestDecision(mode: MaintenanceMode, method: string, pathname:
   }
   return 'ALLOW';
 }
+
+/** Scheduled notices are evaluated against the server clock on every guarded request.
+ * No cron, browser timer, or mutable activation flag is needed for enforcement.
+ * A published NORMAL notice is an announcement only. FULL dominates READ_ONLY
+ * when windows overlap within the same scope. The existing global-over-tenant
+ * precedence remains unchanged.
+ */
+export type ScheduledMaintenanceWindow = {
+  scopeKey: string; mode: string; title: string;
+  startsAt: Date; endsAt: Date; updatedAt: Date;
+};
+const severity = (mode: MaintenanceMode): number =>
+  mode === 'FULL' ? 2 : mode === 'READ_ONLY' ? 1 : 0;
+
+export function strongestScheduledWindow(
+  windows: readonly ScheduledMaintenanceWindow[], scopeKey: string, now = new Date(),
+): MaintenanceSnapshot | null {
+  let result: MaintenanceSnapshot | null = null;
+  for (const window of windows) {
+    if (window.scopeKey !== scopeKey || !validMode(window.mode) || window.mode === 'NORMAL' ||
+        window.startsAt.getTime() > now.getTime() || window.endsAt.getTime() <= now.getTime()) continue;
+    if (!result || severity(window.mode) > severity(result.mode)) {
+      result = { mode: window.mode, reason: window.title, scope: scopeKey,
+        expiresAt: window.endsAt, updatedAt: window.updatedAt };
+    }
+  }
+  return result;
+}
+export function combinePolicyWithScheduled(
+  policy: MaintenanceSnapshot | null, scheduled: MaintenanceSnapshot | null, now = new Date(),
+): MaintenanceSnapshot | null {
+  const manual = activeMode(policy, now);
+  const timed = activeMode(scheduled, now);
+  const chosen = severity(timed.mode) > severity(manual.mode) ? timed : manual;
+  return chosen.mode === 'NORMAL' ? null : chosen;
+}
