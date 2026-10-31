@@ -1,20 +1,35 @@
 import 'server-only';
 import { prisma } from '@/lib/prisma';
 import type { Prisma } from '@prisma/client';
-import { effectivePolicy, type MaintenanceMode, type MaintenanceSnapshot } from './rules';
+import { effectivePolicy, strongestScheduledWindow, combinePolicyWithScheduled,
+  type MaintenanceMode, type MaintenanceSnapshot } from './rules';
 
 /** This module requires committed migration before deploying the proxy.
  * DB errors propagate and are treated as 503 (fail-closed), never NORMAL.
  */
+/** Server-clock driven activation/expiry applies to the proxy and mobile status.
+ * Existing manual policies remain as a conservative emergency override.
+ */
 export async function maintenanceForTenant(slug?: string | null): Promise<MaintenanceSnapshot> {
   const keys = ['GLOBAL', ...(slug ? ['tenant:' + slug] : [])];
-  const rows = await prisma.maintenancePolicy.findMany({ where: { scopeKey: { in: keys } } });
-  const convert = (key: string): MaintenanceSnapshot | null => {
+  const now = new Date();
+  const [rows, windows] = await Promise.all([
+    prisma.maintenancePolicy.findMany({ where: { scopeKey: { in: keys } } }),
+    prisma.maintenanceNotice.findMany({
+      where: { scopeKey: { in: keys }, state: 'SCHEDULED',
+        mode: { in: ['READ_ONLY', 'FULL'] },
+        startsAt: { lte: now }, endsAt: { gt: now } },
+      select: { scopeKey: true, mode: true, title: true, startsAt: true, endsAt: true, updatedAt: true },
+      orderBy: [{ startsAt: 'asc' }, { id: 'asc' }],
+    }),
+  ]);
+  const scoped = (key: string): MaintenanceSnapshot | null => {
     const row = rows.find(v => v.scopeKey === key);
-    return row ? { mode: row.mode as MaintenanceMode, reason: row.reason,
+    const manual = row ? { mode: row.mode as MaintenanceMode, reason: row.reason,
       expiresAt: row.expiresAt, updatedAt: row.updatedAt, scope: row.scopeKey } : null;
+    return combinePolicyWithScheduled(manual, strongestScheduledWindow(windows, key, now), now);
   };
-  return effectivePolicy(convert('GLOBAL'), slug ? convert('tenant:' + slug) : null);
+  return effectivePolicy(scoped('GLOBAL'), slug ? scoped('tenant:' + slug) : null, now);
 }
 
 export async function maintenancePublicState(tenant?: string | null) {
@@ -57,13 +72,23 @@ export async function assertMaintenanceWritesAllowed(
 ): Promise<void> {
   const slugs = [...new Set(tenantSlugs)];
   const keys = ['GLOBAL', ...slugs.map(slug => 'tenant:' + slug)];
-  const rows = await (tx ?? prisma).maintenancePolicy.findMany({
+  const now = new Date();
+  const client = tx ?? prisma;
+  const rows = await client.maintenancePolicy.findMany({
     where: { scopeKey: { in: keys } },
+  });
+  const windows = await client.maintenanceNotice.findMany({
+    where: { scopeKey: { in: keys }, state: 'SCHEDULED',
+      mode: { in: ['READ_ONLY', 'FULL'] },
+      startsAt: { lte: now }, endsAt: { gt: now } },
+    select: { scopeKey: true, mode: true, title: true, startsAt: true, endsAt: true, updatedAt: true },
+    orderBy: [{ startsAt: 'asc' }, { id: 'asc' }],
   });
   const scoped = (key: string): MaintenanceSnapshot | null => {
     const row = rows.find(record => record.scopeKey === key);
-    return row ? { mode: row.mode as MaintenanceMode, reason: row.reason,
+    const manual = row ? { mode: row.mode as MaintenanceMode, reason: row.reason,
       expiresAt: row.expiresAt, updatedAt: row.updatedAt, scope: row.scopeKey } : null;
+    return combinePolicyWithScheduled(manual, strongestScheduledWindow(windows, key, now), now);
   };
   const global = scoped('GLOBAL');
   // Also enforce platform policy when provisioning a completely new tenant.

@@ -8,6 +8,8 @@ test('scoped Global Administrator provisioning cannot bypass tenant READ_ONLY/FU
   const service = read('lib/maintenance/service.ts');
   assert.match(service, /assertMaintenanceWritesAllowed\(/);
   assert.match(service, /effectivePolicy\(global, scoped\('tenant:' \+ slug\)\)/);
+  assert.match(service, /strongestScheduledWindow\(windows, key, now\)/);
+  assert.match(service, /combinePolicyWithScheduled/);
   assert.match(core, /assertMaintenanceWritesAllowed\(affected\.map\(entry => entry\.subdomain\), tx\)/);
   assert.match(core, /assertMaintenanceWritesAllowed\(\[original\.subdomain\], tx\)/);
   assert.match(core, /assertMaintenanceWritesAllowed\(\[org\.subdomain\], tx\)/);

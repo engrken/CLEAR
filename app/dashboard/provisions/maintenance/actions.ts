@@ -38,7 +38,9 @@ function manilaDate(value: string): Date {
   // not Vercel UTC; no reliance on client clock for enforcement.
   if (!/^\d{4}-\d\d-\d\dT\d\d:\d\d$/.test(value)) throw new MaintenanceInputError('Specify a date and time in PHT.');
   const date = new Date(value + ':00+08:00');
-  if (Number.isNaN(date.getTime())) throw new MaintenanceInputError('Invalid date and time.');
+  if (Number.isNaN(date.getTime()) || new Date(date.getTime() + 8 * 3600000).toISOString().slice(0, 16) !== value) {
+    throw new MaintenanceInputError('Invalid date and time.');
+  }
   return date;
 }
 async function resolveScope(form: FormData): Promise<string> {
@@ -97,9 +99,9 @@ export async function setMaintenancePolicy(form: FormData) {
   updatedPages();
 }
 
-function noticeAudit(row: { title: string; message: string; startsAt: Date; endsAt: Date;
+function noticeAudit(row: { title: string; message: string; mode: string; startsAt: Date; endsAt: Date;
   state: string; version: number }) {
-  return { title: row.title, message: row.message, startsAt: row.startsAt.toISOString(),
+  return { title: row.title, message: row.message, mode: row.mode, startsAt: row.startsAt.toISOString(),
     endsAt: row.endsAt.toISOString(), state: row.state, version: row.version };
 }
 export async function createMaintenanceNotice(form: FormData) {
@@ -110,7 +112,9 @@ export async function createMaintenanceNotice(form: FormData) {
   const message = field(form, 'message', 800);
   const start = manilaDate(field(form, 'startsAt', 35));
   const end = manilaDate(field(form, 'endsAt', 35));
-  const state = field(form, 'state', 25);
+  const state = field(form, 'state', 25) || 'SCHEDULED';
+  const mode = field(form, 'mode', 20) || 'NORMAL';
+  if (!validMode(mode)) throw new MaintenanceInputError('Invalid maintenance mode.');
   if (!['DRAFT', 'SCHEDULED'].includes(state)) throw new MaintenanceInputError('Invalid notice publication state.');
   if (title.length < 5 || message.length < 10) throw new MaintenanceInputError('Provide a title and a meaningful notice.');
   if (end <= start || end.getTime() - start.getTime() > 14 * 86400000) {
@@ -119,9 +123,21 @@ export async function createMaintenanceNotice(form: FormData) {
   if (state === 'SCHEDULED' && end.getTime() <= Date.now()) {
     throw new MaintenanceInputError('Published notice must have a future end.');
   }
+  if (mode !== 'NORMAL') {
+    if (start.getTime() < Date.now() - 120000) {
+      throw new MaintenanceInputError('Maintenance start must be current or in the future.');
+    }
+    if (end.getTime() - start.getTime() > 7 * 86400000) {
+      throw new MaintenanceInputError('Maintenance windows must not exceed seven days.');
+    }
+    const confirmation = field(form, 'confirmation', 80);
+    if (confirmation !== 'SCHEDULE MAINTENANCE') {
+      throw new MaintenanceInputError('Type SCHEDULE MAINTENANCE to confirm the service restriction.');
+    }
+  }
   await prisma.$transaction(async tx => {
     const row = await tx.maintenanceNotice.create({ data: {
-      scopeKey, title, message, startsAt: start, endsAt: end, state,
+      scopeKey, title, message, mode, startsAt: start, endsAt: end, state,
       createdBy: actor, updatedBy: actor,
     } });
     await tx.maintenanceAudit.create({ data: {
@@ -135,7 +151,7 @@ export async function editMaintenanceNotice(form: FormData) {
   const actor = String(admin.email ?? '').trim().toLowerCase();
   const id = field(form, 'id', 128);
   const command = field(form, 'command', 20);
-  if (!['CANCEL', 'RESCHEDULE', 'PUBLISH'].includes(command)) throw new MaintenanceInputError('Invalid notice action.');
+  if (!['CANCEL', 'RESCHEDULE', 'PUBLISH', 'END_EARLY'].includes(command)) throw new MaintenanceInputError('Invalid notice action.');
   const confirmation = field(form, 'confirmation', 35);
   if (confirmation !== command) throw new MaintenanceInputError('Type the selected notice action to confirm.');
   await prisma.$transaction(async tx => {
@@ -146,15 +162,27 @@ export async function editMaintenanceNotice(form: FormData) {
       state?: string; startsAt?: Date; endsAt?: Date;
       version: { increment: number }; updatedBy: string;
     } = { version: { increment: 1 }, updatedBy: actor };
-    if (command === 'CANCEL') update.state = 'CANCELLED';
-    else if (command === 'PUBLISH') {
+    if (command === 'END_EARLY') {
+      if (before.mode === 'NORMAL' || before.state !== 'SCHEDULED' ||
+          before.startsAt.getTime() > Date.now() || before.endsAt.getTime() <= Date.now()) {
+        throw new MaintenanceInputError('Only an active maintenance window can be ended early.');
+      }
+      update.state = 'CANCELLED'; // Existing end time remains immutable audit evidence.
+    } else if (command === 'CANCEL') {
+      if (before.mode !== 'NORMAL' && before.state === 'SCHEDULED' &&
+          before.startsAt.getTime() <= Date.now() && before.endsAt.getTime() > Date.now()) {
+        throw new MaintenanceInputError('Use END_EARLY for active maintenance.');
+      }
+      update.state = 'CANCELLED';
+    } else if (command === 'PUBLISH') {
       if (before.endsAt.getTime() <= Date.now()) throw new MaintenanceInputError('Expired notice cannot be published.');
       update.state = 'SCHEDULED';
     } else {
       const startsAt = manilaDate(field(form, 'startsAt', 35));
       const endsAt = manilaDate(field(form, 'endsAt', 35));
       if (startsAt >= endsAt || endsAt.getTime() <= Date.now() ||
-          endsAt.getTime() - startsAt.getTime() > 14 * 86400000) {
+          endsAt.getTime() - startsAt.getTime() > (before.mode === 'NORMAL' ? 14 : 7) * 86400000 ||
+          (before.mode !== 'NORMAL' && startsAt.getTime() < Date.now() - 120000)) {
         throw new MaintenanceInputError('Invalid rescheduled notice window.');
       }
       update = { ...update, startsAt, endsAt, state: 'SCHEDULED' };
@@ -187,7 +215,7 @@ export async function submitMaintenancePolicy(
 export async function submitMaintenanceNotice(
   _previous: MaintenanceFormState, form: FormData,
 ): Promise<MaintenanceFormState> {
-  return asFormState(() => createMaintenanceNotice(form), 'Notice saved. Publication does not activate maintenance.');
+  return asFormState(() => createMaintenanceNotice(form), 'Maintenance schedule / announcement saved. Restriction activates automatically at the specified PHT start time.');
 }
 
 export async function submitMaintenanceNoticeEdit(
