@@ -10,5 +10,5 @@ test('release gate refuses current incomplete v1.5 candidate', () => {
   assert.equal(result.status, 1);
   assert.match(result.stderr, /NOT RELEASE-READY/);
   assert.match(result.stderr, /Native payment posting is disabled/);
-  assert.match(result.stderr, /seamless web sign-in is disabled/);
+  assert.match(result.stderr, /Secure mobile-to-web SSO has not been enabled and UAT-verified/);
 });
