@@ -74,6 +74,7 @@ export function handler<Ctx>(fn: (req: Request, ctx: Ctx) => Promise<unknown>) {
         vercelEnv: process.env.VERCEL_ENV,
         gitRef: process.env.VERCEL_GIT_COMMIT_REF,
         tenantOperationsEnabled: process.env.MOBILE_TENANT_OPERATIONS_ENABLED === 'true',
+        financialWritesEnabled: process.env.MOBILE_FINANCIAL_WRITES_ENABLED === 'true',
       })) {
         throw new ApiFailure(403, 'read_only', 'This mobile operation is not enabled. Use your authorized CLEAR web portal until it is approved.');
       }
