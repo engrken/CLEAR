@@ -30,6 +30,12 @@ jobs:
           name: Run standalone source regression tests
           command: node scripts/ci/run-clear-acceptance.mjs
       - run:
+          name: Verify timezone contracts in UTC and Asia/Manila
+          command: |
+            set -euo pipefail
+            TZ=UTC npm run test:time
+            TZ=Asia/Manila npm run test:time
+      - run:
           name: Lint web application (existing debt baseline)
           command: |
             # Run the actual root lint command. The initial CircleCI run recorded
