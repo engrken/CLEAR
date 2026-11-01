@@ -9,8 +9,8 @@ export function normalizeMobilePayment(input: MobilePaymentInput): MobilePayment
   const feeId = input.feeId.trim();
   const orNumber = input.orNumber.trim();
   const idempotencyKey = input.idempotencyKey.trim();
-  if (!Number.isSafeInteger(input.amountCentavos) || input.amountCentavos <= 0) {
-    throw new Error('Payment amount must be positive integer centavos.');
+  if (!Number.isSafeInteger(input.amountCentavos) || input.amountCentavos <= 0 || input.amountCentavos > 100_000_000) {
+    throw new Error('Payment amount must be positive integer centavos within the server transaction limit.');
   }
   if (!studentId || studentId.length > 100 || !feeId || feeId.length > 200 || !orNumber || orNumber.length > 100 || !idempotencyKey || idempotencyKey.length > 128) {
     throw new Error('Payment requires student, fee, receipt number and stable retry key.');
