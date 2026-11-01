@@ -1,7 +1,6 @@
-CLEAR Android v1.2.2 operational release native compilation request
+CLEAR Android v1.5.0 biometric QA native compilation request
 
-Purpose: run .github/workflows/android-gradle-validation.yml on the full
-branded + #77 Activity hotfix + #80 operational-module source code.
-This file contains no application configuration or secrets.
-The workflow emits an internal DEBUG QA artifact, NOT a signed Play AAB.
-Production tenant-operation and financial write gates stay disabled.
+Run Android Gradle validation (unsigned) on PR #132 after biometric secure-store integration.
+Target: installable debug APK for device UAT, not a signed Google Play release.
+Keep financial write and tenant operation production flags unchanged.
+No production database mutations or rollout authorization.
