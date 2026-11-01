@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, TextInput } from 'react-native';
 
 import { api } from '@/api';
@@ -17,6 +17,18 @@ export default function OfficerProfile() {
   const router = useRouter();
   const { c } = useTheme();
   const [stage, setStage] = useState<Stage>('start');
+  const [writeStatus, setWriteStatus] = useState<'checking' | 'disabled' | 'enabled'>('checking');
+  useEffect(() => {
+    let active = true;
+    setWriteStatus('checking');
+    void api.getWriteCapabilities(session).then((policy) => {
+      if (active) setWriteStatus(policy.enabled && policy.grants.length > 0 ? 'enabled' : 'disabled');
+    }).catch(() => {
+      // Network failure never implies permission to post transactions.
+      if (active) setWriteStatus('disabled');
+    });
+    return () => { active = false; };
+  }, [session.token, session.org.subdomain]);
   const [currentCode, setCurrentCode] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newCode, setNewCode] = useState('');
@@ -96,6 +108,9 @@ export default function OfficerProfile() {
         <Text variant="caption" color="inkMuted">Organization and role</Text>
         <Text variant="bodyStrong">{session.org.name} · {session.officer.role}</Text>
       </Card>
+      <Banner tone="info" title="Transaction access">
+        {writeStatus === 'checking' ? 'Checking server-issued transaction permissions…' : writeStatus === 'enabled' ? 'Server-issued transaction grants are present. Each operation still requires independent server authorization.' : 'Mobile financial and administrative transaction access is currently unavailable. Your existing read permissions are unaffected.'}
+      </Banner>
       <Banner tone="info" title="Verified profile updates">
         Changing your login email requires two verification codes: one sent to the current email, and one to the new email. Your official name, role, and permissions remain managed by your tenant administrator.
       </Banner>
