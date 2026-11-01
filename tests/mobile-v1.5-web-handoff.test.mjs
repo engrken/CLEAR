@@ -124,3 +124,17 @@ test('NextAuth and browser page exchange ticket without exposing mobile bearer t
   assert.ok(redemption.includes('verifyGlobalAdminSession'));
   assert.ok(redemption.includes('maintenanceForTenant'));
 });
+
+test('new ticket issuance revokes previously unconsumed tickets for the same mobile session', () => {
+  const issuer = source('lib/mobile/web-handoff-issue.ts');
+  assert.ok(issuer.includes('mobileWebHandoff.updateMany'));
+  assert.ok(issuer.includes('mobileSessionId: input.mobileSessionId'));
+  assert.ok(issuer.includes('consumedAt: null, revokedAt: null'));
+});
+
+test('handoff browser response denies referrer leakage and indexing', () => {
+  const config = source('next.config.ts');
+  assert.ok(config.includes("source: '/auth/mobile-handoff'"));
+  assert.ok(config.includes("{ key: 'Referrer-Policy', value: 'no-referrer' }"));
+  assert.ok(config.includes("{ key: 'Cache-Control', value: 'private, no-store, max-age=0' }"));
+});
