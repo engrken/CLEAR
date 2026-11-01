@@ -47,6 +47,12 @@ jobs:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
           test -n "$EXPO_TOKEN" || { echo "::error::EXPO_TOKEN secret is missing"; exit 1; }
+      - name: Reconcile mobile lockfile in disposable runner
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Install Expo application dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify mobile TypeScript
+        run: npm run typecheck
       - name: Install EAS CLI
         run: npm install --global eas-cli@latest --no-audit --no-fund
       - name: Verify Expo authentication and current EAS project
