@@ -71,6 +71,9 @@ export async function requireMobileOfficer(
   if (!session) throw new ApiFailure(401, 'unauthorized', SESSION_ENDED);
 
   const { TenantUser: officer, Organization: org } = session;
+  if (officer.organizationId !== org.id || session.organizationId !== org.id || session.tenantUserId !== officer.id) {
+    throw new ApiFailure(403, 'forbidden', 'Session tenant membership is inconsistent.');
+  }
   if (officer.status !== 'Active') {
     await prisma.mobileSession.update({ where: { id: session.id }, data: { revokedAt: new Date() } });
     throw new ApiFailure(401, 'unauthorized', 'This officer account is no longer active.');
