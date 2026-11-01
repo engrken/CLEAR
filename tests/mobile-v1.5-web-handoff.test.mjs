@@ -79,3 +79,16 @@ test('database schema constrains ticket lifetime and principal tenant separation
   assert.match(sql, /"principalType" = 'global' AND "organizationId" IS NULL/);
   assert.doesNotMatch(sql, /"ticket" TEXT/);
 });
+
+test('both native roles expose safe browser switch with independent sign-in fallback', () => {
+  const officer = source('mobile/src/app/(officer)/more.tsx');
+  const global = source('mobile/src/app/global/index.tsx');
+  const links = source('mobile/src/lib/links.ts');
+  assert.match(officer, /Switch to Web Portal/);
+  assert.match(officer, /switchToDepartmentWebPortal\(session\.org\.subdomain\)/);
+  assert.match(global, /Switch to Web Portal/);
+  assert.match(global, /switchToGlobalWebPortal\(\)/);
+  assert.match(links, /return openDepartmentWebPortal\(slug\)/);
+  assert.match(links, /return openGlobalAdministrationPortal\(\)/);
+  assert.match(officer, /Separate web sign-in is required/);
+});
