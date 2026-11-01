@@ -6,6 +6,7 @@ import { api } from '@/api';
 import { BackHeader, Banner, Button, Card, Screen, Text } from '@/components/ui';
 import { useOfficerSession, useSession } from '@/lib/session';
 import { spacing, useTheme } from '@/theme';
+import { BiometricSettings } from '@/components/security/BiometricSettings';
 
 type Stage = 'start' | 'current_code' | 'new_address' | 'new_code' | 'complete';
 const validEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) && email.length <= 254;
@@ -108,6 +109,7 @@ export default function OfficerProfile() {
         <Text variant="caption" color="inkMuted">Organization and role</Text>
         <Text variant="bodyStrong">{session.org.name} · {session.officer.role}</Text>
       </Card>
+      <Card style={styles.section}><BiometricSettings identity={{ kind: "officer", id: session.officer.id, token: session.token }} /></Card>
       <Banner tone="info" title="Transaction access">
         {writeStatus === 'checking' ? 'Checking server-issued transaction permissions…' : writeStatus === 'enabled' ? 'Server-issued transaction grants are present. Each operation still requires independent server authorization.' : 'Mobile financial and administrative transaction access is currently unavailable. Your existing read permissions are unaffected.'}
       </Banner>

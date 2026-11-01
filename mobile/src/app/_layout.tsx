@@ -7,7 +7,10 @@ import {
 import { DefaultTheme, Stack, ThemeProvider as NavThemeProvider, usePathname } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
+import { AppState, View, ActivityIndicator } from 'react-native';
+import { biometricEnabled, unlockWithBiometrics } from '@/lib/biometrics';
+import { Button, Text } from '@/components/ui';
 
 import { MOBILE_BUSINESS_WRITES_ENABLED, TENANT_OPERATIONS_ENABLED } from '@/api/config';
 import { DataPrivacyNotice } from '@/components/privacy/DataPrivacyNotice';
@@ -37,7 +40,35 @@ export default function RootLayout() {
 
 function Navigator() {
   const { c } = useTheme();
-  const { session, globalSession, restoring } = useSession();
+  const { session, globalSession, restoring, signOut } = useSession();
+  const [lock, setLock] = useState<'checking' | 'locked' | 'open'>('checking');
+  const identity = globalSession ? { kind: 'global' as const, id: globalSession.admin.id, token: globalSession.token } :
+    session ? { kind: 'officer' as const, id: session.officer.id, token: session.token } : null;
+  const key = identity ? identity.kind + ':' + identity.id + ':' + identity.token : '';
+  const foreground = useRef(AppState.currentState);
+  useEffect(() => {
+    let live = true;
+    setLock('checking');
+    if (restoring) return () => { live = false; };
+    if (!identity) { setLock('open'); return () => { live = false; }; }
+    void biometricEnabled(identity).then(e => { if (live) setLock(e ? 'locked' : 'open'); })
+      .catch(() => { if (live) setLock('locked'); });
+    return () => { live = false; };
+  }, [restoring, key]);
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', next => {
+      if (next !== 'active' && foreground.current === 'active' && identity) {
+        setLock('checking');
+        void biometricEnabled(identity).then(e => setLock(e ? 'locked' : 'open')).catch(() => setLock('locked'));
+      }
+      foreground.current = next;
+    });
+    return () => sub.remove();
+  }, [key]);
+  const unlock = async () => {
+    setLock('checking');
+    setLock(await unlockWithBiometrics().catch(() => false) ? 'open' : 'locked');
+  };
   const pathname = usePathname();
   const routeTenant = /^\/(?:d|global\/tenant)\/([a-z0-9-]+)/.exec(pathname)?.[1] || null;
   const advisoryTenant = routeTenant || session?.org.subdomain || null;
@@ -70,6 +101,12 @@ function Navigator() {
     colors: { ...DefaultTheme.colors, background: c.canvas, card: c.canvas, text: c.ink, border: c.border, primary: c.accent },
   };
   if (restoring || !privacyReady) return null;
+  if (identity && lock !== 'open') return <View style={{ flex: 1, justifyContent: 'center', padding: 28, gap: 20 }}>
+    <Text variant="headline">CLEAR security lock</Text>
+    <Text variant="bodySm">Verify your fingerprint or face to unlock. Server permissions remain enforced.</Text>
+    {lock === 'checking' ? <ActivityIndicator /> : <Button block onPress={() => void unlock()}>Unlock with biometrics</Button>}
+    <Button block variant="secondary" onPress={() => void signOut()}>Sign out and use OTP</Button>
+  </View>;
 
   return (
     <NavThemeProvider value={navTheme}>

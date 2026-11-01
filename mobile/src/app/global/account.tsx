@@ -4,10 +4,11 @@ import { View } from 'react-native';
 import { Banner, Button, Card, Screen, Text } from '@/components/ui';
 import { useGlobalSession, useSession } from '@/lib/session';
 import { spacing } from '@/theme';
+import { BiometricSettings } from '@/components/security/BiometricSettings';
 
 /** Native global-account identity and session controls; no unsupported email edits. */
 export default function GlobalAccount() {
-  const { admin, expiresAt } = useGlobalSession();
+  const { admin, expiresAt, token } = useGlobalSession();
   const { signOut } = useSession();
   const router = useRouter();
   return (
@@ -29,7 +30,7 @@ export default function GlobalAccount() {
           <Text variant="bodySm" color="inkMuted">Account access is protected by server-verified one-time codes. Signing out revokes the current session when online and clears the local session.</Text>
         </View>
       </Card>
-      <Banner tone="info" title="Security settings">Biometric unlock and global account email changes will appear here only after their secure authentication workflows have been implemented and verified.</Banner>
+      <Card><BiometricSettings identity={{ kind: "global", id: admin.id, token }} /></Card>
       <Button block variant="ink" onPress={() => void signOut()}>Sign out of this device</Button>
     </Screen>
   );
