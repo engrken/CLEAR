@@ -46,28 +46,39 @@ function Navigator() {
     session ? { kind: 'officer' as const, id: session.officer.id, token: session.token } : null;
   const key = identity ? identity.kind + ':' + identity.id + ':' + identity.token : '';
   const foreground = useRef(AppState.currentState);
+  const lockEpoch = useRef(0);
   useEffect(() => {
     let live = true;
+    const epoch = ++lockEpoch.current;
     setLock('checking');
     if (restoring) return () => { live = false; };
     if (!identity) { setLock('open'); return () => { live = false; }; }
-    void biometricEnabled(identity).then(e => { if (live) setLock(e ? 'locked' : 'open'); })
-      .catch(() => { if (live) setLock('locked'); });
+    void biometricEnabled(identity).then(e => { if (live && epoch === lockEpoch.current) setLock(e ? 'locked' : 'open'); })
+      .catch(() => { if (live && epoch === lockEpoch.current) setLock('locked'); });
     return () => { live = false; };
   }, [restoring, key]);
   useEffect(() => {
     const sub = AppState.addEventListener('change', next => {
       if (next !== 'active' && foreground.current === 'active' && identity) {
-        setLock('checking');
-        void biometricEnabled(identity).then(e => setLock(e ? 'locked' : 'open')).catch(() => setLock('locked'));
+        const epoch = ++lockEpoch.current;
+        // Deny access immediately; asynchronous preference reads must not leave a visible unlocked frame.
+        setLock('locked');
+        void biometricEnabled(identity).then(e => {
+          if (epoch === lockEpoch.current) setLock(e ? 'locked' : 'open');
+        }).catch(() => { if (epoch === lockEpoch.current) setLock('locked'); });
       }
       foreground.current = next;
     });
     return () => sub.remove();
   }, [key]);
   const unlock = async () => {
+    if (!identity) return;
+    const epoch = ++lockEpoch.current;
     setLock('checking');
-    setLock(await unlockWithBiometrics(identity!).catch(() => false) ? 'open' : 'locked');
+    const verified = await unlockWithBiometrics(identity).catch(() => false);
+    if (epoch === lockEpoch.current && AppState.currentState === 'active') {
+      setLock(verified ? 'open' : 'locked');
+    }
   };
   const pathname = usePathname();
   const routeTenant = /^\/(?:d|global\/tenant)\/([a-z0-9-]+)/.exec(pathname)?.[1] || null;
