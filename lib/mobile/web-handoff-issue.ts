@@ -20,6 +20,12 @@ export async function issueWebHandoff(input: {
   if (input.principalType === 'officer' && !/^\/department\/[a-z0-9-]+$/.test(input.destination)) throw new Error('Invalid tenant destination.');
   if (input.principalType === 'global' && input.destination !== '/dashboard/provisions') throw new Error('Invalid global destination.');
   const { ticket, ticketHash, expiresAt } = createWebHandoffTicket(key);
+  // Revoke outstanding tickets from this mobile session before issuing a new one.
+  // This also limits simultaneous valid handoff links after repeated taps.
+  await prisma.mobileWebHandoff.updateMany({
+    where: { mobileSessionId: input.mobileSessionId, consumedAt: null, revokedAt: null },
+    data: { revokedAt: new Date() },
+  });
   await prisma.mobileWebHandoff.create({ data: { ticketHash, expiresAt, ...input } });
   return { url: `${WEB_ORIGIN}/auth/mobile-handoff?ticket=${encodeURIComponent(ticket)}` };
 }
