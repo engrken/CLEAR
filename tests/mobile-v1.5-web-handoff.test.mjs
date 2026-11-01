@@ -13,15 +13,18 @@ test('mobile handoff URL only accepts first-party HTTPS ticket endpoint', () => 
   assert.match(client, /\[A-Za-z0-9_-\]\{43,128\}/);
 });
 
-test('officer and global issuance endpoints fail closed after authentication', () => {
+test('both issuance endpoints authenticate before minting tickets and require rollout flag', () => {
   const officer = source('app/api/mobile/orgs/[org]/auth/web-handoff/route.ts');
   const global = source('app/api/mobile/global/auth/web-handoff/route.ts');
-  assert.match(officer, /requireMobileOfficer\(req, org, \[\]\)/);
-  assert.match(global, /requireGlobalMobileAdmin\(req\)/);
+  assert.match(officer, /requireMobileOfficer\\(req, slug, \\[\\]\\)/);
+  assert.match(global, /requireGlobalMobileAdmin\\(req\\)/);
   for (const route of [officer, global]) {
-    assert.match(route, /throw new ApiFailure\(503, 'unavailable'/);
-    assert.doesNotMatch(route, /randomBytes|create\(/);
+    assert.match(route, /isWebHandoffEnabled\\(\\)/);
+    assert.match(route, /issueWebHandoff\\(/);
   }
+  const issuer = source('lib/mobile/web-handoff-issue.ts');
+  assert.match(issuer, /MOBILE_WEB_HANDOFF_ENABLED/);
+  assert.match(issuer, /MOBILE_WEB_HANDOFF_SECRET/);
 });
 
 test('browser handoff requests are POST-only and separate by principal', () => {
@@ -90,7 +93,7 @@ test('both native roles expose safe browser switch with independent sign-in fall
   assert.match(global, /switchToGlobalWebPortal\(\)/);
   assert.match(links, /return openDepartmentWebPortal\(slug\)/);
   assert.match(links, /return openGlobalAdministrationPortal\(\)/);
-  assert.match(officer, /Separate web sign-in is required/);
+  assert.match(officer, /Secure automatic sign-in is attempted/);
 });
 
 test('first-party browser handoff URL validator rejects hostile destinations at runtime', async () => {
@@ -107,4 +110,17 @@ test('first-party browser handoff URL validator rejects hostile destinations at 
     'https://clearsys.vercel.app/auth/mobile-handoff?ticket=short',
     `https://clearsys.vercel.app/department/example?ticket=${ticket}`,
   ]) assert.throws(() => validateWebHandoffUrl(bad), bad);
+});
+
+test('NextAuth and browser page exchange ticket without exposing mobile bearer tokens', () => {
+  const auth = source('auth.ts');
+  const page = source('app/auth/mobile-handoff/page.tsx');
+  const redemption = source('lib/mobile/web-handoff-redeem.ts');
+  assert.match(auth, /id: 'mobile-handoff'/);
+  assert.match(auth, /redeemWebHandoff\\(ticket\\)/);
+  assert.match(page, /signIn\\('mobile-handoff'/);
+  assert.match(page, /history\\.replaceState/);
+  assert.match(redemption, /consumeWebHandoffTicket/);
+  assert.match(redemption, /verifyGlobalAdminSession/);
+  assert.match(redemption, /maintenanceForTenant/);
 });
