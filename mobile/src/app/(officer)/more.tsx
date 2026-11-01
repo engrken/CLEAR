@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { Banner, Button, Card, Icon, Screen, Text } from '@/components/ui';
 import { DataPrivacyNotice } from '@/components/privacy/DataPrivacyNotice';
-import { ACCOUNT_DELETION_URL, PRIVACY_URL, openWebPage, openDepartmentModule } from '@/lib/links';
+import { ACCOUNT_DELETION_URL, PRIVACY_URL, openWebPage, openDepartmentModule, switchToDepartmentWebPortal } from '@/lib/links';
 import { grantedModules, type MobileAvailability } from '@/lib/module-access';
 import { useOfficerSession, useSession } from '@/lib/session';
 import { TAB_BAR_SPACE } from '@/lib/tab-bar';
@@ -181,6 +181,12 @@ export default function More() {
         ) : null}
 
         <Text variant="headline" accessibilityRole="header">Account & help</Text>
+        <Button block variant="secondary" icon="forward" onPress={() => void switchToDepartmentWebPortal(session.org.subdomain)}>
+          Switch to Web Portal
+        </Button>
+        <Text variant="caption" color="inkMuted">
+          Opens your tenant portal in a browser. Separate web sign-in is required until secure single-use handoff is enabled.
+        </Text>
         <Button block variant="secondary" icon="people" onPress={() => router.push('/officer/profile')}>
           My profile · Edit email
         </Button>
