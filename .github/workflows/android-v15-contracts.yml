@@ -1,0 +1,36 @@
+name: Android v1.5 security contract checks
+
+on:
+  pull_request:
+    paths:
+      - 'mobile/src/lib/write-permissions.ts'
+      - 'mobile/src/api/types.ts'
+      - 'mobile/src/api/http.ts'
+      - 'mobile/src/api/config.ts'
+      - 'mobile/src/app/global/account.tsx'
+      - 'mobile/src/app/global/index.tsx'
+      - 'mobile/src/app/officer/profile.tsx'
+      - 'mobile/src/app/_layout.tsx'
+      - 'app/api/mobile/orgs/**/write-capabilities/route.ts'
+      - 'tests/mobile-v1.5-*.test.mjs'
+      - '.github/workflows/android-v15-contracts.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-v15-contracts-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify write permission and release safety contracts
+        run: node --experimental-strip-types --test tests/mobile-v1.5-write-permissions.test.mjs tests/mobile-v1.5-release-guards.test.mjs
