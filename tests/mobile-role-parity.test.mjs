@@ -80,8 +80,8 @@ test('JIECEP officer path explicitly offers the separate global OTP sign-in', ()
   assert.match(portal, /router\.push\('\/global\/sign-in'\)/);
   assert.match(portal, /globalSession\s*\?/);
   assert.match(portal, /pathname: '\/global\/tenant\/\[org\]'/);
-  assert.match(officerLogin, /Sign in as Global Superadmin/);
-  assert.match(officerSettings, /Sign in as Global Superadmin/);
+  assert.match(officerLogin, /Sign in as Global Administrator/);
+  assert.match(officerSettings, /Sign in as Global Administrator/);
   assert.match(globalPage, /Open tenant activity/);
 });
 
