@@ -10,7 +10,7 @@ test('mobile handoff URL only accepts first-party HTTPS ticket endpoint', () => 
   assert.match(client, /url\.origin !== WEB_ORIGIN/);
   assert.match(client, /url\.pathname !== '\/auth\/mobile-handoff'/);
   assert.match(client, /url\.searchParams\.size !== 1/);
-  assert.match(client, /\[A-Za-z0-9_-\]\{43,128\}/);
+  assert.match(client, /\[A-Za-z0-9_-\]\{43\}/);
 });
 
 test('both issuance endpoints authenticate before minting tickets and require rollout flag', () => {
@@ -108,6 +108,10 @@ test('first-party browser handoff URL validator rejects hostile destinations at 
     `https://clearsys.vercel.app/auth/mobile-handoff?ticket=${ticket}&redirect=https://evil.example`,
     `https://clearsys.vercel.app/auth/mobile-handoff?ticket=${ticket}#secret`,
     'https://clearsys.vercel.app/auth/mobile-handoff?ticket=short',
+    `https://clearsys.vercel.app/auth/mobile-handoff?ticket=${'A'.repeat(44)}`,
+    ` https://clearsys.vercel.app/auth/mobile-handoff?ticket=${ticket}`,
+    `https://clearsys.vercel.app/auth/mobile-handoff?ticket=${ticket} `,
+    `https://clearsys.vercel.app:443/auth/mobile-handoff?ticket=${ticket}`,
     `https://clearsys.vercel.app/department/example?ticket=${ticket}`,
   ]) assert.throws(() => validateWebHandoffUrl(bad), bad);
 });
