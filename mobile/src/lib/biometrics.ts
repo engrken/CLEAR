@@ -13,6 +13,7 @@ export async function biometricAvailable(): Promise<boolean> {
   return Platform.OS !== 'web' && SecureStore.canUseBiometricAuthentication();
 }
 export async function biometricEnabled(identity: BiometricIdentity): Promise<boolean> {
+  if (!(await biometricAvailable())) return false;
   return (await getItem(PREFERENCE)) === scope(identity);
 }
 export async function disableBiometrics(): Promise<void> {
@@ -34,7 +35,7 @@ export async function enableBiometrics(identity: BiometricIdentity): Promise<boo
   }
 }
 export async function unlockWithBiometrics(identity: BiometricIdentity): Promise<boolean> {
-  if (!(await biometricAvailable())) return false;
+  if (!(await biometricEnabled(identity))) return false;
   try {
     const proof = await SecureStore.getItemAsync(PROOF, { requireAuthentication: true, authenticationPrompt: 'Unlock CLEAR' });
     return proof === 'CLEAR:' + scope(identity);
