@@ -1,0 +1,19 @@
+name: Android v1.5 release readiness gate
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release-readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Refuse release while security-critical features are incomplete
+        run: node scripts/ci/android-v15-release-gate.mjs
