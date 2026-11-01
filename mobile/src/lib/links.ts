@@ -55,3 +55,9 @@ export async function switchToDepartmentWebPortal(slug: string) {
 export async function switchToGlobalWebPortal() {
   return openGlobalAdministrationPortal();
 }
+
+/** Authenticated handoff: only server-issued URLs validated against fixed origin. */
+export async function openVerifiedWebHandoff(url: unknown) {
+  const { validateWebHandoffUrl } = await import('./web-handoff');
+  return openWebPage(validateWebHandoffUrl(url));
+}
