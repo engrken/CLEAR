@@ -160,6 +160,9 @@ jobs:
             npx prisma migrate status
             npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code
       - run:
+          name: Verify receipt sequence and idempotent payment concurrency (isolated PostgreSQL)
+          command: bash scripts/ci/receipt-concurrency-circleci.sh
+      - run:
           name: Seed synthetic finance records and run isolated audit
           command: |
             set -euo pipefail
