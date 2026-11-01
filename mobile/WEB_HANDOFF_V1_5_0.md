@@ -15,3 +15,18 @@ A signed-in officer, tenant Administrator, or Global Administrator selects **Swi
 
 ## Current status
 **Specified, not enabled.** This feature is required for v1.5.0 but must not be represented as working until the complete server exchange and NextAuth integration pass security tests.
+
+## Implementation rollout checklist (2026-11-01)
+
+- [x] Authenticated tenant and Global Administrator ticket issuance endpoints.
+- [x] Keyed ticket digest persisted with a 60-second TTL; no bearer credential in URL.
+- [x] Atomic consume-once redemption with current mobile-session and principal revalidation.
+- [x] NextAuth credentials exchange and browser URL secret scrubbing.
+- [x] Native tenant/global browser switch with safe independent-login fallback.
+- [ ] Verify Prisma migration and transaction concurrency against an isolated PostgreSQL database.
+- [ ] Verify NextAuth sign-in/cookie exchange, tenant routing, revocation, maintenance and replay in a deployed preview.
+- [ ] Verify the mobile Expo TypeScript build and physical Android device browser flow.
+- [ ] Security sign-off: browser referrer/caching policy, ticket replay, global isolation, audit trail and rate limits.
+- [ ] Set MOBILE_WEB_HANDOFF_SECRET (random >=32-character secret) and MOBILE_WEB_HANDOFF_ENABLED=true **only after** verification, with production deployment controls.
+
+**Safety:** The rollout flag is off by default. Never put the signing secret in Expo, a client bundle, logs, or a GitHub workflow output. No existing OTP login behavior should change while disabled. A passing static contract test is not evidence that the browser cookie exchange works end to end.
