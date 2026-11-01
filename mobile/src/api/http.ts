@@ -17,7 +17,7 @@ type Options = { method?: string; token?: string | null; json?: unknown; form?: 
 
 async function request<T>(path: string, { method = 'GET', token, json, form, idempotencyKey, query }: Options = {}): Promise<T> {
   const qs = query
-    ? '?' + Object.entries(query).filter(([, v]) => v !== undefined && v !== '').map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&')
+    ? '?' + Object.entries(query).filter(([, v]) => v !== undefined && v !== '').map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`).join('&')
     : '';
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey;
