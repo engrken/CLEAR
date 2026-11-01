@@ -76,3 +76,17 @@ test('financial allowlist is anchored to the exact payments endpoint', () => {
   assert.ok(policy.includes('payments$/;'), 'payment route must be end-anchored');
   assert.match(policy, /FINANCIAL_POSTS\.test\(path\)/);
 });
+
+test('financial route rejects malformed tenant slugs and all non-post methods', () => {
+  const policy = source('lib/mobile/production-readonly.ts');
+  assert.match(policy, /const FINANCIAL_POSTS = /);
+  assert.match(policy, /\{0,61\}/);
+  assert.match(policy, /env\.financialWritesEnabled === true/);
+  assert.match(policy, /verb === 'POST' && FINANCIAL_POSTS\.test\(path\)/);
+});
+
+test('payment validation rejects ASCII control characters and DEL', () => {
+  const validator = source('mobile/src/api/financial-validation.ts');
+  assert.ok(validator.includes('\\x00-\\x1f\\x7f'), 'all ASCII control characters must be rejected');
+  assert.match(validator, /orNumber \+ idempotencyKey/);
+});
