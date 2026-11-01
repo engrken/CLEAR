@@ -42,3 +42,12 @@ Related: mobile/RELEASE_1_4_0_PLAN.md and PR #130.
 - The mobile client similarly contains guarded remittance verification/invalidation calls; verify server endpoints and web service parity before enabling either.
 - Draft PR #132 currently adds client-side action-grant types and deny-by-default tests only. It is **not server authorization** and must never be considered a security boundary.
 - Production write enablement requires separate implementation PRs, passing integration tests against isolated data, audit review and signed mobile UAT. A successful database check alone does not authorize production rollout.
+
+## Final 2026 release freeze and build gate
+- [ ] v1.5.0 is the final planned Android feature release of 2026; consolidate all approved work and v1.4.0 carryovers before producing APK or AAB.
+- [ ] Create an implementation-to-test traceability matrix for each Officer, Administrator, Global Administrator and student workflow; no unchecked planned item may be described as delivered.
+- [ ] Confirm prerequisites: canonical web services, database migrations, secure credentials, Android biometrics dependency, role permission contracts, Play upload signing certificate and unused versionCode.
+- [ ] Complete functional parity, accessibility, tenant isolation, audit, idempotency and financial regression checks in isolated environments before enabling each server-side production capability.
+- [ ] Complete signed-off UAT across all roles and real devices; verify existing production reads and ledger fingerprints without performing unapproved test writes in production.
+- [ ] Enforce release freeze: no APK/AAB builds until all mandatory gates pass; preserve GitHub Actions and Vercel usage quotas, and use a single consolidated build pair.
+- [ ] Deploy backend changes separately with fail-closed flags, monitoring, rollback and a documented staged activation plan; do not mistake a successful mobile build for permission to activate production writes.
