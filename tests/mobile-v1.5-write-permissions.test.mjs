@@ -14,6 +14,8 @@ test('mobile write policy requires exact organization and action grant', () => {
   assert.equal(canOfferMobileWrite(policy, 'collections.create', 'other-tenant'), false);
   assert.equal(canOfferMobileWrite(policy, 'receipts.void', 'jiecep'), false);
   assert.equal(canOfferMobileWrite(policy, 'collections.create', ' jiecep'), false);
+  assert.equal(canOfferMobileWrite(policy, 'collections.create', 'JIECEP'), false);
+  assert.equal(canOfferMobileWrite(policy, 'collections.create', '../jiecep'), false);
 });
 
 test('every Android write action has a unique explicit identifier', () => {
