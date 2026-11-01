@@ -88,5 +88,13 @@ test('financial route rejects malformed tenant slugs and all non-post methods', 
 test('payment validation rejects ASCII control characters and DEL', () => {
   const validator = source('mobile/src/api/financial-validation.ts');
   assert.ok(validator.includes('\\x00-\\x1f\\x7f'), 'all ASCII control characters must be rejected');
-  assert.match(validator, /orNumber \+ idempotencyKey/);
+  assert.match(validator, /studentId \+ feeId \+ orNumber \+ idempotencyKey/);
+});
+
+test('mobile payment identifier bounds prevent oversized financial requests', () => {
+  const validator = source('mobile/src/api/financial-validation.ts');
+  assert.match(validator, /studentId\.length > 100/);
+  assert.match(validator, /feeId\.length > 200/);
+  assert.match(validator, /orNumber\.length > 100/);
+  assert.match(validator, /idempotencyKey\.length > 128/);
 });
