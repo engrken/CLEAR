@@ -63,3 +63,19 @@ test('malformed or short signing keys cannot mint valid tickets', () => {
   assert.throws(() => hashWebHandoffTicket('bad', signingKey));
   assert.equal(matchesWebHandoffTicket('bad', '0'.repeat(64), signingKey), false);
 });
+
+test('database redemption is consume-once under concurrent requests', () => {
+  const store = source('lib/mobile/web-handoff-store.ts');
+  assert.match(store, /updateMany\(/);
+  assert.match(store, /consumedAt: null, revokedAt: null, expiresAt: \{ gt: now \}/);
+  assert.match(store, /changed\.count !== 1/);
+  assert.match(store, /\$transaction\(/);
+});
+
+test('database schema constrains ticket lifetime and principal tenant separation', () => {
+  const sql = source('prisma/migrations/20261101150000_mobile_web_handoff/migration.sql');
+  assert.match(sql, /UNIQUE INDEX "MobileWebHandoff_ticketHash_key"/);
+  assert.match(sql, /INTERVAL '60 seconds'/);
+  assert.match(sql, /"principalType" = 'global' AND "organizationId" IS NULL/);
+  assert.doesNotMatch(sql, /"ticket" TEXT/);
+});
