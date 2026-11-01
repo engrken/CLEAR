@@ -28,3 +28,9 @@ test('financial write switches stay disabled until server-side authorization is 
   assert.match(config, /PAYMENT_WRITES_ENABLED = false/);
   assert.match(config, /MOBILE_BUSINESS_WRITES_ENABLED = false/);
 });
+
+test('malformed grants fail closed rather than exposing write controls', () => {
+  const invalid = { enabled: true, grants: null };
+  assert.equal(canOfferMobileWrite(invalid, 'collections.create', 'jiecep'), false);
+  assert.equal(canOfferMobileWrite({ enabled: true, grants: [null] }, 'collections.create', 'jiecep'), false);
+});
