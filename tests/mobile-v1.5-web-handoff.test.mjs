@@ -83,17 +83,17 @@ test('database schema constrains ticket lifetime and principal tenant separation
   assert.doesNotMatch(sql, /"ticket" TEXT/);
 });
 
-test('both native roles expose safe browser switch with independent sign-in fallback', () => {
+test('both native roles expose authenticated handoff with safe fallback', () => {
   const officer = source('mobile/src/app/(officer)/more.tsx');
   const global = source('mobile/src/app/global/index.tsx');
   const links = source('mobile/src/lib/links.ts');
-  assert.match(officer, /Switch to Web Portal/);
-  assert.match(officer, /switchToDepartmentWebPortal\(session\.org\.subdomain\)/);
-  assert.match(global, /Switch to Web Portal/);
-  assert.match(global, /switchToGlobalWebPortal\(\)/);
-  assert.match(links, /return openDepartmentWebPortal\(slug\)/);
-  assert.match(links, /return openGlobalAdministrationPortal\(\)/);
-  assert.match(officer, /Secure automatic sign-in is attempted/);
+  assert.ok(officer.includes('Switch to Web Portal'));
+  assert.ok(officer.includes('api.requestOfficerWebHandoff(session)'));
+  assert.ok(global.includes('Switch to Web Portal'));
+  assert.ok(global.includes('api.requestGlobalWebHandoff(global)'));
+  assert.ok(links.includes('return openDepartmentWebPortal(slug)'));
+  assert.ok(links.includes('return openGlobalAdministrationPortal()'));
+  assert.ok(officer.includes('Secure automatic sign-in is attempted'));
 });
 
 test('first-party browser handoff URL validator rejects hostile destinations at runtime', async () => {
