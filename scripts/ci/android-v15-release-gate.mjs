@@ -12,9 +12,14 @@ const global = read('app/api/mobile/global/auth/web-handoff/route.ts');
 
 if (/PAYMENT_WRITES_ENABLED\s*=\s*false/.test(config)) blockers.push('Native payment posting is disabled');
 if (/MOBILE_BUSINESS_WRITES_ENABLED\s*=\s*false/.test(config)) blockers.push('Native business writes are disabled');
-if (/throw new ApiFailure\(503, 'unavailable'/.test(auth)) blockers.push('Officer seamless web sign-in is disabled');
-if (/throw new ApiFailure\(503, 'unavailable'/.test(global)) blockers.push('Global Administrator seamless web sign-in is disabled');
+if (!/issueWebHandoff\(/.test(auth)) blockers.push('Officer seamless web sign-in is not wired');
+if (!/issueWebHandoff\(/.test(global)) blockers.push('Global Administrator seamless web sign-in is not wired');
+if (!existsSync(resolve(root, 'app/auth/mobile-handoff/page.tsx'))) blockers.push('Browser ticket exchange page is missing');
+if (!existsSync(resolve(root, 'lib/mobile/web-handoff-redeem.ts'))) blockers.push('Web ticket redemption is missing');
 if (!existsSync(resolve(root, 'mobile/src/lib/web-handoff.ts'))) blockers.push('Web handoff URL validator is missing');
+
+// Server-side rollout is intentionally disabled unless an authorized production operator opts in.
+if (process.env.MOBILE_WEB_HANDOFF_ENABLED !== 'true') blockers.push('Secure mobile-to-web SSO has not been enabled and UAT-verified');
 
 if (blockers.length) {
   console.error('Android v1.5.0 NOT RELEASE-READY:');
