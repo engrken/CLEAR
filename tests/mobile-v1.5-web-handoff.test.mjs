@@ -30,3 +30,36 @@ test('browser handoff requests are POST-only and separate by principal', () => {
   assert.match(api, /requestGlobalWebHandoff: \(session\) => request/);
   assert.match(api, /auth\/web-handoff.*method: 'POST'/);
 });
+
+import { createWebHandoffTicket, hashWebHandoffTicket, matchesWebHandoffTicket, canRedeemWebHandoff, HANDOFF_TTL_MS } from '../lib/mobile/web-handoff-ticket.mjs';
+
+const signingKey = 'test-only-not-production-signing-key-0000000000000000';
+
+test('handoff secrets are random, keyed, and expire after sixty seconds', () => {
+  const a = createWebHandoffTicket(signingKey, 1000);
+  const b = createWebHandoffTicket(signingKey, 1000);
+  assert.notEqual(a.ticket, b.ticket);
+  assert.equal(a.ticket.length, 43);
+  assert.equal(a.ticketHash.length, 64);
+  assert.notEqual(a.ticketHash, a.ticket);
+  assert.equal(a.ticketHash, hashWebHandoffTicket(a.ticket, signingKey));
+  assert.equal(matchesWebHandoffTicket(a.ticket, a.ticketHash, signingKey), true);
+  assert.equal(matchesWebHandoffTicket(b.ticket, a.ticketHash, signingKey), false);
+  assert.equal(matchesWebHandoffTicket(a.ticket, a.ticketHash, 'different-key-000000000000000000000000000'), false);
+  assert.equal(a.expiresAt.getTime(), 1000 + HANDOFF_TTL_MS);
+});
+
+test('handoff redemption denies expired, consumed, revoked and malformed records', () => {
+  const record = { expiresAt: new Date(61000), consumedAt: null, revokedAt: null };
+  assert.equal(canRedeemWebHandoff(record, 60999), true);
+  assert.equal(canRedeemWebHandoff(record, 61000), false);
+  assert.equal(canRedeemWebHandoff({ ...record, consumedAt: new Date() }, 1000), false);
+  assert.equal(canRedeemWebHandoff({ ...record, revokedAt: new Date() }, 1000), false);
+  assert.equal(canRedeemWebHandoff({ ...record, expiresAt: 'invalid' }, 1000), false);
+});
+
+test('malformed or short signing keys cannot mint valid tickets', () => {
+  assert.throws(() => createWebHandoffTicket('short'));
+  assert.throws(() => hashWebHandoffTicket('bad', signingKey));
+  assert.equal(matchesWebHandoffTicket('bad', '0'.repeat(64), signingKey), false);
+});
