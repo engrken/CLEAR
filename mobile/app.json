@@ -57,13 +57,7 @@
           "microphonePermission": false
         }
       ],
-      "expo-secure-store",
-      [
-        "expo-local-authentication",
-        {
-          "faceIDPermission": "Allow CLEAR to use Face ID to unlock your account."
-        }
-      ]
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,

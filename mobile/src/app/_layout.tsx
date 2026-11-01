@@ -67,7 +67,7 @@ function Navigator() {
   }, [key]);
   const unlock = async () => {
     setLock('checking');
-    setLock(await unlockWithBiometrics().catch(() => false) ? 'open' : 'locked');
+    setLock(await unlockWithBiometrics(identity!).catch(() => false) ? 'open' : 'locked');
   };
   const pathname = usePathname();
   const routeTenant = /^\/(?:d|global\/tenant)\/([a-z0-9-]+)/.exec(pathname)?.[1] || null;
