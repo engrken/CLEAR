@@ -13,16 +13,18 @@ export function ServiceAdvisory({ tenant, enabled }: { tenant: string | null; en
   const [snapshot, setSnapshot] = useState<{ key: string; data: ServiceStatus } | null>(null);
   const [unknownScope, setUnknownScope] = useState<string | null>(null);
   const [openScope, setOpenScope] = useState<string | null>(null);
+  const [retryVersion, setRetryVersion] = useState(0);
   const [dismissedNotices, setDismissedNotices] = useState<Set<string>>(() => new Set());
   const key = tenant || 'global';
   const unknown = unknownScope === key;
 
   useEffect(() => {
     let alive = true;
+    const controller = new AbortController();
     const refresh = async () => {
       try {
         const url = serviceStatusUrl(API_URL, tenant);
-        const res = await fetch(url, { headers: { Accept: 'application/json', 'Cache-Control': 'no-cache' } });
+        const res = await fetch(url, { signal: controller.signal, headers: { Accept: 'application/json', 'Cache-Control': 'no-cache' } });
         if (!res.ok) throw new Error('Maintenance service unavailable');
         const parsed = parseServiceStatus(await res.json());
         if (!parsed) throw new Error('Invalid maintenance status');
@@ -37,8 +39,8 @@ export function ServiceAdvisory({ tenant, enabled }: { tenant: string | null; en
     const resumed = AppState.addEventListener('change', state => {
       if (state === 'active') void refresh();
     });
-    return () => { alive = false; clearInterval(timer); resumed.remove(); };
-  }, [key, tenant]);
+    return () => { alive = false; controller.abort(); clearInterval(timer); resumed.remove(); };
+  }, [key, tenant, retryVersion]);
 
   const status = snapshot?.key === key ? snapshot.data : null;
   const noticeKey = status ? serviceAdvisoryKey(status, tenant) : '';
@@ -100,6 +102,7 @@ export function ServiceAdvisory({ tenant, enabled }: { tenant: string | null; en
               ))}
             </>
           )}
+          {unknown ? <Button block variant="secondary" onPress={() => setRetryVersion(v => v + 1)}>Retry service status</Button> : null}
           <Button block onPress={dismiss}>I understand</Button>
           <Text variant="caption" color="inkMuted">Times shown in Philippine Time (PHT). Advisory only:
             server-side maintenance and role permissions are authoritative.</Text>
