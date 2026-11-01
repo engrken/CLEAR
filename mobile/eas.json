@@ -51,6 +51,19 @@
         "buildType": "apk"
       },
       "autoIncrement": true
+    },
+    "release-apk": {
+      "distribution": "internal",
+      "environment": "production",
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://clearsys.vercel.app/api/mobile",
+        "EXPO_PUBLIC_CLEAR_TENANT_OPERATIONS": "false",
+        "EXPO_PUBLIC_CLEAR_RELEASE_KIND": "v1.4.0-internal"
+      },
+      "android": {
+        "buildType": "apk"
+      }
     }
   },
   "submit": {
