@@ -9,15 +9,20 @@
 export const MOBILE_WRITE_ACTIONS = [
   'clearance.update',
   'collections.create',
+  'students.update',
   'penalties.assess',
   'penalties.adjust',
   'advances.create',
   'advances.approve',
+  'advances.release',
   'liquidations.submit',
   'liquidations.approve',
+  'liquidations.reconcile',
   'remittances.create',
   'remittances.verify',
+  'remittances.invalidate',
   'receipts.void',
+  'maintenance.manage',
   'tenant.users.manage',
   'tenant.roles.manage',
   'tenant.settings.manage',
@@ -47,7 +52,8 @@ export function canOfferMobileWrite(
 ): boolean {
   if (!policy?.enabled || !validActions.has(action)) return false;
   if (!organization || organization.trim() !== organization) return false;
+  if (!Array.isArray(policy.grants)) return false;
   return policy.grants.some((grant) =>
-    grant.action === action && grant.organization === organization
+    grant != null && grant.action === action && grant.organization === organization
   );
 }
