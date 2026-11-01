@@ -1,0 +1,63 @@
+name: CLEAR Android v1.4.0 APK and AAB queue
+
+on:
+  push:
+    branches:
+      - release/android-v1.4.0-build-prep-20261101
+    paths:
+      - .github/workflows/android-v1.4.0-build.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: clear-android-v1.4.0-build
+  cancel-in-progress: false
+
+jobs:
+  queue-android-artifacts:
+    if: github.ref == 'refs/heads/release/android-v1.4.0-build-prep-20261101'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Guard release identity, production API and read-only flags
+        run: |
+          node <<'NODE'
+          const fs=require('node:fs');
+          const app=require('./app.json').expo, eas=require('./eas.json');
+          if(app.version!=='1.4.0'||app.android.package!=='com.rupertbulquerin.clear'||app.android.versionCode<=15) throw Error('Invalid Android release identity');
+          for(const key of ['release-apk','production']) {
+            const p=eas.build[key];
+            if(p.environment!=='production'||p.autoIncrement!==true||p.env.EXPO_PUBLIC_API_URL!=='https://clearsys.vercel.app/api/mobile'||p.env.EXPO_PUBLIC_CLEAR_TENANT_OPERATIONS!=='false') throw Error('Unsafe '+key+' profile');
+          }
+          if(eas.build['release-apk'].android.buildType!=='apk'||eas.build.production.android.buildType!=='app-bundle') throw Error('Artifact types mismatch');
+          const config=fs.readFileSync('src/api/config.ts','utf8');
+          if(!config.includes('PAYMENT_WRITES_ENABLED = false')||!config.includes('MOBILE_BUSINESS_WRITES_ENABLED = false')) throw Error('Mobile write guard disabled');
+          NODE
+      - name: Require Expo EAS token
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          test -n "$EXPO_TOKEN" || { echo "::error::EXPO_TOKEN secret is missing"; exit 1; }
+      - name: Install EAS CLI
+        run: npm install --global eas-cli@latest --no-audit --no-fund
+      - name: Verify Expo authentication and current EAS project
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: eas whoami && eas project:info --non-interactive
+      - name: Queue internal v1.4.0 APK (production API)
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: eas build --platform android --profile release-apk --non-interactive --no-wait
+      - name: Queue Play v1.4.0 AAB (do not submit)
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: eas build --platform android --profile production --non-interactive --no-wait
