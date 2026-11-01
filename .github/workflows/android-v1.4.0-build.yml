@@ -33,11 +33,12 @@ jobs:
           node <<'NODE'
           const fs=require('node:fs');
           const app=require('./app.json').expo, eas=require('./eas.json');
-          if(app.version!=='1.4.0'||app.android.package!=='com.rupertbulquerin.clear'||app.android.versionCode<=15) throw Error('Invalid Android release identity');
+          if(app.version!=='1.4.0'||app.android.package!=='com.rupertbulquerin.clear'||app.android.versionCode!==16) throw Error('Invalid Android release identity');
           for(const key of ['release-apk','production']) {
             const p=eas.build[key];
-            if(p.environment!=='production'||p.autoIncrement!==true||p.env.EXPO_PUBLIC_API_URL!=='https://clearsys.vercel.app/api/mobile'||p.env.EXPO_PUBLIC_CLEAR_TENANT_OPERATIONS!=='false') throw Error('Unsafe '+key+' profile');
+            if(p.environment!=='production'||p.autoIncrement!==false||p.env.EXPO_PUBLIC_API_URL!=='https://clearsys.vercel.app/api/mobile'||p.env.EXPO_PUBLIC_CLEAR_TENANT_OPERATIONS!=='false') throw Error('Unsafe '+key+' profile');
           }
+          if(eas.cli.appVersionSource!=='local') throw Error('Release version source must be local');
           if(eas.build['release-apk'].android.buildType!=='apk'||eas.build.production.android.buildType!=='app-bundle') throw Error('Artifact types mismatch');
           const config=fs.readFileSync('src/api/config.ts','utf8');
           if(!config.includes('PAYMENT_WRITES_ENABLED = false')||!config.includes('MOBILE_BUSINESS_WRITES_ENABLED = false')) throw Error('Mobile write guard disabled');
