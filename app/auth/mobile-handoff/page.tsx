@@ -28,7 +28,7 @@ function MobileHandoffExchange() {
           return;
         }
         const session = await getSession();
-        const user = session?.user as (typeof session.user & { department?: string | null; role?: string }) | undefined;
+        const user = session?.user as ((NonNullable<typeof session>['user']) & { department?: string | null; role?: string }) | undefined;
         if (!user) { setMessage('Browser session could not be verified. Please sign in on the web portal.'); return; }
         if (user.role === 'SuperAdmin') { router.replace('/dashboard/provisions'); return; }
         if (user.department && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(user.department)) {
