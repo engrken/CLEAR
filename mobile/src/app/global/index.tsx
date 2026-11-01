@@ -34,6 +34,7 @@ export default function GlobalDashboard() {
       </Banner>
 
       <View style={{ gap: spacing[2] }}>
+        <Button block variant="secondary" onPress={() => router.push("/global/account")}>My Account & Security</Button>
         <Button block icon="shield" onPress={() => router.push('/global/provisions')}>
           Tenant management portal
         </Button>
