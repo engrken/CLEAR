@@ -59,3 +59,13 @@ test('server financial-write validator rejects coerced or fractional centavos', 
   assert.match(http, /!Number\.isSafeInteger\(value\)/);
   assert.match(http, /value <= 0/);
 });
+
+test('financial rollout is isolated to one production main payment route', () => {
+  const policy = source('lib/mobile/production-readonly.ts');
+  const http = source('lib/mobile/http.ts');
+  assert.match(policy, /financialWritesEnabled\?: boolean/);
+  assert.match(policy, /FINANCIAL_POSTS\.test\(path\)/);
+  assert.match(policy, /env\.vercelEnv === 'production' && env\.gitRef === 'main'/);
+  assert.match(policy, /env\.financialWritesEnabled === true/);
+  assert.match(http, /MOBILE_FINANCIAL_WRITES_ENABLED === 'true'/);
+});
