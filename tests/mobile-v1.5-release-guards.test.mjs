@@ -33,5 +33,5 @@ test('payment posting requires idempotency and integer centavos before network c
 test('capability endpoint checks tenant-scoped authentication and denies by default', () => {
   const route = source('app/api/mobile/orgs/[org]/write-capabilities/route.ts');
   assert.match(route, /requireMobileOfficer\(req, org, \[\]\)/);
-  assert.match(route, /enabled: false, grants: \[\]/);
+  assert.match(route, /enabled:\s*false,\s*grants:\s*\[\]/);
 });
