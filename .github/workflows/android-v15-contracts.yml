@@ -17,6 +17,7 @@ on:
       - 'app/api/mobile/orgs/**/write-capabilities/route.ts'
       - 'app/api/mobile/**/auth/web-handoff/route.ts'
       - 'tests/mobile-v1.5-*.test.mjs'
+      - 'scripts/ci/android-v15-release-gate.mjs'
       - '.github/workflows/android-v15-contracts.yml'
   workflow_dispatch:
 
@@ -37,4 +38,4 @@ jobs:
         with:
           node-version: '22'
       - name: Verify write permission and release safety contracts
-        run: node --experimental-strip-types --test tests/mobile-v1.5-write-permissions.test.mjs tests/mobile-v1.5-release-guards.test.mjs tests/mobile-v1.5-web-handoff.test.mjs
+        run: node --experimental-strip-types --test tests/mobile-v1.5-write-permissions.test.mjs tests/mobile-v1.5-release-guards.test.mjs tests/mobile-v1.5-web-handoff.test.mjs tests/mobile-v1.5-release-gate.test.mjs
