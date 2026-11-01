@@ -44,3 +44,8 @@ test('mobile bearer tokens remain bound to active tenant membership', () => {
   assert.match(session, /officer\.status !== 'Active'/);
   assert.match(session, /org\.subdomain !== normalizeDepartmentSlug\(orgSlug\)/);
 });
+
+test('API query parameters encode both keys and values', () => {
+  const client = source('mobile/src/api/http.ts');
+  assert.match(client, /encodeURIComponent\(k\).*encodeURIComponent\(String\(v\)\)/);
+});
