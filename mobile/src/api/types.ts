@@ -303,6 +303,9 @@ export type ReceiptReferenceSearch = { kind: 'receipts'; scope: 'active_period';
 export type VoidReferenceSearch = { kind: 'void'; scope: 'tenant_all_periods';
   query: string; records: VoidReference[] };
 
+export type MobileWriteAction = import('../lib/write-permissions').MobileWriteAction;
+export type MobileWritePolicy = import('../lib/write-permissions').MobileWritePolicy;
+
 export type ClearApi = {
   mode: 'http' | 'mock';
   // public
@@ -346,6 +349,8 @@ export type ClearApi = {
   listGlobalTenantLedgerPage(session: GlobalSession, slug: string, cursor?: string): Promise<LedgerPage>;
   listGlobalTenantRemittances(session: GlobalSession, slug: string): Promise<LedgerEntry[]>;
   // officer
+  /** Server-issued capability grants; deny all when unavailable. */
+  getWriteCapabilities(s: Session): Promise<MobileWritePolicy>;
   /** Session metadata only; all server requests independently check tenant and tab permissions. */
   getOfficerOnboarding(s: Session): Promise<{ exempt: boolean; completed: boolean; tabs: string[] }>;
   completeOfficerOnboarding(s: Session): Promise<{ exempt: boolean; completed: boolean }>;
