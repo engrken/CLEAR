@@ -9,7 +9,7 @@ test('biometric secret is stored in Keystore/Keychain with authentication requir
 });
 test('app gates protected routes on biometric unlock and background transition',()=>{
  const s=read('mobile/src/app/_layout.tsx');
- for(const x of ["lock !== 'open'","setLock('checking')","AppState.addEventListener","unlockWithBiometrics(identity!)"]) assert.ok(s.includes(x),x);
+ for(const x of ["lock !== 'open'","setLock('checking')","AppState.addEventListener","unlockWithBiometrics(identity)"]) assert.ok(s.includes(x),x);
 });
 test('both account roles offer opt-in and sign-out clears enrollment',()=>{
  assert.ok(read('mobile/src/app/officer/profile.tsx').includes('<BiometricSettings'));
@@ -20,4 +20,12 @@ test('biometric integration uses existing native dependency and preserves lockfi
  const p=JSON.parse(read('mobile/package.json'));
  assert.ok(p.dependencies['expo-secure-store']);
  assert.ok(!p.dependencies['expo-local-authentication']);
+});
+
+test('background transitions invalidate pending unlocks and fail closed', () => {
+ const s = read('mobile/src/app/_layout.tsx');
+ for (const marker of ['lockEpoch.current', "setLock('locked')", "AppState.currentState === 'active'", 'epoch === lockEpoch.current']) {
+  assert.ok(s.includes(marker), marker);
+ }
+ assert.ok(!s.includes('unlockWithBiometrics(identity!)'), 'unlock must guard missing identity');
 });
