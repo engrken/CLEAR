@@ -34,7 +34,7 @@ const OFFICER_LOGOUT = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9]
 
 // This only admits a route to its own authorization and accounting handler.
 // It never grants the mobile user permission to post a transaction.
-const FINANCIAL_POSTS = new RegExp('^/api/mobile/orgs/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?/payments
+const FINANCIAL_POSTS = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/payments/;
 
 const PREVIEW_BUSINESS_POSTS = new Set([
   '/api/mobile/global/provisions',
@@ -72,7 +72,7 @@ export function isMobileRequestAllowed(
   ) return true;
 
   if (
-    verb === 'POST' && FINANCIAL_POSTS.test(path) &&
+    verb === 'POST' && FINANCIAL_POSTS.test(path) && path.endsWith('/payments') &&
     env.vercelEnv === 'production' && env.gitRef === 'main' &&
     env.financialWritesEnabled === true
   ) return true;
