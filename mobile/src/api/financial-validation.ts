@@ -12,11 +12,11 @@ export function normalizeMobilePayment(input: MobilePaymentInput): MobilePayment
   if (!Number.isSafeInteger(input.amountCentavos) || input.amountCentavos <= 0) {
     throw new Error('Payment amount must be positive integer centavos.');
   }
-  if (!studentId || !feeId || !orNumber || !idempotencyKey || idempotencyKey.length > 128) {
+  if (!studentId || studentId.length > 100 || !feeId || feeId.length > 200 || !orNumber || orNumber.length > 100 || !idempotencyKey || idempotencyKey.length > 128) {
     throw new Error('Payment requires student, fee, receipt number and stable retry key.');
   }
-  if (/[\x00-\x1f\x7f]/.test(orNumber + idempotencyKey)) {
-    throw new Error('Receipt number and retry key cannot contain control characters.');
+  if (/[\x00-\x1f\x7f]/.test(studentId + feeId + orNumber + idempotencyKey)) {
+    throw new Error('Payment identifiers cannot contain control characters.');
   }
   return { studentId, feeId, orNumber, idempotencyKey, amountCentavos: input.amountCentavos };
 }
