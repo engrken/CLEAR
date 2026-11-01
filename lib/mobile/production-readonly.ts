@@ -13,6 +13,8 @@ type MobileEnvironment = {
   gitRef?: string | null;
   /** Explicit Production opt-in, configured server-side only after authorization QA. */
   tenantOperationsEnabled?: boolean;
+  /** Independently approved financial rollout, restricted to main Production. */
+  financialWritesEnabled?: boolean;
 };
 
 const GLOBAL_OTP = /^\/api\/mobile\/global\/auth\/(?:request-code|verify-code)$/;
@@ -29,6 +31,10 @@ const OFFICER_WEB_HANDOFF = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-
 const GLOBAL_WEB_HANDOFF = '/api/mobile/global/auth/web-handoff';
 const GLOBAL_LOGOUT = '/api/mobile/global/auth/session';
 const OFFICER_LOGOUT = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/auth\/session$/;
+
+// This only admits a route to its own authorization and accounting handler.
+// It never grants the mobile user permission to post a transaction.
+const FINANCIAL_POSTS = /^\\/api\\/mobile\\/orgs\\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\/payments$/;
 
 const PREVIEW_BUSINESS_POSTS = new Set([
   '/api/mobile/global/provisions',
@@ -65,6 +71,12 @@ export function isMobileRequestAllowed(
     PREVIEW_BUSINESS_POSTS.has(path)
   ) return true;
 
+  if (
+    verb === 'POST' && FINANCIAL_POSTS.test(path) &&
+    env.vercelEnv === 'production' && env.gitRef === 'main' &&
+    env.financialWritesEnabled === true
+  ) return true;
+
   // Production operational rollout is opt-in per capability, NOT a broad
   // "write enabled" switch. Only two existing audited tenant-management routes
   // qualify; authorization, confirmation and transaction validation still run
@@ -77,7 +89,7 @@ export function isMobileRequestAllowed(
     PREVIEW_BUSINESS_POSTS.has(path)
   ) return true;
 
-  // Financial posting, remittance approval, proof uploads, other tenant mutations,
+  // Unapproved financial posting, remittance approval, proof uploads, other tenant mutations,
   // future mutation endpoints and unrecognized methods are denied by default.
   return false;
 }
