@@ -36,3 +36,9 @@ Enable authorized Officers, tenant Administrators, and Global Administrators to 
 - Enabling unverified financial or tenant-management writes globally.
 
 Related: mobile/RELEASE_1_4_0_PLAN.md and PR #130.
+
+## Repository audit — 2026-11-01
+- The existing `app/api/mobile/orgs/[org]` routes expose read-focused resources and authentication, onboarding, profile email, presence and proof submission. **No mobile `payments/route.ts` exists**; the Android `recordPayment` client method points to a missing route and is deliberately disabled. Do not enable the payment flag before implementing the canonical server handler.
+- The mobile client similarly contains guarded remittance verification/invalidation calls; verify server endpoints and web service parity before enabling either.
+- Draft PR #132 currently adds client-side action-grant types and deny-by-default tests only. It is **not server authorization** and must never be considered a security boundary.
+- Production write enablement requires separate implementation PRs, passing integration tests against isolated data, audit review and signed mobile UAT. A successful database check alone does not authorize production rollout.
