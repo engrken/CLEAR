@@ -92,3 +92,19 @@ test('both native roles expose safe browser switch with independent sign-in fall
   assert.match(links, /return openGlobalAdministrationPortal\(\)/);
   assert.match(officer, /Separate web sign-in is required/);
 });
+
+test('first-party browser handoff URL validator rejects hostile destinations at runtime', async () => {
+  const { validateWebHandoffUrl } = await import('../mobile/src/lib/web-handoff.ts');
+  const ticket = 'A'.repeat(43);
+  const valid = `https://clearsys.vercel.app/auth/mobile-handoff?ticket=${ticket}`;
+  assert.equal(validateWebHandoffUrl(valid), valid);
+  for (const bad of [
+    `http://clearsys.vercel.app/auth/mobile-handoff?ticket=${ticket}`,
+    `https://clearsys.vercel.app.evil.example/auth/mobile-handoff?ticket=${ticket}`,
+    `https://clearsys.vercel.app@evil.example/auth/mobile-handoff?ticket=${ticket}`,
+    `https://clearsys.vercel.app/auth/mobile-handoff?ticket=${ticket}&redirect=https://evil.example`,
+    `https://clearsys.vercel.app/auth/mobile-handoff?ticket=${ticket}#secret`,
+    'https://clearsys.vercel.app/auth/mobile-handoff?ticket=short',
+    `https://clearsys.vercel.app/department/example?ticket=${ticket}`,
+  ]) assert.throws(() => validateWebHandoffUrl(bad), bad);
+});
