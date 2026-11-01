@@ -29,3 +29,9 @@ test('background transitions invalidate pending unlocks and fail closed', () => 
  }
  assert.ok(!s.includes('unlockWithBiometrics(identity!)'), 'unlock must guard missing identity');
 });
+
+test('biometric unlock requires opt-in for the active identity and device support', () => {
+ const source = read('mobile/src/lib/biometrics.ts');
+ assert.match(source, /export async function biometricEnabled[\s\S]*?biometricAvailable\(\)/);
+ assert.match(source, /export async function unlockWithBiometrics[\s\S]*?biometricEnabled\(identity\)/);
+});
