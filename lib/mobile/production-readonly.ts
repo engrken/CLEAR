@@ -25,6 +25,8 @@ const OFFICER_PROFILE_EMAIL = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[
 const STUDENT_EMAIL_CHANGE = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/clearance\/email-change\/(?:request-new|confirm)$/;
 // Session-only collaboration metadata. Does not authorize a business mutation.
 const OFFICER_COLLABORATION = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/(?:presence|onboarding)$/;
+const OFFICER_WEB_HANDOFF = /^\\/api\\/mobile\\/orgs\\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\/auth\\/web-handoff$/;
+const GLOBAL_WEB_HANDOFF = '/api/mobile/global/auth/web-handoff';
 const GLOBAL_LOGOUT = '/api/mobile/global/auth/session';
 const OFFICER_LOGOUT = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/auth\/session$/;
 
@@ -42,6 +44,10 @@ export function isMobileRequestAllowed(
   const path = String(pathname || '').replace(/\/+$/, '');
 
   if (verb === 'GET' || verb === 'HEAD' || verb === 'OPTIONS') return true;
+
+  // Ticket issuance is an authenticated identity operation, never a business write.
+  // Endpoint itself also checks the independent production-only feature flag.
+  if (verb === 'POST' && (OFFICER_WEB_HANDOFF.test(path) || path === GLOBAL_WEB_HANDOFF)) return true;
 
   // Login and logout are identity/session operations, not business transactions.
   if (verb === 'POST' && (GLOBAL_OTP.test(path) || OFFICER_OTP.test(path) || STUDENT_OTP.test(path))) return true;
