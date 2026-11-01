@@ -4,6 +4,7 @@ import { Platform } from 'react-native';
 
 import { API_URL, MOBILE_BUSINESS_WRITES_ENABLED, PAYMENT_WRITES_ENABLED, TENANT_OPERATIONS_ENABLED } from './config';
 import { fallbackMessage } from './errors';
+import { normalizeMobilePayment } from './financial-validation';
 import { ApiError, type ClearApi, type GlobalSession, type Session } from './types';
 
 let onUnauthorized: (() => void) | null = null;
@@ -186,12 +187,13 @@ export const httpApi: ClearApi = {
   }),
   recordPayment: (s, p) => {
     if (!PAYMENT_WRITES_ENABLED) return Promise.reject(new ApiError('Payment posting is disabled until Android financial parity is verified.', 'unavailable'));
-    // Never send a payment mutation without an explicit, stable retry key.
-    // The server must independently enforce idempotency and atomic posting.
-    if (!p.idempotencyKey?.trim() || p.idempotencyKey.length > 128 || !Number.isSafeInteger(p.amountCentavos) || p.amountCentavos <= 0 || !p.studentId.trim() || !p.feeId.trim() || !p.orNumber.trim()) {
-      return Promise.reject(new ApiError('A valid amount, student, fee, receipt number and idempotency key are required.', 'invalid'));
-    }
-    return request(`${org(s.org.subdomain)}/payments`, { method: 'POST', ...as(s), idempotencyKey: p.idempotencyKey, json: { studentId: p.studentId, feeId: p.feeId, amountCentavos: p.amountCentavos, orNumber: p.orNumber.trim() } });
+    // Validation is local defense-in-depth. The canonical server must independently
+    // enforce authorization, receipt uniqueness, idempotency and atomic posting.
+    let payment;
+    try { payment = normalizeMobilePayment(p); }
+    catch { return Promise.reject(new ApiError('A valid integer-centavo amount, student, fee, receipt number and retry key are required.', 'invalid')); }
+    return request(`${org(s.org.subdomain)}/payments`, { method: 'POST', ...as(s), idempotencyKey: payment.idempotencyKey,
+      json: { studentId: payment.studentId, feeId: payment.feeId, amountCentavos: payment.amountCentavos, orNumber: payment.orNumber } });
   },
   getRemittance: (s, id) => request(`${org(s.org.subdomain)}/remittances/${encodeURIComponent(id)}`, as(s)),
   verifyRemittance: (s, id, p) => PAYMENT_WRITES_ENABLED ?
