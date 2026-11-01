@@ -98,3 +98,10 @@ test('mobile payment identifier bounds prevent oversized financial requests', ()
   assert.match(validator, /orNumber\.length > 100/);
   assert.match(validator, /idempotencyKey\.length > 128/);
 });
+
+test('Android and server enforce the same maximum payment amount', () => {
+  const client = source('mobile/src/api/financial-validation.ts');
+  const server = source('lib/mobile/http.ts');
+  assert.match(client, /input\.amountCentavos > 100_000_000/);
+  assert.match(server, /value > 100_000_000/);
+});
