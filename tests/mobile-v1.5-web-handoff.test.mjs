@@ -16,15 +16,15 @@ test('mobile handoff URL only accepts first-party HTTPS ticket endpoint', () => 
 test('both issuance endpoints authenticate before minting tickets and require rollout flag', () => {
   const officer = source('app/api/mobile/orgs/[org]/auth/web-handoff/route.ts');
   const global = source('app/api/mobile/global/auth/web-handoff/route.ts');
-  assert.match(officer, /requireMobileOfficer\\(req, slug, \\[\\]\\)/);
-  assert.match(global, /requireGlobalMobileAdmin\\(req\\)/);
+  assert.ok(officer.includes('requireMobileOfficer(req, slug, [])'));
+  assert.ok(global.includes('requireGlobalMobileAdmin(req)'));
   for (const route of [officer, global]) {
-    assert.match(route, /isWebHandoffEnabled\\(\\)/);
-    assert.match(route, /issueWebHandoff\\(/);
+    assert.ok(route.includes('isWebHandoffEnabled()'));
+    assert.ok(route.includes('issueWebHandoff('));
   }
   const issuer = source('lib/mobile/web-handoff-issue.ts');
-  assert.match(issuer, /MOBILE_WEB_HANDOFF_ENABLED/);
-  assert.match(issuer, /MOBILE_WEB_HANDOFF_SECRET/);
+  assert.ok(issuer.includes('MOBILE_WEB_HANDOFF_ENABLED'));
+  assert.ok(issuer.includes('MOBILE_WEB_HANDOFF_SECRET'));
 });
 
 test('browser handoff requests are POST-only and separate by principal', () => {
@@ -116,11 +116,11 @@ test('NextAuth and browser page exchange ticket without exposing mobile bearer t
   const auth = source('auth.ts');
   const page = source('app/auth/mobile-handoff/page.tsx');
   const redemption = source('lib/mobile/web-handoff-redeem.ts');
-  assert.match(auth, /id: 'mobile-handoff'/);
-  assert.match(auth, /redeemWebHandoff\\(ticket\\)/);
-  assert.match(page, /signIn\\('mobile-handoff'/);
-  assert.match(page, /history\\.replaceState/);
-  assert.match(redemption, /consumeWebHandoffTicket/);
-  assert.match(redemption, /verifyGlobalAdminSession/);
-  assert.match(redemption, /maintenanceForTenant/);
+  assert.ok(auth.includes("id: 'mobile-handoff'"));
+  assert.ok(auth.includes('redeemWebHandoff(ticket)'));
+  assert.ok(page.includes("signIn('mobile-handoff'"));
+  assert.ok(page.includes('history.replaceState'));
+  assert.ok(redemption.includes('consumeWebHandoffTicket'));
+  assert.ok(redemption.includes('verifyGlobalAdminSession'));
+  assert.ok(redemption.includes('maintenanceForTenant'));
 });
