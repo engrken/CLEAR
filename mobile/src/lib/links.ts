@@ -46,3 +46,12 @@ export function openDepartmentModule(slug: string, route: string) {
 export function openGlobalAdministrationPortal() {
   return openWebPage(`${CLEAR_WEB_APP}/dashboard/provisions`);
 }
+
+/** First-party browser portal fallback while single-use SSO remains disabled. */
+export async function switchToDepartmentWebPortal(slug: string) {
+  return openDepartmentWebPortal(slug);
+}
+
+export async function switchToGlobalWebPortal() {
+  return openGlobalAdministrationPortal();
+}
