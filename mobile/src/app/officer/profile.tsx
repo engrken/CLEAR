@@ -22,7 +22,7 @@ export default function OfficerProfile() {
     let active = true;
     setWriteStatus('checking');
     void api.getWriteCapabilities(session).then((policy) => {
-      if (active) setWriteStatus(policy.enabled && policy.grants.length > 0 ? 'enabled' : 'disabled');
+      if (active) setWriteStatus(policy.enabled && Array.isArray(policy.grants) && policy.grants.some((grant) => grant?.organization === session.org.subdomain) ? 'enabled' : 'disabled');
     }).catch(() => {
       // Network failure never implies permission to post transactions.
       if (active) setWriteStatus('disabled');
