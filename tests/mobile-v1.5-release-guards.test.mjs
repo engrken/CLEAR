@@ -69,3 +69,10 @@ test('financial rollout is isolated to one production main payment route', () =>
   assert.match(policy, /env\.financialWritesEnabled === true/);
   assert.match(http, /MOBILE_FINANCIAL_WRITES_ENABLED === 'true'/);
 });
+
+test('financial allowlist is anchored to the exact payments endpoint', () => {
+  const policy = source('lib/mobile/production-readonly.ts');
+  assert.match(policy, /const FINANCIAL_POSTS = new RegExp/);
+  assert.match(policy, /payments\$'/);
+  assert.match(policy, /FINANCIAL_POSTS\.test\(path\)/);
+});
