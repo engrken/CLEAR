@@ -196,10 +196,10 @@ export default function More() {
           View data privacy notice
         </Button>
         <Button block variant="secondary" icon="shield" onPress={() => router.push('/global/sign-in')}>
-          Sign in as Global Superadmin
+          Sign in as Global Administrator
         </Button>
         <Text variant="caption" color="inkMuted">
-          Global Superadmin requires a separate OTP and independently verified permission.
+          Global Administrator requires a separate OTP and independently verified permission.
         </Text>
         {LINKS.map(link => (
           <Pressable key={link.url} accessibilityRole="link" accessibilityHint="Opens in the browser"

@@ -53,7 +53,7 @@ test('module directory groups every canonical module, displays only server-autho
   assert.match(src, /action = m\.availability === 'available' \|\| m\.availability === 'review-only'/);
   assert.match(src, /openDepartmentModule\(session\.org\.subdomain, m\.webPath!\)/);
   assert.match(src, /Replay first-time guide/);
-  assert.match(src, /Sign in as Global Superadmin/);
+  assert.match(src, /Sign in as Global Administrator/);
   assert.match(src, /router\.push\('\/officer\/tenant-portal'\)/);
   for (const module of MODULE_CATALOG) {
     assert.ok(src.includes("'" + module.tab + "'"), module.tab + ' omitted from navigation groups');
