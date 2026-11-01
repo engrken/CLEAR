@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { signIn } from 'next-auth/react';
+import { signIn, getSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 /** Browser receives a short-lived ticket, never a mobile bearer credential. */
@@ -27,7 +27,15 @@ export default function MobileHandoffPage() {
           setMessage('This sign-in link expired or was already used. Please sign in on the web portal.');
           return;
         }
-        router.replace('/dashboard');
+        const session = await getSession();
+        const user = session?.user as (typeof session.user & { department?: string | null; role?: string }) | undefined;
+        if (!user) { setMessage('Browser session could not be verified. Please sign in on the web portal.'); return; }
+        if (user.role === 'SuperAdmin') { router.replace('/dashboard/provisions'); return; }
+        if (user.department && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(user.department)) {
+          router.replace(`/department/${user.department}`);
+          return;
+        }
+        setMessage('Your department could not be verified. Please sign in on the web portal.');
       } catch {
         setMessage('Unable to complete browser sign-in. Please sign in on the web portal.');
       }
