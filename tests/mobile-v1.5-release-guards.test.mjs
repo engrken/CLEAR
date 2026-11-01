@@ -35,3 +35,12 @@ test('capability endpoint checks tenant-scoped authentication and denies by defa
   assert.match(route, /requireMobileOfficer\(req, org, \[\]\)/);
   assert.match(route, /enabled:\s*false,\s*grants:\s*\[\]/);
 });
+
+test('mobile bearer tokens remain bound to active tenant membership', () => {
+  const session = source('lib/mobile/session.ts');
+  assert.match(session, /officer\.organizationId !== org\.id/);
+  assert.match(session, /session\.organizationId !== org\.id/);
+  assert.match(session, /session\.tenantUserId !== officer\.id/);
+  assert.match(session, /officer\.status !== 'Active'/);
+  assert.match(session, /org\.subdomain !== normalizeDepartmentSlug\(orgSlug\)/);
+});
