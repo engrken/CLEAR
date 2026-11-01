@@ -51,3 +51,11 @@ test('API query parameters encode both keys and values', () => {
   const client = source('mobile/src/api/http.ts');
   assert.match(client, /encodeURIComponent\(k\).*encodeURIComponent\(String\(v\)\)/);
 });
+
+test('server financial-write validator rejects coerced or fractional centavos', () => {
+  const http = source('lib/mobile/http.ts');
+  assert.match(http, /export function requireFinancialWriteCentavos/);
+  assert.match(http, /typeof value !== 'number'/);
+  assert.match(http, /!Number\.isSafeInteger\(value\)/);
+  assert.match(http, /value <= 0/);
+});
