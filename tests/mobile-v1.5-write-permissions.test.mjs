@@ -9,7 +9,7 @@ test('mobile write controls default deny without a server policy', () => {
 });
 
 test('mobile write policy requires exact organization and action grant', () => {
-  const policy = { enabled: true, grants: [{ action: 'collections.create' as const, organization: 'jiecep' }] };
+  const policy = { enabled: true, grants: [{ action: 'collections.create', organization: 'jiecep' }] };
   assert.equal(canOfferMobileWrite(policy, 'collections.create', 'jiecep'), true);
   assert.equal(canOfferMobileWrite(policy, 'collections.create', 'other-tenant'), false);
   assert.equal(canOfferMobileWrite(policy, 'receipts.void', 'jiecep'), false);
