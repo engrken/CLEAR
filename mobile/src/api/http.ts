@@ -182,7 +182,15 @@ export const httpApi: ClearApi = {
   listStudents: (s, q, missingEmailOnly) => request(`${org(s.org.subdomain)}/students`, {
     ...as(s), query: { q, ...(missingEmailOnly ? { email: 'missing' } : {}) },
   }),
-  recordPayment: (s, p) => PAYMENT_WRITES_ENABLED ? request(`${org(s.org.subdomain)}/payments`, { method: 'POST', ...as(s), idempotencyKey: p.idempotencyKey, json: { studentId: p.studentId, feeId: p.feeId, amountCentavos: p.amountCentavos, orNumber: p.orNumber.trim() } }) : Promise.reject(new ApiError('Payment posting is disabled until Android financial parity is verified.', 'unavailable')),
+  recordPayment: (s, p) => {
+    if (!PAYMENT_WRITES_ENABLED) return Promise.reject(new ApiError('Payment posting is disabled until Android financial parity is verified.', 'unavailable'));
+    // Never send a payment mutation without an explicit, stable retry key.
+    // The server must independently enforce idempotency and atomic posting.
+    if (!p.idempotencyKey?.trim() || p.idempotencyKey.length > 128 || !Number.isSafeInteger(p.amountCentavos) || p.amountCentavos <= 0 || !p.studentId.trim() || !p.feeId.trim() || !p.orNumber.trim()) {
+      return Promise.reject(new ApiError('A valid amount, student, fee, receipt number and idempotency key are required.', 'invalid'));
+    }
+    return request(`${org(s.org.subdomain)}/payments`, { method: 'POST', ...as(s), idempotencyKey: p.idempotencyKey, json: { studentId: p.studentId, feeId: p.feeId, amountCentavos: p.amountCentavos, orNumber: p.orNumber.trim() } });
+  },
   getRemittance: (s, id) => request(`${org(s.org.subdomain)}/remittances/${encodeURIComponent(id)}`, as(s)),
   verifyRemittance: (s, id, p) => PAYMENT_WRITES_ENABLED ?
     request(`${org(s.org.subdomain)}/remittances/${encodeURIComponent(id)}/verify`, { method: 'POST', ...as(s), json: { ...p, orNumber: p.orNumber.trim() } }) : Promise.reject(new ApiError('Remittance verification is disabled until Android financial parity is verified.', 'unavailable')),
