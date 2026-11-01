@@ -158,6 +158,7 @@ export const httpApi: ClearApi = {
   }),
   listGlobalTenantRemittances: (s, slug) => request(`/global/orgs/${encodeURIComponent(slug)}/remittances`, { token: s.token }),
 
+  getWriteCapabilities: (s) => request(`${org(s.org.subdomain)}/write-capabilities`, as(s)),
   getOfficerOnboarding: (s) => request(`${org(s.org.subdomain)}/onboarding`, as(s)),
   completeOfficerOnboarding: (s) => request(`${org(s.org.subdomain)}/onboarding`, { method: 'POST', ...as(s) }),
   pulseOfficerPresence: (s, page, tabId) => request(`${org(s.org.subdomain)}/presence`, { method: 'POST', ...as(s), json: { page, tabId } }),
