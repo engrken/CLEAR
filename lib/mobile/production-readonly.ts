@@ -72,7 +72,7 @@ export function isMobileRequestAllowed(
   ) return true;
 
   if (
-    verb === 'POST' && FINANCIAL_POSTS.test(path) && path.endsWith('/payments') &&
+    verb === 'POST' && FINANCIAL_POSTS.test(path) &&
     env.vercelEnv === 'production' && env.gitRef === 'main' &&
     env.financialWritesEnabled === true
   ) return true;
