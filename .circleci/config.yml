@@ -105,6 +105,60 @@ jobs:
           command: cd mobile && npm run lint
 
 
+  student-auth-security:
+    # Real student OTP/clearance HTTP tests with a disposable database and local SMTP.
+    docker:
+      - image: cimg/node:22.23
+      - image: postgres:16
+        environment:
+          POSTGRES_USER: student_ci
+          POSTGRES_PASSWORD: student_ci
+          POSTGRES_DB: student_ci
+    working_directory: ~/project
+    environment:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+      DATABASE_URL: postgresql://student_ci:student_ci@127.0.0.1:5432/student_ci?schema=public
+      AUTH_SECRET: ci-only-student-clearance-strong-test-secret-2026
+      NEXTAUTH_SECRET: ci-only-student-clearance-strong-test-secret-2026
+      AUTH_URL: http://127.0.0.1:3112
+      AUTH_TRUST_HOST: "true"
+      SUPER_ADMIN_EMAIL: ci-superadmin@example.invalid
+      CLEAR_CI_STUDENT_AUTH_TEST_ENABLED: "1"
+      SMTP_HOST: 127.0.0.1
+      SMTP_PORT: "2525"
+      SMTP_USER: ci-only-student-auth
+      SMTP_PASSWORD: ci-only-not-a-real-password
+      MAIL_FROM: "CLEAR CI <ci-clear@example.invalid>"
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - v1-web-npm-{{ checksum "package-lock.json" }}
+      - run:
+          name: Install student runtime dependencies
+          command: npm ci --no-audit --no-fund
+      - run:
+          name: Wait for disposable PostgreSQL
+          command: |
+            set -euo pipefail
+            for i in $(seq 1 60); do
+              if node -e 'const s=require("node:net").connect(5432,"127.0.0.1");s.on("connect",()=>{s.end();process.exit(0)});s.on("error",()=>process.exit(1));s.setTimeout(2000,()=>process.exit(1))'; then exit 0; fi
+              sleep 1
+            done
+            exit 1
+      - run:
+          name: Rehearse committed migrations and reject schema drift
+          command: |
+            npx prisma migrate deploy
+            npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code
+      - run:
+          name: Build authenticated student API
+          command: npm run build
+      - run:
+          name: Test real student authentication and clearance privacy against synthetic records
+          command: node --test tests/ci-student-clearance-runtime.test.mjs
+
   financial-security:
     # GitHub Actions quota-independent equivalent of the isolated financial
     # migration and signed-action regression checks. Never connect to Neon.
@@ -218,3 +272,4 @@ workflows:
       - web
       - mobile
       - financial-security
+      - student-auth-security
