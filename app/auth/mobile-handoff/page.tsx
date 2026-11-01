@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { signIn, getSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 /** Browser receives a short-lived ticket, never a mobile bearer credential. */
-export default function MobileHandoffPage() {
+function MobileHandoffExchange() {
   const params = useSearchParams();
   const router = useRouter();
   const attempted = useRef(false);
@@ -46,4 +46,10 @@ export default function MobileHandoffPage() {
     <p role="status">{message}</p>
     <a href="/">Return to web sign-in</a>
   </main>;
+}
+
+export default function MobileHandoffPage() {
+  return <Suspense fallback={<main><p role="status">Preparing secure browser sign-in…</p></main>}>
+    <MobileHandoffExchange />
+  </Suspense>;
 }
