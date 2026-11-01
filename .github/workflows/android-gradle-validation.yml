@@ -35,6 +35,8 @@ concurrency:
 
 jobs:
   android-debug:
+    # v1.5 checklist must pass before any internal APK build; manual dispatch remains available after approval.
+    if: ${{ github.event_name != 'pull_request' || !startsWith(github.head_ref, 'feature/android-v1.5.0-') }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     defaults:
