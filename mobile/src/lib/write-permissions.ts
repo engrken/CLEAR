@@ -51,7 +51,7 @@ export function canOfferMobileWrite(
   organization: string,
 ): boolean {
   if (!policy?.enabled || !validActions.has(action)) return false;
-  if (!organization || organization.trim() !== organization) return false;
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(organization)) return false;
   if (!Array.isArray(policy.grants)) return false;
   return policy.grants.some((grant) =>
     grant != null && grant.action === action && grant.organization === organization
