@@ -25,7 +25,7 @@ const OFFICER_PROFILE_EMAIL = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[
 const STUDENT_EMAIL_CHANGE = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/clearance\/email-change\/(?:request-new|confirm)$/;
 // Session-only collaboration metadata. Does not authorize a business mutation.
 const OFFICER_COLLABORATION = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/(?:presence|onboarding)$/;
-const OFFICER_WEB_HANDOFF = /^\\/api\\/mobile\\/orgs\\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\/auth\\/web-handoff$/;
+const OFFICER_WEB_HANDOFF = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/auth\/web-handoff$/;
 const GLOBAL_WEB_HANDOFF = '/api/mobile/global/auth/web-handoff';
 const GLOBAL_LOGOUT = '/api/mobile/global/auth/session';
 const OFFICER_LOGOUT = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/auth\/session$/;
