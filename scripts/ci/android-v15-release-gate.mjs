@@ -9,9 +9,11 @@ const blockers = [];
 const config = read('mobile/src/api/config.ts');
 const auth = read('app/api/mobile/orgs/[org]/auth/web-handoff/route.ts');
 const global = read('app/api/mobile/global/auth/web-handoff/route.ts');
+const capabilities = read('app/api/mobile/orgs/[org]/write-capabilities/route.ts');
 
 if (/PAYMENT_WRITES_ENABLED\s*=\s*false/.test(config)) blockers.push('Native payment posting is disabled');
 if (/MOBILE_BUSINESS_WRITES_ENABLED\s*=\s*false/.test(config)) blockers.push('Native business writes are disabled');
+if (/enabled:\s*false\s*,\s*grants:\s*\[\s*\]/.test(capabilities)) blockers.push('Server-issued mobile write capabilities remain deny-all');
 if (!/issueWebHandoff\(/.test(auth)) blockers.push('Officer seamless web sign-in is not wired');
 if (!/issueWebHandoff\(/.test(global)) blockers.push('Global Administrator seamless web sign-in is not wired');
 if (!existsSync(resolve(root, 'app/auth/mobile-handoff/page.tsx'))) blockers.push('Browser ticket exchange page is missing');
