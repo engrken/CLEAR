@@ -124,6 +124,14 @@ export function requireCentavos(value: unknown, field: string): number {
   return n;
 }
 
+/** Strict financial write validation: reject string coercion, fractions and unsafe integers. */
+export function requireFinancialWriteCentavos(value: unknown, field: string): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0 || value > 100_000_000) {
+    throw new ApiFailure(400, 'invalid', `${field} must be positive integer centavos within the transaction limit.`);
+  }
+  return value;
+}
+
 /** Official origin for signed certificate links; ignores request-controlled hosts. */
 export function publicBaseUrl(_req: Request) {
   return clearanceLinkOrigin();
