@@ -337,6 +337,8 @@ export type ClearApi = {
   restoreGlobalSession(token: string): Promise<GlobalSession>;
   signOutGlobal(session: GlobalSession): Promise<void>;
   getGlobalOverview(session: GlobalSession): Promise<GlobalOverview>;
+  /** Separate Global Administrator identity; never impersonate a tenant officer. */
+  requestGlobalWebHandoff(session: GlobalSession): Promise<{ url: string }>;
   listManagedTenants(session: GlobalSession): Promise<ManagedTenant[]>;
   provisionTenant(session: GlobalSession, payload: NewTenant): Promise<ProvisionResult>;
   manageTenant(session: GlobalSession, payload: {
@@ -351,6 +353,8 @@ export type ClearApi = {
   // officer
   /** Server-issued capability grants; deny all when unavailable. */
   getWriteCapabilities(s: Session): Promise<MobileWritePolicy>;
+  /** Disabled server-side until one-time browser exchange is audited. */
+  requestOfficerWebHandoff(s: Session): Promise<{ url: string }>;
   /** Session metadata only; all server requests independently check tenant and tab permissions. */
   getOfficerOnboarding(s: Session): Promise<{ exempt: boolean; completed: boolean; tabs: string[] }>;
   completeOfficerOnboarding(s: Session): Promise<{ exempt: boolean; completed: boolean }>;
