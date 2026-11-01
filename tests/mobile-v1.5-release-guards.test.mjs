@@ -22,6 +22,8 @@ test('mobile financial writes remain disabled until actual server handlers are r
 });
 
 test('payment posting requires idempotency and integer centavos before network call', () => {
+  const types = source('mobile/src/api/types.ts');
+  assert.match(types, /orNumber: string; idempotencyKey: string/);
   const client = source('mobile/src/api/http.ts');
   assert.match(client, /!p\.idempotencyKey\?\.trim\(\)/);
   assert.match(client, /Number\.isSafeInteger\(p\.amountCentavos\)/);
