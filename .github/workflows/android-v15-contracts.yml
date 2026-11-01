@@ -3,6 +3,9 @@ name: Android v1.5 security contract checks
 on:
   pull_request:
     paths:
+      - 'lib/mobile/web-handoff-ticket.mjs'
+      - 'lib/mobile/session.ts'
+      - 'mobile/src/lib/web-handoff.ts'
       - 'mobile/src/lib/write-permissions.ts'
       - 'mobile/src/api/types.ts'
       - 'mobile/src/api/http.ts'
@@ -12,6 +15,7 @@ on:
       - 'mobile/src/app/officer/profile.tsx'
       - 'mobile/src/app/_layout.tsx'
       - 'app/api/mobile/orgs/**/write-capabilities/route.ts'
+      - 'app/api/mobile/**/auth/web-handoff/route.ts'
       - 'tests/mobile-v1.5-*.test.mjs'
       - '.github/workflows/android-v15-contracts.yml'
   workflow_dispatch:
@@ -33,4 +37,4 @@ jobs:
         with:
           node-version: '22'
       - name: Verify write permission and release safety contracts
-        run: node --experimental-strip-types --test tests/mobile-v1.5-write-permissions.test.mjs tests/mobile-v1.5-release-guards.test.mjs
+        run: node --experimental-strip-types --test tests/mobile-v1.5-write-permissions.test.mjs tests/mobile-v1.5-release-guards.test.mjs tests/mobile-v1.5-web-handoff.test.mjs
