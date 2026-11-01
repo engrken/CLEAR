@@ -5,7 +5,7 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { api } from '@/api';
 import { TENANT_OPERATIONS_ENABLED } from '@/api/config';
 import { Banner, Button, Card, Screen, SectionHeader, Text } from '@/components/ui';
-import { switchToGlobalWebPortal } from '@/lib/links';
+import { switchToGlobalWebPortal, openVerifiedWebHandoff } from '@/lib/links';
 import { useGlobalSession, useSession } from '@/lib/session';
 import { useAsync } from '@/lib/use-async';
 import { spacing, useTheme } from '@/theme';
@@ -43,10 +43,10 @@ export default function GlobalDashboard() {
             Provision new tenant
           </Button>
         ) : null}
-        <Button block variant="secondary" icon="shield" onPress={() => void switchToGlobalWebPortal()}>
+        <Button block variant="secondary" icon="shield" onPress={() => void api.requestGlobalWebHandoff(global).then(({ url }) => openVerifiedWebHandoff(url)).catch(() => switchToGlobalWebPortal())}>
           Switch to Web Portal
         </Button>
-        <Text variant="caption" color="inkMuted">Web sign-in remains separate until secure one-time handoff is enabled.</Text>
+        <Text variant="caption" color="inkMuted">Secure automatic sign-in is attempted when enabled; otherwise the browser opens the standard web sign-in.</Text>
       </View>
 
       {overview.error ? (
