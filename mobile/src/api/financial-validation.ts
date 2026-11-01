@@ -15,7 +15,7 @@ export function normalizeMobilePayment(input: MobilePaymentInput): MobilePayment
   if (!studentId || !feeId || !orNumber || !idempotencyKey || idempotencyKey.length > 128) {
     throw new Error('Payment requires student, fee, receipt number and stable retry key.');
   }
-  if (/[\\r\\n\\x00-\\x1f]/.test(orNumber + idempotencyKey)) {
+  if (/[\x00-\x1f\x7f]/.test(orNumber + idempotencyKey)) {
     throw new Error('Receipt number and retry key cannot contain control characters.');
   }
   return { studentId, feeId, orNumber, idempotencyKey, amountCentavos: input.amountCentavos };
