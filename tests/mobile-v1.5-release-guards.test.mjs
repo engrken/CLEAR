@@ -25,9 +25,11 @@ test('payment posting requires idempotency and integer centavos before network c
   const types = source('mobile/src/api/types.ts');
   assert.match(types, /orNumber: string; idempotencyKey: string/);
   const client = source('mobile/src/api/http.ts');
-  assert.match(client, /!p\.idempotencyKey\?\.trim\(\)/);
-  assert.match(client, /Number\.isSafeInteger\(p\.amountCentavos\)/);
-  assert.match(client, /idempotencyKey: p\.idempotencyKey/);
+  assert.match(client, /normalizeMobilePayment\(p\)/);
+  assert.match(client, /idempotencyKey: payment\.idempotencyKey/);
+  const validator = source('mobile/src/api/financial-validation.ts');
+  assert.match(validator, /Number\.isSafeInteger\(input\.amountCentavos\)/);
+  assert.match(validator, /idempotencyKey\.length > 128/);
 });
 
 test('capability endpoint checks tenant-scoped authentication and denies by default', () => {
