@@ -40,7 +40,12 @@ function escapeHtml(value: unknown): string {
 
 export async function postAuthorizedPayment(
   cleanDepartment: string,
-  data: Parameters<typeof recordPayment>[1],
+  data: {
+    requestId: string; orNumber?: string; date: string; studentId: string; studentName: string;
+    studentEmail?: string; category: string; itemDescription: string;
+    paymentType: string; standardRate: number; amountPaid: number;
+    fundAllocation: string; ay: string; term: string; penaltyId?: string;
+  },
   officer: { name?: string | null; fullName?: string | null; email?: string | null },
 ) {
   const officerName = String(officer.name || officer.fullName || officer.email || "System Administrator");
