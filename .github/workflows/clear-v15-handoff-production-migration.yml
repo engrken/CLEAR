@@ -1,0 +1,84 @@
+name: CLEAR v1.5 handoff Prisma migration (manual only)
+
+# Never runs on push, pull_request, schedule or from the Android build.
+on:
+  workflow_dispatch:
+    inputs:
+      approved_main_sha:
+        description: "Exact reviewed and deployed main commit SHA (40 characters)"
+        required: true
+        type: string
+      confirmation:
+        description: "Enter APPLY_CLEAR_HANDOFF_MIGRATION to authorize one Prisma deployment"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  statuses: read
+
+concurrency:
+  group: clear-production-prisma-migration
+  cancel-in-progress: false
+
+jobs:
+  migrate-handoff:
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      inputs.confirmation == 'APPLY_CLEAR_HANDOFF_MIGRATION'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: production-db-migrations
+    env:
+      CI: 'true'
+      DATABASE_URL: ${{ secrets.CLEAR_PRODUCTION_DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Match operator approval with checked-out production commit
+        env:
+          APPROVED: ${{ inputs.approved_main_sha }}
+        run: |
+          set -euo pipefail
+          if [ "${#APPROVED}" -ne 40 ] || [ "$APPROVED" != "$GITHUB_SHA" ]; then
+            echo "::error::Approved SHA is not the exact checked-out main commit"
+            exit 1
+          fi
+      - name: Confirm official Vercel release status
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          node --input-type=module <<'CHECK'
+          const res = await fetch('https://api.github.com/repos/' + process.env.REPO +
+            '/commits/' + process.env.GITHUB_SHA + '/status', {
+            headers: { Authorization: 'Bearer ' + process.env.GITHUB_TOKEN,
+              Accept: 'application/vnd.github+json' },
+            signal: AbortSignal.timeout(15000),
+          });
+          if (!res.ok) throw Error('Commit status could not be verified.');
+          const data = await res.json();
+          if (!data.statuses?.some(s => s.context === 'Vercel' && s.state === 'success'))
+            throw Error('Vercel production release is not confirmed for approved SHA.');
+          CHECK
+      - name: Verify scoped production database credential exists
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::Set CLEAR_PRODUCTION_DATABASE_URL as an environment/repository secret before dispatch"
+            exit 1
+          fi
+      - name: Install locked dependencies (Prisma CLI)
+        run: npm ci --no-audit --no-fund
+      - name: Preflight approved Neon endpoint, migration checksum and pending migrations
+        run: node scripts/ci/verify-handoff-production-migration.mjs pre
+      - name: Apply only the reviewed pending migration via Prisma
+        run: npx prisma migrate deploy
+      - name: Verify Prisma migration, indexes and schema
+        run: |
+          node scripts/ci/verify-handoff-production-migration.mjs post
+          npx prisma migrate status
+      - name: Record completion
+        run: echo 'Approved handoff migration validated. Enablement and APK are separate manual release steps.'
