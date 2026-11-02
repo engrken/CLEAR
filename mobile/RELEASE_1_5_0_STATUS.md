@@ -55,3 +55,9 @@ Updated 2026-11-02. This document tracks **draft PR #132**, not deployed behavio
 - [x] Android Global Administrator dashboard branding aligns with the approved display title.
 - [ ] Run all source/CI checks on the final commit, then signed-device UAT. These reads do **not** replace pending native write workflows or approve release.
 - Web production is the authority for all business changes and is not modified by these Android additions. Both features remain only on the draft v1.5.0 integration branch.
+
+## P2 web-first finance review pagination — 2026-11-02
+- [x] Android Penalties, Collections, Cash Advances and Liquidations review now page through the existing web financial tables using bounded, tenant/period/module-bound cursors; no financial posts or receipt aggregation.
+- [x] The native workspace loads older pages on demand with session/module isolation. Search filters the loaded subset only; older server versions retain the secure web fallback.
+- [x] Expanded the disposable PostgreSQL finance HTTP acceptance test to check allocation pagination, cursor isolation and unchanged financial records.
+- [ ] CI and signed-device testing remain necessary before source changes are release-accepted.

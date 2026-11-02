@@ -29,6 +29,27 @@ const PERMISSION: Readonly<Record<Kind, string>> = {
   collections: 'tab-payment',
 };
 const PAGE_LIMIT = 40;
+type Cursor = { v: 1; org: string; ay: string; term: string; kind: Kind; at: string; id: string };
+function parseCursor(raw: string | null, org: string, ay: string, term: string, kind: Kind): Cursor | null {
+  if (raw === null) return null;
+  if (!raw || raw.length > 1100 || !/^[A-Za-z0-9_-]+$/.test(raw)) {
+    throw new ApiFailure(400, 'invalid_cursor', 'Finance cursor is invalid. Refresh the list.');
+  }
+  try {
+    const value = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8')) as Partial<Cursor>;
+    if (Buffer.from(JSON.stringify(value)).toString('base64url') !== raw ||
+        value.v !== 1 || value.org !== org || value.ay !== ay || value.term !== term ||
+        value.kind !== kind || typeof value.at !== 'string' ||
+        !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(value.at) ||
+        !Number.isFinite(Date.parse(value.at)) || new Date(value.at).toISOString() !== value.at ||
+        typeof value.id !== 'string' || !/^[A-Za-z0-9_-]{1,120}$/.test(value.id)) {
+      throw Error('Mismatched or malformed cursor');
+    }
+    return value as Cursor;
+  } catch {
+    throw new ApiFailure(400, 'invalid_cursor', 'Finance cursor is invalid or expired. Refresh the list.');
+  }
+}
 export const dynamic = 'force-dynamic';
 
 export const GET = handler(async (req: Request, { params }: Ctx) => {
@@ -48,17 +69,36 @@ export const GET = handler(async (req: Request, { params }: Ctx) => {
   const { org } = await requireMobileOfficer(req, slug, PERMISSION[mode]);
   const where = { organizationId: org.id, academicYear: org.activeAy, term: org.activeTerm };
   const take = limit + 1;
+  const cursor = parseCursor(query.get('cursor'), org.id, org.activeAy, org.activeTerm, mode);
+  // All rows come from the web's canonical financial tables. Collection rows
+  // remain allocations, never complete official-receipt totals.
+  const pageWhere = (field: 'date' | 'dateIssued' | 'timestamp') =>
+    cursor ? { ...where, OR: [
+      { [field]: { lt: new Date(cursor.at) } },
+      { [field]: new Date(cursor.at), id: { lt: cursor.id } },
+    ] } : where;
+  const finish = <T extends { id: string }>(rows: T[], when: (item: T) => Date) => {
+    const page = rows.slice(0, limit);
+    const hasMore = rows.length > limit;
+    const last = page[page.length - 1];
+    const nextCursor = hasMore && last ? Buffer.from(JSON.stringify({
+      v: 1, org: org.id, ay: org.activeAy, term: org.activeTerm,
+      kind: mode, at: when(last).toISOString(), id: last.id,
+    } satisfies Cursor)).toString('base64url') : null;
+    return { page, hasMore, nextCursor };
+  };
 
   if (mode === 'penalties') {
     const rows = await prisma.penalty.findMany({
-      where, orderBy: [{ date: 'desc' }, { id: 'desc' }], take,
+      where: pageWhere('date'), orderBy: [{ date: 'desc' }, { id: 'desc' }], take,
       select: { id: true, penaltyId: true, studentName: true, activity: true,
         fineAmount: true, status: true, date: true },
     });
+    const paged = finish(rows, row => row.date);
     return {
       kind: mode, scope: 'active_period', ay: org.activeAy, term: org.activeTerm,
-      limit, hasMore: rows.length > limit, amountMeaning: 'Remaining penalty balance',
-      entries: rows.slice(0, limit).map(p => ({
+      limit, hasMore: paged.hasMore, nextCursor: paged.nextCursor, amountMeaning: 'Remaining penalty balance',
+      entries: paged.page.map(p => ({
         id: p.id, reference: p.penaltyId, title: p.studentName,
         subtitle: p.activity, status: p.status,
         amountCentavos: readOnlyCentavos(p.fineAmount),
@@ -69,14 +109,15 @@ export const GET = handler(async (req: Request, { params }: Ctx) => {
 
   if (mode === 'advances') {
     const rows = await prisma.cashAdvance.findMany({
-      where, orderBy: [{ dateIssued: 'desc' }, { id: 'desc' }], take,
+      where: pageWhere('dateIssued'), orderBy: [{ dateIssued: 'desc' }, { id: 'desc' }], take,
       select: { id: true, advanceId: true, requestor: true, purpose: true,
         fundSource: true, amountApproved: true, status: true, dateIssued: true },
     });
+    const paged = finish(rows, row => row.dateIssued);
     return {
       kind: mode, scope: 'active_period', ay: org.activeAy, term: org.activeTerm,
-      limit, hasMore: rows.length > limit, amountMeaning: 'Original approved advance (not current outstanding)',
-      entries: rows.slice(0, limit).map(a => ({
+      limit, hasMore: paged.hasMore, nextCursor: paged.nextCursor, amountMeaning: 'Original approved advance (not current outstanding)',
+      entries: paged.page.map(a => ({
         id: a.id, reference: a.advanceId, title: a.requestor,
         subtitle: [a.fundSource, a.purpose].filter(Boolean).join(' · '),
         status: a.status, amountCentavos: readOnlyCentavos(a.amountApproved),
@@ -87,14 +128,15 @@ export const GET = handler(async (req: Request, { params }: Ctx) => {
 
   if (mode === 'liquidations') {
     const rows = await prisma.audit.findMany({
-      where, orderBy: [{ date: 'desc' }, { id: 'desc' }], take,
+      where: pageWhere('date'), orderBy: [{ date: 'desc' }, { id: 'desc' }], take,
       select: { id: true, auditId: true, referenceCaId: true, requestor: true,
         fundSource: true, totalExpense: true, status: true, date: true },
     });
+    const paged = finish(rows, row => row.date);
     return {
       kind: mode, scope: 'active_period', ay: org.activeAy, term: org.activeTerm,
-      limit, hasMore: rows.length > limit, amountMeaning: 'Recorded liquidation expense',
-      entries: rows.slice(0, limit).map(a => ({
+      limit, hasMore: paged.hasMore, nextCursor: paged.nextCursor, amountMeaning: 'Recorded liquidation expense',
+      entries: paged.page.map(a => ({
         id: a.id, reference: a.auditId, title: a.requestor,
         subtitle: [a.referenceCaId, a.fundSource].filter(Boolean).join(' · '),
         status: a.status, amountCentavos: readOnlyCentavos(a.totalExpense),
@@ -107,15 +149,16 @@ export const GET = handler(async (req: Request, { params }: Ctx) => {
   // NEVER sum or count these as completed receipts; full canonical grouped
   // Receipt History is available through separately authenticated secure web.
   const rows = await prisma.collection.findMany({
-    where, orderBy: [{ timestamp: 'desc' }, { id: 'desc' }], take,
+    where: pageWhere('timestamp'), orderBy: [{ timestamp: 'desc' }, { id: 'desc' }], take,
     select: { id: true, orNumber: true, studentName: true, itemDescription: true,
       category: true, amountPaid: true, status: true, timestamp: true },
   });
+  const paged = finish(rows, row => row.timestamp);
   return {
     kind: mode, scope: 'active_period', ay: org.activeAy, term: org.activeTerm,
-    limit, hasMore: rows.length > limit,
+    limit, hasMore: paged.hasMore, nextCursor: paged.nextCursor,
     amountMeaning: 'Individual receipt allocation line (not full OR total)',
-    entries: rows.slice(0, limit).map(c => ({
+    entries: paged.page.map(c => ({
       id: c.id, reference: c.orNumber, title: c.studentName,
       subtitle: [c.category, c.itemDescription].filter(Boolean).join(' · '),
       status: c.status, amountCentavos: readOnlyCentavos(c.amountPaid),

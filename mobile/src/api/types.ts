@@ -308,6 +308,8 @@ export type FinanceReviewResponse = {
   scope: 'active_period';
   ay: string; term: string;
   limit: number; hasMore: boolean;
+  /** Supplied by the v1.5.0 web API. Older servers may omit this. */
+  nextCursor?: string | null;
   amountMeaning: string;
   entries: FinanceReviewEntry[];
 };
@@ -392,7 +394,7 @@ export type ClearApi = {
   /** Server authorizes tab-void independently of overview and reporting grants. */
   listVoidAudit(s: Session, cursor?: string): Promise<VoidAuditPage>;
   /** Independently permission-checked, current period and read-only. */
-  getFinanceReview(s: Session, kind: FinanceReviewKind, limit?: number): Promise<FinanceReviewResponse>;
+  getFinanceReview(s: Session, kind: FinanceReviewKind, limit?: number, cursor?: string): Promise<FinanceReviewResponse>;
   /** Authorized GET-only exact reference search; no receipt/void mutations. */
   searchReceiptReferences(s: Session, q: string): Promise<ReceiptReferenceSearch>;
   searchVoidReferences(s: Session, q: string): Promise<VoidReferenceSearch>;
