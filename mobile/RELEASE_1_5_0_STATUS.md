@@ -1,5 +1,16 @@
 # CLEAR Android v1.5.0 — Web module parity: non-cash writes, cash-sensitive read-only
 
+## Native parity implementation increment — 2026-11-02
+
+- **Clearance:** Added dedicated role-gated officer clearance review with current-period status and outstanding obligation details, using existing authoritative read-only clearance computation. No ability to override a financial clearance result.
+- **Finance:** Added native read-only report *activity snapshot* (gross allocation-line totals, never certified receipt totals) and a paginated, tenant-scoped fund transfer history. All cash writes, reconciliation and official statements remain on secure web.
+- **Reports:** Native report signatory presentation editor with optimistic versioning, serializable transaction, audit and separate `MOBILE_REPORT_SIGNATORY_WRITES_ENABLED` permission. Official report certification and submission still require the web workflow.
+- **Global Administrator:** Native scheduling, cancellation and early termination of maintenance notices with audit/recovery safeguards and separate `MOBILE_GLOBAL_MAINTENANCE_WRITES_ENABLED` permission. Native global tenant lifecycle forms now consume a server-issued capability for `MOBILE_TENANT_OPERATIONS_ENABLED`, rather than relying on a client flag.
+- **Security:** Added source contract checks for these modules; inherited tests for global tenant navigation were updated to assert *server-verified* permission grants, not the old static client lockout. All new server flags remain off on Production.
+- **Release:** Signed v1.5.0 APK and physical biometric UAT have not begun; PR #132 remains DRAFT. CI for the newest revision must pass, including web lint, before signed UAT packaging. Deployment is separate from this draft review.
+
+---
+
 ## Implementation checkpoint — 2026-11-02 (P1–P3)
 
 **Branch:** `feature/android-v1.5.0-write-foundation-20261101` / draft PR #132. **Not merged or deployed.**

@@ -48,6 +48,17 @@ jobs:
 
       - name: Install regression test dependencies (isolated; no production secrets)
         run: npm ci --no-audit --no-fund
+      - name: Lint new v1.5 API routes without allowing new web lint debt
+        run: |
+          npx eslint --max-warnings=0 \
+            'app/api/mobile/orgs/[org]/reports/route.ts' \
+            'app/api/mobile/orgs/[org]/realign-review/route.ts' \
+            'app/api/mobile/orgs/[org]/academic-calendar/route.ts' \
+            'app/api/mobile/orgs/[org]/report-signatories/route.ts' \
+            'app/api/mobile/orgs/[org]/users/manage/route.ts' \
+            'app/api/mobile/orgs/[org]/collectibles/route.ts' \
+            'app/api/mobile/global/maintenance/route.ts' \
+            'app/api/mobile/global/write-capabilities/route.ts'
       - name: Check consolidated source regressions (no database access)
         run: node scripts/ci/run-clear-acceptance.mjs
       - name: Verify Expo TypeScript and lint (actionable failure logs)
