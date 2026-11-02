@@ -26,6 +26,15 @@ for (const flag of ['PAYMENT_WRITES_ENABLED', 'REMITTANCE_WRITES_ENABLED', 'MOBI
     blockers.push(flag + ' must remain hard-disabled for web-first v1.5.0');
   }
 }
+if (!/if \(verb === 'POST' && FINANCIAL_POSTS\.test\(path\)\) return false/.test(gate) ||
+    /env\.financialWritesEnabled === true/.test(gate) ||
+    /MOBILE_FINANCIAL_WRITES_ENABLED === 'true'/.test(read('lib/mobile/http.ts'))) {
+  blockers.push('Mobile cash POST must stay hard-disabled on the backend regardless of deployment flags');
+}
+if (!read('mobile/src/lib/write-permissions.ts').includes('cashSensitiveActions.has(action)')) {
+  blockers.push('Android cash-affecting write grants must be denied regardless of capability replies');
+}
+
 if (!/TENANT_OPERATIONS_ENABLED/.test(config) || !/EXPO_PUBLIC_CLEAR_TENANT_OPERATIONS/.test(config)) {
   blockers.push('Tenant operations must remain separately gated');
 }
