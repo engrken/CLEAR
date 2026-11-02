@@ -58,13 +58,34 @@ export async function openDepartmentModule(slug: string, route: string) {
   return url ? openVerifiedWebHandoff(url) : openWebPage(fallback);
 }
 
-/** Existing audited Global Superadmin tenant workflow. */
-export function openGlobalAdministrationPortal() {
-  return openWebPage(`${CLEAR_WEB_APP}/dashboard/provisions`);
+const GLOBAL_WEB_DESTINATIONS = new Set(['/dashboard/provisions', '/dashboard/provisions/maintenance']);
+
+/** Use the same single-use global-mobile ticket for every authorized web shortcut. */
+async function openGlobalModule(destination: string) {
+  if (!GLOBAL_WEB_DESTINATIONS.has(destination)) throw new Error('Unrecognized administrator destination.');
+  let url: string | null = null;
+  try {
+    const raw = await getItem('clear.global-session.v1');
+    if (raw) {
+      const session = JSON.parse(raw) as import('@/api').GlobalSession;
+      if (Date.parse(session.expiresAt) > Date.now()) {
+        const response = await api.requestGlobalModuleWebHandoff(session, destination);
+        url = response.url;
+      }
+    }
+  } catch {
+    // Source session expired, handoff disabled, or network offline: normal web OTP.
+  }
+  return url ? openVerifiedWebHandoff(url) : openWebPage(`${CLEAR_WEB_APP}${destination}`);
 }
-/** The existing audited global maintenance scheduling/recovery console. */
+
+/** Existing audited Global Administrator tenant workflow. */
+export function openGlobalAdministrationPortal() {
+  return openGlobalModule('/dashboard/provisions');
+}
+/** Existing audited global maintenance scheduling/recovery console. */
 export function openGlobalMaintenancePortal() {
-  return openWebPage(`${CLEAR_WEB_APP}/dashboard/provisions/maintenance`);
+  return openGlobalModule('/dashboard/provisions/maintenance');
 }
 
 /** First-party browser portal fallback while single-use SSO remains disabled. */

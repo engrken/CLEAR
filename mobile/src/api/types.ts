@@ -435,6 +435,7 @@ export type ClearApi = {
   changeGlobalMaintenance(session: GlobalSession, change: GlobalMaintenanceChange): Promise<{success:true}>;
   /** Separate Global Administrator identity; never impersonate a tenant officer. */
   requestGlobalWebHandoff(session: GlobalSession): Promise<{ url: string }>;
+  requestGlobalModuleWebHandoff(session: GlobalSession, destination: string): Promise<{ url: string }>;
   listManagedTenants(session: GlobalSession): Promise<ManagedTenant[]>;
   provisionTenant(session: GlobalSession, payload: NewTenant): Promise<ProvisionResult>;
   manageTenant(session: GlobalSession, payload: {

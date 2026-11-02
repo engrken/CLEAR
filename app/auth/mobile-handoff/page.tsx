@@ -4,6 +4,7 @@ import { Suspense, useEffect, useRef, useState } from 'react';
 import { signIn, getSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
+const GLOBAL_WEB_PATHS = new Set(['/dashboard/provisions', '/dashboard/provisions/maintenance']);
 const ALLOWED_WEB_MODULE_PATHS = new Set(["/summary","/students","/clearance","/collections","/collections/history","/remittances","/penalties","/advances","/liquidations","/collectibles","/reports","/void","/realign","/users","/setup"]);
 
 /** Browser receives a short-lived ticket, never a mobile bearer credential. */
@@ -32,7 +33,11 @@ function MobileHandoffExchange() {
         const session = await getSession();
         const user = session?.user as ((NonNullable<typeof session>['user']) & { department?: string | null; role?: string; handoffDestination?: string | null }) | undefined;
         if (!user) { setMessage('Browser session could not be verified. Please sign in on the web portal.'); return; }
-        if (user.role === 'SuperAdmin') { router.replace('/dashboard/provisions'); return; }
+        if (user.role === 'SuperAdmin') {
+          router.replace(user.handoffDestination && GLOBAL_WEB_PATHS.has(user.handoffDestination)
+            ? user.handoffDestination : '/dashboard/provisions');
+          return;
+        }
         if (user.department && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(user.department)) {
           const base = `/department/${user.department}`;
           const path = user.handoffDestination;

@@ -31,6 +31,10 @@ test('production migration workflow is manual and isolated from APK packaging', 
   assert.match(workflow, /production-db-migrations/);
   assert.match(workflow, /secrets\.CLEAR_PRODUCTION_DATABASE_URL/);
   assert.match(workflow, /approved_main_sha/);
+  for (const context of ['ci/circleci: web', 'ci/circleci: mobile', 'ci/circleci: financial-security', 'ci/circleci: student-auth-security']) {
+    assert.ok(workflow.includes(context), 'Missing required CI context ' + context);
+  }
+  assert.doesNotMatch(workflow, /Vercel production release is not confirmed/);
   assert.match(workflow, /preflight|Preflight/);
   assert.match(workflow, /node scripts\/ci\/verify-handoff-production-migration\.mjs pre/);
   assert.match(workflow, /npx prisma migrate deploy/);

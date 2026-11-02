@@ -47,7 +47,7 @@ jobs:
             echo "::error::Approved SHA is not the exact checked-out main commit"
             exit 1
           fi
-      - name: Confirm official Vercel release status
+      - name: Require all four reviewed CI contexts for exact main SHA
         env:
           GITHUB_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -59,10 +59,14 @@ jobs:
               Accept: 'application/vnd.github+json' },
             signal: AbortSignal.timeout(15000),
           });
-          if (!res.ok) throw Error('Commit status could not be verified.');
+          if (!res.ok) throw Error('GitHub CI commit status could not be verified.');
           const data = await res.json();
-          if (!data.statuses?.some(s => s.context === 'Vercel' && s.state === 'success'))
-            throw Error('Vercel production release is not confirmed for approved SHA.');
+          const required = ['ci/circleci: web', 'ci/circleci: mobile',
+            'ci/circleci: financial-security', 'ci/circleci: student-auth-security'];
+          for (const context of required) {
+            if (!data.statuses?.some(s => s.context === context && s.state === 'success'))
+              throw Error('Required reviewed CI context has not succeeded: ' + context);
+          }
           CHECK
       - name: Verify scoped production database credential exists
         run: |
