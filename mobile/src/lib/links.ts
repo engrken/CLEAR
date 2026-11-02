@@ -46,6 +46,10 @@ export function openDepartmentModule(slug: string, route: string) {
 export function openGlobalAdministrationPortal() {
   return openWebPage(`${CLEAR_WEB_APP}/dashboard/provisions`);
 }
+/** The existing audited global maintenance scheduling/recovery console. */
+export function openGlobalMaintenancePortal() {
+  return openWebPage(`${CLEAR_WEB_APP}/dashboard/provisions/maintenance`);
+}
 
 /** First-party browser portal fallback while single-use SSO remains disabled. */
 export async function switchToDepartmentWebPortal(slug: string) {

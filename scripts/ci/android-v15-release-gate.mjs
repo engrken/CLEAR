@@ -89,6 +89,12 @@ if (!existsSync(resolve(root, 'app/api/mobile/orgs/[org]/collectibles/route.ts')
   blockers.push('Native Collectibles needs a protected read-only workspace and server route');
 }
 
+if (!existsSync(resolve(root,'app/api/mobile/global/maintenance/route.ts')) ||
+    !existsSync(resolve(root,'mobile/src/app/global/maintenance.tsx')) ||
+    !gate.includes('canRunMobileGlobalMaintenanceWrites') ||
+    !read('lib/maintenance/rules.ts').includes("path === '/api/mobile/global/maintenance'")) {
+  blockers.push('Global Maintenance requires protected native schedule and recovery controls');
+}
 if (!existsSync(resolve(root, 'app/api/mobile/orgs/[org]/students/manage/route.ts')) ||
     !existsSync(resolve(root, 'app/api/mobile/orgs/[org]/write-capabilities/route.ts'))) {
   blockers.push('Roster server authorization routes missing');

@@ -145,6 +145,8 @@ export const httpApi: ClearApi = {
   },
   requestGlobalWebHandoff: (session) => request('/global/auth/web-handoff', { method: 'POST', token: session.token }),
   getGlobalOverview: (session) => request('/global/overview', { token: session.token }),
+  getGlobalMaintenance: (session) => request('/global/maintenance', { token: session.token }),
+  changeGlobalMaintenance: (session, change) => request('/global/maintenance', { token: session.token, method: 'POST', json: change }),
   listManagedTenants: (session) => request('/global/provisions', { token: session.token }),
   provisionTenant: (session, payload) => TENANT_OPERATIONS_ENABLED ?
     request('/global/provisions', { token: session.token, method: 'POST', json: payload }) :

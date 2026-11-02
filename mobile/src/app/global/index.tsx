@@ -38,6 +38,9 @@ export default function GlobalDashboard() {
         <Button block icon="shield" onPress={() => router.push('/global/provisions')}>
           Tenant management portal
         </Button>
+        <Button block variant="secondary" icon="shield" onPress={() => router.push('/global/maintenance')}>
+          Maintenance & announcements
+        </Button>
         {TENANT_OPERATIONS_ENABLED ? (
           <Button block variant="secondary" icon="plus" onPress={() => router.push('/global/provisions/new')}>
             Provision new tenant

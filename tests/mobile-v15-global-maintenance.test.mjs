@@ -1,0 +1,31 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {isMobileRequestAllowed,canRunMobileGlobalMaintenanceWrites} from '../lib/mobile/production-readonly.ts';
+import {isRecoveryPath} from '../lib/maintenance/rules.ts';
+const src=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
+test('global mobile maintenance is uniquely guarded and recoverable in FULL mode',()=>{
+ const path='/api/mobile/global/maintenance';
+ assert.equal(isRecoveryPath(path),true);
+ assert.equal(isRecoveryPath(path+'/other'),false);
+ assert.equal(isMobileRequestAllowed('POST',path,{}),false);
+ assert.equal(isMobileRequestAllowed('POST',path,{vercelEnv:'production',gitRef:'main',tenantOperationsEnabled:true}),false);
+ assert.equal(isMobileRequestAllowed('POST',path,{vercelEnv:'production',gitRef:'main',globalMaintenanceWritesEnabled:true}),true);
+ assert.equal(isMobileRequestAllowed('POST','/api/mobile/global/provisions',{vercelEnv:'production',gitRef:'main',globalMaintenanceWritesEnabled:true}),false);
+ assert.equal(canRunMobileGlobalMaintenanceWrites({vercelEnv:'preview',gitRef:'untrusted',globalMaintenanceWritesEnabled:true}),false);
+});
+test('global schedule handler uses independent global OTP bearer session, confirms change and logs',()=>{
+ const route=src('app/api/mobile/global/maintenance/route.ts');
+ assert.match(route,/requireGlobalMobileAdmin\(req\)/);
+ assert.match(route,/canRunMobileGlobalMaintenanceWrites/);
+ assert.match(route,/maintenanceNotice\.create/);
+ assert.match(route,/maintenanceAudit\.create/);
+ assert.match(route,/maintenanceNotice\.updateMany/);
+ assert.match(route,/version:body\.expectedVersion/);
+ assert.match(route,/SCHEDULE MAINTENANCE/);
+ assert.match(route,/END_EARLY/);
+ assert.doesNotMatch(route,/prisma\.collection\.update|fundTransfer\.create|export const DELETE/);
+ const ui=src('mobile/src/app/global/maintenance.tsx');
+ assert.match(ui,/openGlobalMaintenancePortal/);
+ assert.match(src('mobile/src/app/_layout.tsx'),/name="global\/maintenance"/);
+});

@@ -21,6 +21,8 @@ type MobileEnvironment = {
   tenantUserManageWritesEnabled?: boolean;
   /** Calendar-only, noncash tenant configuration grant. */
   academicSettingsWritesEnabled?: boolean;
+  /** Global maintenance windows require a separate Recovery Administrator opt-in. */
+  globalMaintenanceWritesEnabled?: boolean;
   /** Never permit an unverified Vercel Preview environment to mutate real rosters. */
   localRosterCiOnly?: boolean;
 };
@@ -38,6 +40,7 @@ const OFFICER_COLLABORATION = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[
 const OFFICER_WEB_HANDOFF = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/auth\/web-handoff$/;
 const GLOBAL_WEB_HANDOFF = '/api/mobile/global/auth/web-handoff';
 const GLOBAL_LOGOUT = '/api/mobile/global/auth/session';
+const GLOBAL_MAINTENANCE = '/api/mobile/global/maintenance';
 const OFFICER_LOGOUT = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/auth\/session$/;
 
 // This only admits a route to its own authorization and accounting handler.
@@ -96,6 +99,8 @@ export function isMobileRequestAllowed(
       canRunMobileTenantUserManageWrites(env)) return true;
   if (verb === 'POST' && ACADEMIC_CALENDAR_POST.test(path) &&
       canRunMobileAcademicSettingsWrites(env)) return true;
+  if (verb === 'POST' && path === GLOBAL_MAINTENANCE &&
+      canRunMobileGlobalMaintenanceWrites(env)) return true;
 
   // Production operational rollout is opt-in per capability, NOT a broad
   // "write enabled" switch. Only two existing audited tenant-management routes
@@ -151,7 +156,8 @@ export function mobileTenantUserWriteEnvironment(): MobileEnvironment {
   return { ...mobileRosterWriteEnvironment(),
     tenantUserWritesEnabled: process.env.MOBILE_TENANT_USER_WRITES_ENABLED === 'true',
     tenantUserManageWritesEnabled: process.env.MOBILE_TENANT_USER_MANAGE_WRITES_ENABLED === 'true',
-    academicSettingsWritesEnabled: process.env.MOBILE_ACADEMIC_SETTINGS_WRITES_ENABLED === 'true' };
+    academicSettingsWritesEnabled: process.env.MOBILE_ACADEMIC_SETTINGS_WRITES_ENABLED === 'true',
+    globalMaintenanceWritesEnabled: process.env.MOBILE_GLOBAL_MAINTENANCE_WRITES_ENABLED === 'true' };
 }
 
 /** Native officer creation/role edits are a separately reviewed non-cash rollout. */
@@ -163,6 +169,16 @@ export function canRunMobileTenantUserManageWrites(env: MobileEnvironment): bool
 /** Separate calendar configuration feature flag, never a cash write grant. */
 export function canRunMobileAcademicSettingsWrites(env: MobileEnvironment): boolean {
   return env.academicSettingsWritesEnabled === true && (
+    (env.vercelEnv === 'production' && env.gitRef === 'main') ||
+    (env.vercelEnv === 'preview' &&
+      env.gitRef === 'feature/android-v1.5.0-write-foundation-20261101' &&
+      env.localRosterCiOnly === true)
+  );
+}
+
+/** A dedicated global-admin recovery exception; never unlock arbitrary writes. */
+export function canRunMobileGlobalMaintenanceWrites(env: MobileEnvironment): boolean {
+  return env.globalMaintenanceWritesEnabled === true && (
     (env.vercelEnv === 'production' && env.gitRef === 'main') ||
     (env.vercelEnv === 'preview' &&
       env.gitRef === 'feature/android-v1.5.0-write-foundation-20261101' &&

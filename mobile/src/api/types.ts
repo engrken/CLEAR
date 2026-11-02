@@ -42,6 +42,18 @@ export type Session = { token: string; officer: Officer; org: Organization; expi
 
 /** Global administrators are not department officers and have no implicit tenant permissions. */
 export type GlobalAdmin = { id: string; fullName: string; email: string; role: 'SuperAdmin' };
+export type GlobalMaintenanceNotice = {
+  id:string;scopeKey:string;mode:'NORMAL'|'READ_ONLY'|'FULL';
+  state:'DRAFT'|'SCHEDULED'|'CANCELLED';
+  title:string;message:string;startsAt:string;endsAt:string;version:number;
+};
+export type GlobalMaintenancePage={
+  serverTime:string; notices:GlobalMaintenanceNotice[];
+};
+export type GlobalMaintenanceChange =
+  | {action:'create';scope:string;mode:'NORMAL'|'READ_ONLY'|'FULL';title:string;
+      message:string;startsAt:string;endsAt:string;confirmation:string}
+  | {action:'end_early'|'cancel';id:string;expectedVersion:number;confirmation:string};
 export type GlobalSession = { token: string; admin: GlobalAdmin; expiresAt: string };
 export type GlobalOverview = {
   generatedAt: string;
@@ -406,6 +418,8 @@ export type ClearApi = {
   restoreGlobalSession(token: string): Promise<GlobalSession>;
   signOutGlobal(session: GlobalSession): Promise<void>;
   getGlobalOverview(session: GlobalSession): Promise<GlobalOverview>;
+  getGlobalMaintenance(session: GlobalSession): Promise<GlobalMaintenancePage>;
+  changeGlobalMaintenance(session: GlobalSession, change: GlobalMaintenanceChange): Promise<{success:true}>;
   /** Separate Global Administrator identity; never impersonate a tenant officer. */
   requestGlobalWebHandoff(session: GlobalSession): Promise<{ url: string }>;
   listManagedTenants(session: GlobalSession): Promise<ManagedTenant[]>;
