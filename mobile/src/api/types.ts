@@ -372,7 +372,7 @@ export type ClearApi = {
   /** Accessible to tab-remittances even without tab-overview. */
   listPendingRemittances(s: Session): Promise<LedgerEntry[]>;
   listStudents(s: Session, q?: string, missingEmailOnly?: boolean): Promise<Student[]>;
-  recordPayment(s: Session, p: { studentId: string; feeId: string; amountCentavos: number; orNumber: string; idempotencyKey: string }): Promise<LedgerEntry>;
+  recordPayment(s: Session, p: { studentId: string; feeId: string; amountCentavos: number; idempotencyKey: string }): Promise<{ reference: string; title: string; orNumber: string; balanceDue: number; paymentEntries: number; paymentType: string }>;
   getRemittance(s: Session, id: string): Promise<RemittanceDetail>;
   verifyRemittance(s: Session, id: string, p: { orNumber: string; fundAllocation?: string }): Promise<{ orNumber: string }>;
   invalidateRemittance(s: Session, id: string): Promise<{ ok: true }>;
