@@ -48,12 +48,25 @@ export type MobileWritePolicy = Readonly<{
 
 const validActions: ReadonlySet<string> = new Set(MOBILE_WRITE_ACTIONS);
 
+/**
+ * Cash-affecting mutations cannot be offered on Android v1.5.0, even if an
+ * outdated or compromised capability response claims they are allowed.
+ * Financial edits must use the independently authenticated web portal.
+ */
+const cashSensitiveActions: ReadonlySet<MobileWriteAction> = new Set([
+  'collections.create', 'penalties.assess', 'penalties.adjust',
+  'advances.create', 'advances.approve', 'advances.release',
+  'liquidations.submit', 'liquidations.approve', 'liquidations.reconcile',
+  'remittances.create', 'remittances.verify', 'remittances.invalidate',
+  'receipts.void',
+]);
+
 export function canOfferMobileWrite(
   policy: MobileWritePolicy | null | undefined,
   action: MobileWriteAction,
   organization: string,
 ): boolean {
-  if (!policy?.enabled || !validActions.has(action)) return false;
+  if (!policy?.enabled || !validActions.has(action) || cashSensitiveActions.has(action)) return false;
   if (!/^[a-z0-9][a-z0-9-]*$/.test(organization)) return false;
   if (!Array.isArray(policy.grants)) return false;
   return policy.grants.some((grant) =>
