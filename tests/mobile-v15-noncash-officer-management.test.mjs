@@ -31,6 +31,34 @@ test('non-financial officer management is denied by default and never unlocked b
   }), false);
 });
 
+test('native officer create and role-edit use a separately gated tenant route', async () => {
+  const { canRunMobileTenantUserManageWrites } = await import('../lib/mobile/production-readonly.ts');
+  const path = '/api/mobile/orgs/jiecep/users/manage';
+  assert.equal(isMobileRequestAllowed('POST', path, prod), false,
+    'Status permission alone must not authorize full role management');
+  assert.equal(isMobileRequestAllowed('POST', path,
+    { ...prod, tenantUserManageWritesEnabled: true }), true);
+  assert.equal(isMobileRequestAllowed('POST', '/api/mobile/orgs/jiecep/users/manage/extra',
+    { ...prod, tenantUserManageWritesEnabled: true }), false);
+  assert.equal(isMobileRequestAllowed('DELETE', path,
+    { ...prod, tenantUserManageWritesEnabled: true }), false);
+  assert.equal(canRunMobileTenantUserManageWrites({
+    ...prod, tenantUserWritesEnabled: false, tenantUserManageWritesEnabled: true,
+  }), false);
+  const route = source('app/api/mobile/orgs/[org]/users/manage/route.ts');
+  assert.match(route, /requireMobileOfficer\(req, slug, 'tab-users'\)/);
+  assert.match(route, /isReservedGlobalAdminEmail/);
+  assert.match(route, /Prisma\.TransactionIsolationLevel\.Serializable/);
+  assert.match(route, /tx\.tenantUser\.updateMany/);
+  assert.match(route, /tx\.mobileSession\.updateMany/);
+  assert.match(route, /tx\.systemLog\.create/);
+  assert.match(route, /At least one active administrator must remain/);
+  assert.match(route, /payload\.expected/);
+  const cap = source('app/api/mobile/orgs/[org]/write-capabilities/route.ts');
+  assert.match(cap, /'tenant.users.manage'/);
+  assert.match(cap, /'tenant.roles.manage'/);
+});
+
 test('native account status changes share web admin, role, audit and last admin protections', () => {
   const route = source('app/api/mobile/orgs/[org]/users/route.ts');
   const cap = source('app/api/mobile/orgs/[org]/write-capabilities/route.ts');
