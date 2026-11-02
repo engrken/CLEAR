@@ -259,9 +259,31 @@ jobs:
             node --test tests/ci-maintenance-http.test.mjs
             node --test tests/ci-maintenance-admin-negative.test.mjs
             node --test tests/ci-maintenance-proxy-benchmark.test.mjs
+            # A second LOCAL-only server exercises the production-main financial
+            # allowlist against this disposable PostgreSQL, never Neon or Vercel.
+            VERCEL_ENV=production VERCEL_GIT_COMMIT_REF=main MOBILE_FINANCIAL_WRITES_ENABLED=true \
+              npm run start -- -H 127.0.0.1 -p 3102 >/tmp/clear-ci-mobile-payment-server.log 2>&1 &
+            mobile_server_pid=$!
+            trap 'kill "$mobile_server_pid" "$server_pid" 2>/dev/null || true' EXIT
+            ready=0
+            for i in $(seq 1 60); do
+              if curl -fsS http://127.0.0.1:3102/api/auth/session >/dev/null 2>&1; then
+                ready=1
+                break
+              fi
+              sleep 1
+            done
+            if [ "$ready" -ne 1 ]; then
+              tail -n 80 /tmp/clear-ci-mobile-payment-server.log
+              exit 1
+            fi
+            node --test tests/ci-mobile-payment-http.test.mjs
       - store_artifacts:
           path: /tmp/clear-ci-finance-server.log
           destination: finance/ci-server.log
+      - store_artifacts:
+          path: /tmp/clear-ci-mobile-payment-server.log
+          destination: finance/mobile-payment-http.log
       - store_artifacts:
           path: /tmp/clear-ci-maintenance-benchmark.json
           destination: performance/maintenance-proxy-benchmark.json
