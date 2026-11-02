@@ -62,8 +62,8 @@ export default function More() {
     if (tab === 'tab-overview') return { text: 'Open overview', open: () => router.push('/home') };
     if (tab === 'tab-students') return { text: 'Open student roster', open: () => router.push('/students') };
     if (tab === 'tab-clearance') return {
-      text: 'Open clearance lookup',
-      open: () => router.push({ pathname: '/d/[dept]/clearance', params: { dept: session.org.subdomain } }),
+      text: 'Review student clearance',
+      open: () => router.push('/clearance-admin'),
     };
     if (tab === 'tab-remittances') return { text: 'Review payment proofs', open: () => router.push('/verify') };
     if (tab === 'tab-void') return { text: 'Browse Void audit', open: () => router.push('/void-audit') };

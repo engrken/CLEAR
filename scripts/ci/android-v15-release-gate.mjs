@@ -67,6 +67,10 @@ if (!/name="finance-review"/.test(read('mobile/src/app/(officer)/_layout.tsx')) 
     !/name="void-audit"/.test(read('mobile/src/app/(officer)/_layout.tsx'))) {
   blockers.push('Read-only financial review and Void audit screens missing');
 }
+if (!existsSync(resolve(root,'mobile/src/app/(officer)/clearance-admin.tsx')) ||
+    !read('mobile/src/app/(officer)/_layout.tsx').includes("can('tab-clearance')")) {
+  blockers.push('Authorized native officer clearance review is missing');
+}
 if (!existsSync(resolve(root, 'app/api/mobile/orgs/[org]/users/manage/route.ts')) ||
     !read('mobile/src/app/(officer)/users.tsx').includes('OfficerEditor') ||
     !read('app/api/mobile/orgs/[org]/write-capabilities/route.ts').includes("'tenant.roles.manage'") ||

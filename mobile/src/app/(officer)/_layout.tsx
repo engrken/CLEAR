@@ -99,6 +99,9 @@ export default function OfficerTabs() {
       <Tabs.Protected guard={can('tab-transfer')}>
         <Tabs.Screen name="realign-review" options={{ title: 'Fund transfer history' }} />
       </Tabs.Protected>
+      <Tabs.Protected guard={can('tab-clearance')}>
+        <Tabs.Screen name="clearance-admin" options={{ title: 'Clearance' }} />
+      </Tabs.Protected>
       <Tabs.Protected guard={can('tab-collectibles')}>
         <Tabs.Screen name="collectibles" options={{ title: 'Collectibles' }} />
       </Tabs.Protected>
