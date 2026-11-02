@@ -41,8 +41,8 @@ export default function Students() {
   const [selection, setSelection] = useState<Selection | null>(null);
   const [notice, setNotice] = useState<string>();
   const students = useAsync(
-    () => api.listStudents(session, serverSearch || undefined, canView && missingEmailOnly),
-    session.token + ':' + session.org.subdomain + ':roster:' + String(canView && missingEmailOnly) + ':' + serverSearch,
+    () => canView ? api.listStudents(session, serverSearch || undefined, missingEmailOnly) : Promise.resolve<Student[]>([]),
+    session.token + ':' + session.org.subdomain + ':roster:' + String(canView) + ':' + String(missingEmailOnly) + ':' + serverSearch,
   );
   const capability = useAsync(
     () => STUDENT_ROSTER_WRITES_ENABLED && canView ? api.getWriteCapabilities(session) : Promise.resolve({ enabled: false, grants: [] }),
@@ -67,13 +67,16 @@ export default function Students() {
   const header = (
     <View style={styles.header}>
       <Text variant="title" accessibilityRole="header" style={styles.heading}>Students</Text>
-      {current ? <Text variant="label" color="inkMuted">{current.length} loaded</Text> : null}
+      {canView && current ? <Text variant="label" color="inkMuted">{current.length} loaded</Text> : null}
     </View>
   );
 
   return (
     <Screen edges={['top']} header={header} bottomInset={TAB_BAR_SPACE} contentStyle={{ gap: 10 }}>
       <OfficerPresence page="students" session={session} />
+      {!canView ? <Banner tone="danger" title="Students permission required">
+        Your current role cannot browse the student roster. Ask your department Administrator if access is needed.
+      </Banner> : null}
       <View style={[styles.search, { backgroundColor: focused ? c.ground : c.soft, borderColor: focused ? c.cobalt : 'transparent' }]}>
         <Icon name="search" size={18} color="inkMuted" />
         <TextInput value={q} onChangeText={setQ} placeholder="Name or student ID" placeholderTextColor={c.inkMuted}
@@ -105,7 +108,7 @@ export default function Students() {
         </View>
       ) : null}
       {students.error ? <Banner tone="danger" title="Couldn't load student roster">{students.error.message}</Banner> : null}
-      {students.loading ? <ActivityIndicator color={c.cobalt} /> : current ? (
+      {canView && students.loading ? <ActivityIndicator color={c.cobalt} /> : canView && current ? (
         <View style={{ gap: 6 }}>
           {list.map(student => (
             <RosterRow key={student.id} student={student}

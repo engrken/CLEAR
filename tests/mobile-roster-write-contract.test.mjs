@@ -92,7 +92,17 @@ test('Android roster editor fails closed without server grant or trusted email r
 
 test('Android roster searches server-side beyond the first 500 loaded records', () => {
   const source = read('mobile/src/app/(officer)/students.tsx');
-  assert.match(source, /api\.listStudents\(session, serverSearch \|\| undefined, canView && missingEmailOnly\)/);
+  assert.match(source, /canView \? api\.listStudents\(session, serverSearch \|\| undefined, missingEmailOnly\)/);
   assert.match(source, /setTimeout\(\(\) => setServerSearch\(q\.trim\(\)\), 320\)/);
   assert.match(source, /:roster:/);
+});
+
+test('payment-only sessions cannot load or browse the native roster screen', () => {
+  const source = read('mobile/src/app/(officer)/students.tsx');
+  assert.match(source, /canView \? api\.listStudents\(session, serverSearch \|\| undefined, missingEmailOnly\) : Promise\.resolve<Student\[\]>\(\[\]\)/);
+  assert.match(source, /:roster:' \+ String\(canView\)/);
+  assert.match(source, /canView && current \? <Text variant="label"/);
+  assert.match(source, /canView && students\.loading \?/);
+  assert.match(source, /canView && current \? \(/);
+  assert.match(source, /Students permission required/);
 });
