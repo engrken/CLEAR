@@ -67,6 +67,7 @@ export default function More() {
     };
     if (tab === 'tab-remittances') return { text: 'Review payment proofs', open: () => router.push('/verify') };
     if (tab === 'tab-void') return { text: 'Browse Void audit', open: () => router.push('/void-audit') };
+    if (tab === 'tab-collectibles') return { text: 'Review collectibles', open: () => router.push('/collectibles') };
     if (tab === 'tab-users' && isTenantAdmin) return { text: 'Manage officers', open: () => router.push('/users') };
     const financeKinds: Record<string, string> = {
       'tab-penalties': 'penalties',
