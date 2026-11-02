@@ -57,10 +57,13 @@ export default function Collect() {
       return;
     }
     const e: Record<string, string> = {};
-    const pesos = Number(amount.replace(/,/g, ''));
+    const amountText = amount.trim().replace(/,/g, '');
+    const validAmount = /^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/.test(amountText);
+    const pesos = validAmount ? Number(amountText) : NaN;
+    const amountCentavos = validAmount ? Math.round(pesos * 100) : NaN;
     if (!studentId) e.student = 'Choose the student who paid.';
     if (!feeId) e.fee = 'Choose the fee item.';
-    if (!Number.isFinite(pesos) || pesos <= 0) e.amount = 'Enter the amount received, for example 150.00.';
+    if (!Number.isSafeInteger(amountCentavos) || amountCentavos <= 0 || amountCentavos > 100_000_000) e.amount = 'Enter a valid amount with at most two decimal places (maximum ₱1,000,000.00).';
     if (!orNumber.trim()) e.or = 'Enter the OR number printed on the receipt.';
     setErrors(e);
     if (Object.keys(e).length) return;
@@ -69,7 +72,7 @@ export default function Collect() {
     setBusy(true);
     try {
       const draft = {
-        studentId: studentId!, feeId: feeId!, amountCentavos: Math.round(pesos * 100),
+        studentId: studentId!, feeId: feeId!, amountCentavos,
         orNumber: orNumber.trim().toUpperCase(),
       };
       const fingerprint = JSON.stringify(draft);
