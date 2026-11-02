@@ -20,6 +20,8 @@ test('report presentation uses web signatory table, serializable version guard a
  assert.match(route,/tx\.signatory\.deleteMany/);
  assert.match(route,/tx\.signatory\.createMany/);
  assert.match(route,/UPDATE_SIGNATORIES/);
+ assert.match(route,/take:21/);
+ assert.match(route,/list.length>20/);
  assert.doesNotMatch(route,/collection\.update|fundTransfer\.create|payment\.create/);
  assert.match(src('app/api/mobile/orgs/[org]/write-capabilities/route.ts'),/'reports.signatories.manage'/);
  assert.match(src('mobile/src/app/(officer)/_layout.tsx'),/can\('tab-report'\)/);

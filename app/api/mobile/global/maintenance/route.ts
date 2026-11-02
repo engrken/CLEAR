@@ -76,7 +76,7 @@ export const POST=handler(async(req)=>{
  const action=body.action==='end_early'?'END_EARLY':'CANCEL';
  if(body.confirmation!==action)throw new ApiFailure(400,'confirmation_required','Confirm exact maintenance action.');
  if(typeof body.id!=='string'||body.id.length<1||body.id.length>128||
-   !Number.isSafeInteger(body.expectedVersion)||body.expectedVersion!<1)
+   !Number.isSafeInteger(body.expectedVersion)||Number(body.expectedVersion)<1)
      throw new ApiFailure(400,'invalid','Refresh notice and retry.');
  return prisma.$transaction(async(tx)=>{
    const before=await tx.maintenanceNotice.findUnique({where:{id:body.id}});

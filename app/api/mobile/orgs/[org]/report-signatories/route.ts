@@ -15,7 +15,8 @@ const digest=(rows:Row[])=>createHash('sha256').update(JSON.stringify(rows)).dig
 async function rows(org:string,tx:Pick<Prisma.TransactionClient,'signatory'>=prisma){
  const list=await tx.signatory.findMany({where:{organizationId:org},
    orderBy:[{order:'asc'},{id:'asc'}],
-   select:{label:true,name:true,position:true},take:100});
+   select:{label:true,name:true,position:true},take:21});
+ if(list.length>20)throw new ApiFailure(409,'conflict','Too many report signatories for mobile editing. Use secure web.');
  return list.map(({label,name,position})=>({label,name,position}));
 }
 export const GET=handler(async(req,{params}:Ctx)=>{
