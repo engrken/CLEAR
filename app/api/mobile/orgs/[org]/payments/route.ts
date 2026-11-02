@@ -36,7 +36,7 @@ export const POST = handler(async (req: Request, { params }: Ctx) => {
   }
   const result = await postAuthorizedPayment(org.subdomain, {
     requestId: key,
-    date: new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()),
+    date: new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()),
     studentId: student.id, studentName: student.fullName,
     category: setup.category,
     itemDescription: packageId ? PACKAGE_NAME : setup.name,
