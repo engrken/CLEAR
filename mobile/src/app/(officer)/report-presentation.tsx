@@ -15,7 +15,7 @@ export default function ReportPresentation(){
  const session=useOfficerSession(),{can}=useSession(),{c}=useTheme();
  const authorized=can('tab-report');
  const [revision,setRevision]=useState(0);
- const [draft,setDraft]=useState<{version:string;rows:ReportSignatory[]}|null>(null);
+ const [draft,setDraft]=useState<{version:string;rows:ReportSignatory[];schoolName:string;schoolAddress:string}|null>(null);
  const [saving,setSaving]=useState(false),[error,setError]=useState('');
  const key=session.token+':'+session.org.subdomain+':signatories:'+revision+':'+authorized;
  const info=useAsync(()=>authorized?api.getReportSignatories(session):Promise.resolve(null),key);
@@ -25,22 +25,28 @@ export default function ReportPresentation(){
  const value=!info.loading?info.data??null:null;
  const active=draft?.version===value?.version?draft:null;
  const records=active?.rows??value?.records??[];
+ const schoolName=active?.schoolName??value?.schoolName??'';
+ const schoolAddress=active?.schoolAddress??value?.schoolAddress??'';
+ const revise=(rows:ReportSignatory[],name=schoolName,address=schoolAddress)=>{
+  if(value)setDraft({version:value.version,rows,schoolName:name,schoolAddress:address});
+ };
+
  function update(index:number,field:keyof ReportSignatory,text:string){
   if(!value||!mayEdit)return;
   const next=records.map((row,i)=>i===index?{...row,[field]:text}:row);
-  setDraft({version:value.version,rows:next});
+  revise(next);
  }
  function add(){if(value&&mayEdit&&records.length<20)
-  setDraft({version:value.version,rows:[...records,blank()]});}
+  revise([...records,blank()]);}
  function remove(index:number){if(value&&mayEdit)
-  setDraft({version:value.version,rows:records.filter((_,i)=>i!==index)});}
+  revise(records.filter((_,i)=>i!==index));}
  function save(){
   if(!value||!active||!mayEdit||saving)return;
-  Alert.alert('Save report signatories?','This updates authorized report headings for your tenant and is audited.',
+  Alert.alert('Save report presentation?','This updates authorized institution headings and signatories without changing financial values or logos.',
    [{text:'Cancel',style:'cancel'},{text:'Confirm',onPress:()=>{
     setSaving(true);setError('');
     void api.saveReportSignatories(session,{
-     expectedVersion:value.version,records:active.rows,confirmation:'SAVE SIGNATORIES',
+     expectedVersion:value.version,records:active.rows,schoolName:active.schoolName,schoolAddress:active.schoolAddress,confirmation:'SAVE REPORT PRESENTATION',
     }).then(()=>{setRevision(x=>x+1);setDraft(null);})
      .catch(e=>setError(e instanceof Error?e.message:'Unable to save report signatories.'))
      .finally(()=>setSaving(false));
@@ -49,7 +55,7 @@ export default function ReportPresentation(){
  return <Screen edges={['top']} bottomInset={TAB_BAR_SPACE} contentStyle={{gap:spacing[3],paddingTop:spacing[3]}}>
   <Text variant="title" accessibilityRole="header">Report presentation</Text>
   <Banner tone="info" title="Operational metadata only">
-    Signatory labels, names and positions are non-monetary report settings. Official report generation, certification and submission continue through secure web.
+    Institution name, address, and signatories are non-monetary report settings. Existing report logos are retained. Official report certification and submission continue through secure web.
   </Banner>
   {!authorized?<Banner tone="warning" title="Restricted">The Report submission module is not assigned to this account.</Banner>:<>
    {info.loading?<ActivityIndicator color={c.cobalt}/>:null}
@@ -57,6 +63,20 @@ export default function ReportPresentation(){
    {error?<Banner tone="danger" title="Not saved">{error}</Banner>:null}
    {value?<>
     <Text variant="bodySm" color="inkMuted">{records.length} signatory rows · {mayEdit?'Changes permitted':'Viewing only'}</Text>
+    <Card style={styles.card}>
+      <Text variant="bodyStrong">Institution report header</Text>
+      <Text variant="caption" color="inkMuted">Name used by printed web reports</Text>
+      <TextInput value={schoolName} editable={mayEdit&&!saving} maxLength={200}
+        accessibilityLabel="Report institution name"
+        onChangeText={text=>revise(records,text,schoolAddress)}
+        style={[styles.input,{backgroundColor:c.soft,color:c.ink}]}/>
+      <Text variant="caption" color="inkMuted">Institution address</Text>
+      <TextInput value={schoolAddress} editable={mayEdit&&!saving} maxLength={300}
+        accessibilityLabel="Report institution address"
+        multiline onChangeText={text=>revise(records,schoolName,text)}
+        style={[styles.input,{backgroundColor:c.soft,color:c.ink}]}/>
+      <Text variant="caption" color="inkMuted">Logo uploads and official report downloads remain on the secure web portal.</Text>
+    </Card>
     {records.map((row,index)=><Card key={index} style={styles.card}>
       <Text variant="bodyStrong">Signatory {index+1}</Text>
       {(['label','name','position'] as const).map(field=><View key={field} style={styles.field}>
@@ -69,7 +89,7 @@ export default function ReportPresentation(){
       {mayEdit?<Button size="sm" variant="secondary" disabled={saving} onPress={()=>remove(index)}>Remove signatory</Button>:null}
     </Card>)}
     {mayEdit?<><Button block variant="secondary" disabled={saving||records.length>=20} onPress={add}>Add signatory</Button>
-      <Button block disabled={saving||!active} onPress={save}>{saving?'Saving…':'Save signatories'}</Button>
+      <Button block disabled={saving||!active||!schoolName.trim()} onPress={save}>{saving?'Saving…':'Save report presentation'}</Button>
      </>:<Banner tone="info" title="No editing grant">The server has not enabled native report signatory editing for this account.</Banner>}
     <Button block variant="secondary" onPress={()=>{setRevision(x=>x+1);setDraft(null);}}>Refresh</Button>
    </>:null}

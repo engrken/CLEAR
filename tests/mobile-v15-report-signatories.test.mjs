@@ -20,6 +20,9 @@ test('report presentation uses web signatory table, serializable version guard a
  assert.match(route,/tx\.signatory\.deleteMany/);
  assert.match(route,/tx\.signatory\.createMany/);
  assert.match(route,/UPDATE_SIGNATORIES/);
+ assert.match(route,/reportSchoolName:body.schoolName.trim\(\)/);
+ assert.match(route,/reportSchoolAddress:body.schoolAddress.trim\(\)\|\|null/);
+ assert.match(route,/SAVE REPORT PRESENTATION/);
  assert.match(route,/take:21/);
  assert.match(route,/list.length>20/);
  assert.doesNotMatch(route,/collection\.update|fundTransfer\.create|payment\.create/);

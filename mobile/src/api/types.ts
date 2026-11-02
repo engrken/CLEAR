@@ -143,9 +143,9 @@ export type TenantUserStatusChange = {
 };
 
 export type ReportSignatory = {label:string;name:string;position:string};
-export type ReportSignatoriesSnapshot = { version:string; records:ReportSignatory[] };
+export type ReportSignatoriesSnapshot = { version:string; records:ReportSignatory[];schoolName:string;schoolAddress:string };
 export type ReportSignatoriesChange = {
-  expectedVersion:string;records:ReportSignatory[];confirmation:string;
+  expectedVersion:string;records:ReportSignatory[];schoolName:string;schoolAddress:string;confirmation:string;
 };
 export type FinanceSnapshot = {
   scope:'active_period'; ay:string; term:string; generatedAt:string; reportType:string;
