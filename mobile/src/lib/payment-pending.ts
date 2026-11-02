@@ -7,6 +7,15 @@ export type PaymentDraft = Readonly<{ studentId: string; feeId: string; amountCe
 export type PendingPayment = Readonly<{ version: 1; key: string; draft: PaymentDraft }>;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+/** Expo SecureStore only permits alphanumerics, period, dash and underscore in keys. */
+export function paymentStorageKey(tenant: string, officerId: string): string {
+  if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(tenant) ||
+      !/^[A-Za-z0-9_-]{1,120}$/.test(officerId)) {
+    throw new Error('Invalid officer or tenant identity for secure payment recovery.');
+  }
+  return 'clear.pending-payment.' + tenant + '.' + officerId;
+}
+
 /** Exact decimal parser: no binary-float multiplication or rounded centavos. */
 export function parsePaymentCentavos(raw: string): number | null {
   const text = raw.trim();

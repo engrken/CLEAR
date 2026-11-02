@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { choosePendingPayment, parsePaymentCentavos, parsePendingPayment } from '../mobile/src/lib/payment-pending.ts';
+import { choosePendingPayment, parsePaymentCentavos, parsePendingPayment, paymentStorageKey } from '../mobile/src/lib/payment-pending.ts';
 import { readFileSync } from 'node:fs';
 
 const id1 = 'e61cd129-452c-45b5-b944-8330bfa708a3';
@@ -54,4 +54,17 @@ test('native cashier cannot overwrite unresolved payment while retrying another 
   assert.match(screen, /Retry exact payment/);
   assert.match(screen, /disabled=\{!recoveryReady \|\| !!pending \|\| !!recoveryIssue\}/);
   assert.match(screen, /PAYMENT_WRITES_ENABLED/);
+});
+
+test('secure payment recovery key meets Expo SecureStore key contract', () => {
+  const name = paymentStorageKey('jiecep', 'officer-123_abc');
+  assert.equal(name, 'clear.pending-payment.jiecep.officer-123_abc');
+  assert.match(name, /^[A-Za-z0-9._-]+$/);
+  for (const [tenant, officer] of [['../tenant', 'officer-a'], ['jiecep', 'bad:actor'],
+    ['', 'officer-a'], ['jiecep', '']]) {
+    assert.throws(() => paymentStorageKey(tenant, officer), /Invalid officer or tenant/);
+  }
+  const screen = readFileSync(new URL('../mobile/src/app/(officer)/collect.tsx', import.meta.url), 'utf8');
+  assert.match(screen, /paymentStorageKey\(session\.org\.subdomain, session\.officer\.id\)/);
+  assert.doesNotMatch(screen, /clear:pending-payment:/);
 });

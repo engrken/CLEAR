@@ -7,7 +7,7 @@ import { PAYMENT_WRITES_ENABLED } from '@/api/config';
 import { Avatar, Banner, Button, Icon, Screen, Text, TextField } from '@/components/ui';
 import { isEnrolled } from '@/lib/enrollment';
 import { formatPeso, fromCentavos } from '@/lib/money';
-import { choosePendingPayment, parsePaymentCentavos, parsePendingPayment, type PaymentDraft, type PendingPayment } from '@/lib/payment-pending';
+import { choosePendingPayment, parsePaymentCentavos, parsePendingPayment, paymentStorageKey, type PaymentDraft, type PendingPayment } from '@/lib/payment-pending';
 import { useOfficerSession, useSession } from '@/lib/session';
 import { TAB_BAR_SPACE } from '@/lib/tab-bar';
 import { useAsync } from '@/lib/use-async';
@@ -35,7 +35,7 @@ export default function Collect() {
   // Synchronous guard: state updates alone do not prevent rapid double taps.
   const submittingRef = useRef(false);
   // Each officer+tenant has one durable unresolved request. Never overwrite it.
-  const pendingKey = 'clear:pending-payment:' + session.org.subdomain + ':' + session.officer.id;
+  const pendingKey = paymentStorageKey(session.org.subdomain, session.officer.id);
   const canCollect = can('tab-payment');
   const [recovery, setRecovery] = useState<{
     storageKey: string; pending: PendingPayment | null; issue: string | null;
