@@ -37,20 +37,20 @@ export const POST=handler(async(req,{params}:Ctx)=>{
  if(!canRunMobileReportSignatoryWrites(mobileTenantUserWriteEnvironment()))
    throw new ApiFailure(403,'read_only','Native report presentation editing is not enabled.');
  const body=await readJson<{expectedVersion:string;records:Row[];schoolName:string;schoolAddress:string;confirmation:string}>(req);
+ const schoolName=typeof body.schoolName==='string'?body.schoolName.trim():'';
+ const schoolAddress=typeof body.schoolAddress==='string'?body.schoolAddress.trim():'';
  if(typeof body.expectedVersion!=='string'||!/^[a-f0-9]{64}$/.test(body.expectedVersion)||
    body.confirmation!=='SAVE REPORT PRESENTATION'||
-   typeof body.schoolName!=='string'||!body.schoolName.trim()||body.schoolName.trim().length>200||
-   typeof body.schoolAddress!=='string'||body.schoolAddress.trim().length>300||
-   /[\r\n]/.test(body.schoolName)||/[\r\n]/.test(body.schoolAddress)||
+   !schoolName||schoolName.length>200||
+   typeof body.schoolAddress!=='string'||schoolAddress.length>300||
+   /[\r\n]/.test(body.schoolName??'')||/[\r\n]/.test(body.schoolAddress??'')||
    !Array.isArray(body.records)||
    body.records.length>20||body.records.some(row=>!row||typeof row!=='object'||
       typeof row.label!=='string'||typeof row.name!=='string'||typeof row.position!=='string'||
       row.label.length>100||row.name.length>120||row.position.length>120||
       /[\r\n]/.test(row.label)||/[\r\n]/.test(row.name)||/[\r\n]/.test(row.position)))
    throw new ApiFailure(400,'invalid','Report signatories or confirmation are invalid.');
- // Narrow independently of readJson's Partial<T> and close over stable values.
- const schoolName=String(body.schoolName).trim();
- const schoolAddress=String(body.schoolAddress).trim();
+ // Validated, normalized values are stable for the transactional update.
  const sanitized=body.records.map(row=>({
    label:row.label.trim(),name:row.name.trim(),position:row.position.trim(),
  })).filter(row=>row.label||row.name||row.position);
