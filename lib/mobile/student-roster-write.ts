@@ -77,7 +77,7 @@ export async function applyMobileRosterChange(org: Organization, actor: TenantUs
     if (!currentOrg || currentOrg.status !== 'Active') {
       fail(403, 'forbidden', 'This department is no longer active.');
     }
-    if (currentOrg.activeAy !== org.activeAy || currentOrg.activeTerm !== org.activeTerm) {
+    if (currentOrg?.activeAy !== org.activeAy || currentOrg?.activeTerm !== org.activeTerm) {
       fail(409, 'conflict', 'The academic period changed. Reload the roster before continuing.');
     }
     const closed = await tx.academicPeriodTransition.findUnique({
