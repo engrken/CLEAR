@@ -29,7 +29,7 @@ export default function Collectibles() {
   const [pageError, setPageError] = useState('');
   const busy = useRef(false);
   useFocusEffect(useCallback(() => setVersion(v => v + 1), []));
-  const page: CollectiblePage | null = !response.loading ? response.data : null;
+  const page: CollectiblePage | null = !response.loading ? response.data ?? null : null;
   const more = extra?.key === key ? extra : null;
   const records = page ? [...page.records, ...(more?.records || [])] : [];
   const cursor = more ? more.cursor : page?.nextCursor;
