@@ -68,7 +68,8 @@ export default function More() {
     if (tab === 'tab-remittances') return { text: 'Review payment proofs', open: () => router.push('/verify') };
     if (tab === 'tab-void') return { text: 'Browse Void audit', open: () => router.push('/void-audit') };
     if (tab === 'tab-collectibles') return { text: 'Review collectibles', open: () => router.push('/collectibles') };
-    if (tab === 'tab-reports' || tab === 'tab-report') return { text: 'Review recorded activity', open: () => router.push('/reports') };
+    if (tab === 'tab-reports') return { text: 'Review recorded activity', open: () => router.push('/reports') };
+    if (tab === 'tab-report') return { text: 'Manage report presentation', open: () => router.push('/report-presentation') };
     if (tab === 'tab-transfer') return { text: 'Review fund transfers', open: () => router.push('/realign-review') };
     if (tab === 'tab-setup' && isTenantAdmin) return { text: 'Academic calendar', open: () => router.push('/academic-calendar') };
     if (tab === 'tab-users' && isTenantAdmin) return { text: 'Manage officers', open: () => router.push('/users') };

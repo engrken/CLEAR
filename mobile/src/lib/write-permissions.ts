@@ -29,6 +29,7 @@ export const MOBILE_WRITE_ACTIONS = [
   'tenant.users.status',
   'tenant.roles.manage',
   'tenant.settings.manage',
+  'reports.signatories.manage',
   'global.tenants.manage',
 ] as const;
 

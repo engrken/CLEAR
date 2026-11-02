@@ -23,6 +23,8 @@ type MobileEnvironment = {
   academicSettingsWritesEnabled?: boolean;
   /** Global maintenance windows require a separate Recovery Administrator opt-in. */
   globalMaintenanceWritesEnabled?: boolean;
+  /** Noncash report presentation/signatory metadata. */
+  reportSignatoryWritesEnabled?: boolean;
   /** Never permit an unverified Vercel Preview environment to mutate real rosters. */
   localRosterCiOnly?: boolean;
 };
@@ -46,6 +48,7 @@ const OFFICER_LOGOUT = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9]
 // This only admits a route to its own authorization and accounting handler.
 // It never grants the mobile user permission to post a transaction.
 const TENANT_USERS_MANAGE_POST = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/users\/manage$/;
+const REPORT_SIGNATORIES_POST = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/report-signatories$/;
 const ACADEMIC_CALENDAR_POST = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/academic-calendar$/;
 const TENANT_USERS_STATUS_POST = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/users$/;
 const STUDENT_ROSTER_POST = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/students\/manage$/;
@@ -99,6 +102,8 @@ export function isMobileRequestAllowed(
       canRunMobileTenantUserManageWrites(env)) return true;
   if (verb === 'POST' && ACADEMIC_CALENDAR_POST.test(path) &&
       canRunMobileAcademicSettingsWrites(env)) return true;
+  if (verb === 'POST' && REPORT_SIGNATORIES_POST.test(path) &&
+      canRunMobileReportSignatoryWrites(env)) return true;
   if (verb === 'POST' && path === GLOBAL_MAINTENANCE &&
       canRunMobileGlobalMaintenanceWrites(env)) return true;
 
@@ -157,7 +162,8 @@ export function mobileTenantUserWriteEnvironment(): MobileEnvironment {
     tenantUserWritesEnabled: process.env.MOBILE_TENANT_USER_WRITES_ENABLED === 'true',
     tenantUserManageWritesEnabled: process.env.MOBILE_TENANT_USER_MANAGE_WRITES_ENABLED === 'true',
     academicSettingsWritesEnabled: process.env.MOBILE_ACADEMIC_SETTINGS_WRITES_ENABLED === 'true',
-    globalMaintenanceWritesEnabled: process.env.MOBILE_GLOBAL_MAINTENANCE_WRITES_ENABLED === 'true' };
+    globalMaintenanceWritesEnabled: process.env.MOBILE_GLOBAL_MAINTENANCE_WRITES_ENABLED === 'true',
+    reportSignatoryWritesEnabled: process.env.MOBILE_REPORT_SIGNATORY_WRITES_ENABLED === 'true' };
 }
 
 /** Native officer creation/role edits are a separately reviewed non-cash rollout. */
@@ -179,6 +185,16 @@ export function canRunMobileAcademicSettingsWrites(env: MobileEnvironment): bool
 /** A dedicated global-admin recovery exception; never unlock arbitrary writes. */
 export function canRunMobileGlobalMaintenanceWrites(env: MobileEnvironment): boolean {
   return env.globalMaintenanceWritesEnabled === true && (
+    (env.vercelEnv === 'production' && env.gitRef === 'main') ||
+    (env.vercelEnv === 'preview' &&
+      env.gitRef === 'feature/android-v1.5.0-write-foundation-20261101' &&
+      env.localRosterCiOnly === true)
+  );
+}
+
+/** Exact action-scoped report presentation metadata; no financial changes. */
+export function canRunMobileReportSignatoryWrites(env: MobileEnvironment): boolean {
+  return env.reportSignatoryWritesEnabled === true && (
     (env.vercelEnv === 'production' && env.gitRef === 'main') ||
     (env.vercelEnv === 'preview' &&
       env.gitRef === 'feature/android-v1.5.0-write-foundation-20261101' &&

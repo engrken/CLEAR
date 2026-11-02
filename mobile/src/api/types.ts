@@ -142,6 +142,11 @@ export type TenantUserStatusChange = {
   id: string; status: 'Active' | 'Inactive' | 'Blocked'; expectedUpdatedAt: string;
 };
 
+export type ReportSignatory = {label:string;name:string;position:string};
+export type ReportSignatoriesSnapshot = { version:string; records:ReportSignatory[] };
+export type ReportSignatoriesChange = {
+  expectedVersion:string;records:ReportSignatory[];confirmation:string;
+};
 export type FinanceSnapshot = {
   scope:'active_period'; ay:string; term:string; generatedAt:string; reportType:string;
   totals:{label:string;count:number;amountCentavos:number;meaning:string}[];
@@ -446,6 +451,8 @@ export type ClearApi = {
   getTenantPortal(s: Session): Promise<TenantPortalStatus>;
   getAcademicCalendar(s: Session): Promise<MobileAcademicCalendar>;
   getFinanceSnapshot(s: Session): Promise<FinanceSnapshot>;
+  getReportSignatories(s:Session):Promise<ReportSignatoriesSnapshot>;
+  saveReportSignatories(s:Session,input:ReportSignatoriesChange):Promise<{success:true}>;
   getRealignmentReview(s: Session, cursor?:string): Promise<RealignmentPage>;
   updateAcademicCalendar(s: Session, change: MobileAcademicCalendarChange): Promise<{ success: true }>;
   listTenantUsers(s: Session, search?: string, cursor?: string): Promise<TenantUsersPage>;

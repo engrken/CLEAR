@@ -96,6 +96,9 @@ export default function OfficerTabs() {
       <Tabs.Protected guard={can('tab-reports') || can('tab-report')}>
         <Tabs.Screen name="reports" options={{ title: 'Reports' }} />
       </Tabs.Protected>
+      <Tabs.Protected guard={can('tab-report')}>
+        <Tabs.Screen name="report-presentation" options={{ title: 'Report presentation' }} />
+      </Tabs.Protected>
       <Tabs.Protected guard={can('tab-transfer')}>
         <Tabs.Screen name="realign-review" options={{ title: 'Fund transfer history' }} />
       </Tabs.Protected>
