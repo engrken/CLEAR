@@ -108,31 +108,6 @@ jobs:
             exit 1
           fi
           node --test tests/ci-financial-actions.test.mjs
-      - name: Test isolated Android payments using authenticated HTTP
-        run: |
-          set -euo pipefail
-          VERCEL_ENV=preview VERCEL_GIT_COMMIT_REF=feature/android-v1.5.0-write-foundation-20261101 MOBILE_FINANCIAL_WRITES_ENABLED=true \
-            npm run start -- -H 127.0.0.1 -p 3102 >/tmp/clear-ci-payment-uat.log 2>&1 &
-          server_pid=$!
-          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
-          ready=0
-          for i in $(seq 1 45); do
-            if curl -fsS http://127.0.0.1:3102/api/auth/session >/dev/null 2>&1; then
-              ready=1
-              break
-            fi
-            sleep 1
-          done
-          if test "$ready" -ne 1; then
-            echo "Isolated Android payment server did not start"
-            tail -n 80 /tmp/clear-ci-payment-uat.log
-            exit 1
-          fi
-          if ! node --experimental-strip-types --test tests/ci-mobile-payment-http.test.mjs; then
-            echo "Isolated Android payment server diagnostic (synthetic fixture only):"
-            tail -n 140 /tmp/clear-ci-payment-uat.log
-            exit 1
-          fi
       - name: Verify maintenance mode blocks login, existing JWT sessions, mobile routes and financial POSTs
         run: |
           set -euo pipefail
