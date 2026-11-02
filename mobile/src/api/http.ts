@@ -162,6 +162,7 @@ export const httpApi: ClearApi = {
   listGlobalTenantRemittances: (s, slug) => request(`/global/orgs/${encodeURIComponent(slug)}/remittances`, { token: s.token }),
 
   requestOfficerWebHandoff: (s) => request(`${org(s.org.subdomain)}/auth/web-handoff`, { method: 'POST', ...as(s) }),
+  requestOfficerModuleWebHandoff: (s, webPath) => request(`${org(s.org.subdomain)}/auth/web-handoff`, { method: 'POST', ...as(s), json: { webPath } }),
   getWriteCapabilities: (s) => request(`${org(s.org.subdomain)}/write-capabilities`, as(s)),
   getOfficerOnboarding: (s) => request(`${org(s.org.subdomain)}/onboarding`, as(s)),
   completeOfficerOnboarding: (s) => request(`${org(s.org.subdomain)}/onboarding`, { method: 'POST', ...as(s) }),

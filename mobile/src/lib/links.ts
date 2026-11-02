@@ -1,4 +1,6 @@
 import * as WebBrowser from 'expo-web-browser';
+import { api, type Session } from '@/api';
+import { getItem } from './secure-storage';
 
 // Public pages on the web app. Always production: the policy is the same for every build.
 // The privacy policy is the one on the CLEAR web app (clearsys.vercel.app).
@@ -37,9 +39,23 @@ export function openDepartmentWebPortal(slug: string) {
   return openWebPage(safeDepartmentUrl(slug));
 }
 
-/** Web-owned operational modules require independent web authentication. */
-export function openDepartmentModule(slug: string, route: string) {
-  return openWebPage(safeDepartmentUrl(slug, route));
+/** Prefer a single-use, tenant-bound SSO ticket; keep secure web OTP fallback. */
+export async function openDepartmentModule(slug: string, route: string) {
+  const fallback = safeDepartmentUrl(slug, route);
+  let url: string | null = null;
+  try {
+    const raw = await getItem('clear.session.v1');
+    if (raw) {
+      const session = JSON.parse(raw) as Session;
+      if (session.org.subdomain === slug && Date.parse(session.expiresAt) > Date.now()) {
+        const response = await api.requestOfficerModuleWebHandoff(session, route);
+        url = response.url;
+      }
+    }
+  } catch {
+    // Disabled rollout, network interruption, or revoked session: standard web login.
+  }
+  return url ? openVerifiedWebHandoff(url) : openWebPage(fallback);
 }
 
 /** Existing audited Global Superadmin tenant workflow. */

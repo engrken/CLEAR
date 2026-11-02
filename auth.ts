@@ -136,6 +136,7 @@ export const {
         token.allowedTabs = authenticatedUser.allowedTabs || [];
         token.globalAdminId = authenticatedUser.globalAdminId || null;
         token.globalAdminVersion = authenticatedUser.globalAdminVersion || null;
+        token.handoffDestination = authenticatedUser.handoffDestination || null;
       }
       return token;
     },
@@ -150,6 +151,7 @@ export const {
         sessionUser.allowedTabs = token.allowedTabs || [];
         sessionUser.globalAdminId = token.globalAdminId || null;
         sessionUser.globalAdminVersion = token.globalAdminVersion || null;
+        sessionUser.handoffDestination = token.handoffDestination || null;
         sessionUser.id = String(token.sub || sessionUser.id || '');
       }
       return session;
