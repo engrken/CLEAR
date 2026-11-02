@@ -92,7 +92,7 @@ export default function Collect() {
       setStudentId(undefined); setFeeId(undefined); setAmount(''); setSearch('');
     } catch (err) {
       const e = err as ApiError;
-      // A reused OR number or an amount over the balance belongs to that field; anything else
+      // An amount over the balance belongs to that field; anything else
       // (closed term, inactive student, rate limit) is the form's. The message comes from the server.
       if (e.code === 'overpayment') setErrors({ amount: e.message });
       else setErrors({ form: e.message });
@@ -126,7 +126,7 @@ export default function Collect() {
 
   return (
     <Screen edges={['top']} header={header} bottomInset={TAB_BAR_SPACE}>
-      {recorded ? <Banner tone="success" title="Payment recorded">{recorded}. The receipt was emailed to the student.</Banner> : null}
+      {recorded ? <Banner tone="success" title="Payment recorded">{recorded}. A digital receipt has been queued for delivery.</Banner> : null}
       {errors.form ? <Banner tone="danger" title="Payment not recorded">{errors.form}</Banner> : null}
 
       {student ? (
