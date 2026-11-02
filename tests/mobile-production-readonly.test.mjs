@@ -130,8 +130,8 @@ test('Android cannot post cash; global tenant changes require separately verifie
   // receives a server-issued grant. The server denies every mutation without
   // its separate default-off Production opt-in regardless of client flags.
   assert.match(client, /getGlobalManagementCapabilities:.*global\/write-capabilities/);
-  assert.match(client, /provisionTenant:.*request\('\/global\/provisions'/);
-  assert.match(client, /manageTenant:.*request\('\/global\/provisions\/manage'/);
+  assert.match(client, /provisionTenant:[\s\S]*?request\('\/global\/provisions'/);
+  assert.match(client, /manageTenant:[\s\S]*?request\('\/global\/provisions\/manage'/);
   const grantRoute = read('app/api/mobile/global/write-capabilities/route.ts');
   assert.match(grantRoute, /requireGlobalMobileAdmin\(req\)/);
   assert.match(grantRoute, /canRunMobileGlobalTenantOperations/);
