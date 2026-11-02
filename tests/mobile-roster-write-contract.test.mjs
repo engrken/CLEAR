@@ -25,10 +25,14 @@ test('roster API can never open from financial or generic business-write flags',
 test('roster gate only admits independently enabled server and approved deployment', () => {
   const prod = { vercelEnv: 'production', gitRef: 'main', rosterWritesEnabled: true };
   const staging = {
-    vercelEnv: 'preview', gitRef: 'feature/android-v1.5.0-write-foundation-20261101', rosterWritesEnabled: true,
+    vercelEnv: 'preview', gitRef: 'feature/android-v1.5.0-write-foundation-20261101',
+    rosterWritesEnabled: true, localRosterCiOnly: true,
   };
   assert.equal(canRunMobileRosterWrites(prod), true);
   assert.equal(canRunMobileRosterWrites(staging), true);
+  assert.equal(canRunMobileRosterWrites({ ...staging, localRosterCiOnly: false }), false,
+    'Vercel Preview must never be sufficient for roster writes');
+  assert.equal(isMobileRequestAllowed('POST', rosterPath, { ...staging, localRosterCiOnly: false }), false);
   assert.equal(isMobileRequestAllowed('POST', rosterPath, prod), true);
   assert.equal(isMobileRequestAllowed('POST', rosterPath, staging), true);
   assert.equal(isMobileRequestAllowed('POST', rosterPath, { ...prod, rosterWritesEnabled: false }), false);
@@ -40,7 +44,9 @@ test('roster endpoint rejects non-student tabs and caller-defined tenant/academi
   const service = read('lib/mobile/student-roster-write.ts');
   const capabilities = read('app/api/mobile/orgs/[org]/write-capabilities/route.ts');
   assert.match(route, /requireMobileOfficer\(req, slug, 'tab-students'\)/);
-  assert.match(route, /canRunMobileRosterWrites\(/);
+  assert.match(route, /canRunMobileRosterWrites\(mobileRosterWriteEnvironment\(\)\)/);
+  assert.match(capabilities, /canRunMobileRosterWrites\(mobileRosterWriteEnvironment\(\)\)/);
+  assert.match(read('lib/mobile/http.ts'), /\.\.\.mobileRosterWriteEnvironment\(\)/);
   assert.match(route, /readJson<Record<string, unknown>>\(req\)/);
   assert.match(service, /organizationId: org.id/);
   assert.match(service, /org.activeAy/);

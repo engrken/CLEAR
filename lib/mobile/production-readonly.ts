@@ -19,6 +19,8 @@ type MobileEnvironment = {
   localFinancialCiOnly?: boolean;
   /** Isolated, independent roster editing authorization. */
   rosterWritesEnabled?: boolean;
+  /** Never permit an unverified Vercel Preview environment to mutate real rosters. */
+  localRosterCiOnly?: boolean;
 };
 
 const GLOBAL_OTP = /^\/api\/mobile\/global\/auth\/(?:request-code|verify-code)$/;
@@ -111,6 +113,21 @@ export function canRunMobileRosterWrites(env: MobileEnvironment): boolean {
   return env.rosterWritesEnabled === true && (
     (env.vercelEnv === 'production' && env.gitRef === 'main') ||
     (env.vercelEnv === 'preview' &&
-      env.gitRef === 'feature/android-v1.5.0-write-foundation-20261101')
+      env.gitRef === 'feature/android-v1.5.0-write-foundation-20261101' &&
+      env.localRosterCiOnly === true)
   );
+}
+
+/** One server-side source for both write-capability advertising and routing. */
+export function mobileRosterWriteEnvironment(): MobileEnvironment {
+  return {
+    vercelEnv: process.env.VERCEL_ENV,
+    gitRef: process.env.VERCEL_GIT_COMMIT_REF,
+    rosterWritesEnabled: process.env.MOBILE_STUDENT_ROSTER_WRITES_ENABLED === 'true',
+    localRosterCiOnly: process.env.CI === 'true' &&
+      process.env.CLEAR_CI_FINANCE_TEST_ENABLED === '1' &&
+      process.env.AUTH_URL === 'http://127.0.0.1:3100' &&
+      process.env.DATABASE_URL ===
+        'postgresql://clear_ci:clear_ci@127.0.0.1:5432/clear_ci?schema=public',
+  };
 }

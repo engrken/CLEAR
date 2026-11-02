@@ -6,7 +6,7 @@
 
 import { NextResponse } from 'next/server';
 import { DomainError } from '@/lib/errors';
-import { isMobileRequestAllowed } from '@/lib/mobile/production-readonly';
+import { isMobileRequestAllowed, mobileRosterWriteEnvironment } from '@/lib/mobile/production-readonly';
 import { clearanceLinkOrigin } from '@/lib/clearance-link-origin';
 
 export class ApiFailure extends Error {
@@ -80,7 +80,7 @@ export function handler<Ctx>(fn: (req: Request, ctx: Ctx) => Promise<unknown>) {
         localFinancialCiOnly: process.env.CI === 'true' &&
           process.env.CLEAR_CI_FINANCE_TEST_ENABLED === '1' &&
           process.env.DATABASE_URL === 'postgresql://clear_ci:clear_ci@127.0.0.1:5432/clear_ci?schema=public',
-        rosterWritesEnabled: process.env.MOBILE_STUDENT_ROSTER_WRITES_ENABLED === 'true',
+        ...mobileRosterWriteEnvironment(),
       })) {
         throw new ApiFailure(403, 'read_only', 'This mobile operation is not enabled. Use your authorized CLEAR web portal until it is approved.');
       }

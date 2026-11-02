@@ -1,7 +1,7 @@
 import { handler, preflight } from '@/lib/mobile/http';
 import { requireMobileOfficer } from '@/lib/mobile/session';
 import { hasTabAccess } from '@/lib/roles';
-import { canRunMobileRosterWrites } from '@/lib/mobile/production-readonly';
+import { canRunMobileRosterWrites, mobileRosterWriteEnvironment } from '@/lib/mobile/production-readonly';
 
 type Ctx = { params: Promise<{ org: string }> };
 
@@ -13,11 +13,7 @@ type Ctx = { params: Promise<{ org: string }> };
 export const GET = handler(async (req, { params }: Ctx) => {
   const { org } = await params;
   const { officer, org: tenant } = await requireMobileOfficer(req, org, []);
-  const enabled = canRunMobileRosterWrites({
-    vercelEnv: process.env.VERCEL_ENV,
-    gitRef: process.env.VERCEL_GIT_COMMIT_REF,
-    rosterWritesEnabled: process.env.MOBILE_STUDENT_ROSTER_WRITES_ENABLED === 'true',
-  });
+  const enabled = canRunMobileRosterWrites(mobileRosterWriteEnvironment());
   if (!enabled || !hasTabAccess(officer.role, officer.allowedTabs, 'tab-students')) {
     return { enabled: false, grants: [] };
   }
