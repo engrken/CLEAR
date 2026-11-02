@@ -74,12 +74,6 @@ export function handler<Ctx>(fn: (req: Request, ctx: Ctx) => Promise<unknown>) {
         vercelEnv: process.env.VERCEL_ENV,
         gitRef: process.env.VERCEL_GIT_COMMIT_REF,
         tenantOperationsEnabled: process.env.MOBILE_TENANT_OPERATIONS_ENABLED === 'true',
-        financialWritesEnabled: process.env.MOBILE_FINANCIAL_WRITES_ENABLED === 'true',
-        // A test-only branch allowance requires the exact disposable local CI
-        // database; CI flags alone never authorize a production mutation.
-        localFinancialCiOnly: process.env.CI === 'true' &&
-          process.env.CLEAR_CI_FINANCE_TEST_ENABLED === '1' &&
-          process.env.DATABASE_URL === 'postgresql://clear_ci:clear_ci@127.0.0.1:5432/clear_ci?schema=public',
         ...mobileRosterWriteEnvironment(),
         ...mobileTenantUserWriteEnvironment(),
       })) {
