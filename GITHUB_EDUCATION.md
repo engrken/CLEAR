@@ -1,10 +1,10 @@
 # GitHub Education development setup
 
-This repository is prepared for the owner's verified faculty benefits. This configuration does not activate a subscription, guarantee a Codespaces allowance, or claim student-only partner offers.
+This repository is prepared for the owner's verified faculty benefits. The owner completed Copilot Pro signup on November 2, 2026 and reported disabling use of their data for AI model training. This configuration does not activate a subscription, guarantee a Codespaces allowance, or claim student-only partner offers.
 
 ## Use now
 
-Select the `education-development-setup` branch, then Code > Codespaces > Create codespace. Confirm the billing owner and available quota first; use a 2-core machine where suitable. Alternatively, open the repository locally with VS Code Dev Containers. The container recommends the official GitHub Copilot extensions; sign in with the eligible GitHub account.
+Use the repository's default branch, then Code > Codespaces > Create codespace. Confirm the billing owner and available quota first; use a 2-core machine where suitable. Alternatively, open the repository locally with VS Code Dev Containers. The container recommends the official GitHub Copilot extensions; sign in with the eligible GitHub account.
 
 Dependencies are installed explicitly, not automatically: opening a container will not run application install hooks, database migrations or launch a server.
 
@@ -27,7 +27,7 @@ Forwarded ports must remain private. Configure only development credentials thro
 
 ## Release separation
 
-This setup is available on a dedicated development branch; default branches and production code are unchanged. The commit uses [skip ci], and vercel.json disables automatic deployment only for this branch. Merge the development files with a future reviewed release when appropriate, preserving existing release requirements.
+This development setup is integrated into the default branch. Application code, production credentials and CI workflows are unchanged. Vercel automatic deployment is disabled only for education-development-setup; production deployment settings are preserved. Required branch-protection checks run through the pull request. Existing hosting integrations may still react to the default-branch update; no separate deployment is required to use Copilot or Codespaces.
 
 ## References
 
