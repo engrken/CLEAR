@@ -23,7 +23,7 @@ test('mobile financial writes remain disabled until actual server handlers are r
 
 test('payment posting requires idempotency and integer centavos before network call', () => {
   const types = source('mobile/src/api/types.ts');
-  assert.match(types, /orNumber: string; idempotencyKey: string/);
+  assert.match(types, /amountCentavos: number; idempotencyKey: string/);
   const client = source('mobile/src/api/http.ts');
   assert.match(client, /normalizeMobilePayment\(p\)/);
   assert.match(client, /idempotencyKey: payment\.idempotencyKey/);
@@ -88,14 +88,13 @@ test('financial route rejects malformed tenant slugs and all non-post methods', 
 test('payment validation rejects ASCII control characters and DEL', () => {
   const validator = source('mobile/src/api/financial-validation.ts');
   assert.ok(validator.includes('\\x00-\\x1f\\x7f'), 'all ASCII control characters must be rejected');
-  assert.match(validator, /studentId \+ feeId \+ orNumber \+ idempotencyKey/);
+  assert.match(validator, /studentId \+ feeId \+ idempotencyKey/);
 });
 
 test('mobile payment identifier bounds prevent oversized financial requests', () => {
   const validator = source('mobile/src/api/financial-validation.ts');
   assert.match(validator, /studentId\.length > 100/);
   assert.match(validator, /feeId\.length > 200/);
-  assert.match(validator, /orNumber\.length > 100/);
   assert.match(validator, /idempotencyKey\.length > 128/);
 });
 
@@ -104,4 +103,16 @@ test('Android and server enforce the same maximum payment amount', () => {
   const server = source('lib/mobile/http.ts');
   assert.match(client, /input\.amountCentavos > 100_000_000/);
   assert.match(server, /value > 100_000_000/);
+});
+
+test('mobile payment endpoint enforces tenant authorization and uses canonical posting', () => {
+  const route = source('app/api/mobile/orgs/[org]/payments/route.ts');
+  assert.match(route, /requireMobileOfficer\(req, slug, 'tab-payment'\)/);
+  assert.match(route, /requireFinancialWriteCentavos\(body\.amountCentavos/);
+  assert.match(route, /postAuthorizedPayment\(org\.subdomain/);
+  assert.doesNotMatch(route, /orNumber:\s*body\./);
+  const shared = source('lib/financial/authorized-payment.ts');
+  assert.match(shared, /withFinancialTransaction/);
+  assert.match(shared, /allocateOfficialReceiptNumber/);
+  assert.match(shared, /tx\.paymentRequest\.create/);
 });
