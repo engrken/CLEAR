@@ -61,29 +61,19 @@ test('server financial-write validator rejects coerced or fractional centavos', 
   assert.match(http, /value <= 0/);
 });
 
-test('financial rollout is isolated to one production main payment route', () => {
+test('mobile cash posting remains denied even if server financial flags are enabled', () => {
   const policy = source('lib/mobile/production-readonly.ts');
   const http = source('lib/mobile/http.ts');
-  assert.match(policy, /financialWritesEnabled\?: boolean/);
-  assert.match(policy, /FINANCIAL_POSTS\.test\(path\)/);
-  assert.match(policy, /env\.vercelEnv === 'production' && env\.gitRef === 'main'/);
-  assert.match(policy, /env\.financialWritesEnabled === true/);
-  assert.match(http, /MOBILE_FINANCIAL_WRITES_ENABLED === 'true'/);
+  assert.match(policy, /if \(verb === 'POST' && FINANCIAL_POSTS\.test\(path\)\) return false/);
+  assert.doesNotMatch(policy, /env\.financialWritesEnabled === true/);
+  assert.doesNotMatch(http, /MOBILE_FINANCIAL_WRITES_ENABLED === 'true'/);
 });
 
-test('financial allowlist is anchored to the exact payments endpoint', () => {
+test('the mobile cash block is scoped to the exact payments route', () => {
   const policy = source('lib/mobile/production-readonly.ts');
   assert.match(policy, /const FINANCIAL_POSTS = /);
   assert.ok(policy.includes('payments$/;'), 'payment route must be end-anchored');
-  assert.match(policy, /FINANCIAL_POSTS\.test\(path\)/);
-});
-
-test('financial route rejects malformed tenant slugs and all non-post methods', () => {
-  const policy = source('lib/mobile/production-readonly.ts');
-  assert.match(policy, /const FINANCIAL_POSTS = /);
   assert.match(policy, /\{0,61\}/);
-  assert.match(policy, /env\.financialWritesEnabled === true/);
-  assert.match(policy, /verb === 'POST' && FINANCIAL_POSTS\.test\(path\)/);
 });
 
 test('payment validation rejects ASCII control characters and DEL', () => {
