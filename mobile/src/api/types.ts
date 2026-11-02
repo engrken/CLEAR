@@ -157,6 +157,13 @@ export type RealignmentRecord = {
 export type RealignmentPage = {
   scope:'active_period';ay:string;term:string;hasMore:boolean;nextCursor:string|null;entries:RealignmentRecord[];
 };
+export type SetupReview={
+ scope:'active_period';ay:string;term:string;
+ calendar:{mode:string;includeSummer:boolean}|null;
+ fundsTotal:number;feesTotal:number;
+ funds:{id:string;name:string;openingCentavos:number}[];
+ fees:{id:string;category:string;name:string;amountCentavos:number;targetFund:string;isPackage:boolean}[];
+};
 export type MobileAcademicCalendar = {
   activeAy: string; activeTerm: string;
   configurations: { academicYear: string; mode: 'Semester' | 'Trimester' | 'FullYear';
@@ -451,6 +458,7 @@ export type ClearApi = {
   leaveOfficerPresence(s: Session, tabId: string): Promise<{ ok: true }>;
   getTenantPortal(s: Session): Promise<TenantPortalStatus>;
   getAcademicCalendar(s: Session): Promise<MobileAcademicCalendar>;
+  getSetupReview(s: Session): Promise<SetupReview>;
   getFinanceSnapshot(s: Session): Promise<FinanceSnapshot>;
   getReportSignatories(s:Session):Promise<ReportSignatoriesSnapshot>;
   saveReportSignatories(s:Session,input:ReportSignatoriesChange):Promise<{success:true}>;

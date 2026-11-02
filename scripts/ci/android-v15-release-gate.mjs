@@ -77,6 +77,10 @@ if (!existsSync(resolve(root, 'app/api/mobile/orgs/[org]/users/manage/route.ts')
     !read('lib/mobile/production-readonly.ts').includes('canRunMobileTenantUserManageWrites')) {
   blockers.push('Native officer creation and role/permission editing require independent server authorization');
 }
+if (!existsSync(resolve(root, 'app/api/mobile/orgs/[org]/setup-review/route.ts')) ||
+    !existsSync(resolve(root, 'mobile/src/app/(officer)/setup-review.tsx'))) {
+  blockers.push('Financial setup must provide a permissioned native read-only configuration review');
+}
 if (!existsSync(resolve(root, 'app/api/mobile/orgs/[org]/academic-calendar/route.ts')) ||
     !existsSync(resolve(root, 'mobile/src/app/(officer)/academic-calendar.tsx')) ||
     !gate.includes('canRunMobileAcademicSettingsWrites')) {

@@ -71,7 +71,7 @@ export default function More() {
     if (tab === 'tab-reports') return { text: 'Review recorded activity', open: () => router.push('/reports') };
     if (tab === 'tab-report') return { text: 'Manage report presentation', open: () => router.push('/report-presentation') };
     if (tab === 'tab-transfer') return { text: 'Review fund transfers', open: () => router.push('/realign-review') };
-    if (tab === 'tab-setup' && isTenantAdmin) return { text: 'Academic calendar', open: () => router.push('/academic-calendar') };
+    if (tab === 'tab-setup') return { text: 'Department setup', open: () => router.push('/setup-review') };
     if (tab === 'tab-users' && isTenantAdmin) return { text: 'Manage officers', open: () => router.push('/users') };
     const financeKinds: Record<string, string> = {
       'tab-penalties': 'penalties',

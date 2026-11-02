@@ -29,7 +29,7 @@ export const MODULE_CATALOG: readonly {
   { tab: 'tab-report', name: 'Report presentation', availability: 'available', detail: 'Edit report institution heading and signatories with explicit grant; official exports stay on web', webPath: '/reports' },
   { tab: 'tab-transfer', name: 'Fund realignment', availability: 'review-only', detail: 'Review current-term fund transfer history; all movement remains web-only', webPath: '/realign' },
   { tab: 'tab-users', name: 'Officer management', availability: 'available', detail: 'Review accounts and manage authorized status changes in Android; creating officers and editing roles remain on web', webPath: '/users' },
-  { tab: 'tab-setup', name: 'Department setup', availability: 'available', detail: 'Authorized academic calendars in app; finance-related setup remains on secure web', webPath: '/setup' },
+  { tab: 'tab-setup', name: 'Department setup', availability: 'available', detail: 'Review current fee and opening-fund settings; admin calendar editing is separately granted, monetary setup remains web-only', webPath: '/setup' },
 ];
 
 export function grantedModules(allowedTabs: readonly string[]) {
