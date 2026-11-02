@@ -61,8 +61,8 @@ test('roster endpoint rejects non-student tabs and caller-defined tenant/academi
   assert.match(service, /academicPeriodTransition.findUnique/);
   assert.match(service, /tx.organization.findUnique/);
   assert.ok(service.includes("revalidatePath('/department/' + org.subdomain + suffix)"));
-  assert.match(service, /currentOrg.activeAy !== org.activeAy/);
-  assert.match(service, /currentOrg.activeTerm !== org.activeTerm/);
+  assert.match(service, /currentOrg\?\.activeAy !== org\.activeAy/);
+  assert.match(service, /currentOrg\?\.activeTerm !== org\.activeTerm/);
   assert.match(capabilities, /hasTabAccess\(officer.role, officer.allowedTabs, 'tab-students'\)/);
   assert.match(capabilities, /'students.create', 'students.update', 'students.enrollment'/);
 });
