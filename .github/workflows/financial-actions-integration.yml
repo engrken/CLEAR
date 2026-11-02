@@ -128,7 +128,11 @@ jobs:
             tail -n 80 /tmp/clear-ci-payment-uat.log
             exit 1
           fi
-          node --experimental-strip-types --test tests/ci-mobile-payment-http.test.mjs
+          if ! node --experimental-strip-types --test tests/ci-mobile-payment-http.test.mjs; then
+            echo "Isolated Android payment server diagnostic (synthetic fixture only):"
+            tail -n 140 /tmp/clear-ci-payment-uat.log
+            exit 1
+          fi
       - name: Verify maintenance mode blocks login, existing JWT sessions, mobile routes and financial POSTs
         run: |
           set -euo pipefail
