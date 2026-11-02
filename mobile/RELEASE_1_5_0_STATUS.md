@@ -14,7 +14,7 @@ Updated 2026-11-02. This document tracks **draft PR #132**, not deployed behavio
 - [x] Real isolated CI test: default Android financial POST returns 403 for a valid officer without changing monetary records.
 
 ## Not verified / release blockers
-- [ ] **P1** Native Student Roster POST acceptance: active role, disabled flags, email privacy for payment-only users, create/update/enrollment, student ID financial-history guard, concurrency and wrong-tenant denial on isolated PostgreSQL.
+- [ ] **P1** Native Student Roster POST acceptance: active role, disabled flags, email privacy for payment-only users, create/update/enrollment, student ID financial-history guard, concurrency and wrong-tenant denial on isolated PostgreSQL. The new CircleCI synthetic HTTP test is pending green verification.
 - [ ] **P1** Verify the Android device provides cryptographically secure UUID generation; the current handler intentionally fails closed if its runtime cannot supply crypto.randomUUID().
 - [ ] **P1** Real authenticated native payment POST end-to-end against disposable PostgreSQL under independently authorized UAT controls; verify concurrent identical requests, dropped response, changed retry, overpayment, package splits, receipts, and original balances. The draft positive test `tests/ci-mobile-payment-http.test.mjs` exists but is **not an accepted passing gate**.
 - [ ] **P1** Release-safe tenant/action grants and Android UI activation. `PAYMENT_WRITES_ENABLED=false`, `MOBILE_BUSINESS_WRITES_ENABLED=false`, and the capability endpoint denies all; do not enable production.

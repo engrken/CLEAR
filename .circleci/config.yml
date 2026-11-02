@@ -260,6 +260,29 @@ jobs:
             node --test tests/ci-maintenance-admin-negative.test.mjs
             node --test tests/ci-maintenance-proxy-benchmark.test.mjs
             node --experimental-strip-types --test tests/ci-mobile-payment-denied-http.test.mjs
+            # Ephemeral, scoped roster UAT server. Production environment remains
+            # untouched; this job only uses local synthetic Postgres fixtures.
+            VERCEL_ENV=preview VERCEL_GIT_COMMIT_REF=feature/android-v1.5.0-write-foundation-20261101 MOBILE_STUDENT_ROSTER_WRITES_ENABLED=true \
+              npm run start -- -H 127.0.0.1 -p 3103 >/tmp/clear-ci-roster-server.log 2>&1 &
+            roster_server_pid=$!
+            trap 'kill "$roster_server_pid" "$server_pid" 2>/dev/null || true' EXIT
+            ready=0
+            for i in $(seq 1 60); do
+              if curl -fsS http://127.0.0.1:3103/api/auth/session >/dev/null 2>&1; then
+                ready=1
+                break
+              fi
+              sleep 1
+            done
+            if [ "$ready" -ne 1 ]; then
+              echo "Isolated roster UAT server failed to start"
+              tail -n 80 /tmp/clear-ci-roster-server.log
+              exit 1
+            fi
+            node --test tests/ci-mobile-roster-http.test.mjs
+      - store_artifacts:
+          path: /tmp/clear-ci-roster-server.log
+          destination: roster/ci-server.log
       - store_artifacts:
           path: /tmp/clear-ci-finance-server.log
           destination: finance/ci-server.log
