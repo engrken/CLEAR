@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, TextInput, View } from 'react-native';
 import { api, type TenantUserRecord, type TenantUsersPage } from '@/api';
 import { Banner, Button, Card, Screen, Text } from '@/components/ui';
+import { OfficerEditor } from '@/components/officers/OfficerEditor';
 import { openDepartmentModule } from '@/lib/links';
 import { canOfferMobileWrite } from '@/lib/write-permissions';
 import { useOfficerSession, useSession } from '@/lib/session';
@@ -22,6 +23,7 @@ export default function OfficerManagement() {
   const { c } = useTheme();
   const authorized = can('tab-users') && isAdministrator(s.officer.role);
   const [query, setQuery] = useState('');
+  const [editing, setEditing] = useState<{ scope: string; officer: TenantUserRecord | null } | null>(null);
   const [search, setSearch] = useState('');
   const [revision, setRevision] = useState(0);
   const [busy, setBusy] = useState<string | null>(null);
@@ -43,11 +45,16 @@ export default function OfficerManagement() {
   const mayUpdate = authorized && canOfferMobileWrite(
     capability.data, 'tenant.users.status', s.org.subdomain,
   );
+  const mayManage = authorized &&
+    canOfferMobileWrite(capability.data, 'tenant.users.manage', s.org.subdomain) &&
+    canOfferMobileWrite(capability.data, 'tenant.roles.manage', s.org.subdomain);
   const [extra, setExtra] = useState<{ key: string; records: TenantUserRecord[];
     cursor: string | null; hasMore: boolean } | null>(null);
   const [paging, setPaging] = useState(false);
   const pageBusy = useRef(false);
   const page = !result.loading ? result.data : null;
+  const editorScope = s.org.subdomain + ':' + s.token;
+  const activeEditor = mayManage && editing?.scope === editorScope ? editing : null;
   const extended = extra?.key === key ? extra : null;
   const records = page ? [...page.records, ...(extended?.records ?? [])] : [];
   const nextCursor = extended ? extended.cursor : page?.nextCursor;
@@ -104,9 +111,8 @@ export default function OfficerManagement() {
       Your web role must include department administrator access to manage officers.
     </Banner> : <>
       <Banner tone="info" title="Same rules as web">
-        Review officers for this department. Status updates require an independent server-issued
-        management grant and are audited. Adding officers, role assignments and permission
-        changes use the fully protected web workflow until their native parity is verified.
+        Officer creation, role/permission editing and status changes require independently
+        server-issued management grants. Every change is tenant-scoped and audited.
       </Banner>
       <TextInput value={query} onChangeText={setQuery} autoCorrect={false}
         autoCapitalize="none" maxLength={80} placeholder="Search officers or email"
@@ -119,6 +125,15 @@ export default function OfficerManagement() {
         Your authorized web administration remains available.
       </Banner> : null}
       {result.loading ? <ActivityIndicator color={c.cobalt}/> : null}
+      {mayManage && !activeEditor && page?.rolePresets ? <Button block variant="secondary" onPress={() => setEditing({ scope: editorScope, officer: null })}>
+        Add officer
+      </Button> : null}
+      {activeEditor && page?.rolePresets ? <OfficerEditor
+        key={activeEditor.officer?.id || 'new'} record={activeEditor.officer}
+        rolePresets={page.rolePresets}
+        onCancel={() => setEditing(null)}
+        onSaved={() => { setEditing(null); setRevision(n => n + 1); setExtra(null); }}
+      /> : null}
       {result.error ? <Banner tone="danger" title="Cannot load officers">{result.error.message}</Banner> : null}
       {error ? <Banner tone="danger" title="Action not completed">{error}</Banner> : null}
       {page ? <>
@@ -129,6 +144,11 @@ export default function OfficerManagement() {
           <Text variant="bodyStrong">{user.fullName}</Text>
           <Text variant="bodySm" color="inkMuted">{user.email}</Text>
           <Text variant="caption" color="inkMuted">{user.role} · {user.status}</Text>
+          {mayManage && page?.rolePresets && user.id !== s.officer.id ? <Button size="sm" variant="secondary"
+            disabled={busy !== null}
+            onPress={() => setEditing({ scope: editorScope, officer: user })}>
+            Edit role / permissions
+          </Button> : null}
           {mayUpdate ? <View style={styles.row}>
             {(['Active', 'Inactive', 'Blocked'] as const).filter(status => status !== user.status)
               .map(status => <Button key={status} size="sm" variant="secondary"
