@@ -13,9 +13,10 @@ test('Android client financial writes stay disabled until canonical web parity i
   const config = read('mobile/src/api/config.ts');
   const client = read('mobile/src/api/http.ts');
   assert.match(config, /export const PAYMENT_WRITES_ENABLED = false\s*;/);
+  assert.match(config, /export const REMITTANCE_WRITES_ENABLED = false\s*;/);
   assert.match(client, /recordPayment:\s*\(s, p\) => \{\s*if \(!PAYMENT_WRITES_ENABLED\)/);
-  assert.match(client, /verifyRemittance:\s*\(s, id, p\) => PAYMENT_WRITES_ENABLED \?/);
-  assert.match(client, /invalidateRemittance:\s*\(s, id\) => PAYMENT_WRITES_ENABLED \?/);
+  assert.match(client, /verifyRemittance:\s*\(s, id, p\) => REMITTANCE_WRITES_ENABLED \?/);
+  assert.match(client, /invalidateRemittance:\s*\(s, id\) => REMITTANCE_WRITES_ENABLED \?/);
 });
 
 test('Android payment API is authenticated and gated; other financial writes remain blocked', () => {

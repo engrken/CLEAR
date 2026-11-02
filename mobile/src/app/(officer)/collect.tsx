@@ -87,8 +87,9 @@ export default function Collect() {
         await SecureStore.setItemAsync(pendingKey, JSON.stringify(pending));
       }
       const entry = await api.recordPayment(session, { ...draft, idempotencyKey: pending.key });
-      await SecureStore.deleteItemAsync(pendingKey).catch(() => {});
-      setRecorded(`${entry.reference} · ${formatPeso(pesos)} from ${entry.title}`);
+      const cleared = await SecureStore.deleteItemAsync(pendingKey).then(() => true, () => false);
+      const recoveryNotice = cleared ? '' : ' Payment WAS recorded, but the retry key could not be cleared. Do not record the same payment again until you confirm the receipt in history.';
+      setRecorded(`${entry.reference} · ${formatPeso(pesos)} from ${entry.title}.${recoveryNotice}`);
       setStudentId(undefined); setFeeId(undefined); setAmount(''); setSearch('');
     } catch (err) {
       const e = err as ApiError;

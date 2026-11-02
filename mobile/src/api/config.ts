@@ -4,6 +4,9 @@ const PROD_URL = 'https://clearsys.vercel.app/api/mobile';
 // Integration branch safety gate: payment writes must not be enabled until
 // the canonical web transaction service has been ported and verified.
 export const PAYMENT_WRITES_ENABLED = false;
+// Remittance decisions are separately authorized; enabling collection payments
+// must never unlock verification, invalidation or handwritten receipt controls.
+export const REMITTANCE_WRITES_ENABLED = false;
 // The read-only legacy build has no student proof or generic business writes.
 // Keep this fail-closed independently of role, APK environment and UI navigation.
 export const MOBILE_BUSINESS_WRITES_ENABLED = false;
@@ -26,7 +29,7 @@ if (releaseKind === 'live-readonly-internal') {
   if (__DEV__ || configuredMode === 'mock' || apiUrl !== PROD_URL) {
     throw new Error('CLEAR live viewer release must use the pinned Production HTTPS API.');
   }
-  if (PAYMENT_WRITES_ENABLED !== false || MOBILE_BUSINESS_WRITES_ENABLED !== false || TENANT_OPERATIONS_ENABLED !== false) {
+  if (PAYMENT_WRITES_ENABLED !== false || REMITTANCE_WRITES_ENABLED !== false || MOBILE_BUSINESS_WRITES_ENABLED !== false || TENANT_OPERATIONS_ENABLED !== false) {
     throw new Error('CLEAR live viewer may not enable business transactions.');
   }
 }

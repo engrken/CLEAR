@@ -2,7 +2,7 @@
 
 import { Platform } from 'react-native';
 
-import { API_URL, MOBILE_BUSINESS_WRITES_ENABLED, PAYMENT_WRITES_ENABLED, TENANT_OPERATIONS_ENABLED } from './config';
+import { API_URL, MOBILE_BUSINESS_WRITES_ENABLED, PAYMENT_WRITES_ENABLED, REMITTANCE_WRITES_ENABLED, TENANT_OPERATIONS_ENABLED } from './config';
 import { fallbackMessage } from './errors';
 import { normalizeMobilePayment } from './financial-validation';
 import { ApiError, type ClearApi, type GlobalSession, type Session } from './types';
@@ -196,8 +196,8 @@ export const httpApi: ClearApi = {
       json: { studentId: payment.studentId, feeId: payment.feeId, amountCentavos: payment.amountCentavos } });
   },
   getRemittance: (s, id) => request(`${org(s.org.subdomain)}/remittances/${encodeURIComponent(id)}`, as(s)),
-  verifyRemittance: (s, id, p) => PAYMENT_WRITES_ENABLED ?
+  verifyRemittance: (s, id, p) => REMITTANCE_WRITES_ENABLED ?
     request(`${org(s.org.subdomain)}/remittances/${encodeURIComponent(id)}/verify`, { method: 'POST', ...as(s), json: { ...p, orNumber: p.orNumber.trim() } }) : Promise.reject(new ApiError('Remittance verification is disabled until Android financial parity is verified.', 'unavailable')),
-  invalidateRemittance: (s, id) => PAYMENT_WRITES_ENABLED ?
+  invalidateRemittance: (s, id) => REMITTANCE_WRITES_ENABLED ?
     request(`${org(s.org.subdomain)}/remittances/${encodeURIComponent(id)}/invalidate`, { method: 'POST', ...as(s) }) : Promise.reject(new ApiError('Remittance invalidation is disabled until Android financial parity is verified.', 'unavailable')),
 };

@@ -14,10 +14,12 @@ Updated 2026-11-02. This document tracks **draft PR #132**, not deployed behavio
 - [x] Real isolated CI test: default Android financial POST returns 403 for a valid officer without changing monetary records.
 
 ## Not verified / release blockers
+- [ ] **P1** Verify the Android device provides cryptographically secure UUID generation; the current handler intentionally fails closed if its runtime cannot supply crypto.randomUUID().
 - [ ] **P1** Real authenticated native payment POST end-to-end against disposable PostgreSQL under independently authorized UAT controls; verify concurrent identical requests, dropped response, changed retry, overpayment, package splits, receipts, and original balances. The draft positive test `tests/ci-mobile-payment-http.test.mjs` exists but is **not an accepted passing gate**.
 - [ ] **P1** Release-safe tenant/action grants and Android UI activation. `PAYMENT_WRITES_ENABLED=false`, `MOBILE_BUSINESS_WRITES_ENABLED=false`, and the capability endpoint denies all; do not enable production.
 - [ ] **P1** Secure mobile-to-web ticket issuance/redemption: full browser cookie, replay, revocation, maintenance and role isolation tests, then physical-device UAT. Keep handoff disabled.
 - [ ] **P1** Financial change review for any shared web code: compare against deployed `main`, run authenticated regressions and ensure no change to live financial data.
+- [x] Native payment vs. remittance write switches are independently disabled, so enabling cashier posting cannot accidentally unhide unsupported remittance verification/void controls.
 - [ ] **P2** Native remittance verification/invalidation, student payment-proof submissions, penalties assessment/settlement, advances and liquidation approvals, voids, funds, tenant administration and other role-specific writes: **not approved or fully implemented**. Separate server-permission/transaction/audit gates required.
 - [ ] **P2** All outstanding v1.4.0 carryover: maintenance/notice parity and student/officer regression UAT across web and Android; review #100, #97 and #81.
 - [ ] **Release** Verify Expo native build, approved signing certificate, Play versionCode availability, secure HTTPS API, physical Android UAT and Google Play policy requirements.
