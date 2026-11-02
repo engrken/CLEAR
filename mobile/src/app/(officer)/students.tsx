@@ -236,7 +236,7 @@ function RosterEditor({ student, save, onCancel, onSaved }: {
             onPress={() => setVerifiedIdentity(value => !value)} style={[styles.confirm, { borderColor: c.border }]}>
             <Icon name={verifiedIdentity ? 'check' : 'alert'} size={20} color={verifiedIdentity ? 'cobalt' : 'inkMuted'} />
             <Text variant="bodySm" style={{ flex: 1 }}>
-              I verified this student's identity under school policy before changing the registered email. Student OTP remains required.
+              I verified this student’s identity under school policy before changing the registered email. Student OTP remains required.
             </Text>
           </Pressable> : null}
           <Text variant="label">Active-term enrollment</Text>
