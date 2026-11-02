@@ -15,6 +15,8 @@ type MobileEnvironment = {
   tenantOperationsEnabled?: boolean;
   /** Independently approved financial rollout, restricted to main Production. */
   financialWritesEnabled?: boolean;
+  /** Only allowed with CI's hard-coded disposable local database. */
+  localFinancialCiOnly?: boolean;
   /** Isolated, independent roster editing authorization. */
   rosterWritesEnabled?: boolean;
 };
@@ -76,8 +78,12 @@ export function isMobileRequestAllowed(
 
   if (
     verb === 'POST' && FINANCIAL_POSTS.test(path) &&
-    env.vercelEnv === 'production' && env.gitRef === 'main' &&
-    env.financialWritesEnabled === true
+    env.financialWritesEnabled === true && (
+      (env.vercelEnv === 'production' && env.gitRef === 'main') ||
+      (env.vercelEnv === 'preview' &&
+        env.gitRef === 'feature/android-v1.5.0-write-foundation-20261101' &&
+        env.localFinancialCiOnly === true)
+    )
   ) return true;
 
   if (verb === 'POST' && STUDENT_ROSTER_POST.test(path) &&

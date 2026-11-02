@@ -280,6 +280,30 @@ jobs:
               exit 1
             fi
             node --test tests/ci-mobile-roster-http.test.mjs
+            # Real Android cashier integration on disposable local PostgreSQL.
+            # This branch-only CI gate is denied unless both the server flag
+            # and the literal throwaway database check succeed.
+            VERCEL_ENV=preview VERCEL_GIT_COMMIT_REF=feature/android-v1.5.0-write-foundation-20261101 MOBILE_FINANCIAL_WRITES_ENABLED=true \
+              npm run start -- -H 127.0.0.1 -p 3102 >/tmp/clear-ci-payment-server.log 2>&1 &
+            payment_server_pid=$!
+            trap 'kill "$payment_server_pid" "$roster_server_pid" "$server_pid" 2>/dev/null || true' EXIT
+            ready=0
+            for i in $(seq 1 60); do
+              if curl -fsS http://127.0.0.1:3102/api/auth/session >/dev/null 2>&1; then
+                ready=1
+                break
+              fi
+              sleep 1
+            done
+            if [ "$ready" -ne 1 ]; then
+              echo "Isolated payment UAT server failed to start"
+              tail -n 80 /tmp/clear-ci-payment-server.log
+              exit 1
+            fi
+            node --experimental-strip-types --test tests/ci-mobile-payment-http.test.mjs
+      - store_artifacts:
+          path: /tmp/clear-ci-payment-server.log
+          destination: finance/mobile-payment-server.log
       - store_artifacts:
           path: /tmp/clear-ci-roster-server.log
           destination: roster/ci-server.log

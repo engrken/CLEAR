@@ -140,3 +140,23 @@ test('Android live viewer cannot invoke proof, payment or tenant changes', () =>
   const globalDetail = read('mobile/src/app/global/provisions/[id].tsx');
   assert.match(globalDetail, /if \(!TENANT_OPERATIONS_ENABLED\)/);
 });
+
+test('isolated Android cashier CI path cannot be used on other deployments or databases', () => {
+  const path = '/api/mobile/orgs/jiecep/payments';
+  const scoped = {
+    vercelEnv: 'preview',
+    gitRef: 'feature/android-v1.5.0-write-foundation-20261101',
+    financialWritesEnabled: true,
+    localFinancialCiOnly: true,
+  };
+  assert.equal(isMobileRequestAllowed('POST', path, scoped), true);
+  for (const env of [
+    { ...scoped, localFinancialCiOnly: false },
+    { ...scoped, financialWritesEnabled: false },
+    { ...scoped, gitRef: 'main' },
+    { ...scoped, gitRef: 'another-preview' },
+    { ...scoped, vercelEnv: 'development' },
+  ]) assert.equal(isMobileRequestAllowed('POST', path, env), false);
+  assert.equal(isMobileRequestAllowed('POST', '/api/mobile/orgs/jiecep/payments/extra', scoped), false);
+  assert.equal(isMobileRequestAllowed('DELETE', path, scoped), false);
+});
