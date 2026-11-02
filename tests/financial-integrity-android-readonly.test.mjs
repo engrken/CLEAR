@@ -27,8 +27,8 @@ test('Android payment API is authenticated and gated; other financial writes rem
   assert.match(route, /requireFinancialWriteCentavos\(body\.amountCentavos/);
   assert.match(route, /postAuthorizedPayment\(org\.subdomain/);
   const policy = read('lib/mobile/production-readonly.ts');
-  assert.match(policy, /env\.vercelEnv === 'production' && env\.gitRef === 'main'/);
-  assert.match(policy, /env\.financialWritesEnabled === true/);
+  assert.match(policy, /if \(verb === 'POST' && FINANCIAL_POSTS\.test\(path\)\) return false/);
+  assert.doesNotMatch(policy, /env\.financialWritesEnabled === true/);
   for (const path of [
     'app/api/mobile/orgs/[org]/remittances/[id]/verify/route.ts',
     'app/api/mobile/orgs/[org]/remittances/[id]/invalidate/route.ts',
