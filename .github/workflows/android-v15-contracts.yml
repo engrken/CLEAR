@@ -44,7 +44,7 @@ jobs:
         with:
           node-version: '22'
       - name: Verify write permission and release safety contracts
-        run: node --experimental-strip-types --test tests/mobile-v1.5-write-permissions.test.mjs tests/mobile-v1.5-release-guards.test.mjs tests/mobile-v1.5-web-handoff.test.mjs tests/mobile-v1.5-release-gate.test.mjs
+        run: node --experimental-strip-types --test tests/mobile-v1.5-write-permissions.test.mjs tests/mobile-v1.5-release-guards.test.mjs tests/mobile-v1.5-web-handoff.test.mjs tests/mobile-v1.5-release-gate.test.mjs tests/mobile-v1.5-handoff-migration-gate.test.mjs
 
       - name: Install regression test dependencies (isolated; no production secrets)
         run: npm ci --no-audit --no-fund
