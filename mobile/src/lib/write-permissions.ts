@@ -9,6 +9,7 @@
 export const MOBILE_WRITE_ACTIONS = [
   'clearance.update',
   'collections.create',
+  'students.create',
   'students.update',
   'students.enrollment',
   'penalties.assess',

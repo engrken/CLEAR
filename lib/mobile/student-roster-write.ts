@@ -19,7 +19,8 @@ export type RosterInput = {
   emailChangeIdentityVerified?: boolean;
 };
 const clean = (value: unknown) => typeof value === 'string' ? value.trim() : '';
-const statusOf = (value: unknown) => value === 'Enrolled' ? 'Enrolled' : value === 'Inactive' || value === 'Dropped' ? 'Inactive' : null;
+type EnrollmentState = 'Enrolled' | 'Inactive';
+const statusOf = (value: unknown): EnrollmentState | null => value === 'Enrolled' ? 'Enrolled' : value === 'Inactive' || value === 'Dropped' ? 'Inactive' : null;
 const fail = (status: number, code: string, message: string): never => { throw new ApiFailure(status, code, message); };
 const emailFormat = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -41,7 +42,7 @@ const normalize = (raw: RosterInput) => {
     fail(400, 'invalid', 'Enter a valid student email address.');
   }
   const status = statusOf(raw.enrollmentStatus);
-  if (!status) fail(400, 'invalid', 'Choose Enrolled or Inactive.');
+  if (!status) throw new ApiFailure(400, 'invalid', 'Choose Enrolled or Inactive.');
   return { studentId, fullName, yearLevel, email, status };
 };
 
@@ -62,12 +63,20 @@ export async function applyMobileRosterChange(org: Organization, actor: TenantUs
     fail(400, 'invalid', 'Select an existing student.');
   }
   if (!org.activeAy || !org.activeTerm) fail(409, 'period_closed', 'No active academic term is configured.');
-  const actorName = actor.fullName || actor.email;
-  const result = await prisma.$transaction(async tx => {
+  const actorName = actor.fullName || actor.email || 'Authorized Officer';
+  let result;
+  try {
+  result = await prisma.$transaction(async tx => {
+    const closed = await tx.academicPeriodTransition.findUnique({
+      where: { organizationId_sourceAY_sourceTerm: {
+        organizationId: org.id, sourceAY: org.activeAy, sourceTerm: org.activeTerm,
+      } }, select: { status: true },
+    });
+    if (closed?.status === 'Closed') fail(409, 'period_closed', 'This academic term is closed for roster changes.');
     const selected = raw.action === 'create' ? null : await tx.student.findFirst({
       where: { organizationId: org.id, id: existingId },
     });
-    if (raw.action !== 'create' && !selected) fail(404, 'not_found', 'Student not found in this department.');
+    if (raw.action !== 'create' && !selected) throw new ApiFailure(404, 'not_found', 'Student not found in this department.');
     const currentEnrollment = selected ? await tx.enrollment.findUnique({
       where: { organizationId_academicYear_term_studentId: {
         organizationId: org.id, academicYear: org.activeAy, term: org.activeTerm, studentId: selected.id,
@@ -86,9 +95,9 @@ export async function applyMobileRosterChange(org: Organization, actor: TenantUs
     }
 
     if (raw.action === 'enrollment') {
-      if (!selected) fail(404, 'not_found', 'Student not found.');
+      if (!selected) throw new ApiFailure(404, 'not_found', 'Student not found.');
       const next = statusOf(raw.enrollmentStatus);
-      if (!next) fail(400, 'invalid', 'Choose Enrolled or Inactive.');
+      if (!next) throw new ApiFailure(400, 'invalid', 'Choose Enrolled or Inactive.');
       if (next === currentStatus) return { id: selected.id, status: next, changed: false };
       if (currentEnrollment) {
         const changed = await tx.enrollment.updateMany({
@@ -186,5 +195,11 @@ export async function applyMobileRosterChange(org: Organization, actor: TenantUs
     } });
     return { id, status: student.status, changed: true };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 15000 });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && ['P2002', 'P2034'].includes(error.code)) {
+      fail(409, 'conflict', 'The roster changed during editing. Refresh the roster and retry.');
+    }
+    throw error;
+  }
   return { success: true as const, ...result };
 }

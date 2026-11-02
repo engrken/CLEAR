@@ -55,8 +55,8 @@ export default function Students() {
     !q.trim() || s.fullName.toLowerCase().includes(q.trim().toLowerCase()) ||
     s.studentId.toLowerCase().includes(q.trim().toLowerCase())
   );
-  const editor = selection?.sessionKey === session.token ? selection.student : undefined;
-  const editorOpen = selection !== null && selection.sessionKey === session.token &&
+  const editor = selection?.sessionKey === session.token + ':' + session.org.subdomain ? selection.student : undefined;
+  const editorOpen = selection !== null && selection.sessionKey === session.token + ':' + session.org.subdomain &&
     (selection.student === null ? canAdd : canEdit);
 
   const header = (
@@ -90,7 +90,7 @@ export default function Students() {
             Registered email changes require school-policy identity review. The student must still verify their own email using OTP.
           </Banner> : null}
           {STUDENT_ROSTER_WRITES_ENABLED && capability.loading ? <ActivityIndicator color={c.cobalt} /> : null}
-          {canAdd ? <Button block onPress={() => { setNotice(undefined); setSelection({ sessionKey: session.token, student: null }); }}>
+          {canAdd ? <Button block onPress={() => { setNotice(undefined); setSelection({ sessionKey: session.token + ':' + session.org.subdomain, student: null }); }}>
             Add student
           </Button> : null}
           {STUDENT_ROSTER_WRITES_ENABLED && !capability.loading && !canAdd ?
@@ -104,7 +104,7 @@ export default function Students() {
         <View style={{ gap: 6 }}>
           {list.map(student => (
             <RosterRow key={student.id} student={student}
-              onEdit={canEdit ? () => { setNotice(undefined); setSelection({ sessionKey: session.token, student }); } : undefined} />
+              onEdit={canEdit ? () => { setNotice(undefined); setSelection({ sessionKey: session.token + ':' + session.org.subdomain, student }); } : undefined} />
           ))}
           {list.length === 0 ? <Banner tone="info" title="No matching records">
             Try another search or switch the email filter.
