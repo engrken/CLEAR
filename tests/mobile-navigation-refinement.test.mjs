@@ -69,7 +69,9 @@ test('module directory groups every canonical module, displays only server-autho
 test('global admin landing does not advertise unavailable provisioning as available', () => {
   const global = read('mobile/src/app/global/index.tsx');
   assert.match(global, /TENANT_OPERATIONS_ENABLED \? \(/);
-  assert.match(global, /Open operational Global Admin portal/);
+  assert.match(global, /Switch to Web Portal/);
+  assert.match(global, /openVerifiedWebHandoff\(url\)/);
+  assert.match(global, /switchToGlobalWebPortal\(\)/);
   assert.match(global, /Open tenant activity/);
 });
 

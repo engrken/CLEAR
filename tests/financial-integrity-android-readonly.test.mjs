@@ -45,10 +45,11 @@ test('Android must not invent or accept a user-selected OR when financial writes
   const mobile = read('mobile/src/api/http.ts');
   assert.match(current, /allocateOfficialReceiptNumber\(tx, org\.id\)/);
   assert.match(current, /tx\.paymentRequest\.findUnique/);
-  // This is an intentionally disabled legacy client payload. Do not turn
-  // PAYMENT_WRITES_ENABLED on until the mobile API no longer depends on this
-  // untrusted OR field and uses the canonical web-generated receipt number.
-  assert.doesNotMatch(mobile, /orNumber:\s*p\.orNumber/);
+  // Verify only the payment client: the independently disabled remittance
+  // verifier still accepts its own proof receipt input.
+  const paymentClient = mobile.slice(mobile.indexOf('  recordPayment:'), mobile.indexOf('  getRemittance:'));
+  assert.match(paymentClient, /amountCentavos: payment\.amountCentavos/);
+  assert.doesNotMatch(paymentClient, /orNumber:\s*p\.orNumber/);
   assert.match(web, /return postAuthorizedPayment\(cleanDepartment, data, officer\)/);
   assert.match(read('app/api/mobile/orgs/[org]/payments/route.ts'), /orNumber:\s*result\.orNumber/);
   assert.match(read('mobile/src/api/config.ts'), /PAYMENT_WRITES_ENABLED = false/);
