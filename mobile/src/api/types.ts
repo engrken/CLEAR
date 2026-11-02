@@ -246,6 +246,25 @@ export type Student = {
   yearLevel: string;
   /** Ken's web app calls a dropped student "Inactive"; older servers send 'Dropped'. Show via `enrollmentLabel`. */
   enrollmentStatus: 'Enrolled' | 'Dropped' | 'Inactive';
+  /** Private. Returned only when the officer has tab-students, never to payment-only users. */
+  email?: string | null;
+  termStatus?: string;
+};
+
+export type StudentRosterSnapshot = {
+  studentId: string; fullName: string; yearLevel: string;
+  email: string | null; enrollmentStatus: 'Enrolled' | 'Inactive';
+};
+export type StudentRosterMutation =
+  | { action: 'create'; studentId: string; fullName: string; yearLevel: string;
+      email: string | null; enrollmentStatus: 'Enrolled' | 'Inactive' }
+  | { action: 'update'; id: string; studentId: string; fullName: string; yearLevel: string;
+      email: string | null; enrollmentStatus: 'Enrolled' | 'Inactive'; expected: StudentRosterSnapshot;
+      emailChangeIdentityVerified: boolean }
+  | { action: 'enrollment'; id: string; enrollmentStatus: 'Enrolled' | 'Inactive';
+      expected: StudentRosterSnapshot };
+export type StudentRosterMutationResult = {
+  success: true; id: string; status: 'Enrolled' | 'Inactive'; changed: boolean;
 };
 
 export type FeeItem = { id: string; category: string; name: string; amountCentavos: number; targetFund: string };
@@ -372,6 +391,7 @@ export type ClearApi = {
   /** Accessible to tab-remittances even without tab-overview. */
   listPendingRemittances(s: Session): Promise<LedgerEntry[]>;
   listStudents(s: Session, q?: string, missingEmailOnly?: boolean): Promise<Student[]>;
+  updateStudentRoster(s: Session, change: StudentRosterMutation): Promise<StudentRosterMutationResult>;
   recordPayment(s: Session, p: { studentId: string; feeId: string; amountCentavos: number; idempotencyKey: string }): Promise<{ reference: string; title: string; orNumber: string; balanceDue: number; paymentEntries: number; paymentType: string }>;
   getRemittance(s: Session, id: string): Promise<RemittanceDetail>;
   verifyRemittance(s: Session, id: string, p: { orNumber: string; fundAllocation?: string }): Promise<{ orNumber: string }>;

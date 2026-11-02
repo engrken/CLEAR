@@ -27,6 +27,8 @@ assert.equal(prod.env.EXPO_PUBLIC_API_URL, canonical);
 const cfg = load('src/api/config.ts');
 assert.match(cfg, /export const PAYMENT_WRITES_ENABLED = false;/);
 assert.match(cfg, /export const REMITTANCE_WRITES_ENABLED = false;/);
+assert.match(cfg, /STUDENT_ROSTER_WRITES_ENABLED = process\.env\.EXPO_PUBLIC_CLEAR_STUDENT_ROSTER_WRITES/);
+assert.match(cfg, /STUDENT_ROSTER_WRITES_ENABLED !== false/);
 assert.match(cfg, /export const MOBILE_BUSINESS_WRITES_ENABLED = false;/);
 assert.match(cfg, /releaseKind === 'live-readonly-internal'/);
 assert.match(cfg, /apiUrl !== PROD_URL/);

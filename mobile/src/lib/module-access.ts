@@ -16,7 +16,7 @@ export const MODULE_CATALOG: readonly {
   webPath?: string;
 }[] = [
   { tab: 'tab-overview', name: 'Financial overview', availability: 'available', detail: 'Financial dashboard and recent activity; web actions require separate sign-in', webPath: '/summary' },
-  { tab: 'tab-students', name: 'Student roster', availability: 'available', detail: 'View your department roster', webPath: '/students' },
+  { tab: 'tab-students', name: 'Student roster', availability: 'available', detail: 'Review students; audited add and edit controls available after separate authorization', webPath: '/students' },
   { tab: 'tab-clearance', name: 'Clearance', availability: 'available', detail: 'Public student clearance inquiry; officer details require server authorization', webPath: '/clearance' },
   { tab: 'tab-payment', name: 'Collections', availability: 'review-only', detail: 'Review recent receipt allocation lines in app; audited payment posting and complete OR history remain on web', webPath: '/collections' },
   { tab: 'tab-remittances', name: 'Online remittances', availability: 'review-only', detail: 'Review proofs in app; verify or invalidate in the audited web workflow', webPath: '/remittances' },

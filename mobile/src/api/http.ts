@@ -2,7 +2,7 @@
 
 import { Platform } from 'react-native';
 
-import { API_URL, MOBILE_BUSINESS_WRITES_ENABLED, PAYMENT_WRITES_ENABLED, REMITTANCE_WRITES_ENABLED, TENANT_OPERATIONS_ENABLED } from './config';
+import { API_URL, MOBILE_BUSINESS_WRITES_ENABLED, PAYMENT_WRITES_ENABLED, REMITTANCE_WRITES_ENABLED, STUDENT_ROSTER_WRITES_ENABLED, TENANT_OPERATIONS_ENABLED } from './config';
 import { fallbackMessage } from './errors';
 import { normalizeMobilePayment } from './financial-validation';
 import { ApiError, type ClearApi, type GlobalSession, type Session } from './types';
@@ -185,6 +185,9 @@ export const httpApi: ClearApi = {
   listStudents: (s, q, missingEmailOnly) => request(`${org(s.org.subdomain)}/students`, {
     ...as(s), query: { q, ...(missingEmailOnly ? { email: 'missing' } : {}) },
   }),
+  updateStudentRoster: (s, change) => STUDENT_ROSTER_WRITES_ENABLED ?
+    request(`${org(s.org.subdomain)}/students/manage`, { method: 'POST', ...as(s), json: change }) :
+    Promise.reject(new ApiError('Student roster editing is not enabled for this Android build.', 'read_only')),
   recordPayment: (s, p) => {
     if (!PAYMENT_WRITES_ENABLED) return Promise.reject(new ApiError('Payment posting is disabled until Android financial parity is verified.', 'unavailable'));
     // Validation is local defense-in-depth. The canonical server must independently
