@@ -30,6 +30,9 @@ export default function Home() {
   const canRoster = can('tab-students') || can('tab-payment');
   const canPayment = can('tab-payment');
   const canVoid = can('tab-void');
+  const canReports = can('tab-reports');
+  const [selectedLedgerScope, setSelectedLedgerScope] = useState<'active' | 'all'>('active');
+  const ledgerScope = canReports && selectedLedgerScope === 'all' ? 'all' : 'active';
   const [ledgerQuery, setLedgerQuery] = useState('');
   const [activityFilter, setActivityFilter] = useState<RecentActivityFilter>('all');
 
@@ -39,8 +42,8 @@ export default function Home() {
     `${session.token}:overview:${canOverview}`
   );
   const ledger = useLedgerPages(
-    (cursor) => api.listLedgerPage(session, cursor),
-    `${session.token}:ledger`, canOverview,
+    (cursor) => api.listLedgerPage(session, cursor, ledgerScope),
+    `${session.org.subdomain}:${session.token}:ledger:${ledgerScope}`, canOverview,
   );
 
   const { reload: reloadSummary } = summary;
@@ -138,7 +141,22 @@ export default function Home() {
 
       {canOverview ? (
         <View style={{ gap: spacing[2], marginTop: 6 }}>
-          <SectionHeader title="Activity · current academic period" />
+          <SectionHeader title={ledgerScope === 'all' ? 'Activity · all academic periods' : 'Activity · current academic period'} />
+          {canReports ? (
+            <View style={styles.activityFilters}>
+              {(['active', 'all'] as const).map(scope => (
+                <Pressable key={scope} accessibilityRole="button"
+                  accessibilityLabel={scope === 'all' ? 'All academic periods' : 'Current academic period'}
+                  accessibilityState={{ selected: ledgerScope === scope }}
+                  onPress={() => { setSelectedLedgerScope(scope); setLedgerQuery(''); setActivityFilter('all'); }}
+                  style={[styles.activityChip, { backgroundColor: ledgerScope === scope ? c.inkBlock : c.soft }]}>
+                  <Text variant="caption" style={{ color: ledgerScope === scope ? c.onAccent : c.ink }}>
+                    {scope === 'all' ? 'All periods' : 'Current period'}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
           <TextInput value={ledgerQuery} onChangeText={setLedgerQuery} autoCorrect={false}
             accessibilityLabel="Search recent authorized activity by student, OR or reference"
             placeholder="Search loaded names, ORs or references" placeholderTextColor={c.inkMuted}
@@ -168,6 +186,11 @@ export default function Home() {
               Search Void references (read-only)
             </Button>
           ) : null}
+          {canVoid ? (
+            <Button block variant="secondary" onPress={() => router.push('/void-audit')}>
+              Browse Void audit history (read-only)
+            </Button>
+          ) : null}
           {ledger.error ? <Banner tone="danger" title="Couldn't load activity">{ledger.error.message}</Banner> : null}
           {ledger.data ? (
             <>
@@ -178,7 +201,7 @@ export default function Home() {
                   first={i === 0}
                   title={l.title}
                   reference={l.reference}
-                  subtitle={`${l.subtitle} · ${formatWhen(l.at)}`}
+                  subtitle={`${l.subtitle}${ledgerScope === 'all' && l.academicYear ? ` · ${l.academicYear} ${l.term ?? ''}` : ''} · ${formatWhen(l.at)}`}
                   amount={fromCentavos(l.amountCentavos)}
                   status={l.status}
                   onPress={

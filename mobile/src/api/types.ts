@@ -180,6 +180,9 @@ export type LedgerEntry = {
   receiptNumber?: string;
   /** Collection line within the issued receipt; provided only for collection entries. */
   receiptLine?: number;
+  /** Present for all-period Activity, supplied by the web-ledger service. */
+  academicYear?: string;
+  term?: string;
 };
 
 export type LedgerPage = {
@@ -321,6 +324,9 @@ export type ReceiptReferenceSearch = { kind: 'receipts'; scope: 'active_period';
   ay: string; term: string; query: string; records: ReceiptReference[] };
 export type VoidReferenceSearch = { kind: 'void'; scope: 'tenant_all_periods';
   query: string; records: VoidReference[] };
+/** Read-only keyset pages of the existing web VoidTransaction audit trail. */
+export type VoidAuditPage = { scope: 'tenant_all_periods'; records: VoidReference[];
+  hasMore: boolean; nextCursor: string | null; pageSize: number };
 
 export type MobileWriteAction = import('../lib/write-permissions').MobileWriteAction;
 export type MobileWritePolicy = import('../lib/write-permissions').MobileWritePolicy;
@@ -382,7 +388,9 @@ export type ClearApi = {
   getTenantPortal(s: Session): Promise<TenantPortalStatus>;
   getDashboard(s: Session): Promise<DashboardSummary>;
   listLedger(s: Session, filter?: { status?: string; limit?: number }): Promise<LedgerEntry[]>;
-  listLedgerPage(s: Session, cursor?: string): Promise<LedgerPage>;
+  listLedgerPage(s: Session, cursor?: string, scope?: 'active' | 'all'): Promise<LedgerPage>;
+  /** Server authorizes tab-void independently of overview and reporting grants. */
+  listVoidAudit(s: Session, cursor?: string): Promise<VoidAuditPage>;
   /** Independently permission-checked, current period and read-only. */
   getFinanceReview(s: Session, kind: FinanceReviewKind, limit?: number): Promise<FinanceReviewResponse>;
   /** Authorized GET-only exact reference search; no receipt/void mutations. */

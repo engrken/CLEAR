@@ -29,7 +29,7 @@ export default function GlobalDashboard() {
         <Text variant="bodySm" color="inkMuted">{global.admin.fullName} · {global.admin.email}</Text>
       </View>
 
-      <Banner tone="info" title="Global Superadmin · authorized operations">
+      <Banner tone="info" title="Global Administrator · authorized operations">
         Review every tenant in the mobile workspace. Approved tenant-management operations can be enabled separately; all other management modules remain available through your secure web sign-in.
       </Banner>
 

@@ -66,6 +66,7 @@ export default function More() {
       open: () => router.push({ pathname: '/d/[dept]/clearance', params: { dept: session.org.subdomain } }),
     };
     if (tab === 'tab-remittances') return { text: 'Review payment proofs', open: () => router.push('/verify') };
+    if (tab === 'tab-void') return { text: 'Browse Void audit', open: () => router.push('/void-audit') };
     const financeKinds: Record<string, string> = {
       'tab-penalties': 'penalties',
       'tab-advances': 'advances',

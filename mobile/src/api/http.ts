@@ -172,8 +172,11 @@ export const httpApi: ClearApi = {
   getFinanceReview: (s, kind, limit = 20) => request(`${org(s.org.subdomain)}/finance-review`, {
     ...as(s), query: { kind, limit },
   }),
-  listLedgerPage: (s, cursor) => request(`${org(s.org.subdomain)}/ledger/page`, {
-    ...as(s), query: { scope: 'active', limit: 50, cursor },
+  listLedgerPage: (s, cursor, scope = 'active') => request(`${org(s.org.subdomain)}/ledger/page`, {
+    ...as(s), query: { scope, limit: 50, cursor },
+  }),
+  listVoidAudit: (s, cursor) => request(`${org(s.org.subdomain)}/void-audit`, {
+    ...as(s), query: { limit: 30, cursor },
   }),
   searchReceiptReferences: (s, q) => request(`${org(s.org.subdomain)}/reference-search`, {
     ...as(s), query: { kind: 'receipts', q: q.trim() },

@@ -25,7 +25,7 @@ export const MODULE_CATALOG: readonly {
   { tab: 'tab-audit', name: 'Liquidations and audit', availability: 'review-only', detail: 'Review recorded liquidation expenses and audit status; web remains authoritative', webPath: '/liquidations' },
   { tab: 'tab-collectibles', name: 'Collectibles', availability: 'web-only', detail: 'Use the web system for collectibles', webPath: '/collectibles' },
   { tab: 'tab-reports', name: 'Financial reports', availability: 'web-only', detail: 'Use the web system for official financial reports', webPath: '/reports' },
-  { tab: 'tab-void', name: 'Void center', availability: 'web-only', detail: 'Use the web system for financial reversals', webPath: '/void' },
+  { tab: 'tab-void', name: 'Void center', availability: 'review-only', detail: 'Browse the tenant-wide Void audit in Android; audited void and reversal actions remain on web', webPath: '/void' },
   { tab: 'tab-report', name: 'Report submission', availability: 'web-only', detail: 'Use the web system for report submission', webPath: '/reports' },
   { tab: 'tab-transfer', name: 'Fund realignment', availability: 'web-only', detail: 'Use the web system for transfers', webPath: '/realign' },
   { tab: 'tab-users', name: 'Officer management', availability: 'web-only', detail: 'Use the web system to manage roles and permissions', webPath: '/users' },

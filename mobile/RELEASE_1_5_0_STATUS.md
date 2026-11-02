@@ -48,3 +48,10 @@ Updated 2026-11-02. This document tracks **draft PR #132**, not deployed behavio
 - [PR #132](https://github.com/engrken/CLEAR/pull/132)
 - [Baseline CircleCI #332](https://app.circleci.com/pipeline/56c4fdd2-598f-4fc4-9457-491d303c5c01)
 - [Original positive-payment diagnostic CI #333](https://app.circleci.com/pipeline/2f68561a-4b26-477b-9f7a-7e4f6488a21a) (failed, **not accepted**)
+
+## Web-first parity additions — 2026-11-02
+- [x] Native officer Activity can browse **all academic periods** only when the officer independently holds the web `tab-reports` grant as well as `tab-overview`. Existing web pagination service remains the source of truth; cursors and private rows are keyed by tenant, token and scope. No writes.
+- [x] Native GET-only, paginated Void audit uses the canonical web VoidTransaction records, the existing `tab-void` grant, tenant-scoped keyset cursor validation and exact-centavo review. The Android Void module now offers browsing, but executing reversals remains web-only.
+- [x] Android Global Administrator dashboard branding aligns with the approved display title.
+- [ ] Run all source/CI checks on the final commit, then signed-device UAT. These reads do **not** replace pending native write workflows or approve release.
+- Web production is the authority for all business changes and is not modified by these Android additions. Both features remain only on the draft v1.5.0 integration branch.
