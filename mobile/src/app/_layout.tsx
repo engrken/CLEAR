@@ -41,7 +41,7 @@ export default function RootLayout() {
 function Navigator() {
   const { c } = useTheme();
   const { session, globalSession, restoring, signOut } = useSession();
-  const [lock, setLock] = useState<'checking' | 'locked' | 'open'>('checking');
+  const [lock, setLock] = useState<{ key: string; status: 'checking' | 'locked' | 'open' }>({ key: '', status: 'checking' });
   const identity = globalSession ? { kind: 'global' as const, id: globalSession.admin.id, token: globalSession.token } :
     session ? { kind: 'officer' as const, id: session.officer.id, token: session.token } : null;
   const key = identity ? identity.kind + ':' + identity.id + ':' + identity.token : '';
@@ -50,11 +50,10 @@ function Navigator() {
   useEffect(() => {
     let live = true;
     const epoch = ++lockEpoch.current;
-    setLock('checking');
     if (restoring) return () => { live = false; };
-    if (!identity) { setLock('open'); return () => { live = false; }; }
-    void biometricEnabled(identity).then(e => { if (live && epoch === lockEpoch.current) setLock(e ? 'locked' : 'open'); })
-      .catch(() => { if (live && epoch === lockEpoch.current) setLock('locked'); });
+    if (!identity) return () => { live = false; };
+    void biometricEnabled(identity).then(e => { if (live && epoch === lockEpoch.current) setLock({ key, status: e ? 'locked' : 'open' }); })
+      .catch(() => { if (live && epoch === lockEpoch.current) setLock({ key, status: 'locked' }); });
     return () => { live = false; };
   }, [restoring, key]);
   useEffect(() => {
@@ -74,10 +73,10 @@ function Navigator() {
   const unlock = async () => {
     if (!identity) return;
     const epoch = ++lockEpoch.current;
-    setLock('checking');
+    setLock({ key, status: 'checking' });
     const verified = await unlockWithBiometrics(identity).catch(() => false);
     if (epoch === lockEpoch.current && AppState.currentState === 'active') {
-      setLock(verified ? 'open' : 'locked');
+      setLock({ key, status: verified ? 'open' : 'locked' });
     }
   };
   const pathname = usePathname();
@@ -112,10 +111,11 @@ function Navigator() {
     colors: { ...DefaultTheme.colors, background: c.canvas, card: c.canvas, text: c.ink, border: c.border, primary: c.accent },
   };
   if (restoring || !privacyReady) return null;
-  if (identity && lock !== 'open') return <View style={{ flex: 1, justifyContent: 'center', padding: 28, gap: 20 }}>
+  const effectiveLock = lock.key === key ? lock.status : 'checking';
+  if (identity && effectiveLock !== 'open') return <View style={{ flex: 1, justifyContent: 'center', padding: 28, gap: 20 }}>
     <Text variant="headline">CLEAR security lock</Text>
     <Text variant="bodySm">Verify your fingerprint or face to unlock. Server permissions remain enforced.</Text>
-    {lock === 'checking' ? <ActivityIndicator /> : <Button block onPress={() => void unlock()}>Unlock with biometrics</Button>}
+    {effectiveLock === 'checking' ? <ActivityIndicator /> : <Button block onPress={() => void unlock()}>Unlock with biometrics</Button>}
     <Button block variant="secondary" onPress={() => void signOut()}>Sign out and use OTP</Button>
   </View>;
 
