@@ -1,3 +1,32 @@
+# CLEAR Android v1.5.0 — APPROVED WEB-FIRST UAT SCOPE (2026-11-02)
+
+**This approved scope supersedes earlier drafts proposing native financial posting or other native business writes.** Web remains the source of truth for all operational changes.
+
+- Financial modules: **STRICTLY READ-ONLY on Android.** Penalties, collections, advances, liquidations, remittances, void audit, balances and Activity show authorized web data; any posting, approval, reversal, adjustment, transfer or financial configuration redirects to separately authenticated web pages. `PAYMENT_WRITES_ENABLED`, `REMITTANCE_WRITES_ENABLED` and `MOBILE_BUSINESS_WRITES_ENABLED` stay hardcoded false. Tenant provisioning also stays disabled in the UAT profile.
+- Role parity: Android uses the current server-authorized `allowedTabs`, with a fresh role/tenant check on every API. The web app is ahead for all write workflows.
+- Student roster: **native create/update/current-term enrollment** permitted only under both independent mobile-build opt-in and server-issued tenant-specific `students.*` grants. The web roster's canonical rules remain authoritative; no changes on Production or arbitrary previews without release approval.
+- User profile: native viewing, dual-email-OTP login email update, and separate Global Administrator account view. Official name, role and permission changes remain Administrator-owned on web.
+- Device security: opt-in fingerprint/face via Android Keystore / Expo SecureStore, OS-provided passcode fallback only when available, otherwise sign out and use server OTP. Never create an independent app PIN or claim local biometrics replace server authentication.
+- Web redirect: first-party HTTPS module URLs, normal web RBAC/OTP; optional single-use auto-login handoff is separately feature-gated and **not required** to build or UAT this safer version.
+
+## Source implementation and verification
+
+- [x] Version `1.5.0` with Android `versionCode 16` staged in app config (the Play Console must still confirm uniqueness).
+- [x] Web-first historical Activity, complete-on-demand page navigation for current term, Void audit, financial review module pagination on the draft PR.
+- [x] Server-enforced exact-centavo financial reads and negative role/tenant tests; financial write switches remain false.
+- [x] Native student roster add/edit foundation, server capability gate, closed-term and financial-history protection with isolated CI testing.
+- [x] Dual-OTP profile editing and native biometric opt-in foundation.
+- [x] Dedicated **v15-uat-readonly** EAS internal Android APK profile, pinned to Production HTTPS with all roster/business writes off.
+- [ ] Required automated gates green **on current final commit**.
+- [ ] Isolated roster-write test server and Android APK configuration approved for writable roster UAT; Production roster data must not be used for write testing without separate approval.
+- [ ] Signed Android APK generated; physical-device tests verify biometric fingerprint/face, any OS passcode fallback, OTP and browser redirect.
+- [ ] Real-user UAT for student OTP/clearance, roster, profile, all authorized modules, maintenance, performance, no financial write actions.
+- [ ] Google Play Upload signer, unique versionCode and staged AAB release reviewed.
+
+**UAT packaging is not production release.** The `v15-uat-readonly` APK profile can safely test live read-only flows and profile email changes; roster editing remains denied until an isolated, explicitly authorized backend is configured. Never infer a server write grant from a UI/build flag.
+
+**Previous implementation audit follows (historical; financial posting tasks below are no longer in v1.5.0 scope):**
+
 # Android 1.5.0 — verified work / pending release gates
 
 Updated 2026-11-02. This document tracks **draft PR #132**, not deployed behavior.

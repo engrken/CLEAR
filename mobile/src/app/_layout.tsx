@@ -114,7 +114,7 @@ function Navigator() {
   const effectiveLock = lock.key === key ? lock.status : 'checking';
   if (identity && effectiveLock !== 'open') return <View style={{ flex: 1, justifyContent: 'center', padding: 28, gap: 20 }}>
     <Text variant="headline">CLEAR security lock</Text>
-    <Text variant="bodySm">Verify your fingerprint or face to unlock. Server permissions remain enforced.</Text>
+    <Text variant="bodySm">Use your enrolled fingerprint or face to unlock; follow the OS prompt if it offers a device passcode. Otherwise sign out and use OTP. Server permissions remain enforced.</Text>
     {effectiveLock === 'checking' ? <ActivityIndicator /> : <Button block onPress={() => void unlock()}>Unlock with biometrics</Button>}
     <Button block variant="secondary" onPress={() => void signOut()}>Sign out and use OTP</Button>
   </View>;

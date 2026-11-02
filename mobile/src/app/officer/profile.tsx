@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, TextInput } from 'react-native';
 
 import { api } from '@/api';
+import { STUDENT_ROSTER_WRITES_ENABLED } from '@/api/config';
 import { BackHeader, Banner, Button, Card, Screen, Text } from '@/components/ui';
 import { useOfficerSession, useSession } from '@/lib/session';
 import { spacing, useTheme } from '@/theme';
@@ -22,6 +23,10 @@ export default function OfficerProfile() {
   const effectiveWriteStatus = writeStatus.token === session.token ? writeStatus.state : 'checking';
   useEffect(() => {
     let active = true;
+    if (!STUDENT_ROSTER_WRITES_ENABLED || !session.officer.allowedTabs.includes('tab-students')) {
+      setWriteStatus({ token: session.token, state: 'disabled' });
+      return;
+    }
     void api.getWriteCapabilities(session).then((policy) => {
       if (active) setWriteStatus({ token: session.token, state: policy.enabled && Array.isArray(policy.grants) && policy.grants.some((grant) => grant?.organization === session.org.subdomain) ? 'enabled' : 'disabled' });
     }).catch(() => {
@@ -110,8 +115,8 @@ export default function OfficerProfile() {
         <Text variant="bodyStrong">{session.org.name} · {session.officer.role}</Text>
       </Card>
       <Card style={styles.section}><BiometricSettings identity={{ kind: "officer", id: session.officer.id, token: session.token }} /></Card>
-      <Banner tone="info" title="Transaction access">
-        {effectiveWriteStatus === 'checking' ? 'Checking server-issued transaction permissions…' : effectiveWriteStatus === 'enabled' ? 'Server-issued transaction grants are present. Each operation still requires independent server authorization.' : 'Mobile financial and administrative transaction access is currently unavailable. Your existing read permissions are unaffected.'}
+      <Banner tone="info" title="Roster editing authorization">
+        {effectiveWriteStatus === 'checking' ? 'Checking the server-issued student roster grant…' : effectiveWriteStatus === 'enabled' ? 'Your active tenant has authorized roster editing. Each change is independently checked on the server.' : 'Student roster editing is not enabled for this session or build. Mobile financial modules remain strictly read-only.'}
       </Banner>
       <Banner tone="info" title="Verified profile updates">
         Changing your login email requires two verification codes: one sent to the current email, and one to the new email. Your official name, role, and permissions remain managed by your tenant administrator.

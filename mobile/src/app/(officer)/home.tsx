@@ -4,6 +4,7 @@ import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react
 
 import { api, type DashboardSummary } from '@/api';
 import { PAYMENT_WRITES_ENABLED } from '@/api/config';
+import { openDepartmentModule } from '@/lib/links';
 import { Banner, Button, ColorTile, HeroStat, LedgerList, LedgerRow, Screen, SectionHeader, TermChip, Text } from '@/components/ui';
 import { FinancialOverview } from '@/components/overview/FinancialOverview';
 import { OfficerPresence } from '@/components/collaboration/OfficerPresence';
@@ -130,13 +131,17 @@ export default function Home() {
           View students
         </Button>
       ) : null}
-      {canPayment && PAYMENT_WRITES_ENABLED ? (
-        <Button block variant="ink" icon="plus" onPress={() => router.push('/collect')}>Record a payment</Button>
-      ) : null}
-      {canPayment && !PAYMENT_WRITES_ENABLED ? (
-        <Banner tone="info" title="Financial posting paused">
-          Your role has payment permission, but Android posting is disabled until receipt sequencing and accounting parity are verified.
-        </Banner>
+      {canPayment ? (
+        <>
+          <Banner tone="info" title="Financial actions stay on web">
+            Android v1.5.0 is read-only for collections and all other financial modules.
+            Official payment posting and receipt issuance take place only in the role-protected web app.
+          </Banner>
+          <Button block variant="secondary" icon="receipt"
+            onPress={() => void openDepartmentModule(session.org.subdomain, '/collections')}>
+            Record payment on secure web
+          </Button>
+        </>
       ) : null}
 
       {canOverview ? (
