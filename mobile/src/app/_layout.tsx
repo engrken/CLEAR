@@ -12,7 +12,7 @@ import { AppState, View, ActivityIndicator } from 'react-native';
 import { biometricEnabled, unlockWithBiometrics } from '@/lib/biometrics';
 import { Button, Text } from '@/components/ui';
 
-import { MOBILE_BUSINESS_WRITES_ENABLED, TENANT_OPERATIONS_ENABLED } from '@/api/config';
+import { MOBILE_BUSINESS_WRITES_ENABLED } from '@/api/config';
 import { DataPrivacyNotice } from '@/components/privacy/DataPrivacyNotice';
 import { ServiceAdvisory } from '@/components/maintenance/ServiceAdvisory';
 import { getItem, setItem } from '@/lib/secure-storage';
@@ -171,9 +171,7 @@ function Navigator() {
           <Stack.Screen name="global/maintenance" />
           <Stack.Screen name="global/tenant/[org]" />
           <Stack.Screen name="global/provisions/index" />
-          <Stack.Protected guard={TENANT_OPERATIONS_ENABLED} redirectTo="/global/provisions">
-            <Stack.Screen name="global/provisions/new" />
-          </Stack.Protected>
+          <Stack.Screen name="global/provisions/new" />
           <Stack.Screen name="global/provisions/[id]" />
         </Stack.Protected>
       </Stack>

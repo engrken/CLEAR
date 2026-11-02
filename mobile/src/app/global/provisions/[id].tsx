@@ -3,7 +3,6 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { api, type OrganizationStatus, type SubscriptionTier } from '@/api';
-import { TENANT_OPERATIONS_ENABLED } from '@/api/config';
 import { BackHeader, Banner, Button, Card, Screen, Text, TextField } from '@/components/ui';
 import { openGlobalAdministrationPortal } from '@/lib/links';
 import { useGlobalSession } from '@/lib/session';
@@ -38,6 +37,7 @@ export default function ManageTenant() {
   const router = useRouter();
   const { c } = useTheme();
   const tenants = useAsync(() => api.listManagedTenants(global), global.token + ':management');
+  const operations = useAsync(() => api.getGlobalManagementCapabilities(global), global.token + ':management-capabilities');
   const { reload } = tenants;
   useFocusEffect(useCallback(() => { reload(); }, [reload]));
   const org = tenants.data?.find((tenant) => tenant.id === id);
@@ -51,7 +51,7 @@ export default function ManageTenant() {
   const [success, setSuccess] = useState('');
 
   async function apply(action: 'tier' | 'status' | 'group', value: string) {
-    if (busy || !org || confirmation !== `MANAGE ${org.subdomain}`) return;
+    if (busy || !org || !operations.data?.tenantOperationsEnabled || confirmation !== `MANAGE ${org.subdomain}`) return;
     if (value === (action === 'tier' ? org.tier : action === 'status' ? org.status : org.schoolGroup)) return;
     setBusy(true); setError(''); setSuccess('');
     try {
@@ -69,12 +69,12 @@ export default function ManageTenant() {
     }
   }
 
-  if (!TENANT_OPERATIONS_ENABLED) {
+  if (!operations.data?.tenantOperationsEnabled) {
     return (
       <Screen edges={['top', 'bottom']}
         header={<BackHeader title="Tenant status" onBack={() => router.replace('/global/provisions')} />}>
         <Banner tone="info" title="Read-only tenant status">
-          Native tenant management is not enabled in this build. The authorized web portal supports these operations.
+          Native tenant management is not enabled by the server for this account. The authorized web portal supports these operations.
         </Banner>
         {tenants.loading && !tenants.data ? <ActivityIndicator color={c.cobalt} /> : null}
         {tenants.error ? <Banner tone="danger" title="Unable to load tenant">{tenants.error.message}</Banner> : null}

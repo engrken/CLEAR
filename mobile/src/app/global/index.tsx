@@ -3,7 +3,6 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import { api } from '@/api';
-import { TENANT_OPERATIONS_ENABLED } from '@/api/config';
 import { Banner, Button, Card, Screen, SectionHeader, Text } from '@/components/ui';
 import { switchToGlobalWebPortal, openVerifiedWebHandoff } from '@/lib/links';
 import { useGlobalSession, useSession } from '@/lib/session';
@@ -16,6 +15,7 @@ export default function GlobalDashboard() {
   const { signOut } = useSession();
   const { c } = useTheme();
   const overview = useAsync(() => api.getGlobalOverview(global), global.token);
+  const operations = useAsync(() => api.getGlobalManagementCapabilities(global), global.token + ':management-capabilities');
   const { reload } = overview;
   useFocusEffect(useCallback(() => { reload(); }, [reload]));
 
@@ -41,7 +41,7 @@ export default function GlobalDashboard() {
         <Button block variant="secondary" icon="shield" onPress={() => router.push('/global/maintenance')}>
           Maintenance & announcements
         </Button>
-        {TENANT_OPERATIONS_ENABLED ? (
+        {operations.data?.tenantOperationsEnabled ? (
           <Button block variant="secondary" icon="plus" onPress={() => router.push('/global/provisions/new')}>
             Provision new tenant
           </Button>

@@ -423,6 +423,7 @@ export type ClearApi = {
   restoreGlobalSession(token: string): Promise<GlobalSession>;
   signOutGlobal(session: GlobalSession): Promise<void>;
   getGlobalOverview(session: GlobalSession): Promise<GlobalOverview>;
+  getGlobalManagementCapabilities(session: GlobalSession): Promise<{tenantOperationsEnabled:boolean}>;
   getGlobalMaintenance(session: GlobalSession): Promise<GlobalMaintenancePage>;
   changeGlobalMaintenance(session: GlobalSession, change: GlobalMaintenanceChange): Promise<{success:true}>;
   /** Separate Global Administrator identity; never impersonate a tenant officer. */

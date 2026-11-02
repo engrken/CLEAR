@@ -98,6 +98,11 @@ if (!existsSync(resolve(root, 'app/api/mobile/orgs/[org]/collectibles/route.ts')
   blockers.push('Native Collectibles needs a protected read-only workspace and server route');
 }
 
+if (!existsSync(resolve(root,'app/api/mobile/global/write-capabilities/route.ts')) ||
+    !read('mobile/src/app/global/provisions/new.tsx').includes('getGlobalManagementCapabilities') ||
+    !read('lib/mobile/production-readonly.ts').includes('canRunMobileGlobalTenantOperations')) {
+  blockers.push('Native tenant provisioning/management needs independent global server grants');
+}
 if (!existsSync(resolve(root,'app/api/mobile/global/maintenance/route.ts')) ||
     !existsSync(resolve(root,'mobile/src/app/global/maintenance.tsx')) ||
     !gate.includes('canRunMobileGlobalMaintenanceWrites') ||

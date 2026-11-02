@@ -201,3 +201,12 @@ export function canRunMobileReportSignatoryWrites(env: MobileEnvironment): boole
       env.localRosterCiOnly === true)
   );
 }
+
+/** Read-only server capability signal; the underlying provisioning handlers
+ * retain independent global-mobile session, confirmation and web-core checks. */
+export function canRunMobileGlobalTenantOperations(env: MobileEnvironment): boolean {
+  return (
+    (env.vercelEnv === 'production' && env.gitRef === 'main' && env.tenantOperationsEnabled === true) ||
+    (env.vercelEnv === 'preview' && env.gitRef === 'android-parity-integration')
+  );
+}

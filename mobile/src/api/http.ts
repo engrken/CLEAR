@@ -2,7 +2,7 @@
 
 import { Platform } from 'react-native';
 
-import { API_URL, MOBILE_BUSINESS_WRITES_ENABLED, PAYMENT_WRITES_ENABLED, REMITTANCE_WRITES_ENABLED, STUDENT_ROSTER_WRITES_ENABLED, TENANT_OPERATIONS_ENABLED } from './config';
+import { API_URL, MOBILE_BUSINESS_WRITES_ENABLED, PAYMENT_WRITES_ENABLED, REMITTANCE_WRITES_ENABLED, STUDENT_ROSTER_WRITES_ENABLED } from './config';
 import { fallbackMessage } from './errors';
 import { normalizeMobilePayment } from './financial-validation';
 import { ApiError, type ClearApi, type GlobalSession, type Session } from './types';
@@ -145,15 +145,14 @@ export const httpApi: ClearApi = {
   },
   requestGlobalWebHandoff: (session) => request('/global/auth/web-handoff', { method: 'POST', token: session.token }),
   getGlobalOverview: (session) => request('/global/overview', { token: session.token }),
+  getGlobalManagementCapabilities: (session) => request('/global/write-capabilities', { token: session.token }),
   getGlobalMaintenance: (session) => request('/global/maintenance', { token: session.token }),
   changeGlobalMaintenance: (session, change) => request('/global/maintenance', { token: session.token, method: 'POST', json: change }),
   listManagedTenants: (session) => request('/global/provisions', { token: session.token }),
-  provisionTenant: (session, payload) => TENANT_OPERATIONS_ENABLED ?
-    request('/global/provisions', { token: session.token, method: 'POST', json: payload }) :
-    Promise.reject(new ApiError('Tenant provisioning is not enabled in this Android build. Open the secure web portal.', 'read_only')),
-  manageTenant: (session, payload) => TENANT_OPERATIONS_ENABLED ?
-    request('/global/provisions/manage', { token: session.token, method: 'POST', json: payload }) :
-    Promise.reject(new ApiError('Tenant changes are not enabled in this Android build. Open the secure web portal.', 'read_only')),
+  provisionTenant: (session, payload) =>
+    request('/global/provisions', { token: session.token, method: 'POST', json: payload }),
+  manageTenant: (session, payload) =>
+    request('/global/provisions/manage', { token: session.token, method: 'POST', json: payload }),
   getGlobalTenantDashboard: (s, slug) => request(`/global/orgs/${encodeURIComponent(slug)}/dashboard`, { token: s.token }),
   listGlobalTenantStudents: (s, slug, q) => request(`/global/orgs/${encodeURIComponent(slug)}/students`, { token: s.token, query: { q } }),
   listGlobalTenantLedger: (s, slug) => request(`/global/orgs/${encodeURIComponent(slug)}/ledger`, { token: s.token }),

@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { api, type CalendarMode, type NewTenant, type SubscriptionTier } from '@/api';
 import { BackHeader, Banner, Button, Card, Screen, Text, TextField } from '@/components/ui';
 import { useGlobalSession } from '@/lib/session';
+import { useAsync } from '@/lib/use-async';
 import { radius, spacing, useTheme } from '@/theme';
 
 const startYear = new Date(Date.now() + 8 * 3600_000).getUTCFullYear();
@@ -48,6 +49,7 @@ function Choice<T extends string>({ label, options, value, select }: {
 export default function ProvisionTenant() {
   const global = useGlobalSession();
   const router = useRouter();
+  const operations = useAsync(() => api.getGlobalManagementCapabilities(global), global.token + ':tenant-provision-grant');
   const [data, setData] = useState<NewTenant>(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -55,7 +57,7 @@ export default function ProvisionTenant() {
   const put = <K extends keyof NewTenant>(key: K, value: NewTenant[K]) =>
     setData((prev) => ({ ...prev, [key]: value }));
   const slug = data.subdomain.trim().toLowerCase();
-  const canSubmit = !busy && !!slug && data.confirmation === `PROVISION ${slug}`;
+  const canSubmit = !!operations.data?.tenantOperationsEnabled && !busy && !!slug && data.confirmation === `PROVISION ${slug}`;
 
   const save = async () => {
     if (!canSubmit) return;
@@ -70,6 +72,12 @@ export default function ProvisionTenant() {
       setBusy(false);
     }
   };
+
+  if (!operations.data?.tenantOperationsEnabled) return (
+    <Screen edges={['top','bottom']} header={<BackHeader title="Tenant provisioning" />}>
+      <Banner tone="info" title="Secure web required">Native tenant provisioning is disabled until the server independently authorizes Global Administrator operations.</Banner>
+    </Screen>
+  );
 
   if (completed) {
     return (
