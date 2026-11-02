@@ -130,6 +130,16 @@ export type TenantUserStatusChange = {
   id: string; status: 'Active' | 'Inactive' | 'Blocked'; expectedUpdatedAt: string;
 };
 
+export type FinanceSnapshot = {
+  scope:'active_period'; ay:string; term:string; generatedAt:string; reportType:string;
+  totals:{label:string;count:number;amountCentavos:number;meaning:string}[];
+};
+export type RealignmentRecord = {
+  id:string; when:string; from:string;to:string;amountCentavos:number;reason:string;encodedBy:string|null;
+};
+export type RealignmentPage = {
+  scope:'active_period';ay:string;term:string;hasMore:boolean;nextCursor:string|null;entries:RealignmentRecord[];
+};
 export type MobileAcademicCalendar = {
   activeAy: string; activeTerm: string;
   configurations: { academicYear: string; mode: 'Semester' | 'Trimester' | 'FullYear';
@@ -421,6 +431,8 @@ export type ClearApi = {
   leaveOfficerPresence(s: Session, tabId: string): Promise<{ ok: true }>;
   getTenantPortal(s: Session): Promise<TenantPortalStatus>;
   getAcademicCalendar(s: Session): Promise<MobileAcademicCalendar>;
+  getFinanceSnapshot(s: Session): Promise<FinanceSnapshot>;
+  getRealignmentReview(s: Session, cursor?:string): Promise<RealignmentPage>;
   updateAcademicCalendar(s: Session, change: MobileAcademicCalendarChange): Promise<{ success: true }>;
   listTenantUsers(s: Session, search?: string, cursor?: string): Promise<TenantUsersPage>;
   listCollectibles(s: Session, cursor?: string): Promise<CollectiblePage>;

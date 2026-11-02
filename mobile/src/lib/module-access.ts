@@ -24,10 +24,10 @@ export const MODULE_CATALOG: readonly {
   { tab: 'tab-advances', name: 'Cash advances', availability: 'review-only', detail: 'Review approved advances; issuing or changing them remains on the audited web app', webPath: '/advances' },
   { tab: 'tab-audit', name: 'Liquidations and audit', availability: 'review-only', detail: 'Review recorded liquidation expenses and audit status; web remains authoritative', webPath: '/liquidations' },
   { tab: 'tab-collectibles', name: 'Collectibles', availability: 'review-only', detail: 'Review current-term assessments in app; financial changes require secure web', webPath: '/collectibles' },
-  { tab: 'tab-reports', name: 'Financial reports', availability: 'web-only', detail: 'Use the web system for official financial reports', webPath: '/reports' },
+  { tab: 'tab-reports', name: 'Financial reports', availability: 'review-only', detail: 'Review unreconciled recorded activity in app; official reports stay on web', webPath: '/reports' },
   { tab: 'tab-void', name: 'Void center', availability: 'review-only', detail: 'Browse read-only tenant Void history in Android; all reversals are handled on secure web', webPath: '/void' },
-  { tab: 'tab-report', name: 'Report submission', availability: 'web-only', detail: 'Use the web system for report submission', webPath: '/reports' },
-  { tab: 'tab-transfer', name: 'Fund realignment', availability: 'web-only', detail: 'Use the web system for transfers', webPath: '/realign' },
+  { tab: 'tab-report', name: 'Report submission', availability: 'review-only', detail: 'Review current recorded activity; official report submission still requires web', webPath: '/reports' },
+  { tab: 'tab-transfer', name: 'Fund realignment', availability: 'review-only', detail: 'Review current-term fund transfer history; all movement remains web-only', webPath: '/realign' },
   { tab: 'tab-users', name: 'Officer management', availability: 'available', detail: 'Review accounts and manage authorized status changes in Android; creating officers and editing roles remain on web', webPath: '/users' },
   { tab: 'tab-setup', name: 'Department setup', availability: 'available', detail: 'Authorized academic calendars in app; finance-related setup remains on secure web', webPath: '/setup' },
 ];

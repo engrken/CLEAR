@@ -78,6 +78,11 @@ if (!existsSync(resolve(root, 'app/api/mobile/orgs/[org]/academic-calendar/route
     !gate.includes('canRunMobileAcademicSettingsWrites')) {
   blockers.push('Academic Calendar native configuration needs an audited independent server grant');
 }
+if (!existsSync(resolve(root,'app/api/mobile/orgs/[org]/reports/route.ts')) ||
+    !existsSync(resolve(root,'app/api/mobile/orgs/[org]/realign-review/route.ts')) ||
+    !read('mobile/src/app/(officer)/_layout.tsx').includes("can('tab-transfer')")) {
+  blockers.push('Financial reporting and fund movement require safe native role-scoped reviews');
+}
 if (!existsSync(resolve(root, 'app/api/mobile/orgs/[org]/collectibles/route.ts')) ||
     !existsSync(resolve(root, 'mobile/src/app/(officer)/collectibles.tsx')) ||
     !read('mobile/src/app/(officer)/_layout.tsx').includes("can('tab-collectibles')")) {
