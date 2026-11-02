@@ -61,10 +61,10 @@ function Navigator() {
       if (next !== 'active' && foreground.current === 'active' && identity) {
         const epoch = ++lockEpoch.current;
         // Deny access immediately; asynchronous preference reads must not leave a visible unlocked frame.
-        setLock('locked');
+        setLock({ key, status: 'locked' });
         void biometricEnabled(identity).then(e => {
-          if (epoch === lockEpoch.current) setLock(e ? 'locked' : 'open');
-        }).catch(() => { if (epoch === lockEpoch.current) setLock('locked'); });
+          if (epoch === lockEpoch.current) setLock({ key, status: e ? 'locked' : 'open' });
+        }).catch(() => { if (epoch === lockEpoch.current) setLock({ key, status: 'locked' }); });
       }
       foreground.current = next;
     });
