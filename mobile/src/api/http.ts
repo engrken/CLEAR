@@ -191,7 +191,7 @@ export const httpApi: ClearApi = {
     // enforce authorization, receipt uniqueness, idempotency and atomic posting.
     let payment;
     try { payment = normalizeMobilePayment(p); }
-    catch { return Promise.reject(new ApiError('A valid integer-centavo amount, student, fee, receipt number and retry key are required.', 'invalid')); }
+    catch { return Promise.reject(new ApiError('A valid integer-centavo amount, student, fee and retry key are required.', 'invalid')); }
     return request(`${org(s.org.subdomain)}/payments`, { method: 'POST', ...as(s), idempotencyKey: payment.idempotencyKey,
       json: { studentId: payment.studentId, feeId: payment.feeId, amountCentavos: payment.amountCentavos } });
   },
