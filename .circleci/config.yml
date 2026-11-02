@@ -263,7 +263,7 @@ jobs:
             node --experimental-strip-types --test tests/ci-mobile-payment-denied-http.test.mjs
             # Ephemeral, scoped roster UAT server. Production environment remains
             # untouched; this job only uses local synthetic Postgres fixtures.
-            VERCEL_ENV=preview VERCEL_GIT_COMMIT_REF=feature/android-v1.5.0-write-foundation-20261101 MOBILE_STUDENT_ROSTER_WRITES_ENABLED=true MOBILE_TENANT_USER_WRITES_ENABLED=true MOBILE_TENANT_USER_MANAGE_WRITES_ENABLED=true MOBILE_ACADEMIC_SETTINGS_WRITES_ENABLED=true \
+            VERCEL_ENV=preview VERCEL_GIT_COMMIT_REF=feature/android-v1.5.0-write-foundation-20261101 MOBILE_STUDENT_ROSTER_WRITES_ENABLED=true MOBILE_TENANT_USER_WRITES_ENABLED=true MOBILE_TENANT_USER_MANAGE_WRITES_ENABLED=true MOBILE_ACADEMIC_SETTINGS_WRITES_ENABLED=true MOBILE_REPORT_SIGNATORY_WRITES_ENABLED=true \
               npm run start -- -H 127.0.0.1 -p 3103 >/tmp/clear-ci-roster-server.log 2>&1 &
             roster_server_pid=$!
             trap 'kill "$roster_server_pid" "$server_pid" 2>/dev/null || true' EXIT
@@ -283,6 +283,7 @@ jobs:
             node --test tests/ci-mobile-roster-http.test.mjs
             node --test tests/ci-mobile-users-http.test.mjs
             node --test tests/ci-mobile-academic-calendar-http.test.mjs
+            node --test tests/ci-mobile-report-setup-http.test.mjs
       - store_artifacts:
           path: /tmp/clear-ci-roster-server.log
           destination: roster/ci-server.log
