@@ -48,7 +48,7 @@ export const POST = handler(async (req, { params }: Ctx) => {
   catch { throw new ApiFailure(400, 'invalid', 'Use a valid academic year such as A.Y. 2026 - 2027.'); }
   const includeSummer=body.mode === 'Semester' && body.includeSummer;
   const allowed=periodsFor({mode:body.mode, includeSummer});
-  const stamp=body.expectedUpdatedAt;
+  const stamp=body.expectedUpdatedAt ?? null;
   if (stamp !== null && (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(stamp) ||
       !Number.isFinite(Date.parse(stamp)) || new Date(stamp).toISOString() !== stamp)) {
     throw new ApiFailure(400, 'invalid', 'Refresh calendar before editing.');
