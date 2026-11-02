@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { api, type TenantUserRecord, type TenantUserManagementChange } from '@/api';
-import { Banner, Button, Card, Screen, Text } from '@/components/ui';
+import { Banner, Button, Card, Text } from '@/components/ui';
 import { MODULE_CATALOG } from '@/lib/module-access';
 import { useOfficerSession } from '@/lib/session';
 import { radius, spacing, useTheme } from '@/theme';
