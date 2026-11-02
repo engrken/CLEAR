@@ -110,8 +110,14 @@ export type GlobalTenantDashboard = {
 export type TenantUserRecord = {
   id: string; fullName: string; email: string; username: string;
   role: string; status: 'Active' | 'Inactive' | 'Blocked'; updatedAt: string;
+  allowedTabs: string[];
 };
 export type TenantUsersPage = { records: TenantUserRecord[]; hasMore: boolean; nextCursor: string | null };
+export type TenantUserManagementChange = {
+  action: 'create' | 'update'; id?: string; expectedUpdatedAt?: string;
+  fullName: string; email: string; username: string; role: string;
+  status: 'Active' | 'Inactive' | 'Blocked'; allowedTabs: string[];
+};
 export type TenantUserStatusChange = {
   id: string; status: 'Active' | 'Inactive' | 'Blocked'; expectedUpdatedAt: string;
 };
@@ -399,6 +405,7 @@ export type ClearApi = {
   getTenantPortal(s: Session): Promise<TenantPortalStatus>;
   listTenantUsers(s: Session, search?: string, cursor?: string): Promise<TenantUsersPage>;
   updateTenantUserStatus(s: Session, input: TenantUserStatusChange): Promise<{ success: true }>;
+  manageTenantUser(s: Session, input: TenantUserManagementChange): Promise<{ success: true; id: string }>;
   getDashboard(s: Session): Promise<DashboardSummary>;
   listLedger(s: Session, filter?: { status?: string; limit?: number }): Promise<LedgerEntry[]>;
   listLedgerPage(s: Session, cursor?: string, scope?: 'active' | 'all'): Promise<LedgerPage>;
