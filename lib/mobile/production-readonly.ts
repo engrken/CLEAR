@@ -40,7 +40,7 @@ const OFFICER_LOGOUT = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9]
 
 // This only admits a route to its own authorization and accounting handler.
 // It never grants the mobile user permission to post a transaction.
-const TENANT_USERS_MANAGE_POST = /^\\/api\\/mobile\\/orgs\\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\/users\\/manage$/;
+const TENANT_USERS_MANAGE_POST = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/users\/manage$/;
 const TENANT_USERS_STATUS_POST = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/users$/;
 const STUDENT_ROSTER_POST = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/students\/manage$/;
 const FINANCIAL_POSTS = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/payments$/;
