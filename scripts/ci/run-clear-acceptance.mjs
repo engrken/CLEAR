@@ -30,7 +30,13 @@ console.log('CLEAR one-shot source acceptance: ' + (ok ? 'PASS' : 'FAIL'));
 console.log('Discovered files: ' + files.length);
 console.log('Tests: ' + tests + '; passed: ' + passed + '; failed: ' + failed);
 if (!ok) {
-  console.error(log.split('\n').slice(-160).join('\n'));
+  // Surface the actual failing test names before the aggregate TAP summary.
+  // The former tail-only log hid failures when hundreds of passing cases followed.
+  const failureDetails = log.split('\n').filter(line =>
+    /^not ok \d+ - /.test(line) || /^\s+(?:failureType|error|location|code):/.test(line)
+  );
+  console.error('Failing TAP assertions:\n' + failureDetails.join('\n'));
+  console.error('Final TAP summary:\n' + log.split('\n').slice(-50).join('\n'));
   if (result.error) console.error(result.error.message);
 }
 if (process.env.GITHUB_STEP_SUMMARY) {
