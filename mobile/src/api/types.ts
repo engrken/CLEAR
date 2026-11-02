@@ -130,6 +130,15 @@ export type TenantUserStatusChange = {
   id: string; status: 'Active' | 'Inactive' | 'Blocked'; expectedUpdatedAt: string;
 };
 
+export type MobileAcademicCalendar = {
+  activeAy: string; activeTerm: string;
+  configurations: { academicYear: string; mode: 'Semester' | 'Trimester' | 'FullYear';
+    includeSummer: boolean; updatedAt: string }[];
+};
+export type MobileAcademicCalendarChange = {
+  academicYear: string; mode: 'Semester' | 'Trimester' | 'FullYear';
+  includeSummer: boolean; expectedUpdatedAt: string | null;
+};
 export type TenantPortalStatus = {
   organization: {
     subdomain: string;
@@ -411,6 +420,8 @@ export type ClearApi = {
   pulseOfficerPresence(s: Session, page: 'overview' | 'students' | 'remittances', tabId: string): Promise<{ colleagues: { id: string; name: string }[]; count: number }>;
   leaveOfficerPresence(s: Session, tabId: string): Promise<{ ok: true }>;
   getTenantPortal(s: Session): Promise<TenantPortalStatus>;
+  getAcademicCalendar(s: Session): Promise<MobileAcademicCalendar>;
+  updateAcademicCalendar(s: Session, change: MobileAcademicCalendarChange): Promise<{ success: true }>;
   listTenantUsers(s: Session, search?: string, cursor?: string): Promise<TenantUsersPage>;
   listCollectibles(s: Session, cursor?: string): Promise<CollectiblePage>;
   updateTenantUserStatus(s: Session, input: TenantUserStatusChange): Promise<{ success: true }>;

@@ -29,7 +29,7 @@ export const MODULE_CATALOG: readonly {
   { tab: 'tab-report', name: 'Report submission', availability: 'web-only', detail: 'Use the web system for report submission', webPath: '/reports' },
   { tab: 'tab-transfer', name: 'Fund realignment', availability: 'web-only', detail: 'Use the web system for transfers', webPath: '/realign' },
   { tab: 'tab-users', name: 'Officer management', availability: 'available', detail: 'Review accounts and manage authorized status changes in Android; creating officers and editing roles remain on web', webPath: '/users' },
-  { tab: 'tab-setup', name: 'Department setup', availability: 'web-only', detail: 'Use the web system for configuration', webPath: '/setup' },
+  { tab: 'tab-setup', name: 'Department setup', availability: 'available', detail: 'Authorized academic calendars in app; finance-related setup remains on secure web', webPath: '/setup' },
 ];
 
 export function grantedModules(allowedTabs: readonly string[]) {

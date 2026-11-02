@@ -73,6 +73,11 @@ if (!existsSync(resolve(root, 'app/api/mobile/orgs/[org]/users/manage/route.ts')
     !read('lib/mobile/production-readonly.ts').includes('canRunMobileTenantUserManageWrites')) {
   blockers.push('Native officer creation and role/permission editing require independent server authorization');
 }
+if (!existsSync(resolve(root, 'app/api/mobile/orgs/[org]/academic-calendar/route.ts')) ||
+    !existsSync(resolve(root, 'mobile/src/app/(officer)/academic-calendar.tsx')) ||
+    !gate.includes('canRunMobileAcademicSettingsWrites')) {
+  blockers.push('Academic Calendar native configuration needs an audited independent server grant');
+}
 if (!existsSync(resolve(root, 'app/api/mobile/orgs/[org]/collectibles/route.ts')) ||
     !existsSync(resolve(root, 'mobile/src/app/(officer)/collectibles.tsx')) ||
     !read('mobile/src/app/(officer)/_layout.tsx').includes("can('tab-collectibles')")) {

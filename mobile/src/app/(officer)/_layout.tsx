@@ -99,6 +99,9 @@ export default function OfficerTabs() {
       <Tabs.Protected guard={can('tab-users')}>
         <Tabs.Screen name="users" options={{ title: 'Officers' }} />
       </Tabs.Protected>
+      <Tabs.Protected guard={can('tab-setup')}>
+        <Tabs.Screen name="academic-calendar" options={{ title: 'Calendar' }} />
+      </Tabs.Protected>
       <Tabs.Screen name="more" options={{ title: 'Modules' }} />
     </Tabs>
   );

@@ -167,6 +167,8 @@ export const httpApi: ClearApi = {
   pulseOfficerPresence: (s, page, tabId) => request(`${org(s.org.subdomain)}/presence`, { method: 'POST', ...as(s), json: { page, tabId } }),
   leaveOfficerPresence: (s, tabId) => request(`${org(s.org.subdomain)}/presence`, { method: 'DELETE', ...as(s), json: { tabId } }),
   getTenantPortal: (s) => request(`${org(s.org.subdomain)}/portal`, as(s)),
+  getAcademicCalendar: (s) => request(`${org(s.org.subdomain)}/academic-calendar`, as(s)),
+  updateAcademicCalendar: (s, change) => request(`${org(s.org.subdomain)}/academic-calendar`, { ...as(s), method: 'POST', json: change }),
   listCollectibles: (s, cursor) => request(`${org(s.org.subdomain)}/collectibles`, {
     ...as(s), query: { cursor, limit: 30 },
   }),
