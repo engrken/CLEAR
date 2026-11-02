@@ -13,10 +13,6 @@ type MobileEnvironment = {
   gitRef?: string | null;
   /** Explicit Production opt-in, configured server-side only after authorization QA. */
   tenantOperationsEnabled?: boolean;
-  /** Independently approved financial rollout, restricted to main Production. */
-  financialWritesEnabled?: boolean;
-  /** Only allowed with CI's hard-coded disposable local database. */
-  localFinancialCiOnly?: boolean;
   /** Isolated, independent roster editing authorization. */
   rosterWritesEnabled?: boolean;
   /** Independent opt-in: role-scoped non-financial officer status changes only. */
@@ -81,15 +77,10 @@ export function isMobileRequestAllowed(
     PREVIEW_BUSINESS_POSTS.has(path)
   ) return true;
 
-  if (
-    verb === 'POST' && FINANCIAL_POSTS.test(path) &&
-    env.financialWritesEnabled === true && (
-      (env.vercelEnv === 'production' && env.gitRef === 'main') ||
-      (env.vercelEnv === 'preview' &&
-        env.gitRef === 'feature/android-v1.5.0-write-foundation-20261101' &&
-        env.localFinancialCiOnly === true)
-    )
-  ) return true;
+  // v1.5.0 policy: mobile cash posting is web-only in EVERY environment.
+  // Environment variables, CI fixtures or future broad operational flags
+  // must never enable this endpoint. Keep the explicit deny before opt-ins.
+  if (verb === 'POST' && FINANCIAL_POSTS.test(path)) return false;
 
   if (verb === 'POST' && STUDENT_ROSTER_POST.test(path) &&
       canRunMobileRosterWrites(env)) return true;
