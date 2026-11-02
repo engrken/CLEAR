@@ -19,7 +19,7 @@ test('Android missing-email filter and gated roster editor retain native permiss
   const s=read('mobile/src/app/(officer)/students.tsx');
   const api=read('mobile/src/api/http.ts');
   const types=read('mobile/src/api/types.ts');
-  assert.match(s,/canView && missingEmailOnly/);
+  assert.match(s,/canView \? api\.listStudents\(session, serverSearch \|\| undefined, missingEmailOnly\) : Promise\.resolve<Student\[\]>\(\[\]\)/);
   assert.match(s,/canView = can\('tab-students'\)/);
   assert.match(s,/students.loading \? undefined : students.data/);
   assert.match(s,/setMissingEmailOnly\(v => !v\)/);
