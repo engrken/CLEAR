@@ -2,7 +2,7 @@
 // The web admin console remains authoritative for full notice editing and logs.
 import {useState} from 'react';
 import {ActivityIndicator,Alert,Pressable,StyleSheet,TextInput,View} from 'react-native';
-import {api,type GlobalMaintenanceChange} from '@/api';
+import {api} from '@/api';
 import {BackHeader,Banner,Button,Card,Screen,Text} from '@/components/ui';
 import {useGlobalSession} from '@/lib/session';
 import {useAsync} from '@/lib/use-async';
@@ -14,7 +14,7 @@ export default function GlobalMaintenance(){
  const global=useGlobalSession();
  const {c}=useTheme();
  const [revision,setRevision]=useState(0);
- const [scope,setScope]=useState('global'),[mode,setMode]=useState<GlobalMaintenanceChange['action'] extends 'none'?never:'NORMAL'|'READ_ONLY'|'FULL'>('NORMAL');
+ const [scope,setScope]=useState('global'),[mode,setMode]=useState<'NORMAL'|'READ_ONLY'|'FULL'>('NORMAL');
  const [title,setTitle]=useState(''),[message,setMessage]=useState('');
  const [start,setStart]=useState(''),[end,setEnd]=useState('');
  const [saving,setSaving]=useState(false),[error,setError]=useState('');
