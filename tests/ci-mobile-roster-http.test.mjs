@@ -199,6 +199,37 @@ test('Student Roster: current session authorization, PII scope and audited optim
     assert.equal((await prisma.student.findUniqueOrThrow({ where: { id: initial.id } })).studentId,
       initial.studentId);
 
+    // A closed term must refuse even an otherwise authorized roster change.
+    const closedTransition = await prisma.academicPeriodTransition.create({ data: {
+      organizationId: org.id, sourceAY: ay, sourceTerm: term,
+      destinationAY: 'A.Y. 2027 - 2028', destinationTerm: '1st Sem',
+      status: 'Closed', reason: 'CI roster closed-term acceptance',
+      closedBy: 'CI Synthetic Officer',
+    } });
+    const beforeClosure = await Promise.all([
+      prisma.student.count({ where: { organizationId: org.id } }),
+      prisma.enrollment.count({ where: { organizationId: org.id } }),
+      prisma.systemLog.count({ where: { organizationId: org.id } }),
+    ]);
+    const blockedCreate = await post(org.subdomain, allowed.token, {
+      ...create, studentId: 'CI-CLOSED-' + suffix, email: null,
+    });
+    assert.equal(blockedCreate.status, 409, JSON.stringify(blockedCreate.body));
+    assert.equal(blockedCreate.body.error.code, 'period_closed');
+    const blockedUpdate = await post(org.subdomain, allowed.token, {
+      action: 'enrollment', id: initial.id, enrollmentStatus: 'Enrolled',
+      expected: snapshot(statusBeforeIdRewrite),
+    });
+    assert.equal(blockedUpdate.status, 409, JSON.stringify(blockedUpdate.body));
+    assert.equal(blockedUpdate.body.error.code, 'period_closed');
+    const afterClosure = await Promise.all([
+      prisma.student.count({ where: { organizationId: org.id } }),
+      prisma.enrollment.count({ where: { organizationId: org.id } }),
+      prisma.systemLog.count({ where: { organizationId: org.id } }),
+    ]);
+    assert.deepEqual(afterClosure, beforeClosure, 'Closed-period requests must not modify the roster or audit log');
+    await prisma.academicPeriodTransition.delete({ where: { id: closedTransition.id } });
+
     const logs = await prisma.systemLog.findMany({
       where: { organizationId: org.id,
         action: { in: ['CREATE_STUDENT', 'UPDATE_STUDENT', 'TOGGLE_STUDENT_STATUS', 'STUDENT_EMAIL_IDENTITY_REVIEW'] } },

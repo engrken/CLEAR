@@ -67,6 +67,18 @@ export async function applyMobileRosterChange(org: Organization, actor: TenantUs
   let result;
   try {
   result = await prisma.$transaction(async tx => {
+    // Never apply a roster change to a term captured before an Administrator
+    // switched the organization's active academic period.
+    const currentOrg = await tx.organization.findUnique({
+      where: { id: org.id },
+      select: { status: true, activeAy: true, activeTerm: true },
+    });
+    if (!currentOrg || currentOrg.status !== 'Active') {
+      fail(403, 'forbidden', 'This department is no longer active.');
+    }
+    if (currentOrg.activeAy !== org.activeAy || currentOrg.activeTerm !== org.activeTerm) {
+      fail(409, 'conflict', 'The academic period changed. Reload the roster before continuing.');
+    }
     const closed = await tx.academicPeriodTransition.findUnique({
       where: { organizationId_sourceAY_sourceTerm: {
         organizationId: org.id, sourceAY: org.activeAy, sourceTerm: org.activeTerm,
