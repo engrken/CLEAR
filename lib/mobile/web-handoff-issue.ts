@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma';
 import { createWebHandoffTicket } from '@/lib/mobile/web-handoff-ticket.mjs';
 
 const WEB_ORIGIN = 'https://clearsys.vercel.app';
+export const GLOBAL_WEB_PATHS = new Set(['/dashboard/provisions', '/dashboard/provisions/maintenance']);
+
 export const OFFICER_WEB_PATHS = new Set(["/summary","/students","/clearance","/collections","/collections/history","/remittances","/penalties","/advances","/liquidations","/collectibles","/reports","/void","/realign","/users","/setup"]);
 
 /** Route destinations are fixed, tenant-scoped, and cannot contain query strings. */
@@ -30,7 +32,7 @@ export async function issueWebHandoff(input: {
   if (input.principalType === 'officer' && !isAllowedOfficerHandoffDestination(
     input.destination, input.destination.match(/^\/department\/([a-z0-9]+(?:-[a-z0-9]+)*)(?:\/|$)/)?.[1] || ''
   )) throw new Error('Invalid tenant destination.');
-  if (input.principalType === 'global' && input.destination !== '/dashboard/provisions') throw new Error('Invalid global destination.');
+  if (input.principalType === 'global' && !GLOBAL_WEB_PATHS.has(input.destination)) throw new Error('Invalid global destination.');
   const { ticket, ticketHash, expiresAt } = createWebHandoffTicket(key);
   // Revoke outstanding tickets from this mobile session before issuing a new one.
   // This also limits simultaneous valid handoff links after repeated taps.

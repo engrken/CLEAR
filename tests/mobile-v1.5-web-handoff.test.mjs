@@ -161,3 +161,18 @@ test('module-specific browser handoffs stay tenant-scoped and server allowlisted
   assert.match(mobile, /openVerifiedWebHandoff\(url\)/);
   assert.match(mobile, /openWebPage\(fallback\)/);
 });
+
+
+test('global administration and maintenance web shortcuts use independently scoped one-time tickets', () => {
+  const issuer = source('lib/mobile/web-handoff-issue.ts');
+  const route = source('app/api/mobile/global/auth/web-handoff/route.ts');
+  const redeem = source('lib/mobile/web-handoff-redeem.ts');
+  const client = source('mobile/src/lib/links.ts');
+  const page = source('app/auth/mobile-handoff/page.tsx');
+  assert.match(issuer, /GLOBAL_WEB_PATHS\.has\(input.destination\)/);
+  assert.match(route, /GLOBAL_WEB_PATHS\.has\(destination\)/);
+  assert.match(redeem, /GLOBAL_WEB_PATHS\.has\(record.destination\)/);
+  assert.match(client, /requestGlobalModuleWebHandoff\(session, destination\)/);
+  assert.match(client, /openGlobalModule\('\/dashboard\/provisions\/maintenance'\)/);
+  assert.match(page, /GLOBAL_WEB_PATHS\.has\(user.handoffDestination\)/);
+});

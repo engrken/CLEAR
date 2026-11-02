@@ -144,6 +144,7 @@ export const httpApi: ClearApi = {
     }
   },
   requestGlobalWebHandoff: (session) => request('/global/auth/web-handoff', { method: 'POST', token: session.token }),
+  requestGlobalModuleWebHandoff: (session, destination) => request('/global/auth/web-handoff', { method: 'POST', token: session.token, json: { destination } }),
   getGlobalOverview: (session) => request('/global/overview', { token: session.token }),
   getGlobalManagementCapabilities: (session) => request('/global/write-capabilities', { token: session.token }),
   getGlobalMaintenance: (session) => request('/global/maintenance', { token: session.token }),

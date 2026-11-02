@@ -1,7 +1,7 @@
 import 'server-only';
 import { prisma } from '@/lib/prisma';
 import { consumeWebHandoffTicket } from '@/lib/mobile/web-handoff-store';
-import { isAllowedOfficerHandoffDestination, isWebHandoffEnabled } from '@/lib/mobile/web-handoff-issue';
+import { GLOBAL_WEB_PATHS, isAllowedOfficerHandoffDestination, isWebHandoffEnabled } from '@/lib/mobile/web-handoff-issue';
 import { effectiveTabs, isOrganizationActive } from '@/lib/roles';
 import { verifyGlobalAdminSession } from '@/lib/super-admin';
 import { maintenanceForTenant } from '@/lib/maintenance/service';
@@ -29,7 +29,7 @@ export async function redeemWebHandoff(ticket: string) {
       username: user.username, allowedTabs: effectiveTabs(user.role, user.allowedTabs),
       handoffDestination: record.destination };
   }
-  if (record.principalType === 'global' && !record.organizationId && record.destination === '/dashboard/provisions') {
+  if (record.principalType === 'global' && !record.organizationId && GLOBAL_WEB_PATHS.has(record.destination)) {
     const session = await prisma.globalMobileSession.findUnique({ where: { id: record.mobileSessionId } });
     if (!session || session.revokedAt || session.expiresAt <= now || session.globalAdminId !== record.principalId) return null;
     const identity = await verifyGlobalAdminSession({ email: session.adminEmail,
@@ -38,6 +38,7 @@ export async function redeemWebHandoff(ticket: string) {
     if (!identity) return null;
     return { id: identity.id, name: identity.fullName, email: identity.email, role: 'SuperAdmin',
       globalAdminId: identity.id, globalAdminVersion: identity.sessionVersion,
+      handoffDestination: record.destination,
       organizationId: null, department: null, username: 'SuperAdmin',
       allowedTabs: ['tab-overview', 'tab-students', 'tab-clearance', 'tab-payment', 'tab-remittances', 'tab-penalties', 'tab-advances', 'tab-audit', 'tab-collectibles', 'tab-reports', 'tab-void', 'tab-report', 'tab-transfer', 'tab-users', 'tab-setup'] };
   }
