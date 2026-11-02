@@ -26,6 +26,7 @@ assert.equal(prod.android.buildType, 'app-bundle', 'Do not alter Play Store arti
 assert.equal(prod.env.EXPO_PUBLIC_API_URL, canonical);
 const cfg = load('src/api/config.ts');
 assert.match(cfg, /export const PAYMENT_WRITES_ENABLED = false;/);
+assert.match(cfg, /export const REMITTANCE_WRITES_ENABLED = false;/);
 assert.match(cfg, /export const MOBILE_BUSINESS_WRITES_ENABLED = false;/);
 assert.match(cfg, /releaseKind === 'live-readonly-internal'/);
 assert.match(cfg, /apiUrl !== PROD_URL/);
@@ -33,7 +34,9 @@ assert.match(cfg, /configuredMode === 'mock'/);
 assert.match(cfg, /if \(!__DEV__\)/);
 const http = load('src/api/http.ts');
 assert.match(http, /MOBILE_BUSINESS_WRITES_ENABLED\s*\?/);
-assert.match(http, /PAYMENT_WRITES_ENABLED\s*\?/);
+assert.match(http, /recordPayment:\s*\(s, p\) => \{\s*if \(!PAYMENT_WRITES_ENABLED\)/);
+assert.match(http, /verifyRemittance:\s*\(s, id, p\) => REMITTANCE_WRITES_ENABLED\s*\?/);
+assert.match(http, /invalidateRemittance:\s*\(s, id\) => REMITTANCE_WRITES_ENABLED\s*\?/);
 const app = JSON.parse(load('app.json'));
 assert.ok(/^com\.[A-Za-z0-9_.]+$/.test(app.expo.android.package), 'App ID must be explicit');
 assert.match(app.expo.version, /^\d+\.\d+\.\d+$/, 'Android release version must be semantic major.minor.patch');
