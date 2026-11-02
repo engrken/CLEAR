@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { ApiFailure, handler, preflight, readJson } from '@/lib/mobile/http';
 import { requireMobileOfficer } from '@/lib/mobile/session';
 import { isAdminRole } from '@/lib/roles';
+import { parseAllowedTabs } from '@/lib/role-permissions';
 import { isReservedGlobalAdminEmail } from '@/lib/super-admin';
 import { canRunMobileTenantUserWrites, mobileTenantUserWriteEnvironment } from '@/lib/mobile/production-readonly';
 
@@ -48,12 +49,13 @@ export const GET = handler(async (req, { params }: Ctx) => {
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     take: 51,
     select: { id: true, fullName: true, email: true, username: true,
-      role: true, status: true, updatedAt: true },
+      role: true, status: true, updatedAt: true, allowedTabs: true },
   });
   const page = rows.slice(0, 50);
   return {
     records: page.map(user => ({
       ...user, updatedAt: user.updatedAt.toISOString(),
+      allowedTabs: parseAllowedTabs(user.allowedTabs),
     })),
     hasMore: rows.length > 50,
     nextCursor: rows.length > 50 ? page[page.length - 1]?.id ?? null : null,
