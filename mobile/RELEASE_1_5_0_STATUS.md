@@ -1,13 +1,28 @@
 # CLEAR Android v1.5.0 — Web module parity: non-cash writes, cash-sensitive read-only
 
+## Implementation checkpoint — 2026-11-02 (P1–P3)
+
+**Branch:** `feature/android-v1.5.0-write-foundation-20261101` / draft PR #132. **Not merged or deployed.**
+
+- **P1 implemented in source:** Tenant Administrator native officer create/edit, role and custom module permissions, with canonical server-issued role presets, exact tenant/administrator guard, own-account and protected Global Administrator exclusions, active-admin retention, optimistic update version, serializable transaction, uniqueness validation, audit and mobile-session revocation. Separate server opt-in `MOBILE_TENANT_USER_MANAGE_WRITES_ENABLED=true` *also requires* existing `MOBILE_TENANT_USER_WRITES_ENABLED=true`; both remain OFF on Production.
+- **P2 implemented in source:** Native, tab-collectibles-permissioned, paginated current-period Collectibles summary using canonical web assessments and exact centavos. Student identity markers are removed from summary status. Assessment changes, payments and reconciliation remain web-only.
+- **P3 verified at code SHA `6cbcda95ce5483f48e4825104ffd344ff21c86ed`:** all four CircleCI jobs (web/mobile/financial-security/student-auth) passed; GitHub Android v1.5 security contracts, Expo typecheck and lint passed. New synthetic authenticated HTTP tests verify officer create/edit cross-tenant exclusion, stale edit rejection, session revocation, auditable financial non-mutation and Collectibles pagination/privacy.
+- **Remaining:** Clearance administration, full tenant settings/maintenance, non-cash report submission, comprehensive financial reports, fund realignment review, global-tenant native parity and other web-only modules. Full device biometrics/UAT, approved server rollout, APK and AAB remain pending.
+- **Infrastructure:** Vercel Preview deployment is blocked by provider build-rate limits, not by a confirmed application regression. No Neon Production writes, finance-posting enablement or deployment performed.
+
+**Release policy:** Financial/cash changes are web-only. Native operational writes are server-granted per action and tenant; web remains authoritative. No signed v1.5 APK is accepted yet. The AAB is prohibited until APK acceptance.
+
+---
+
+
 Updated 2026-11-02 — This policy supersedes earlier tracker text below. **Every one of the 15 canonical web modules must appear in the mobile module directory and follow the same live web role/tenant grants.** Do not claim all modules are natively complete merely because a module links to secure web.
 
 ## Latest clarified behavior
 - **Cash-sensitive writes stay web-only:** payments, OR creation, reversals/voids, remittance verification/invalidation, advances disbursement, liquidation approvals and money-moving accounting operations. View and search them natively when authorized.
 - **Non-cash writes are in scope for Android:** student roster create/edit/enrollment, self profile email changes, officer status/role management, academic and tenant settings, maintenance notices, noncash clearance administration and other web operational workflows. Each must reuse the web's canonical permission and audit rules, with independent backend authorization, no broad client-write flag.
 - **Already native:** enrolled biometric device lock, officer and global account screens, dual-OTP self-profile email update, student roster edit foundation with independent grant, all-period Activity, four finance review modules, remittance review and Void audit.
-- **This development increment:** native Officer Management list/search/keyset pagination and server-gated status changes with last-active-admin, protected-global-account, own-account, stale-edit, session revocation and audit checks. New independent server opt-in `MOBILE_TENANT_USER_WRITES_ENABLED=true` is required on verified main Production before status controls appear; `tab-users` alone cannot bypass it.
-- **Still not full native parity:** officer create/edit/role/permission assignments, tenant setup and maintenance writes, detailed officer clearance admin, collectibles, submission/report editing, global tenant provisioning and settings, and comprehensive financial reporting. Web routes remain available for these. Do not call these 100% complete or advertise release readiness.
+- **Earlier increment:** native Officer Management list/search/keyset pagination and server-gated status changes with last-active-admin, protected-global-account, own-account, stale-edit, session revocation and audit checks. New independent server opt-in `MOBILE_TENANT_USER_WRITES_ENABLED=true` is required on verified main Production before status controls appear; `tab-users` alone cannot bypass it.
+- **Still not full native parity:** tenant setup and maintenance writes, detailed officer clearance administration, report submission/editing, native global tenant provisioning/settings, comprehensive financial reporting and other web-only workflows. Officer creation/role editing and read-only Collectibles are now implemented on the draft branch but await server rollout and device UAT. Web routes remain available for these. Do not call these 100% complete or advertise release readiness.
 - **APK before AAB:** v15-uat signed APK uses the Production HTTPS backend and authorized test accounts; after remediation and device acceptance, build a matching AAB. Do not alter real financial records for UAT.
 
 ## Current release gates
