@@ -29,7 +29,6 @@ export default function Collect() {
   const [studentId, setStudentId] = useState<string>();
   const [feeId, setFeeId] = useState<string>();
   const [amount, setAmount] = useState('');
-  const [orNumber, setOrNumber] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   // Synchronous guard: state updates alone do not prevent rapid double taps.
@@ -64,7 +63,6 @@ export default function Collect() {
     if (!studentId) e.student = 'Choose the student who paid.';
     if (!feeId) e.fee = 'Choose the fee item.';
     if (!Number.isSafeInteger(amountCentavos) || amountCentavos <= 0 || amountCentavos > 100_000_000) e.amount = 'Enter a valid amount with at most two decimal places (maximum ₱1,000,000.00).';
-    if (!orNumber.trim()) e.or = 'Enter the OR number printed on the receipt.';
     setErrors(e);
     if (Object.keys(e).length) return;
 
@@ -73,7 +71,6 @@ export default function Collect() {
     try {
       const draft = {
         studentId: studentId!, feeId: feeId!, amountCentavos,
-        orNumber: orNumber.trim().toUpperCase(),
       };
       const fingerprint = JSON.stringify(draft);
       const saved = await SecureStore.getItemAsync(pendingKey);
@@ -92,13 +89,12 @@ export default function Collect() {
       const entry = await api.recordPayment(session, { ...draft, idempotencyKey: pending.key });
       await SecureStore.deleteItemAsync(pendingKey).catch(() => {});
       setRecorded(`${entry.reference} · ${formatPeso(pesos)} from ${entry.title}`);
-      setStudentId(undefined); setFeeId(undefined); setAmount(''); setOrNumber(''); setSearch('');
+      setStudentId(undefined); setFeeId(undefined); setAmount(''); setSearch('');
     } catch (err) {
       const e = err as ApiError;
       // A reused OR number or an amount over the balance belongs to that field; anything else
       // (closed term, inactive student, rate limit) is the form's. The message comes from the server.
-      if (e.code === 'duplicate_or') setErrors({ or: e.message });
-      else if (e.code === 'overpayment') setErrors({ amount: e.message });
+      if (e.code === 'overpayment') setErrors({ amount: e.message });
       else setErrors({ form: e.message });
     } finally {
       submittingRef.current = false;
@@ -167,14 +163,8 @@ export default function Collect() {
         ) : null}
       </View>
 
-      <View style={styles.pair}>
-        <View style={styles.half}>
-          <TextField label="Amount received" prefix="₱" mono inputMode="decimal" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} placeholder="0.00" error={errors.amount} />
-        </View>
-        <View style={styles.half}>
-          <TextField label="OR number" autoCapitalize="characters" autoCorrect={false} value={orNumber} onChangeText={setOrNumber} placeholder="OR-2026-000185" error={errors.or} />
-        </View>
-      </View>
+      <TextField label="Amount received" prefix="₱" mono inputMode="decimal" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} placeholder="0.00" error={errors.amount} />
+      <Banner tone="info" title="Official receipt">CLEAR automatically allocates the official receipt number after successful posting.</Banner>
 
       <Button block onPress={submit} loading={busy} loadingLabel="Recording…">{submitLabel}</Button>
     </Screen>
