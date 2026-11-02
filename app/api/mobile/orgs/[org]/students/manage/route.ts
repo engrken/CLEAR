@@ -1,0 +1,18 @@
+import { ApiFailure, handler, preflight, readJson } from '@/lib/mobile/http';
+import { requireMobileOfficer } from '@/lib/mobile/session';
+import { applyMobileRosterChange, type RosterInput } from '@/lib/mobile/student-roster-write';
+
+type Ctx = { params: Promise<{ org: string }> };
+
+/** Authenticated and independently feature-gated roster mutations only. */
+export const POST = handler(async (req: Request, { params }: Ctx) => {
+  const { org: slug } = await params;
+  const { org, officer } = await requireMobileOfficer(req, slug, 'tab-students');
+  const body = await readJson<Record<string, unknown>>(req);
+  if (!['create', 'update', 'enrollment'].includes(String(body.action || ''))) {
+    throw new ApiFailure(400, 'invalid', 'Unsupported student roster action.');
+  }
+  // No academic period, organization or officer identifier is accepted from the app.
+  return applyMobileRosterChange(org, officer, body as RosterInput);
+});
+export const OPTIONS = preflight;

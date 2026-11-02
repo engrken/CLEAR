@@ -15,6 +15,8 @@ type MobileEnvironment = {
   tenantOperationsEnabled?: boolean;
   /** Independently approved financial rollout, restricted to main Production. */
   financialWritesEnabled?: boolean;
+  /** Isolated, independent roster editing authorization. */
+  rosterWritesEnabled?: boolean;
 };
 
 const GLOBAL_OTP = /^\/api\/mobile\/global\/auth\/(?:request-code|verify-code)$/;
@@ -34,6 +36,7 @@ const OFFICER_LOGOUT = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9]
 
 // This only admits a route to its own authorization and accounting handler.
 // It never grants the mobile user permission to post a transaction.
+const STUDENT_ROSTER_POST = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/students\/manage$/;
 const FINANCIAL_POSTS = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/payments$/;
 
 const PREVIEW_BUSINESS_POSTS = new Set([
@@ -77,6 +80,9 @@ export function isMobileRequestAllowed(
     env.financialWritesEnabled === true
   ) return true;
 
+  if (verb === 'POST' && STUDENT_ROSTER_POST.test(path) &&
+      canRunMobileRosterWrites(env)) return true;
+
   // Production operational rollout is opt-in per capability, NOT a broad
   // "write enabled" switch. Only two existing audited tenant-management routes
   // qualify; authorization, confirmation and transaction validation still run
@@ -92,4 +98,13 @@ export function isMobileRequestAllowed(
   // Unapproved financial posting, remittance approval, proof uploads, other tenant mutations,
   // future mutation endpoints and unrecognized methods are denied by default.
   return false;
+}
+
+/** No roster operations on arbitrary previews or with a client-only flag. */
+export function canRunMobileRosterWrites(env: MobileEnvironment): boolean {
+  return env.rosterWritesEnabled === true && (
+    (env.vercelEnv === 'production' && env.gitRef === 'main') ||
+    (env.vercelEnv === 'preview' &&
+      env.gitRef === 'feature/android-v1.5.0-write-foundation-20261101')
+  );
 }

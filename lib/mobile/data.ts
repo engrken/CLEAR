@@ -242,6 +242,7 @@ export async function listLedger(org: Organization, opts: { status?: string | nu
  */
 export async function listStudents(
   org: Organization, query?: string | null, missingEmailOnly = false,
+  includePrivateEmail = false,
 ) {
   const q = String(query || '').trim().slice(0, 120);
   const students = await prisma.student.findMany({
@@ -253,7 +254,7 @@ export async function listStudents(
             OR: [
               { studentId: { contains: q, mode: 'insensitive' } },
               { fullName: { contains: q, mode: 'insensitive' } },
-              { email: { contains: q, mode: 'insensitive' } },
+              ...(includePrivateEmail ? [{ email: { contains: q, mode: 'insensitive' as const } }] : []),
             ],
           }
         : {}),
@@ -284,7 +285,7 @@ export async function listStudents(
       enrollmentStatus: termStatus === 'Enrolled' ? ('Enrolled' as const) : ('Dropped' as const),
       // additions
       termStatus,
-      email: s.email ?? null,
+      ...(includePrivateEmail ? { email: s.email ?? null } : {}),
     };
   });
 }
