@@ -79,6 +79,18 @@ export async function recordPayment(department: string, data: {
 }) {
   const cleanDepartment = decodeURIComponent(department).trim().toLowerCase();
   const officer = await requireTabAccess("tab-payment", cleanDepartment);
+  return postAuthorizedPayment(cleanDepartment, data, officer);
+}
+
+/**
+ * Trusted shared financial posting core. Caller MUST authorize the officer and
+ * tenant before invoking this function. Never expose it as a server action.
+ */
+export async function postAuthorizedPayment(
+  cleanDepartment: string,
+  data: Parameters<typeof recordPayment>[1],
+  officer: { name?: string | null; fullName?: string | null; email?: string | null },
+) {
   const officerName = String(officer.name || officer.fullName || officer.email || "System Administrator");
   const org = await prisma.organization.findUnique({ where: { subdomain: cleanDepartment },
     select: { id: true, name: true, reportSchoolName: true } });
