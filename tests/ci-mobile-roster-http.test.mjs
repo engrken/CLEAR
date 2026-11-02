@@ -15,7 +15,7 @@ if (process.env.CI !== 'true' ||
 const prisma = new PrismaClient();
 const liveHost = 'http://127.0.0.1:3103';
 const deniedHost = 'http://127.0.0.1:3100';
-const ay = 'A.Y. CI Roster 2026 - 2027';
+const ay = 'A.Y. 2026 - 2027';
 const term = '1st Sem';
 
 async function session(org, allowedTabs, role = 'Officer', status = 'Active') {

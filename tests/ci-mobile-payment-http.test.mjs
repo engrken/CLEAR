@@ -15,7 +15,7 @@ if (process.env.CI !== 'true' || process.env.CLEAR_CI_FINANCE_TEST_ENABLED !== '
 }
 const prisma = new PrismaClient();
 const host = 'http://127.0.0.1:3102';
-const academicYear = 'A.Y. CI Mobile 2026 - 2027';
+const academicYear = 'A.Y. 2026 - 2027';
 const term = '1st Sem';
 const newToken = () => 'clr_' + randomBytes(32).toString('base64url');
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { api, type ApiError, type Student, type StudentRosterMutation, type StudentRosterSnapshot } from '@/api';
@@ -32,11 +32,17 @@ export default function Students() {
   const { c } = useTheme();
   const canView = can('tab-students');
   const [missingEmailOnly, setMissingEmailOnly] = useState(false);
+  const [q, setQ] = useState('');
+  const [serverSearch, setServerSearch] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setServerSearch(q.trim()), 320);
+    return () => clearTimeout(timer);
+  }, [q]);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [notice, setNotice] = useState<string>();
   const students = useAsync(
-    () => api.listStudents(session, undefined, canView && missingEmailOnly),
-    session.token + ':' + session.org.subdomain + ':roster:' + String(canView && missingEmailOnly),
+    () => api.listStudents(session, serverSearch || undefined, canView && missingEmailOnly),
+    session.token + ':' + session.org.subdomain + ':roster:' + String(canView && missingEmailOnly) + ':' + serverSearch,
   );
   const capability = useAsync(
     () => STUDENT_ROSTER_WRITES_ENABLED && canView ? api.getWriteCapabilities(session) : Promise.resolve({ enabled: false, grants: [] }),
@@ -47,7 +53,6 @@ export default function Students() {
   const canEdit = canView && STUDENT_ROSTER_WRITES_ENABLED &&
     canOfferMobileWrite(capability.data, 'students.update', session.org.subdomain);
 
-  const [q, setQ] = useState('');
   const [focused, setFocused] = useState(false);
   // Never display previous tenant/filter data while a new roster loads.
   const current = students.loading ? undefined : students.data;
@@ -110,7 +115,7 @@ export default function Students() {
             Try another search or switch the email filter.
           </Banner> : null}
           {current.length >= 500 ? <Banner tone="info" title="Roster list is limited">
-            Up to 500 students are loaded. Use the web roster for complete authorized search and pagination.
+            This search shows up to 500 matching students. Narrow the search or use the web roster for complete pagination.
           </Banner> : null}
         </View>
       ) : null}

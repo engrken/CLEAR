@@ -79,3 +79,10 @@ test('Android roster editor fails closed without server grant or trusted email r
   assert.match(actions, /'students.create'/);
   assert.match(actions, /'students.enrollment'/);
 });
+
+test('Android roster searches server-side beyond the first 500 loaded records', () => {
+  const source = read('mobile/src/app/(officer)/students.tsx');
+  assert.match(source, /api\.listStudents\(session, serverSearch \|\| undefined, canView && missingEmailOnly\)/);
+  assert.match(source, /setTimeout\(\(\) => setServerSearch\(q\.trim\(\)\), 320\)/);
+  assert.match(source, /:roster:/);
+});
