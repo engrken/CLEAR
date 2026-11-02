@@ -17,6 +17,12 @@ Updated 2026-11-02. This document tracks **draft PR #132**, not deployed behavio
 - [x] CircleCI #348 passed authenticated mobile payment posting, retry and package-allocation tests against disposable PostgreSQL. This does **not** authorize Production payment writes or replace device UAT.
 - [x] CircleCI #349 passed the web, mobile, student-auth and financial-security suites after restricting Preview roster writes to the local disposable CI database.
 
+## Current payment-retry safety work (2026-11-02)
+- [x] Added exact-decimal peso-to-centavo parsing, with deterministic malformed-input and boundary tests.
+- [x] A saved unknown-outcome cashier attempt now keeps its UUID and original student/fee/centavo draft across retries and restarts. A new/different draft is blocked until receipt confirmation; malformed secure-store recovery fails closed.
+- [ ] A signed Android device must verify secure UUID availability and restart/OTP/network-disconnect retry UX. Manual reconciliation remains necessary when server rejects a previously uncertain attempt; never reset the key merely because of an HTTP error.
+- [ ] These changes are source/CI acceptance only. Production payment switches remain false.
+
 ## Not verified / release blockers
 - [ ] **P1** Native Student Roster POST acceptance: active role, disabled flags, email privacy for payment-only users, create/update/enrollment, student ID financial-history guard, concurrency and wrong-tenant denial on isolated PostgreSQL. The authenticated create/edit/privacy synthetic HTTP test passed in CircleCI #344; real-device UAT and activation remain pending.
 - [ ] **P1** Verify the Android device provides cryptographically secure UUID generation; the current handler intentionally fails closed if its runtime cannot supply crypto.randomUUID().

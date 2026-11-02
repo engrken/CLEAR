@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import { Pressable, StyleSheet, View } from 'react-native';
 
@@ -7,6 +7,7 @@ import { PAYMENT_WRITES_ENABLED } from '@/api/config';
 import { Avatar, Banner, Button, Icon, Screen, Text, TextField } from '@/components/ui';
 import { isEnrolled } from '@/lib/enrollment';
 import { formatPeso, fromCentavos } from '@/lib/money';
+import { choosePendingPayment, parsePaymentCentavos, parsePendingPayment, type PaymentDraft, type PendingPayment } from '@/lib/payment-pending';
 import { useOfficerSession, useSession } from '@/lib/session';
 import { TAB_BAR_SPACE } from '@/lib/tab-bar';
 import { useAsync } from '@/lib/use-async';
@@ -33,9 +34,34 @@ export default function Collect() {
   const [busy, setBusy] = useState(false);
   // Synchronous guard: state updates alone do not prevent rapid double taps.
   const submittingRef = useRef(false);
-  // Persist the pending request across app restarts. A changed payment draft
-  // receives a new identifier, while an uncertain network retry reuses its key.
+  // Each officer+tenant has one durable unresolved request. Never overwrite it.
   const pendingKey = 'clear:pending-payment:' + session.org.subdomain + ':' + session.officer.id;
+  const canCollect = can('tab-payment');
+  const [recovery, setRecovery] = useState<{
+    storageKey: string; pending: PendingPayment | null; issue: string | null;
+  }>();
+  const recoveryReady = !PAYMENT_WRITES_ENABLED || !canCollect || recovery?.storageKey === pendingKey;
+  const pending = recovery?.storageKey === pendingKey ? recovery.pending : null;
+  const recoveryIssue = recovery?.storageKey === pendingKey ? recovery.issue : null;
+
+  useEffect(() => {
+    if (!PAYMENT_WRITES_ENABLED || !canCollect) return;
+    let active = true;
+    void SecureStore.getItemAsync(pendingKey)
+      .then(raw => {
+        if (!active) return;
+        try {
+          setRecovery({ storageKey: pendingKey, pending: parsePendingPayment(raw), issue: null });
+        } catch (error) {
+          setRecovery({ storageKey: pendingKey, pending: null, issue: (error as Error).message });
+        }
+      })
+      .catch(() => {
+        if (active) setRecovery({ storageKey: pendingKey, pending: null,
+          issue: 'Secure payment recovery is unavailable. Do not start another payment until reconciled.' });
+      });
+    return () => { active = false; };
+  }, [pendingKey, canCollect]);
 
   const [recorded, setRecorded] = useState<string>();
 
@@ -49,63 +75,65 @@ export default function Collect() {
     setAmount(fromCentavos(f.amountCentavos).toFixed(2));
   };
 
-  const submit = async () => {
+  const postPayment = async (draft: PaymentDraft) => {
     if (submittingRef.current) return;
-    if (!PAYMENT_WRITES_ENABLED) {
-      setErrors({ form: 'Payments are temporarily unavailable while the Android accounting integration is being verified. Use the CLEAR web application to record payments.' });
+    if (!PAYMENT_WRITES_ENABLED || !canCollect) {
+      setErrors({ form: 'Native payment posting is not enabled. Use the audited CLEAR web application.' });
       return;
     }
-    const e: Record<string, string> = {};
-    const amountText = amount.trim().replace(/,/g, '');
-    const validAmount = /^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/.test(amountText);
-    const pesos = validAmount ? Number(amountText) : NaN;
-    const amountCentavos = validAmount ? Math.round(pesos * 100) : NaN;
-    if (!studentId) e.student = 'Choose the student who paid.';
-    if (!feeId) e.fee = 'Choose the fee item.';
-    if (!Number.isSafeInteger(amountCentavos) || amountCentavos <= 0 || amountCentavos > 100_000_000) e.amount = 'Enter a valid amount with at most two decimal places (maximum ₱1,000,000.00).';
-    setErrors(e);
-    if (Object.keys(e).length) return;
+    if (!recoveryReady || recoveryIssue) {
+      setErrors({ form: recoveryIssue || 'Checking an earlier payment. Try again when recovery is ready.' });
+      return;
+    }
 
     submittingRef.current = true;
     setBusy(true);
+    setErrors({});
     try {
-      const draft = {
-        studentId: studentId!, feeId: feeId!, amountCentavos,
-      };
-      const fingerprint = JSON.stringify(draft);
-      const saved = await SecureStore.getItemAsync(pendingKey);
-      let pending: { fingerprint: string; key: string } | null = null;
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          if (parsed?.fingerprint === fingerprint && typeof parsed.key === 'string') pending = parsed;
-        } catch { /* Corrupt pending record is replaced. */ }
+      // Read secure storage again, not just React state: it is the recovery source of truth.
+      const existing = parsePendingPayment(await SecureStore.getItemAsync(pendingKey));
+      const attempt = choosePendingPayment(existing, draft, () =>
+        globalThis.crypto?.randomUUID?.() ?? (() => { throw new Error('Secure request IDs unavailable; payment not submitted.'); })()
+      );
+      if (!existing) {
+        // Must persist before the HTTP request. Failure forbids any posting.
+        await SecureStore.setItemAsync(pendingKey, JSON.stringify(attempt));
       }
-      if (!pending) {
-        // UUID generated by the native runtime; no Math.random-based financial IDs.
-        pending = { fingerprint, key: globalThis.crypto?.randomUUID?.() ?? (() => { throw new Error('Secure request IDs unavailable; payment not submitted.'); })() };
-        await SecureStore.setItemAsync(pendingKey, JSON.stringify(pending));
-      }
-      const entry = await api.recordPayment(session, { ...draft, idempotencyKey: pending.key });
+      setRecovery({ storageKey: pendingKey, pending: attempt, issue: null });
+      const entry = await api.recordPayment(session, { ...draft, idempotencyKey: attempt.key });
       const cleared = await SecureStore.deleteItemAsync(pendingKey).then(() => true, () => false);
-      const recoveryNotice = cleared ? '' : ' Payment WAS recorded, but the retry key could not be cleared. Do not record the same payment again until you confirm the receipt in history.';
-      setRecorded(`${entry.reference} · ${formatPeso(pesos)} from ${entry.title}.${recoveryNotice}`);
+      if (cleared) setRecovery({ storageKey: pendingKey, pending: null, issue: null });
+      const warning = cleared ? '' : ' Confirm this receipt in the ledger before starting another payment; secure recovery could not be cleared.';
+      setRecorded(entry.reference + ' · ' + formatPeso(fromCentavos(draft.amountCentavos)) + ' from ' + entry.title + '.' + warning);
       setStudentId(undefined); setFeeId(undefined); setAmount(''); setSearch('');
-    } catch (err) {
-      const e = err as ApiError;
-      // An amount over the balance belongs to that field; anything else
-      // (closed term, inactive student, rate limit) is the form's. The message comes from the server.
-      if (e.code === 'overpayment') setErrors({ amount: e.message });
-      else setErrors({ form: e.message });
+    } catch (error) {
+      const cause = error as ApiError;
+      // Even a later validation failure does not prove an earlier timed-out
+      // request with this key failed. Preserve it until a confirmed receipt.
+      setErrors({ form: (cause?.message || 'Unable to confirm the payment.') +
+        ' Check the receipt ledger. If the outcome is uncertain, retry the saved payment only.' });
     } finally {
       submittingRef.current = false;
       setBusy(false);
     }
   };
 
-  // The button repeats the amount once it reads as one ("Record ₱350.00").
-  const typed = Number(amount.replace(/,/g, ''));
-  const submitLabel = amount.trim() && Number.isFinite(typed) && typed > 0 ? `Record ${formatPeso(typed)}` : 'Record payment';
+  const submit = async () => {
+    if (submittingRef.current) return;
+    const e: Record<string, string> = {};
+    const amountCentavos = parsePaymentCentavos(amount);
+    if (!studentId) e.student = 'Choose the student who paid.';
+    if (!feeId) e.fee = 'Choose the fee item.';
+    if (amountCentavos === null) e.amount = 'Enter a valid amount with at most two decimal places (maximum ₱1,000,000.00).';
+    if (pending) e.form = 'Resolve the saved payment first. Retrying it will reuse its receipt request ID.';
+    setErrors(e);
+    if (Object.keys(e).length) return;
+    await postPayment({ studentId: studentId!, feeId: feeId!, amountCentavos: amountCentavos! });
+  };
+
+  const parsedAmount = parsePaymentCentavos(amount);
+  const submitLabel = parsedAmount !== null ?
+    'Record ' + formatPeso(fromCentavos(parsedAmount)) : 'Record payment';
 
   const header = (
     <View style={styles.header}>
@@ -127,8 +155,20 @@ export default function Collect() {
 
   return (
     <Screen edges={['top']} header={header} bottomInset={TAB_BAR_SPACE}>
-      {recorded ? <Banner tone="success" title="Payment recorded">{recorded}. A digital receipt has been queued for delivery.</Banner> : null}
-      {errors.form ? <Banner tone="danger" title="Payment not recorded">{errors.form}</Banner> : null}
+      {recorded ? <Banner tone="success" title="Receipt confirmed">{recorded}</Banner> : null}
+      {errors.form ? <Banner tone="danger" title="Payment needs review">{errors.form}</Banner> : null}
+      {recoveryIssue ? <Banner tone="danger" title="Recovery blocked">{recoveryIssue}</Banner> : null}
+      {pending ? (
+        <View style={{ gap: spacing[2] }}>
+          <Banner tone="warning" title="Unconfirmed payment">
+            {formatPeso(fromCentavos(pending.draft.amountCentavos))} · Student {pending.draft.studentId} · Fee {pending.draft.feeId}.
+            An earlier request might already have posted. Retry the exact payment to recover its official receipt; do not start another transaction until it is reconciled.
+          </Banner>
+          <Button block variant="secondary" loading={busy} onPress={() => void postPayment(pending.draft)}>
+            Retry exact payment
+          </Button>
+        </View>
+      ) : null}
 
       {student ? (
         <View style={styles.group}>
@@ -167,7 +207,8 @@ export default function Collect() {
       <TextField label="Amount received" prefix="₱" mono inputMode="decimal" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} placeholder="0.00" error={errors.amount} />
       <Banner tone="info" title="Official receipt">CLEAR automatically allocates the official receipt number after successful posting.</Banner>
 
-      <Button block onPress={submit} loading={busy} loadingLabel="Recording…">{submitLabel}</Button>
+      <Button block onPress={submit} disabled={!recoveryReady || !!pending || !!recoveryIssue}
+        loading={busy} loadingLabel="Recording…">{submitLabel}</Button>
     </Screen>
   );
 }
