@@ -2,7 +2,7 @@
 // actions remain on secure web with independent sign-in.
 import {useFocusEffect} from 'expo-router';
 import {useCallback,useState} from 'react';
-import {ActivityIndicator,StyleSheet,View} from 'react-native';
+import {ActivityIndicator,StyleSheet} from 'react-native';
 import {api} from '@/api';
 import {Banner,Button,Card,Screen,Text} from '@/components/ui';
 import {useOfficerSession,useSession} from '@/lib/session';

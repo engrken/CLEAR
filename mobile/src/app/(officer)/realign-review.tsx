@@ -1,7 +1,7 @@
 // View-only financial transfer history, not a transfer approval workspace.
 import {useFocusEffect} from 'expo-router';
 import {useCallback,useRef,useState} from 'react';
-import {ActivityIndicator,StyleSheet,View} from 'react-native';
+import {ActivityIndicator,StyleSheet} from 'react-native';
 import {api,type RealignmentRecord,type RealignmentPage} from '@/api';
 import {Banner,Button,Card,Screen,Text} from '@/components/ui';
 import {openDepartmentModule} from '@/lib/links';
