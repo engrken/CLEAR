@@ -173,6 +173,9 @@ export const httpApi: ClearApi = {
   updateTenantUserStatus: (s, input) => request(`${org(s.org.subdomain)}/users`, {
     ...as(s), method: 'POST', json: input,
   }),
+  manageTenantUser: (s, input) => request(`${org(s.org.subdomain)}/users/manage`, {
+    ...as(s), method: 'POST', json: input,
+  }),
   getDashboard: (s) => request(`${org(s.org.subdomain)}/dashboard`, as(s)),
   listLedger: (s, f) => request(`${org(s.org.subdomain)}/ledger`, { ...as(s), query: { status: f?.status, limit: f?.limit } }),
   getFinanceReview: (s, kind, limit = 20, cursor) => request(`${org(s.org.subdomain)}/finance-review`, {
