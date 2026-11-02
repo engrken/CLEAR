@@ -1,43 +1,9 @@
 "use server";
 import { postAuthorizedPayment } from "@/lib/financial/authorized-payment";
 import { moneyNumber } from "@/lib/money-precision";
-import { createHash } from "node:crypto";
-import { parseClearAccountingDate } from '@/lib/clear-timezone';
-
 import { prisma } from "@/lib/prisma";
 import { requireTabAccess } from "@/lib/permissions";
-import { enqueuePaymentReceipt, scheduleDigitalReceiptDispatch } from "@/lib/digital-receipts";
-import { revalidatePath } from "next/cache";
-import { withFinancialTransaction } from "@/lib/financial-transaction";
-import { allocateOfficialReceiptNumber, lockReceiptNumber } from "@/lib/receipt-number";
 import { summarizeValidCollectionCredits } from "@/lib/collection-payment-preview.mjs";
-import { getPeriodLedger, toCents } from "../realign/ledger";
-import { applyPaymentToStudentCollectibles } from "../collectibles/due-link";
-import { PENALTY_FUND_NAME } from "@/lib/penalty-fund";
-import { ensurePenaltyFund } from "@/lib/penalty-fund.server";
-import { assertAcademicPeriod } from "@/lib/academic-period-guard";
-
-const PACKAGE_NAME = "Departmental Fee Package (All Items)";
-
-function money(value: unknown, label: string): number {
-  const n = Number(value);
-  if (!Number.isFinite(n) || n <= 0 || n > Number.MAX_SAFE_INTEGER / 100 ||
-      Math.abs(n * 100 - Math.round(n * 100)) > .000001) {
-    throw new Error(`${label} must be a positive amount with at most two decimal places.`);
-  }
-  return Math.round(n * 100) / 100;
-}
-
-function dateOnly(value: string): Date {
-  try { return parseClearAccountingDate(value); }
-  catch { throw new Error("Invalid payment date."); }
-}
-
-function escapeHtml(value: unknown): string {
-  return String(value ?? "").replace(/[&<>"']/g, (c) => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-  }[c] || c));
-}
 
 /**
  * A tenant-scoped, authorized balance preview for ONE student.
