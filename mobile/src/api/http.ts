@@ -167,6 +167,12 @@ export const httpApi: ClearApi = {
   pulseOfficerPresence: (s, page, tabId) => request(`${org(s.org.subdomain)}/presence`, { method: 'POST', ...as(s), json: { page, tabId } }),
   leaveOfficerPresence: (s, tabId) => request(`${org(s.org.subdomain)}/presence`, { method: 'DELETE', ...as(s), json: { tabId } }),
   getTenantPortal: (s) => request(`${org(s.org.subdomain)}/portal`, as(s)),
+  listTenantUsers: (s, search, cursor) => request(`${org(s.org.subdomain)}/users`, {
+    ...as(s), query: { q: search, cursor },
+  }),
+  updateTenantUserStatus: (s, input) => request(`${org(s.org.subdomain)}/users`, {
+    ...as(s), method: 'POST', json: input,
+  }),
   getDashboard: (s) => request(`${org(s.org.subdomain)}/dashboard`, as(s)),
   listLedger: (s, f) => request(`${org(s.org.subdomain)}/ledger`, { ...as(s), query: { status: f?.status, limit: f?.limit } }),
   getFinanceReview: (s, kind, limit = 20, cursor) => request(`${org(s.org.subdomain)}/finance-review`, {

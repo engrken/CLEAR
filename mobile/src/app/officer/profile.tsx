@@ -20,13 +20,11 @@ export default function OfficerProfile() {
   const { c } = useTheme();
   const [stage, setStage] = useState<Stage>('start');
   const [writeStatus, setWriteStatus] = useState<{ token: string; state: 'disabled' | 'enabled' }>({ token: '', state: 'disabled' });
-  const effectiveWriteStatus = writeStatus.token === session.token ? writeStatus.state : 'checking';
+  const rosterEligible = STUDENT_ROSTER_WRITES_ENABLED && session.officer.allowedTabs.includes('tab-students');
+  const effectiveWriteStatus = !rosterEligible ? 'disabled' : writeStatus.token === session.token ? writeStatus.state : 'checking';
   useEffect(() => {
     let active = true;
-    if (!STUDENT_ROSTER_WRITES_ENABLED || !session.officer.allowedTabs.includes('tab-students')) {
-      setWriteStatus({ token: session.token, state: 'disabled' });
-      return;
-    }
+    if (!rosterEligible) return;
     void api.getWriteCapabilities(session).then((policy) => {
       if (active) setWriteStatus({ token: session.token, state: policy.enabled && Array.isArray(policy.grants) && policy.grants.some((grant) => grant?.organization === session.org.subdomain) ? 'enabled' : 'disabled' });
     }).catch(() => {
@@ -34,7 +32,7 @@ export default function OfficerProfile() {
       if (active) setWriteStatus({ token: session.token, state: 'disabled' });
     });
     return () => { active = false; };
-  }, [session.token, session.org.subdomain]);
+  }, [session.token, session.org.subdomain, rosterEligible]);
   const [currentCode, setCurrentCode] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newCode, setNewCode] = useState('');

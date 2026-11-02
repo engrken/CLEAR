@@ -1,5 +1,5 @@
 /**
- * Labels and availability of assigned web and native modules in CLEAR v1.2.2.
+ * Labels and availability of assigned web and native modules in CLEAR v1.5.0.
  *
  * This is NOT an authority list. Grant decisions must be read from the signed-in
  * officer's server-supplied allowedTabs and rechecked by requireMobileOfficer
@@ -28,7 +28,7 @@ export const MODULE_CATALOG: readonly {
   { tab: 'tab-void', name: 'Void center', availability: 'review-only', detail: 'Browse read-only tenant Void history in Android; all reversals are handled on secure web', webPath: '/void' },
   { tab: 'tab-report', name: 'Report submission', availability: 'web-only', detail: 'Use the web system for report submission', webPath: '/reports' },
   { tab: 'tab-transfer', name: 'Fund realignment', availability: 'web-only', detail: 'Use the web system for transfers', webPath: '/realign' },
-  { tab: 'tab-users', name: 'Officer management', availability: 'web-only', detail: 'Use the web system to manage roles and permissions', webPath: '/users' },
+  { tab: 'tab-users', name: 'Officer management', availability: 'available', detail: 'Review accounts and manage authorized status changes in Android; creating officers and editing roles remain on web', webPath: '/users' },
   { tab: 'tab-setup', name: 'Department setup', availability: 'web-only', detail: 'Use the web system for configuration', webPath: '/setup' },
 ];
 

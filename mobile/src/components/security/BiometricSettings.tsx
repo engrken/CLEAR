@@ -24,7 +24,7 @@ export function BiometricSettings({ identity }: { identity: BiometricIdentity })
   };
   return <View style={{ gap: 10 }}>
     <Text variant="bodyStrong">Biometric unlock</Text>
-    <Text variant="bodySm">Optional device fingerprint or face unlock, using the operating system's secure prompt. A device passcode may be offered where supported by the OS. CLEAR does not create or store a separate lock PIN. New or expired sessions still require OTP.</Text>
+    <Text variant="bodySm">Optional device fingerprint or face unlock, using the operating system&apos;s secure prompt. A device passcode may be offered where supported by the OS. CLEAR does not create or store a separate lock PIN. New or expired sessions still require OTP.</Text>
     {notice ? <Text variant="caption">{notice}</Text> : null}
     <Button block variant="secondary" disabled={busy || (!available && !enabled)} onPress={() => void toggle()}>{enabled ? 'Disable biometric unlock' : 'Enable biometric unlock'}</Button>
     {!available ? <Text variant="caption">Enrolled device biometrics required.</Text> : null}

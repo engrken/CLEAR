@@ -26,6 +26,7 @@ export const MOBILE_WRITE_ACTIONS = [
   'receipts.void',
   'maintenance.manage',
   'tenant.users.manage',
+  'tenant.users.status',
   'tenant.roles.manage',
   'tenant.settings.manage',
   'global.tenants.manage',

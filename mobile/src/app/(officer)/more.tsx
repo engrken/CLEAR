@@ -67,6 +67,7 @@ export default function More() {
     };
     if (tab === 'tab-remittances') return { text: 'Review payment proofs', open: () => router.push('/verify') };
     if (tab === 'tab-void') return { text: 'Browse Void audit', open: () => router.push('/void-audit') };
+    if (tab === 'tab-users' && isTenantAdmin) return { text: 'Manage officers', open: () => router.push('/users') };
     const financeKinds: Record<string, string> = {
       'tab-penalties': 'penalties',
       'tab-advances': 'advances',
@@ -167,7 +168,7 @@ export default function More() {
         </View>
 
         <Banner tone="info" title="Your permissions stay protected">
-          Only your server-assigned modules appear. Audited transactions are accessible through a fresh web login; native financial posting remains blocked until its separate safety checks pass.
+          All web permission modules are listed here. Cash-sensitive actions remain on the audited web application; other native write controls require their matching server authorization.
         </Banner>
 
         {groups.map(group => (

@@ -3,7 +3,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { api, type DashboardSummary } from '@/api';
-import { PAYMENT_WRITES_ENABLED } from '@/api/config';
 import { openDepartmentModule } from '@/lib/links';
 import { Banner, Button, ColorTile, HeroStat, LedgerList, LedgerRow, Screen, SectionHeader, TermChip, Text } from '@/components/ui';
 import { FinancialOverview } from '@/components/overview/FinancialOverview';

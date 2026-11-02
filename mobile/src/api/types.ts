@@ -107,6 +107,15 @@ export type GlobalTenantDashboard = {
 };
 
 /** Live, tenant-scoped metadata for an authenticated administrator only. */
+export type TenantUserRecord = {
+  id: string; fullName: string; email: string; username: string;
+  role: string; status: 'Active' | 'Inactive' | 'Blocked'; updatedAt: string;
+};
+export type TenantUsersPage = { records: TenantUserRecord[]; hasMore: boolean; nextCursor: string | null };
+export type TenantUserStatusChange = {
+  id: string; status: 'Active' | 'Inactive' | 'Blocked'; expectedUpdatedAt: string;
+};
+
 export type TenantPortalStatus = {
   organization: {
     subdomain: string;
@@ -388,6 +397,8 @@ export type ClearApi = {
   pulseOfficerPresence(s: Session, page: 'overview' | 'students' | 'remittances', tabId: string): Promise<{ colleagues: { id: string; name: string }[]; count: number }>;
   leaveOfficerPresence(s: Session, tabId: string): Promise<{ ok: true }>;
   getTenantPortal(s: Session): Promise<TenantPortalStatus>;
+  listTenantUsers(s: Session, search?: string, cursor?: string): Promise<TenantUsersPage>;
+  updateTenantUserStatus(s: Session, input: TenantUserStatusChange): Promise<{ success: true }>;
   getDashboard(s: Session): Promise<DashboardSummary>;
   listLedger(s: Session, filter?: { status?: string; limit?: number }): Promise<LedgerEntry[]>;
   listLedgerPage(s: Session, cursor?: string, scope?: 'active' | 'all'): Promise<LedgerPage>;

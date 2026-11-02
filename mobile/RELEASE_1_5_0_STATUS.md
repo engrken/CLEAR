@@ -1,3 +1,26 @@
+# CLEAR Android v1.5.0 — Web module parity: non-cash writes, cash-sensitive read-only
+
+Updated 2026-11-02 — This policy supersedes earlier tracker text below. **Every one of the 15 canonical web modules must appear in the mobile module directory and follow the same live web role/tenant grants.** Do not claim all modules are natively complete merely because a module links to secure web.
+
+## Latest clarified behavior
+- **Cash-sensitive writes stay web-only:** payments, OR creation, reversals/voids, remittance verification/invalidation, advances disbursement, liquidation approvals and money-moving accounting operations. View and search them natively when authorized.
+- **Non-cash writes are in scope for Android:** student roster create/edit/enrollment, self profile email changes, officer status/role management, academic and tenant settings, maintenance notices, noncash clearance administration and other web operational workflows. Each must reuse the web's canonical permission and audit rules, with independent backend authorization, no broad client-write flag.
+- **Already native:** enrolled biometric device lock, officer and global account screens, dual-OTP self-profile email update, student roster edit foundation with independent grant, all-period Activity, four finance review modules, remittance review and Void audit.
+- **This development increment:** native Officer Management list/search/keyset pagination and server-gated status changes with last-active-admin, protected-global-account, own-account, stale-edit, session revocation and audit checks. New independent server opt-in `MOBILE_TENANT_USER_WRITES_ENABLED=true` is required on verified main Production before status controls appear; `tab-users` alone cannot bypass it.
+- **Still not full native parity:** officer create/edit/role/permission assignments, tenant setup and maintenance writes, detailed officer clearance admin, collectibles, submission/report editing, global tenant provisioning and settings, and comprehensive financial reporting. Web routes remain available for these. Do not call these 100% complete or advertise release readiness.
+- **APK before AAB:** v15-uat signed APK uses the Production HTTPS backend and authorized test accounts; after remediation and device acceptance, build a matching AAB. Do not alter real financial records for UAT.
+
+## Current release gates
+- [ ] New account-management server route and capabilities deployed to web main after the required security review; this code remains in a draft PR.
+- [ ] Source, TypeScript, lint, authentication and CI integration tests green on final commit.
+- [ ] Physical APK fingerprint/face/OS fallback, role isolation, roster/profile and officer account status UAT verified.
+- [ ] Complete remaining native non-cash workflows and inspect all 15 web modules for parity.
+- [ ] AAB versionCode and signing provenance approved following APK acceptance.
+
+**Financial endpoints remain disabled in Android; no production deployment or Neon modification is authorized by source commits alone.**
+
+---
+
 # CLEAR Android v1.5.0 — Production-API APK verification then Play AAB (2026-11-02)
 
 ## Latest approved release sequence

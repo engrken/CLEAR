@@ -19,6 +19,8 @@ type MobileEnvironment = {
   localFinancialCiOnly?: boolean;
   /** Isolated, independent roster editing authorization. */
   rosterWritesEnabled?: boolean;
+  /** Independent opt-in: role-scoped non-financial officer status changes only. */
+  tenantUserWritesEnabled?: boolean;
   /** Never permit an unverified Vercel Preview environment to mutate real rosters. */
   localRosterCiOnly?: boolean;
 };
@@ -40,6 +42,7 @@ const OFFICER_LOGOUT = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9]
 
 // This only admits a route to its own authorization and accounting handler.
 // It never grants the mobile user permission to post a transaction.
+const TENANT_USERS_STATUS_POST = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/users$/;
 const STUDENT_ROSTER_POST = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/students\/manage$/;
 const FINANCIAL_POSTS = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/payments$/;
 
@@ -90,6 +93,8 @@ export function isMobileRequestAllowed(
 
   if (verb === 'POST' && STUDENT_ROSTER_POST.test(path) &&
       canRunMobileRosterWrites(env)) return true;
+  if (verb === 'POST' && TENANT_USERS_STATUS_POST.test(path) &&
+      canRunMobileTenantUserWrites(env)) return true;
 
   // Production operational rollout is opt-in per capability, NOT a broad
   // "write enabled" switch. Only two existing audited tenant-management routes
@@ -130,4 +135,18 @@ export function mobileRosterWriteEnvironment(): MobileEnvironment {
       process.env.DATABASE_URL ===
         'postgresql://clear_ci:clear_ci@127.0.0.1:5432/clear_ci?schema=public',
   };
+}
+
+/** Same explicit deployment/CI isolation policy as roster edits, never a financial permission. */
+export function canRunMobileTenantUserWrites(env: MobileEnvironment): boolean {
+  return env.tenantUserWritesEnabled === true && (
+    (env.vercelEnv === 'production' && env.gitRef === 'main') ||
+    (env.vercelEnv === 'preview' &&
+      env.gitRef === 'feature/android-v1.5.0-write-foundation-20261101' &&
+      env.localRosterCiOnly === true)
+  );
+}
+export function mobileTenantUserWriteEnvironment(): MobileEnvironment {
+  return { ...mobileRosterWriteEnvironment(),
+    tenantUserWritesEnabled: process.env.MOBILE_TENANT_USER_WRITES_ENABLED === 'true' };
 }
