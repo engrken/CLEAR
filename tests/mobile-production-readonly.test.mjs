@@ -120,15 +120,23 @@ test('tenant administrator portal is server-guarded, tenant-bound and GET-only',
   assert.match(more, /My tenant portal and settings/);
 });
 
-test('Android live viewer cannot invoke proof, payment or tenant changes', () => {
+test('Android cannot post cash; global tenant changes require separately verified server permissions', () => {
   const config = read('mobile/src/api/config.ts');
   assert.match(config, /export const PAYMENT_WRITES_ENABLED = false;/);
   assert.match(config, /export const MOBILE_BUSINESS_WRITES_ENABLED = false;/);
   const client = read('mobile/src/api/http.ts');
   assert.match(client, /submitProof:.*MOBILE_BUSINESS_WRITES_ENABLED/);
-  for (const method of ['provisionTenant', 'manageTenant']) {
-    assert.match(client, new RegExp(method + ':.*TENANT_OPERATIONS_ENABLED'));
-  }
+  // The client exposes native forms only when a live global bearer session
+  // receives a server-issued grant. The server denies every mutation without
+  // its separate default-off Production opt-in regardless of client flags.
+  assert.match(client, /getGlobalManagementCapabilities:.*global\/write-capabilities/);
+  assert.match(client, /provisionTenant:.*request\('\/global\/provisions'/);
+  assert.match(client, /manageTenant:.*request\('\/global\/provisions\/manage'/);
+  const grantRoute = read('app/api/mobile/global/write-capabilities/route.ts');
+  assert.match(grantRoute, /requireGlobalMobileAdmin\(req\)/);
+  assert.match(grantRoute, /canRunMobileGlobalTenantOperations/);
+  assert.equal(isMobileRequestAllowed('POST', '/api/mobile/global/provisions', production), false);
+  assert.equal(isMobileRequestAllowed('POST', '/api/mobile/global/provisions/manage', production), false);
   const policy = read('lib/mobile/http.ts');
   assert.match(policy, /tenantOperationsEnabled: process\.env\.MOBILE_TENANT_OPERATIONS_ENABLED === 'true'/);
   const layout = read('mobile/src/app/_layout.tsx');
@@ -136,9 +144,9 @@ test('Android live viewer cannot invoke proof, payment or tenant changes', () =>
   const student = read('mobile/src/app/d/[dept]/clearance.tsx');
   assert.match(student, /status === 'hold' && MOBILE_BUSINESS_WRITES_ENABLED/);
   const globalIndex = read('mobile/src/app/global/provisions/index.tsx');
-  assert.match(globalIndex, /TENANT_OPERATIONS_ENABLED/);
+  assert.match(globalIndex, /operations\.data\?\.tenantOperationsEnabled/);
   const globalDetail = read('mobile/src/app/global/provisions/[id].tsx');
-  assert.match(globalDetail, /if \(!TENANT_OPERATIONS_ENABLED\)/);
+  assert.match(globalDetail, /if \(!operations\.data\?\.tenantOperationsEnabled\)/);
 });
 
 test('Android finance POST is denied even when a deployment or CI flag requests it', () => {
