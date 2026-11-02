@@ -13,10 +13,14 @@ Updated 2026-11-02. This document tracks **draft PR #132**, not deployed behavio
 - [x] Web, mobile, student-auth and established financial-security CI baseline passed as of CircleCI #332.
 - [x] Real isolated CI test: default Android financial POST returns 403 for a valid officer without changing monetary records.
 
+## Updated isolated CI acceptance
+- [x] CircleCI #348 passed authenticated mobile payment posting, retry and package-allocation tests against disposable PostgreSQL. This does **not** authorize Production payment writes or replace device UAT.
+- [x] CircleCI #349 passed the web, mobile, student-auth and financial-security suites after restricting Preview roster writes to the local disposable CI database.
+
 ## Not verified / release blockers
 - [ ] **P1** Native Student Roster POST acceptance: active role, disabled flags, email privacy for payment-only users, create/update/enrollment, student ID financial-history guard, concurrency and wrong-tenant denial on isolated PostgreSQL. The authenticated create/edit/privacy synthetic HTTP test passed in CircleCI #344; real-device UAT and activation remain pending.
 - [ ] **P1** Verify the Android device provides cryptographically secure UUID generation; the current handler intentionally fails closed if its runtime cannot supply crypto.randomUUID().
-- [ ] **P1** Real authenticated native payment POST end-to-end against disposable PostgreSQL under independently authorized UAT controls; verify concurrent identical requests, dropped response, changed retry, overpayment, package splits, receipts, and original balances. The draft positive test `tests/ci-mobile-payment-http.test.mjs` is now wired into the isolated CircleCI financial-security job; it must pass before this gate is accepted.
+- [ ] **P1** Real authenticated native payment POST end-to-end against disposable PostgreSQL under independently authorized UAT controls; verify concurrent identical requests, dropped response, changed retry, overpayment, package splits, receipts, and original balances. The synthetic HTTP test `tests/ci-mobile-payment-http.test.mjs` passed in CircleCI #348. Still verify on a signed Android device and perform bank/ledger reconciliation before Production activation.
 - [ ] **P1** Release-safe tenant/action grants and Android UI activation. `PAYMENT_WRITES_ENABLED=false`, `MOBILE_BUSINESS_WRITES_ENABLED=false`, and the capability endpoint denies all; do not enable production.
 - [ ] **P1** Secure mobile-to-web ticket issuance/redemption: full browser cookie, replay, revocation, maintenance and role isolation tests, then physical-device UAT. Keep handoff disabled.
 - [ ] **P1** Financial change review for any shared web code: compare against deployed `main`, run authenticated regressions and ensure no change to live financial data.

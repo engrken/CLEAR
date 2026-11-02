@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import type { Organization, TenantUser } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { revalidatePath } from 'next/cache';
 import { ApiFailure } from '@/lib/mobile/http';
 
 export type RosterAction = 'create' | 'update' | 'enrollment';
@@ -212,6 +213,14 @@ export async function applyMobileRosterChange(org: Organization, actor: TenantUs
       fail(409, 'conflict', 'The roster changed during editing. Refresh the roster and retry.');
     }
     throw error;
+  }
+  if (result.changed) {
+    // Match the existing web Students Roster invalidation targets. These pages
+    // must not keep stale enrollment, clearance or summary state after a
+    // correctly authorized Android roster mutation.
+    for (const suffix of ['/students', '/clearance', '/reports', '/summary', '']) {
+      revalidatePath('/department/' + org.subdomain + suffix);
+    }
   }
   return { success: true as const, ...result };
 }
