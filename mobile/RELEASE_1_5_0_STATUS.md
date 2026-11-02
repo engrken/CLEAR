@@ -1,3 +1,33 @@
+# CLEAR Android v1.5.0 — Production-API APK verification then Play AAB (2026-11-02)
+
+## Latest approved release sequence
+1. **APK**: Use one `v15-uat` profile targeting the EXISTING Production HTTPS API, not a separate test UAT environment. Test the exact role-based financial read-only and roster/profile features expected on production.
+2. **Fix and rebuild APK** if anything fails. Do not produce an AAB before successful signed-device APK acceptance.
+3. **AAB**: Use `production` profile and the same API, roster-write, tenant-operation and financial-write policies as the tested APK. Verify Play signing and unique versionCode before submitting the bundle.
+
+## Role/action policy
+- **ALL financial transactions on Android are view-only**. Every write redirects to an authorized web module and requires web authentication and permissions.
+- **Student roster** native create/update/current-term enrollment is the only tenant business editing in v1.5.0. Both the APK and AAB expose editing only for Students-granted officers who also receive exact server-side `students.*` grants.
+- **User profile** native current-email/new-email OTP flow updates the officer's own login email, revokes prior sessions, and retains the official name/role as Administrator-managed web metadata.
+- Native Global Administrator account viewing and opt-in device biometrics are present.
+- **Biometrics:** SDK 58 `expo-secure-store` configured as native plugin; biometric-protected Keystore secret and identity preference; app lock on background; corrected OS prompt AppState transitions. Physical phone must confirm enrolled fingerprint/face, restart behavior, PIN/passcode fallback (only if OS offers it), and OTP fallback. No custom app PIN.
+
+## Safety: current server rollout blocker
+The Production web backend must first receive the verified mobile roster route and server capability grant, and only then enable `MOBILE_STUDENT_ROSTER_WRITES_ENABLED=true` on Production main for authorized accounts. The APK can ship to testers with the roster button configured but **it will NOT show write controls unless the server grants them**. Never enable financial write flags. Live roster tests must use explicitly designated test student records and user accounts; legitimate student/financial records must be preserved.
+
+## Verification checklist
+- [x] Native biometric implementation + app config present (source inspection).
+- [x] Biometric prompt background-transition race addressed in source.
+- [x] Single Production-API APK profile plus Play AAB counterpart in build config; both require a real server roster grant.
+- [ ] CI source tests and Android lint/type checks all green on final SHA.
+- [ ] Production web roster feature deployed and server opt-in reviewed BEFORE writable phone testing.
+- [ ] APK actually built, installed and tested with enrolled fingerprint/face; Android lock-code fallback behavior confirmed on the device.
+- [ ] Officer roster create/edit, own email update, permission changes, historical financial views and safe redirects accepted on APK.
+- [ ] APK acceptance recorded; AAB generated afterward, verified and submitted for staged release.
+
+No database migrations or Production state changes are authorized by these draft-branch edits alone.
+
+## Previous tracker (historical draft)
 # CLEAR Android v1.5.0 — APPROVED WEB-FIRST UAT SCOPE (2026-11-02)
 
 **This approved scope supersedes earlier drafts proposing native financial posting or other native business writes.** Web remains the source of truth for all operational changes.

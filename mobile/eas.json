@@ -33,7 +33,9 @@
       "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_API_URL": "https://clearsys.vercel.app/api/mobile",
-        "EXPO_PUBLIC_CLEAR_TENANT_OPERATIONS": "false"
+        "EXPO_PUBLIC_CLEAR_TENANT_OPERATIONS": "false",
+        "EXPO_PUBLIC_CLEAR_STUDENT_ROSTER_WRITES": "true",
+        "EXPO_PUBLIC_CLEAR_RELEASE_KIND": "v15-production"
       },
       "android": {
         "image": "latest",
@@ -52,18 +54,19 @@
       },
       "autoIncrement": true
     },
-    "v15-uat-readonly": {
+    "v15-uat": {
       "distribution": "internal",
       "environment": "production",
       "env": {
         "EXPO_PUBLIC_API_URL": "https://clearsys.vercel.app/api/mobile",
         "EXPO_PUBLIC_CLEAR_TENANT_OPERATIONS": "false",
-        "EXPO_PUBLIC_CLEAR_STUDENT_ROSTER_WRITES": "false",
-        "EXPO_PUBLIC_CLEAR_RELEASE_KIND": "live-readonly-internal"
+        "EXPO_PUBLIC_CLEAR_STUDENT_ROSTER_WRITES": "true",
+        "EXPO_PUBLIC_CLEAR_RELEASE_KIND": "v15-production-uat"
       },
       "android": {
         "buildType": "apk"
-      }
+      },
+      "autoIncrement": true
     }
   },
   "submit": {

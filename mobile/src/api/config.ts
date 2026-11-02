@@ -39,6 +39,18 @@ if (releaseKind === 'live-readonly-internal') {
 }
 
 
+// v1.5 APK and Play AAB use the same real Production API and role rules. The
+// Android flag only exposes roster controls; the web backend separately checks
+// the signed-in officer's Student permission and a server-side write rollout.
+if (releaseKind === 'v15-production-uat' || releaseKind === 'v15-production') {
+  if (__DEV__ || configuredMode === 'mock' || apiUrl !== PROD_URL ||
+      PAYMENT_WRITES_ENABLED !== false || REMITTANCE_WRITES_ENABLED !== false ||
+      MOBILE_BUSINESS_WRITES_ENABLED !== false || TENANT_OPERATIONS_ENABLED !== false ||
+      STUDENT_ROSTER_WRITES_ENABLED !== true) {
+    throw new Error('CLEAR v1.5 live build requires Production HTTPS, server-gated roster edits, and read-only finance.');
+  }
+}
+
 if (!__DEV__) {
   if (configuredMode === 'mock') {
     throw new Error('CLEAR security policy: mock API is prohibited in release builds.');

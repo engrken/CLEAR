@@ -47,6 +47,9 @@ function Navigator() {
   const key = identity ? identity.kind + ':' + identity.id + ':' + identity.token : '';
   const foreground = useRef(AppState.currentState);
   const lockEpoch = useRef(0);
+  // An OS biometric prompt may temporarily background the Activity. The screen
+  // is already hidden behind 'checking' while that prompt is in progress.
+  const biometricPromptActive = useRef(false);
   useEffect(() => {
     let live = true;
     const epoch = ++lockEpoch.current;
@@ -58,7 +61,7 @@ function Navigator() {
   }, [restoring, key]);
   useEffect(() => {
     const sub = AppState.addEventListener('change', next => {
-      if (next !== 'active' && foreground.current === 'active' && identity) {
+      if (next !== 'active' && foreground.current === 'active' && identity && !biometricPromptActive.current) {
         const epoch = ++lockEpoch.current;
         // Deny access immediately; asynchronous preference reads must not leave a visible unlocked frame.
         setLock({ key, status: 'locked' });
@@ -71,12 +74,18 @@ function Navigator() {
     return () => sub.remove();
   }, [key]);
   const unlock = async () => {
-    if (!identity) return;
+    if (!identity || biometricPromptActive.current) return;
     const epoch = ++lockEpoch.current;
+    biometricPromptActive.current = true;
     setLock({ key, status: 'checking' });
-    const verified = await unlockWithBiometrics(identity).catch(() => false);
-    if (epoch === lockEpoch.current && AppState.currentState === 'active') {
-      setLock({ key, status: verified ? 'open' : 'locked' });
+    try {
+      const verified = await unlockWithBiometrics(identity).catch(() => false);
+      if (epoch === lockEpoch.current) {
+        // Do not display session data unless the app is actually in foreground.
+        setLock({ key, status: verified && AppState.currentState === 'active' ? 'open' : 'locked' });
+      }
+    } finally {
+      biometricPromptActive.current = false;
     }
   };
   const pathname = usePathname();

@@ -29,27 +29,31 @@ for (const flag of ['PAYMENT_WRITES_ENABLED', 'REMITTANCE_WRITES_ENABLED', 'MOBI
 if (!/TENANT_OPERATIONS_ENABLED/.test(config) || !/EXPO_PUBLIC_CLEAR_TENANT_OPERATIONS/.test(config)) {
   blockers.push('Tenant operations must remain separately gated');
 }
-if (!/canRunMobileRosterWrites/.test(gate) ||
-    !/canOfferMobileWrite\\(capability.data, 'students.create'/.test(student) ||
-    !/canOfferMobileWrite\\(capability.data, 'students.update'/.test(student) ||
-    !/STUDENT_ROSTER_WRITES_ENABLED/.test(config)) {
+if (!gate.includes('canRunMobileRosterWrites') ||
+    !student.includes("canOfferMobileWrite(capability.data, 'students.create'") ||
+    !student.includes("canOfferMobileWrite(capability.data, 'students.update'") ||
+    !config.includes('STUDENT_ROSTER_WRITES_ENABLED')) {
   blockers.push('Native student roster create/update must be independently server-granted');
 }
+
 if (!/requestOfficerEmailChangeCurrentCode/.test(profile) ||
     !/verifyOfficerEmailChangeCurrentCode/.test(profile) ||
     !/confirmOfficerEmailChange/.test(profile)) {
   blockers.push('Native profile email editing must require dual-address OTP');
 }
-if (!/SecureStore.setItemAsync\\(PROOF/.test(security) ||
-    !/requireAuthentication: true/.test(security) ||
-    !/unlockWithBiometrics/.test(read('mobile/src/app/_layout.tsx'))) {
-  blockers.push('OS-protected biometric app-lock and server OTP fallback missing');
+if (!security.includes('SecureStore.setItemAsync(PROOF') ||
+    !security.includes('requireAuthentication: true') ||
+    !read('mobile/src/app/_layout.tsx').includes('unlockWithBiometrics(identity)') ||
+    !read('mobile/src/app/_layout.tsx').includes('biometricPromptActive.current')) {
+  blockers.push('Real-device biometric app-lock, prompt background protection and OTP fallback missing');
 }
-if (!/openDepartmentModule\\(session.org.subdomain, m.webPath!\\)/.test(portal) ||
-    !/switchToDepartmentWebPortal/.test(portal) ||
-    !/WEB_MODULE_PATHS.has\\(route\\)/.test(read('mobile/src/lib/links.ts'))) {
+
+if (!portal.includes('openDepartmentModule(session.org.subdomain, m.webPath!)') ||
+    !portal.includes('switchToDepartmentWebPortal') ||
+    !read('mobile/src/lib/links.ts').includes('WEB_MODULE_PATHS.has(route)')) {
   blockers.push('First-party role-protected financial web handoff missing');
 }
+
 if (!/name="finance-review"/.test(read('mobile/src/app/(officer)/_layout.tsx')) ||
     !/name="void-audit"/.test(read('mobile/src/app/(officer)/_layout.tsx'))) {
   blockers.push('Read-only financial review and Void audit screens missing');
@@ -64,13 +68,24 @@ if (bundle.expo?.version !== '1.5.0' ||
     bundle.expo.android.versionCode <= 15) {
   blockers.push('Android package identity/versionCode has not been staged for v1.5.0');
 }
-const profileUat = eas.build?.['v15-uat-readonly'];
+const profileUat = eas.build?.['v15-uat'];
+const prodAab = eas.build?.production;
+const prodUrl = 'https://clearsys.vercel.app/api/mobile';
 if (profileUat?.distribution !== 'internal' || profileUat.android?.buildType !== 'apk' ||
-    profileUat.env?.EXPO_PUBLIC_API_URL !== 'https://clearsys.vercel.app/api/mobile' ||
+    profileUat.env?.EXPO_PUBLIC_API_URL !== prodUrl ||
+    profileUat.env?.EXPO_PUBLIC_CLEAR_RELEASE_KIND !== 'v15-production-uat' ||
     profileUat.env?.EXPO_PUBLIC_CLEAR_TENANT_OPERATIONS !== 'false' ||
-    profileUat.env?.EXPO_PUBLIC_CLEAR_STUDENT_ROSTER_WRITES !== 'false') {
-  blockers.push('Safe read-only internal APK build profile must be pinned to Production HTTPS and no business or roster writes');
+    profileUat.env?.EXPO_PUBLIC_CLEAR_STUDENT_ROSTER_WRITES !== 'true') {
+  blockers.push('APK UAT must target the pinned Production HTTPS API with independently granted student roster editing');
 }
+if (prodAab?.android?.buildType !== 'app-bundle' ||
+    prodAab.env?.EXPO_PUBLIC_API_URL !== prodUrl ||
+    prodAab.env?.EXPO_PUBLIC_CLEAR_RELEASE_KIND !== 'v15-production' ||
+    prodAab.env?.EXPO_PUBLIC_CLEAR_TENANT_OPERATIONS !== 'false' ||
+    prodAab.env?.EXPO_PUBLIC_CLEAR_STUDENT_ROSTER_WRITES !== 'true') {
+  blockers.push('Play AAB must match the approved APK role, roster and read-only finance policy');
+}
+
 if (phase === 'production') {
   if (process.env.CLEAR_ANDROID_V15_UAT_APPROVED !== 'true') blockers.push('Signed Android v1.5.0 device UAT has not been approved');
   if (process.env.CLEAR_ANDROID_V15_PLAY_VERSIONCODE_CONFIRMED !== 'true') blockers.push('Google Play versionCode and upload signing are not verified');

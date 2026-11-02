@@ -35,3 +35,28 @@ test('biometric unlock requires opt-in for the active identity and device suppor
  assert.match(source, /export async function biometricEnabled[\s\S]*?biometricAvailable\(\)/);
  assert.match(source, /export async function unlockWithBiometrics[\s\S]*?biometricEnabled\(identity\)/);
 });
+
+test('OS biometric prompt transitions do not invalidate the foreground unlock epoch', () => {
+  const root = read('mobile/src/app/_layout.tsx');
+  assert.match(root, /const biometricPromptActive = useRef\(false\)/);
+  assert.match(root, /!biometricPromptActive\.current/);
+  assert.match(root, /biometricPromptActive\.current = true/);
+  assert.match(root, /biometricPromptActive\.current = false/);
+  assert.match(root, /verified && AppState\.currentState === 'active'/);
+  assert.match(root, /if \(!identity \|\| biometricPromptActive\.current\) return/);
+});
+test('the actual APK and AAB enable the same secure biometrics and production-only user scope', () => {
+  const eas = JSON.parse(read('mobile/eas.json'));
+  const app = JSON.parse(read('mobile/app.json'));
+  const cfg = read('mobile/src/api/config.ts');
+  assert.ok(app.expo.plugins.includes('expo-secure-store'));
+  for (const name of ['v15-uat', 'production']) {
+    const profile = eas.build[name];
+    assert.equal(profile.env.EXPO_PUBLIC_API_URL, 'https://clearsys.vercel.app/api/mobile');
+    assert.equal(profile.env.EXPO_PUBLIC_CLEAR_STUDENT_ROSTER_WRITES, 'true');
+    assert.equal(profile.env.EXPO_PUBLIC_CLEAR_TENANT_OPERATIONS, 'false');
+  }
+  assert.match(cfg, /releaseKind === 'v15-production-uat' \|\| releaseKind === 'v15-production'/);
+  assert.equal(eas.build['v15-uat'].android.buildType, 'apk');
+  assert.equal(eas.build.production.android.buildType, 'app-bundle');
+});
