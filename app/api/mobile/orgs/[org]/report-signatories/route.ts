@@ -48,6 +48,9 @@ export const POST=handler(async(req,{params}:Ctx)=>{
       row.label.length>100||row.name.length>120||row.position.length>120||
       /[\r\n]/.test(row.label)||/[\r\n]/.test(row.name)||/[\r\n]/.test(row.position)))
    throw new ApiFailure(400,'invalid','Report signatories or confirmation are invalid.');
+ // Narrow independently of readJson's Partial<T> and close over stable values.
+ const schoolName=String(body.schoolName).trim();
+ const schoolAddress=String(body.schoolAddress).trim();
  const sanitized=body.records.map(row=>({
    label:row.label.trim(),name:row.name.trim(),position:row.position.trim(),
  })).filter(row=>row.label||row.name||row.position);
@@ -61,7 +64,7 @@ export const POST=handler(async(req,{params}:Ctx)=>{
    if(digest(existing,priorHeader)!==body.expectedVersion)
      throw new ApiFailure(409,'conflict','Report presentation changed. Refresh before saving.');
    await tx.organization.update({where:{id:org.id},data:{
-     reportSchoolName:body.schoolName.trim(),reportSchoolAddress:body.schoolAddress.trim()||null,
+     reportSchoolName:schoolName,reportSchoolAddress:schoolAddress||null,
    }});
    await tx.signatory.deleteMany({where:{organizationId:org.id}});
    if(sanitized.length)await tx.signatory.createMany({
