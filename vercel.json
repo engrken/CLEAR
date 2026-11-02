@@ -8,5 +8,10 @@
       "path": "/api/cron/backup",
       "schedule": "0 19 * * *"
     }
-  ]
+  ],
+  "git": {
+    "deploymentEnabled": {
+      "education-development-setup": false
+    }
+  }
 }
