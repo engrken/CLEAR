@@ -112,7 +112,8 @@ export type TenantUserRecord = {
   role: string; status: 'Active' | 'Inactive' | 'Blocked'; updatedAt: string;
   allowedTabs: string[];
 };
-export type TenantUsersPage = { records: TenantUserRecord[]; hasMore: boolean; nextCursor: string | null };
+export type TenantUsersPage = { records: TenantUserRecord[]; hasMore: boolean; nextCursor: string | null;
+  rolePresets?: Record<string, string[]> };
 export type TenantUserManagementChange = {
   action: 'create' | 'update'; id?: string; expectedUpdatedAt?: string;
   fullName: string; email: string; username: string; role: string;
