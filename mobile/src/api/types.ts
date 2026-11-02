@@ -42,6 +42,18 @@ export type Session = { token: string; officer: Officer; org: Organization; expi
 
 /** Global administrators are not department officers and have no implicit tenant permissions. */
 export type GlobalAdmin = { id: string; fullName: string; email: string; role: 'SuperAdmin' };
+export type GlobalMaintenanceNotice = {
+  id:string;scopeKey:string;mode:'NORMAL'|'READ_ONLY'|'FULL';
+  state:'DRAFT'|'SCHEDULED'|'CANCELLED';
+  title:string;message:string;startsAt:string;endsAt:string;version:number;
+};
+export type GlobalMaintenancePage={
+  serverTime:string; notices:GlobalMaintenanceNotice[];
+};
+export type GlobalMaintenanceChange =
+  | {action:'create';scope:string;mode:'NORMAL'|'READ_ONLY'|'FULL';title:string;
+      message:string;startsAt:string;endsAt:string;confirmation:string}
+  | {action:'end_early'|'cancel';id:string;expectedVersion:number;confirmation:string};
 export type GlobalSession = { token: string; admin: GlobalAdmin; expiresAt: string };
 export type GlobalOverview = {
   generatedAt: string;
@@ -107,6 +119,60 @@ export type GlobalTenantDashboard = {
 };
 
 /** Live, tenant-scoped metadata for an authenticated administrator only. */
+export type TenantUserRecord = {
+  id: string; fullName: string; email: string; username: string;
+  role: string; status: 'Active' | 'Inactive' | 'Blocked'; updatedAt: string;
+  allowedTabs: string[];
+};
+export type TenantUsersPage = { records: TenantUserRecord[]; hasMore: boolean; nextCursor: string | null;
+  rolePresets?: Record<string, string[]> };
+export type CollectibleRecord = {
+  id: string; category: string; headcount: number;
+  status: string; balanceCentavos: number;
+};
+export type CollectiblePage = { scope: 'active_period'; ay: string; term: string;
+  records: CollectibleRecord[]; hasMore: boolean; nextCursor: string | null };
+
+export type TenantUserManagementChange = {
+  action: 'create' | 'update'; id?: string; expectedUpdatedAt?: string;
+  fullName: string; email: string; username: string; role: string;
+  status: 'Active' | 'Inactive' | 'Blocked'; allowedTabs: string[];
+};
+export type TenantUserStatusChange = {
+  id: string; status: 'Active' | 'Inactive' | 'Blocked'; expectedUpdatedAt: string;
+};
+
+export type ReportSignatory = {label:string;name:string;position:string};
+export type ReportSignatoriesSnapshot = { version:string; records:ReportSignatory[];schoolName:string;schoolAddress:string };
+export type ReportSignatoriesChange = {
+  expectedVersion:string;records:ReportSignatory[];schoolName:string;schoolAddress:string;confirmation:string;
+};
+export type FinanceSnapshot = {
+  scope:'active_period'; ay:string; term:string; generatedAt:string; reportType:string;
+  totals:{label:string;count:number;amountCentavos:number;meaning:string}[];
+};
+export type RealignmentRecord = {
+  id:string; when:string; from:string;to:string;amountCentavos:number;reason:string;encodedBy:string|null;
+};
+export type RealignmentPage = {
+  scope:'active_period';ay:string;term:string;hasMore:boolean;nextCursor:string|null;entries:RealignmentRecord[];
+};
+export type SetupReview={
+ scope:'active_period';ay:string;term:string;
+ calendar:{mode:string;includeSummer:boolean}|null;
+ fundsTotal:number;feesTotal:number;
+ funds:{id:string;name:string;openingCentavos:number}[];
+ fees:{id:string;category:string;name:string;amountCentavos:number;targetFund:string;isPackage:boolean}[];
+};
+export type MobileAcademicCalendar = {
+  activeAy: string; activeTerm: string;
+  configurations: { academicYear: string; mode: 'Semester' | 'Trimester' | 'FullYear';
+    includeSummer: boolean; updatedAt: string }[];
+};
+export type MobileAcademicCalendarChange = {
+  academicYear: string; mode: 'Semester' | 'Trimester' | 'FullYear';
+  includeSummer: boolean; expectedUpdatedAt: string | null;
+};
 export type TenantPortalStatus = {
   organization: {
     subdomain: string;
@@ -180,6 +246,9 @@ export type LedgerEntry = {
   receiptNumber?: string;
   /** Collection line within the issued receipt; provided only for collection entries. */
   receiptLine?: number;
+  /** Present for all-period Activity, supplied by the web-ledger service. */
+  academicYear?: string;
+  term?: string;
 };
 
 export type LedgerPage = {
@@ -246,6 +315,25 @@ export type Student = {
   yearLevel: string;
   /** Ken's web app calls a dropped student "Inactive"; older servers send 'Dropped'. Show via `enrollmentLabel`. */
   enrollmentStatus: 'Enrolled' | 'Dropped' | 'Inactive';
+  /** Private. Returned only when the officer has tab-students, never to payment-only users. */
+  email?: string | null;
+  termStatus?: string;
+};
+
+export type StudentRosterSnapshot = {
+  studentId: string; fullName: string; yearLevel: string;
+  email: string | null; enrollmentStatus: 'Enrolled' | 'Inactive';
+};
+export type StudentRosterMutation =
+  | { action: 'create'; studentId: string; fullName: string; yearLevel: string;
+      email: string | null; enrollmentStatus: 'Enrolled' | 'Inactive' }
+  | { action: 'update'; id: string; studentId: string; fullName: string; yearLevel: string;
+      email: string | null; enrollmentStatus: 'Enrolled' | 'Inactive'; expected: StudentRosterSnapshot;
+      emailChangeIdentityVerified: boolean }
+  | { action: 'enrollment'; id: string; enrollmentStatus: 'Enrolled' | 'Inactive';
+      expected: StudentRosterSnapshot };
+export type StudentRosterMutationResult = {
+  success: true; id: string; status: 'Enrolled' | 'Inactive'; changed: boolean;
 };
 
 export type FeeItem = { id: string; category: string; name: string; amountCentavos: number; targetFund: string };
@@ -286,6 +374,8 @@ export type FinanceReviewResponse = {
   scope: 'active_period';
   ay: string; term: string;
   limit: number; hasMore: boolean;
+  /** Supplied by the v1.5.0 web API. Older servers may omit this. */
+  nextCursor?: string | null;
   amountMeaning: string;
   entries: FinanceReviewEntry[];
 };
@@ -302,6 +392,12 @@ export type ReceiptReferenceSearch = { kind: 'receipts'; scope: 'active_period';
   ay: string; term: string; query: string; records: ReceiptReference[] };
 export type VoidReferenceSearch = { kind: 'void'; scope: 'tenant_all_periods';
   query: string; records: VoidReference[] };
+/** Read-only keyset pages of the existing web VoidTransaction audit trail. */
+export type VoidAuditPage = { scope: 'tenant_all_periods'; records: VoidReference[];
+  hasMore: boolean; nextCursor: string | null; pageSize: number };
+
+export type MobileWriteAction = import('../lib/write-permissions').MobileWriteAction;
+export type MobileWritePolicy = import('../lib/write-permissions').MobileWritePolicy;
 
 export type ClearApi = {
   mode: 'http' | 'mock';
@@ -334,6 +430,11 @@ export type ClearApi = {
   restoreGlobalSession(token: string): Promise<GlobalSession>;
   signOutGlobal(session: GlobalSession): Promise<void>;
   getGlobalOverview(session: GlobalSession): Promise<GlobalOverview>;
+  getGlobalManagementCapabilities(session: GlobalSession): Promise<{tenantOperationsEnabled:boolean}>;
+  getGlobalMaintenance(session: GlobalSession): Promise<GlobalMaintenancePage>;
+  changeGlobalMaintenance(session: GlobalSession, change: GlobalMaintenanceChange): Promise<{success:true}>;
+  /** Separate Global Administrator identity; never impersonate a tenant officer. */
+  requestGlobalWebHandoff(session: GlobalSession): Promise<{ url: string }>;
   listManagedTenants(session: GlobalSession): Promise<ManagedTenant[]>;
   provisionTenant(session: GlobalSession, payload: NewTenant): Promise<ProvisionResult>;
   manageTenant(session: GlobalSession, payload: {
@@ -346,24 +447,42 @@ export type ClearApi = {
   listGlobalTenantLedgerPage(session: GlobalSession, slug: string, cursor?: string): Promise<LedgerPage>;
   listGlobalTenantRemittances(session: GlobalSession, slug: string): Promise<LedgerEntry[]>;
   // officer
+  /** Server-issued capability grants; deny all when unavailable. */
+  getWriteCapabilities(s: Session): Promise<MobileWritePolicy>;
+  /** Disabled server-side until one-time browser exchange is audited. */
+  requestOfficerWebHandoff(s: Session): Promise<{ url: string }>;
   /** Session metadata only; all server requests independently check tenant and tab permissions. */
   getOfficerOnboarding(s: Session): Promise<{ exempt: boolean; completed: boolean; tabs: string[] }>;
   completeOfficerOnboarding(s: Session): Promise<{ exempt: boolean; completed: boolean }>;
   pulseOfficerPresence(s: Session, page: 'overview' | 'students' | 'remittances', tabId: string): Promise<{ colleagues: { id: string; name: string }[]; count: number }>;
   leaveOfficerPresence(s: Session, tabId: string): Promise<{ ok: true }>;
   getTenantPortal(s: Session): Promise<TenantPortalStatus>;
+  getAcademicCalendar(s: Session): Promise<MobileAcademicCalendar>;
+  getSetupReview(s: Session): Promise<SetupReview>;
+  getFinanceSnapshot(s: Session): Promise<FinanceSnapshot>;
+  getReportSignatories(s:Session):Promise<ReportSignatoriesSnapshot>;
+  saveReportSignatories(s:Session,input:ReportSignatoriesChange):Promise<{success:true}>;
+  getRealignmentReview(s: Session, cursor?:string): Promise<RealignmentPage>;
+  updateAcademicCalendar(s: Session, change: MobileAcademicCalendarChange): Promise<{ success: true }>;
+  listTenantUsers(s: Session, search?: string, cursor?: string): Promise<TenantUsersPage>;
+  listCollectibles(s: Session, cursor?: string): Promise<CollectiblePage>;
+  updateTenantUserStatus(s: Session, input: TenantUserStatusChange): Promise<{ success: true }>;
+  manageTenantUser(s: Session, input: TenantUserManagementChange): Promise<{ success: true; id: string }>;
   getDashboard(s: Session): Promise<DashboardSummary>;
   listLedger(s: Session, filter?: { status?: string; limit?: number }): Promise<LedgerEntry[]>;
-  listLedgerPage(s: Session, cursor?: string): Promise<LedgerPage>;
+  listLedgerPage(s: Session, cursor?: string, scope?: 'active' | 'all'): Promise<LedgerPage>;
+  /** Server authorizes tab-void independently of overview and reporting grants. */
+  listVoidAudit(s: Session, cursor?: string): Promise<VoidAuditPage>;
   /** Independently permission-checked, current period and read-only. */
-  getFinanceReview(s: Session, kind: FinanceReviewKind, limit?: number): Promise<FinanceReviewResponse>;
+  getFinanceReview(s: Session, kind: FinanceReviewKind, limit?: number, cursor?: string): Promise<FinanceReviewResponse>;
   /** Authorized GET-only exact reference search; no receipt/void mutations. */
   searchReceiptReferences(s: Session, q: string): Promise<ReceiptReferenceSearch>;
   searchVoidReferences(s: Session, q: string): Promise<VoidReferenceSearch>;
   /** Accessible to tab-remittances even without tab-overview. */
   listPendingRemittances(s: Session): Promise<LedgerEntry[]>;
   listStudents(s: Session, q?: string, missingEmailOnly?: boolean): Promise<Student[]>;
-  recordPayment(s: Session, p: { studentId: string; feeId: string; amountCentavos: number; orNumber: string; idempotencyKey?: string }): Promise<LedgerEntry>;
+  updateStudentRoster(s: Session, change: StudentRosterMutation): Promise<StudentRosterMutationResult>;
+  recordPayment(s: Session, p: { studentId: string; feeId: string; amountCentavos: number; idempotencyKey: string }): Promise<{ reference: string; title: string; orNumber: string; balanceDue: number; paymentEntries: number; paymentType: string }>;
   getRemittance(s: Session, id: string): Promise<RemittanceDetail>;
   verifyRemittance(s: Session, id: string, p: { orNumber: string; fundAllocation?: string }): Promise<{ orNumber: string }>;
   invalidateRemittance(s: Session, id: string): Promise<{ ok: true }>;

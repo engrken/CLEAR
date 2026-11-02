@@ -6,7 +6,7 @@
 
 import { NextResponse } from 'next/server';
 import { DomainError } from '@/lib/errors';
-import { isMobileRequestAllowed } from '@/lib/mobile/production-readonly';
+import { isMobileRequestAllowed, mobileRosterWriteEnvironment, mobileTenantUserWriteEnvironment } from '@/lib/mobile/production-readonly';
 import { clearanceLinkOrigin } from '@/lib/clearance-link-origin';
 
 export class ApiFailure extends Error {
@@ -74,6 +74,8 @@ export function handler<Ctx>(fn: (req: Request, ctx: Ctx) => Promise<unknown>) {
         vercelEnv: process.env.VERCEL_ENV,
         gitRef: process.env.VERCEL_GIT_COMMIT_REF,
         tenantOperationsEnabled: process.env.MOBILE_TENANT_OPERATIONS_ENABLED === 'true',
+        ...mobileRosterWriteEnvironment(),
+        ...mobileTenantUserWriteEnvironment(),
       })) {
         throw new ApiFailure(403, 'read_only', 'This mobile operation is not enabled. Use your authorized CLEAR web portal until it is approved.');
       }
@@ -122,6 +124,14 @@ export function requireCentavos(value: unknown, field: string): number {
   if (!Number.isInteger(n) || n <= 0) throw new ApiFailure(400, 'invalid', `${field} must be a positive whole number of centavos.`);
   if (n > 100_000_000) throw new ApiFailure(400, 'invalid', `${field} is too large.`);
   return n;
+}
+
+/** Strict financial write validation: reject string coercion, fractions and unsafe integers. */
+export function requireFinancialWriteCentavos(value: unknown, field: string): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0 || value > 100_000_000) {
+    throw new ApiFailure(400, 'invalid', `${field} must be positive integer centavos within the transaction limit.`);
+  }
+  return value;
 }
 
 /** Official origin for signed certificate links; ignores request-controlled hosts. */

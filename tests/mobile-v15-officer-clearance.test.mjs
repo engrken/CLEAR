@@ -1,0 +1,21 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const src=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
+test('officer clearance native search reuses original server-scoped financial calculation',()=>{
+ const ui=src('mobile/src/app/(officer)/clearance-admin.tsx');
+ const route=src('app/api/mobile/orgs/[org]/clearance/route.ts');
+ assert.match(ui,/can\('tab-clearance'\)/);
+ assert.match(ui,/query\.trim\(\)\.length<2/);
+ assert.match(ui,/api\.lookupClearance\(session\.org\.subdomain,requested,session\)/);
+ assert.match(ui,/result\.unpaidItems/);
+ assert.match(ui,/result\.status==='not_enrolled'/);
+ assert.doesNotMatch(ui,/api\.recordPayment|postAuthorizedPayment|setCleared\(/);
+ assert.match(route,/requireMobileOfficer\(req, slug, 'tab-clearance'\)/);
+ assert.match(route,/getStudentClearance\(org\.id, query, org\.activeAy, org\.activeTerm\)/);
+ assert.match(route,/qrToken: null/);
+ const more=src('mobile/src/app/(officer)/more.tsx');
+ const layout=src('mobile/src/app/(officer)/_layout.tsx');
+ assert.match(more,/router\.push\('\/clearance-admin'\)/);
+ assert.match(layout,/can\('tab-clearance'\)/);
+});

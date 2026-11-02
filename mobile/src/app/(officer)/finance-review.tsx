@@ -5,14 +5,14 @@ import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
-import { api, type FinanceReviewKind, type FinanceReviewResponse } from '@/api';
+import { api, type FinanceReviewKind } from '@/api';
 import { Banner, Button, Card, Screen, Text } from '@/components/ui';
 import { formatDateTime } from '@/lib/dates';
 import { openDepartmentModule } from '@/lib/links';
 import { formatPeso, fromCentavos } from '@/lib/money';
 import { useOfficerSession, useSession } from '@/lib/session';
 import { TAB_BAR_SPACE } from '@/lib/tab-bar';
-import { useAsync } from '@/lib/use-async';
+import { useFinanceReviewPages } from '@/lib/use-finance-review-pages';
 import { radius, spacing, useTheme } from '@/theme';
 
 const MODES: readonly { kind: FinanceReviewKind; tab: string; label: string; web: string }[] = [
@@ -33,23 +33,20 @@ export default function FinanceReview() {
   // selection and search can never be reused on a new authenticated route.
   const routeKey = JSON.stringify([session.token, session.org.subdomain, requestedKind ?? null]);
   const [selection, setSelection] = useState<{ key: string; kind: FinanceReviewKind } | null>(null);
-  const [filter, setFilter] = useState<{ key: string; query: string; limit: number }>({
-    key: routeKey, query: '', limit: 20,
-  });
+  const [filter, setFilter] = useState<{ key: string; query: string }>({ key: routeKey, query: '' });
   const query = filter.key === routeKey ? filter.query : '';
-  const limit = filter.key === routeKey ? filter.limit : 20;
   const preferred = selection?.key === routeKey ? selection.kind : requestedKind;
   const mode = allowed.find(m => m.kind === preferred) ?? allowed[0];
   const authorized = !!mode && can(mode.tab);
-  const review = useAsync<FinanceReviewResponse | null>(
-    () => authorized && mode ? api.getFinanceReview(session, mode.kind, limit) : Promise.resolve(null),
-    `${session.token}:${session.org.subdomain}:${mode?.kind ?? 'none'}:${limit}:${authorized}`
+  const review = useFinanceReviewPages(
+    (cursor) => api.getFinanceReview(session, mode!.kind, 20, cursor),
+    `${session.token}:${session.org.subdomain}:${mode?.kind ?? 'none'}`, authorized,
   );
   const { reload } = review;
   useFocusEffect(useCallback(() => { reload(); }, [reload]));
 
   // Never show previous tab's private records while the new mode loads.
-  const data = review.loading || dataBelongsElsewhere(review.data, mode?.kind) ? null : review.data;
+  const data = review.loading || (review.data && review.data.kind !== mode?.kind) ? null : review.data;
   const needle = query.trim().toLowerCase();
   const visible = (data?.entries ?? []).filter(row =>
     !needle || [row.reference, row.title, row.subtitle, row.status]
@@ -74,7 +71,7 @@ export default function FinanceReview() {
             {allowed.map(item => (
               <Pressable key={item.kind} accessibilityRole="tab"
                 accessibilityState={{ selected: mode?.kind === item.kind }}
-                onPress={() => { setSelection({ key: routeKey, kind: item.kind }); setFilter({ key: routeKey, query: '', limit: 20 }); }}
+                onPress={() => { setSelection({ key: routeKey, kind: item.kind }); setFilter({ key: routeKey, query: '' }); }}
                 style={[styles.tab, { backgroundColor: mode?.kind === item.kind ? c.inkBlock : c.soft }]}>
                 <Text variant="bodySm" color={mode?.kind === item.kind ? 'onAccent' : 'ink'}>
                   {item.label}
@@ -98,14 +95,14 @@ export default function FinanceReview() {
             </Banner>
           ) : null}
           <TextInput
-            value={query} onChangeText={next => setFilter({ key: routeKey, query: next, limit })} maxLength={80}
+            value={query} onChangeText={next => setFilter({ key: routeKey, query: next })} maxLength={80}
             accessibilityLabel="Filter loaded financial records"
             placeholder="Filter loaded references, names or status"
             placeholderTextColor={c.inkMuted}
             autoCorrect={false} autoCapitalize="none"
             style={[styles.search, { backgroundColor: c.soft, color: c.ink }]}
           />
-          {query ? <Button size="sm" variant="secondary" onPress={() => setFilter({ key: routeKey, query: '', limit })}>
+          {query ? <Button size="sm" variant="secondary" onPress={() => setFilter({ key: routeKey, query: '' })}>
             Clear filter
           </Button> : null}
           {review.loading ? <ActivityIndicator color={c.cobalt}/> : null}
@@ -117,7 +114,7 @@ export default function FinanceReview() {
           {data ? (
             <>
               <Text variant="caption" color="inkMuted">
-                {visible.length} shown from {data.entries.length} most recent returned records · {data.amountMeaning}
+                {visible.length} shown from {data.entries.length} loaded records{data.hasMore ? ' · Older records available' : ' · All available records loaded'} · {data.amountMeaning}
               </Text>
               {data.entries.length === 0 ? (
                 <Banner tone="info" title="No recent records">
@@ -141,16 +138,18 @@ export default function FinanceReview() {
                   </Card>
                 ))
               )}
-              {data.hasMore ? (
-                <Banner tone="info" title="More records available">
-                  This is a bounded recent list, not complete financial history.
-                  Open the secure web module for full records.
-                </Banner>
-              ) : null}
-              {limit === 20 && data.hasMore ? (
-                <Button block variant="secondary" onPress={() => setFilter({ key: routeKey, query: '', limit: 40 })}>
-                  Show up to 40 recent records
+              {review.pageError ? <Banner tone="danger" title="Older records unavailable">
+                {review.pageError.message}
+              </Banner> : null}
+              {data.hasMore && data.nextCursor ? (
+                <Button block variant="secondary" onPress={() => void review.loadMore()}>
+                  {review.loadingMore ? 'Loading older records…' : 'Load older records'}
                 </Button>
+              ) : data.hasMore ? (
+                <Banner tone="info" title="Older records on web">
+                  The server has more records but cannot provide secure mobile pagination.
+                  Use the full audited web module.
+                </Banner>
               ) : null}
             </>
           ) : null}
@@ -171,9 +170,6 @@ export default function FinanceReview() {
   );
 }
 
-function dataBelongsElsewhere(data: FinanceReviewResponse | null | undefined, kind?: FinanceReviewKind) {
-  return !!data && data.kind !== kind;
-}
 
 const styles = StyleSheet.create({
   modes: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },

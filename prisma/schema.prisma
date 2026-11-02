@@ -621,3 +621,24 @@ model MaintenanceAudit {
   
   @@index([scopeKey, createdAt])
 }
+
+
+/// Single-use mobile-to-web authentication ticket. Only an HMAC digest is stored.
+/// Issuance and redemption remain disabled until NextAuth integration is verified.
+model MobileWebHandoff {
+  id                  String    @id @default(uuid())
+  ticketHash          String    @unique @db.VarChar(64)
+  principalType       String    @db.VarChar(16)
+  principalId         String
+  organizationId      String?
+  mobileSessionId     String
+  destination         String    @db.VarChar(256)
+  expiresAt           DateTime  @db.Timestamptz(3)
+  consumedAt          DateTime? @db.Timestamptz(3)
+  revokedAt           DateTime? @db.Timestamptz(3)
+  createdAt           DateTime  @default(now()) @db.Timestamptz(3)
+
+  @@index([principalType, principalId, createdAt])
+  @@index([mobileSessionId, consumedAt])
+  @@index([expiresAt])
+}

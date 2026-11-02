@@ -1,12 +1,14 @@
-// CI-only, zero-credential smoke checks against the isolated Android PR #41 Preview.
+// CI-only, zero-credential smoke checks against an explicitly configured isolated Preview.
 // Never test the Production URL here, and never log personal/financial data.
 import assert from 'node:assert/strict';
 
-const expectedHost = 'clearsys-git-android-parity-integration-kentbsece-7567.vercel.app';
-const base = new URL(process.env.CLEAR_ANDROID_PREVIEW_ORIGIN || 'https://' + expectedHost);
+const configuredOrigin = process.env.CLEAR_ANDROID_PREVIEW_ORIGIN;
+assert.ok(configuredOrigin, 'Set CLEAR_ANDROID_PREVIEW_ORIGIN to an active isolated Vercel Preview deployment');
+const base = new URL(configuredOrigin);
 assert.equal(base.protocol, 'https:', 'Only HTTPS Preview is allowed');
-assert.equal(base.hostname, expectedHost, 'Refusing to probe Production or another host');
-assert.equal(base.pathname, '/', 'Expected deployment origin, not a path');
+assert.match(base.hostname, /^clearsys-[a-z0-9-]+\\.vercel\\.app$/, 'Expected a CLEAR Vercel Preview hostname');
+assert.notEqual(base.hostname, 'clearsys.vercel.app', 'Never probe Production');
+assert.ok(!base.username && !base.password && !base.search && !base.hash && base.pathname === '/', 'Expected clean deployment origin');
 
 async function probe(name, path, expected, validate) {
   const url = new URL(path, base);
@@ -40,7 +42,7 @@ async function probe(name, path, expected, validate) {
 await probe('Isolated Preview environment and global session schema', '/api/mobile/health', 200, (value) => {
   assert.equal(value?.status, 'ready');
   assert.equal(value?.deployment, 'preview');
-  assert.equal(value?.branch, 'android-parity-integration');
+  assert.ok(typeof value?.branch === 'string' && value.branch !== 'main', 'Expected a non-production Preview branch');
   assert.equal(value?.globalSessionSchema, 'ready');
 });
 const orgs = await probe('Public department directory', '/api/mobile/orgs', 200, (value) => {

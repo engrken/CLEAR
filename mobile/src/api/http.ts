@@ -2,8 +2,9 @@
 
 import { Platform } from 'react-native';
 
-import { API_URL, MOBILE_BUSINESS_WRITES_ENABLED, PAYMENT_WRITES_ENABLED, TENANT_OPERATIONS_ENABLED } from './config';
+import { API_URL, MOBILE_BUSINESS_WRITES_ENABLED, PAYMENT_WRITES_ENABLED, REMITTANCE_WRITES_ENABLED, STUDENT_ROSTER_WRITES_ENABLED } from './config';
 import { fallbackMessage } from './errors';
+import { normalizeMobilePayment } from './financial-validation';
 import { ApiError, type ClearApi, type GlobalSession, type Session } from './types';
 
 let onUnauthorized: (() => void) | null = null;
@@ -17,7 +18,7 @@ type Options = { method?: string; token?: string | null; json?: unknown; form?: 
 
 async function request<T>(path: string, { method = 'GET', token, json, form, idempotencyKey, query }: Options = {}): Promise<T> {
   const qs = query
-    ? '?' + Object.entries(query).filter(([, v]) => v !== undefined && v !== '').map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&')
+    ? '?' + Object.entries(query).filter(([, v]) => v !== undefined && v !== '').map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`).join('&')
     : '';
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey;
@@ -142,14 +143,16 @@ export const httpApi: ClearApi = {
       // Local sign-out still clears the secure-store token while offline.
     }
   },
+  requestGlobalWebHandoff: (session) => request('/global/auth/web-handoff', { method: 'POST', token: session.token }),
   getGlobalOverview: (session) => request('/global/overview', { token: session.token }),
+  getGlobalManagementCapabilities: (session) => request('/global/write-capabilities', { token: session.token }),
+  getGlobalMaintenance: (session) => request('/global/maintenance', { token: session.token }),
+  changeGlobalMaintenance: (session, change) => request('/global/maintenance', { token: session.token, method: 'POST', json: change }),
   listManagedTenants: (session) => request('/global/provisions', { token: session.token }),
-  provisionTenant: (session, payload) => TENANT_OPERATIONS_ENABLED ?
-    request('/global/provisions', { token: session.token, method: 'POST', json: payload }) :
-    Promise.reject(new ApiError('Tenant provisioning is not enabled in this Android build. Open the secure web portal.', 'read_only')),
-  manageTenant: (session, payload) => TENANT_OPERATIONS_ENABLED ?
-    request('/global/provisions/manage', { token: session.token, method: 'POST', json: payload }) :
-    Promise.reject(new ApiError('Tenant changes are not enabled in this Android build. Open the secure web portal.', 'read_only')),
+  provisionTenant: (session, payload) =>
+    request('/global/provisions', { token: session.token, method: 'POST', json: payload }),
+  manageTenant: (session, payload) =>
+    request('/global/provisions/manage', { token: session.token, method: 'POST', json: payload }),
   getGlobalTenantDashboard: (s, slug) => request(`/global/orgs/${encodeURIComponent(slug)}/dashboard`, { token: s.token }),
   listGlobalTenantStudents: (s, slug, q) => request(`/global/orgs/${encodeURIComponent(slug)}/students`, { token: s.token, query: { q } }),
   listGlobalTenantLedger: (s, slug) => request(`/global/orgs/${encodeURIComponent(slug)}/ledger`, { token: s.token }),
@@ -158,18 +161,42 @@ export const httpApi: ClearApi = {
   }),
   listGlobalTenantRemittances: (s, slug) => request(`/global/orgs/${encodeURIComponent(slug)}/remittances`, { token: s.token }),
 
+  requestOfficerWebHandoff: (s) => request(`${org(s.org.subdomain)}/auth/web-handoff`, { method: 'POST', ...as(s) }),
+  getWriteCapabilities: (s) => request(`${org(s.org.subdomain)}/write-capabilities`, as(s)),
   getOfficerOnboarding: (s) => request(`${org(s.org.subdomain)}/onboarding`, as(s)),
   completeOfficerOnboarding: (s) => request(`${org(s.org.subdomain)}/onboarding`, { method: 'POST', ...as(s) }),
   pulseOfficerPresence: (s, page, tabId) => request(`${org(s.org.subdomain)}/presence`, { method: 'POST', ...as(s), json: { page, tabId } }),
   leaveOfficerPresence: (s, tabId) => request(`${org(s.org.subdomain)}/presence`, { method: 'DELETE', ...as(s), json: { tabId } }),
   getTenantPortal: (s) => request(`${org(s.org.subdomain)}/portal`, as(s)),
+  getAcademicCalendar: (s) => request(`${org(s.org.subdomain)}/academic-calendar`, as(s)),
+  getSetupReview: (s) => request(`${org(s.org.subdomain)}/setup-review`,as(s)),
+  getFinanceSnapshot: (s) => request(`${org(s.org.subdomain)}/reports`, as(s)),
+  getReportSignatories: (s) => request(`${org(s.org.subdomain)}/report-signatories`,as(s)),
+  saveReportSignatories: (s,input) => request(`${org(s.org.subdomain)}/report-signatories`,{...as(s),method:'POST',json:input}),
+  getRealignmentReview: (s,cursor) => request(`${org(s.org.subdomain)}/realign-review`,{...as(s),query:{cursor,limit:25}}),
+  updateAcademicCalendar: (s, change) => request(`${org(s.org.subdomain)}/academic-calendar`, { ...as(s), method: 'POST', json: change }),
+  listCollectibles: (s, cursor) => request(`${org(s.org.subdomain)}/collectibles`, {
+    ...as(s), query: { cursor, limit: 30 },
+  }),
+  listTenantUsers: (s, search, cursor) => request(`${org(s.org.subdomain)}/users`, {
+    ...as(s), query: { q: search, cursor },
+  }),
+  updateTenantUserStatus: (s, input) => request(`${org(s.org.subdomain)}/users`, {
+    ...as(s), method: 'POST', json: input,
+  }),
+  manageTenantUser: (s, input) => request(`${org(s.org.subdomain)}/users/manage`, {
+    ...as(s), method: 'POST', json: input,
+  }),
   getDashboard: (s) => request(`${org(s.org.subdomain)}/dashboard`, as(s)),
   listLedger: (s, f) => request(`${org(s.org.subdomain)}/ledger`, { ...as(s), query: { status: f?.status, limit: f?.limit } }),
-  getFinanceReview: (s, kind, limit = 20) => request(`${org(s.org.subdomain)}/finance-review`, {
-    ...as(s), query: { kind, limit },
+  getFinanceReview: (s, kind, limit = 20, cursor) => request(`${org(s.org.subdomain)}/finance-review`, {
+    ...as(s), query: { kind, limit, cursor },
   }),
-  listLedgerPage: (s, cursor) => request(`${org(s.org.subdomain)}/ledger/page`, {
-    ...as(s), query: { scope: 'active', limit: 50, cursor },
+  listLedgerPage: (s, cursor, scope = 'active') => request(`${org(s.org.subdomain)}/ledger/page`, {
+    ...as(s), query: { scope, limit: 50, cursor },
+  }),
+  listVoidAudit: (s, cursor) => request(`${org(s.org.subdomain)}/void-audit`, {
+    ...as(s), query: { limit: 30, cursor },
   }),
   searchReceiptReferences: (s, q) => request(`${org(s.org.subdomain)}/reference-search`, {
     ...as(s), query: { kind: 'receipts', q: q.trim() },
@@ -181,10 +208,22 @@ export const httpApi: ClearApi = {
   listStudents: (s, q, missingEmailOnly) => request(`${org(s.org.subdomain)}/students`, {
     ...as(s), query: { q, ...(missingEmailOnly ? { email: 'missing' } : {}) },
   }),
-  recordPayment: (s, p) => PAYMENT_WRITES_ENABLED ? request(`${org(s.org.subdomain)}/payments`, { method: 'POST', ...as(s), idempotencyKey: p.idempotencyKey, json: { studentId: p.studentId, feeId: p.feeId, amountCentavos: p.amountCentavos, orNumber: p.orNumber.trim() } }) : Promise.reject(new ApiError('Payment posting is disabled until Android financial parity is verified.', 'unavailable')),
+  updateStudentRoster: (s, change) => STUDENT_ROSTER_WRITES_ENABLED ?
+    request(`${org(s.org.subdomain)}/students/manage`, { method: 'POST', ...as(s), json: change }) :
+    Promise.reject(new ApiError('Student roster editing is not enabled for this Android build.', 'read_only')),
+  recordPayment: (s, p) => {
+    if (!PAYMENT_WRITES_ENABLED) return Promise.reject(new ApiError('Payment posting is disabled until Android financial parity is verified.', 'unavailable'));
+    // Validation is local defense-in-depth. The canonical server must independently
+    // enforce authorization, receipt uniqueness, idempotency and atomic posting.
+    let payment;
+    try { payment = normalizeMobilePayment(p); }
+    catch { return Promise.reject(new ApiError('A valid integer-centavo amount, student, fee and retry key are required.', 'invalid')); }
+    return request(`${org(s.org.subdomain)}/payments`, { method: 'POST', ...as(s), idempotencyKey: payment.idempotencyKey,
+      json: { studentId: payment.studentId, feeId: payment.feeId, amountCentavos: payment.amountCentavos } });
+  },
   getRemittance: (s, id) => request(`${org(s.org.subdomain)}/remittances/${encodeURIComponent(id)}`, as(s)),
-  verifyRemittance: (s, id, p) => PAYMENT_WRITES_ENABLED ?
+  verifyRemittance: (s, id, p) => REMITTANCE_WRITES_ENABLED ?
     request(`${org(s.org.subdomain)}/remittances/${encodeURIComponent(id)}/verify`, { method: 'POST', ...as(s), json: { ...p, orNumber: p.orNumber.trim() } }) : Promise.reject(new ApiError('Remittance verification is disabled until Android financial parity is verified.', 'unavailable')),
-  invalidateRemittance: (s, id) => PAYMENT_WRITES_ENABLED ?
+  invalidateRemittance: (s, id) => REMITTANCE_WRITES_ENABLED ?
     request(`${org(s.org.subdomain)}/remittances/${encodeURIComponent(id)}/invalidate`, { method: 'POST', ...as(s) }) : Promise.reject(new ApiError('Remittance invalidation is disabled until Android financial parity is verified.', 'unavailable')),
 };

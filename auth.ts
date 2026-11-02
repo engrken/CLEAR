@@ -1,6 +1,7 @@
 // /auth.ts
 
 import NextAuth, { CredentialsSignin } from "next-auth";
+import { redeemWebHandoff } from "@/lib/mobile/web-handoff-redeem";
 import Credentials from "next-auth/providers/credentials";
 import { isReservedGlobalAdminEmail } from "@/lib/super-admin";
 import { verifySuperAdminOtp } from "@/lib/super-admin-otp";
@@ -28,6 +29,16 @@ export const {
   signOut,
 } = NextAuth({
   providers: [
+    Credentials({
+      id: 'mobile-handoff',
+      name: 'Verified Mobile Handoff',
+      credentials: { ticket: { label: 'One-time ticket', type: 'text' } },
+      async authorize(credentials) {
+        const ticket = typeof credentials?.ticket === 'string' ? credentials.ticket : '';
+        if (!/^[A-Za-z0-9_-]{43}$/.test(ticket)) return null;
+        return redeemWebHandoff(ticket);
+      },
+    }),
     Credentials({
       name: "OTP Verification",
 

@@ -1,10 +1,11 @@
+import { api } from '@/api';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { Banner, Button, Card, Icon, Screen, Text } from '@/components/ui';
 import { DataPrivacyNotice } from '@/components/privacy/DataPrivacyNotice';
-import { ACCOUNT_DELETION_URL, PRIVACY_URL, openWebPage, openDepartmentModule } from '@/lib/links';
+import { ACCOUNT_DELETION_URL, PRIVACY_URL, openWebPage, openDepartmentModule, switchToDepartmentWebPortal, openVerifiedWebHandoff } from '@/lib/links';
 import { grantedModules, type MobileAvailability } from '@/lib/module-access';
 import { useOfficerSession, useSession } from '@/lib/session';
 import { TAB_BAR_SPACE } from '@/lib/tab-bar';
@@ -61,10 +62,17 @@ export default function More() {
     if (tab === 'tab-overview') return { text: 'Open overview', open: () => router.push('/home') };
     if (tab === 'tab-students') return { text: 'Open student roster', open: () => router.push('/students') };
     if (tab === 'tab-clearance') return {
-      text: 'Open clearance lookup',
-      open: () => router.push({ pathname: '/d/[dept]/clearance', params: { dept: session.org.subdomain } }),
+      text: 'Review student clearance',
+      open: () => router.push('/clearance-admin'),
     };
     if (tab === 'tab-remittances') return { text: 'Review payment proofs', open: () => router.push('/verify') };
+    if (tab === 'tab-void') return { text: 'Browse Void audit', open: () => router.push('/void-audit') };
+    if (tab === 'tab-collectibles') return { text: 'Review collectibles', open: () => router.push('/collectibles') };
+    if (tab === 'tab-reports') return { text: 'Review recorded activity', open: () => router.push('/reports') };
+    if (tab === 'tab-report') return { text: 'Manage report presentation', open: () => router.push('/report-presentation') };
+    if (tab === 'tab-transfer') return { text: 'Review fund transfers', open: () => router.push('/realign-review') };
+    if (tab === 'tab-setup') return { text: 'Department setup', open: () => router.push('/setup-review') };
+    if (tab === 'tab-users' && isTenantAdmin) return { text: 'Manage officers', open: () => router.push('/users') };
     const financeKinds: Record<string, string> = {
       'tab-penalties': 'penalties',
       'tab-advances': 'advances',
@@ -165,7 +173,7 @@ export default function More() {
         </View>
 
         <Banner tone="info" title="Your permissions stay protected">
-          Only your server-assigned modules appear. Audited transactions are accessible through a fresh web login; native financial posting remains blocked until its separate safety checks pass.
+          All web permission modules are listed here. Cash-sensitive actions remain on the audited web application; other native write controls require their matching server authorization.
         </Banner>
 
         {groups.map(group => (
@@ -181,6 +189,12 @@ export default function More() {
         ) : null}
 
         <Text variant="headline" accessibilityRole="header">Account & help</Text>
+        <Button block variant="secondary" icon="forward" onPress={() => void api.requestOfficerWebHandoff(session).then(({ url }) => openVerifiedWebHandoff(url)).catch(() => switchToDepartmentWebPortal(session.org.subdomain))}>
+          Switch to Web Portal
+        </Button>
+        <Text variant="caption" color="inkMuted">
+          Opens your tenant portal in a browser. Secure automatic sign-in is attempted when enabled; otherwise the browser opens the standard web sign-in.
+        </Text>
         <Button block variant="secondary" icon="people" onPress={() => router.push('/officer/profile')}>
           My profile · Edit email
         </Button>

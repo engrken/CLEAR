@@ -13,6 +13,20 @@ type MobileEnvironment = {
   gitRef?: string | null;
   /** Explicit Production opt-in, configured server-side only after authorization QA. */
   tenantOperationsEnabled?: boolean;
+  /** Isolated, independent roster editing authorization. */
+  rosterWritesEnabled?: boolean;
+  /** Independent opt-in: role-scoped non-financial officer status changes only. */
+  tenantUserWritesEnabled?: boolean;
+  /** Separate, independently authorized officer create/edit and role grant. */
+  tenantUserManageWritesEnabled?: boolean;
+  /** Calendar-only, noncash tenant configuration grant. */
+  academicSettingsWritesEnabled?: boolean;
+  /** Global maintenance windows require a separate Recovery Administrator opt-in. */
+  globalMaintenanceWritesEnabled?: boolean;
+  /** Noncash report presentation/signatory metadata. */
+  reportSignatoryWritesEnabled?: boolean;
+  /** Never permit an unverified Vercel Preview environment to mutate real rosters. */
+  localRosterCiOnly?: boolean;
 };
 
 const GLOBAL_OTP = /^\/api\/mobile\/global\/auth\/(?:request-code|verify-code)$/;
@@ -25,8 +39,20 @@ const OFFICER_PROFILE_EMAIL = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[
 const STUDENT_EMAIL_CHANGE = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/clearance\/email-change\/(?:request-new|confirm)$/;
 // Session-only collaboration metadata. Does not authorize a business mutation.
 const OFFICER_COLLABORATION = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/(?:presence|onboarding)$/;
+const OFFICER_WEB_HANDOFF = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/auth\/web-handoff$/;
+const GLOBAL_WEB_HANDOFF = '/api/mobile/global/auth/web-handoff';
 const GLOBAL_LOGOUT = '/api/mobile/global/auth/session';
+const GLOBAL_MAINTENANCE = '/api/mobile/global/maintenance';
 const OFFICER_LOGOUT = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/auth\/session$/;
+
+// This only admits a route to its own authorization and accounting handler.
+// It never grants the mobile user permission to post a transaction.
+const TENANT_USERS_MANAGE_POST = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/users\/manage$/;
+const REPORT_SIGNATORIES_POST = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/report-signatories$/;
+const ACADEMIC_CALENDAR_POST = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/academic-calendar$/;
+const TENANT_USERS_STATUS_POST = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/users$/;
+const STUDENT_ROSTER_POST = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/students\/manage$/;
+const FINANCIAL_POSTS = /^\/api\/mobile\/orgs\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/payments$/;
 
 const PREVIEW_BUSINESS_POSTS = new Set([
   '/api/mobile/global/provisions',
@@ -42,6 +68,10 @@ export function isMobileRequestAllowed(
   const path = String(pathname || '').replace(/\/+$/, '');
 
   if (verb === 'GET' || verb === 'HEAD' || verb === 'OPTIONS') return true;
+
+  // Ticket issuance is an authenticated identity operation, never a business write.
+  // Endpoint itself also checks the independent production-only feature flag.
+  if (verb === 'POST' && (OFFICER_WEB_HANDOFF.test(path) || path === GLOBAL_WEB_HANDOFF)) return true;
 
   // Login and logout are identity/session operations, not business transactions.
   if (verb === 'POST' && (GLOBAL_OTP.test(path) || OFFICER_OTP.test(path) || STUDENT_OTP.test(path))) return true;
@@ -59,6 +89,24 @@ export function isMobileRequestAllowed(
     PREVIEW_BUSINESS_POSTS.has(path)
   ) return true;
 
+  // v1.5.0 policy: mobile cash posting is web-only in EVERY environment.
+  // Environment variables, CI fixtures or future broad operational flags
+  // must never enable this endpoint. Keep the explicit deny before opt-ins.
+  if (verb === 'POST' && FINANCIAL_POSTS.test(path)) return false;
+
+  if (verb === 'POST' && STUDENT_ROSTER_POST.test(path) &&
+      canRunMobileRosterWrites(env)) return true;
+  if (verb === 'POST' && TENANT_USERS_STATUS_POST.test(path) &&
+      canRunMobileTenantUserWrites(env)) return true;
+  if (verb === 'POST' && TENANT_USERS_MANAGE_POST.test(path) &&
+      canRunMobileTenantUserManageWrites(env)) return true;
+  if (verb === 'POST' && ACADEMIC_CALENDAR_POST.test(path) &&
+      canRunMobileAcademicSettingsWrites(env)) return true;
+  if (verb === 'POST' && REPORT_SIGNATORIES_POST.test(path) &&
+      canRunMobileReportSignatoryWrites(env)) return true;
+  if (verb === 'POST' && path === GLOBAL_MAINTENANCE &&
+      canRunMobileGlobalMaintenanceWrites(env)) return true;
+
   // Production operational rollout is opt-in per capability, NOT a broad
   // "write enabled" switch. Only two existing audited tenant-management routes
   // qualify; authorization, confirmation and transaction validation still run
@@ -71,7 +119,94 @@ export function isMobileRequestAllowed(
     PREVIEW_BUSINESS_POSTS.has(path)
   ) return true;
 
-  // Financial posting, remittance approval, proof uploads, other tenant mutations,
+  // Unapproved financial posting, remittance approval, proof uploads, other tenant mutations,
   // future mutation endpoints and unrecognized methods are denied by default.
   return false;
+}
+
+/** No roster operations on arbitrary previews or with a client-only flag. */
+export function canRunMobileRosterWrites(env: MobileEnvironment): boolean {
+  return env.rosterWritesEnabled === true && (
+    (env.vercelEnv === 'production' && env.gitRef === 'main') ||
+    (env.vercelEnv === 'preview' &&
+      env.gitRef === 'feature/android-v1.5.0-write-foundation-20261101' &&
+      env.localRosterCiOnly === true)
+  );
+}
+
+/** One server-side source for both write-capability advertising and routing. */
+export function mobileRosterWriteEnvironment(): MobileEnvironment {
+  return {
+    vercelEnv: process.env.VERCEL_ENV,
+    gitRef: process.env.VERCEL_GIT_COMMIT_REF,
+    rosterWritesEnabled: process.env.MOBILE_STUDENT_ROSTER_WRITES_ENABLED === 'true',
+    localRosterCiOnly: process.env.CI === 'true' &&
+      process.env.CLEAR_CI_FINANCE_TEST_ENABLED === '1' &&
+      process.env.AUTH_URL === 'http://127.0.0.1:3100' &&
+      process.env.DATABASE_URL ===
+        'postgresql://clear_ci:clear_ci@127.0.0.1:5432/clear_ci?schema=public',
+  };
+}
+
+/** Same explicit deployment/CI isolation policy as roster edits, never a financial permission. */
+export function canRunMobileTenantUserWrites(env: MobileEnvironment): boolean {
+  return env.tenantUserWritesEnabled === true && (
+    (env.vercelEnv === 'production' && env.gitRef === 'main') ||
+    (env.vercelEnv === 'preview' &&
+      env.gitRef === 'feature/android-v1.5.0-write-foundation-20261101' &&
+      env.localRosterCiOnly === true)
+  );
+}
+export function mobileTenantUserWriteEnvironment(): MobileEnvironment {
+  return { ...mobileRosterWriteEnvironment(),
+    tenantUserWritesEnabled: process.env.MOBILE_TENANT_USER_WRITES_ENABLED === 'true',
+    tenantUserManageWritesEnabled: process.env.MOBILE_TENANT_USER_MANAGE_WRITES_ENABLED === 'true',
+    academicSettingsWritesEnabled: process.env.MOBILE_ACADEMIC_SETTINGS_WRITES_ENABLED === 'true',
+    globalMaintenanceWritesEnabled: process.env.MOBILE_GLOBAL_MAINTENANCE_WRITES_ENABLED === 'true',
+    reportSignatoryWritesEnabled: process.env.MOBILE_REPORT_SIGNATORY_WRITES_ENABLED === 'true' };
+}
+
+/** Native officer creation/role edits are a separately reviewed non-cash rollout. */
+export function canRunMobileTenantUserManageWrites(env: MobileEnvironment): boolean {
+  return env.tenantUserManageWritesEnabled === true &&
+    canRunMobileTenantUserWrites(env);
+}
+
+/** Separate calendar configuration feature flag, never a cash write grant. */
+export function canRunMobileAcademicSettingsWrites(env: MobileEnvironment): boolean {
+  return env.academicSettingsWritesEnabled === true && (
+    (env.vercelEnv === 'production' && env.gitRef === 'main') ||
+    (env.vercelEnv === 'preview' &&
+      env.gitRef === 'feature/android-v1.5.0-write-foundation-20261101' &&
+      env.localRosterCiOnly === true)
+  );
+}
+
+/** A dedicated global-admin recovery exception; never unlock arbitrary writes. */
+export function canRunMobileGlobalMaintenanceWrites(env: MobileEnvironment): boolean {
+  return env.globalMaintenanceWritesEnabled === true && (
+    (env.vercelEnv === 'production' && env.gitRef === 'main') ||
+    (env.vercelEnv === 'preview' &&
+      env.gitRef === 'feature/android-v1.5.0-write-foundation-20261101' &&
+      env.localRosterCiOnly === true)
+  );
+}
+
+/** Exact action-scoped report presentation metadata; no financial changes. */
+export function canRunMobileReportSignatoryWrites(env: MobileEnvironment): boolean {
+  return env.reportSignatoryWritesEnabled === true && (
+    (env.vercelEnv === 'production' && env.gitRef === 'main') ||
+    (env.vercelEnv === 'preview' &&
+      env.gitRef === 'feature/android-v1.5.0-write-foundation-20261101' &&
+      env.localRosterCiOnly === true)
+  );
+}
+
+/** Read-only server capability signal; the underlying provisioning handlers
+ * retain independent global-mobile session, confirmation and web-core checks. */
+export function canRunMobileGlobalTenantOperations(env: MobileEnvironment): boolean {
+  return (
+    (env.vercelEnv === 'production' && env.gitRef === 'main' && env.tenantOperationsEnabled === true) ||
+    (env.vercelEnv === 'preview' && env.gitRef === 'android-parity-integration')
+  );
 }

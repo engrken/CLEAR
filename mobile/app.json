@@ -3,7 +3,7 @@
     "name": "CLEAR",
     "slug": "clear-mobile",
     "owner": "rupert2133s-team",
-    "version": "1.3.0",
+    "version": "1.5.0",
     "runtimeVersion": {
       "policy": "appVersion"
     },
@@ -36,7 +36,7 @@
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "com.google.android.gms.permission.AD_ID"
       ],
-      "versionCode": 15
+      "versionCode": 16
     },
     "web": {
       "output": "static"

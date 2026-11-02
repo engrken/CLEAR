@@ -67,9 +67,9 @@ test('mobile route guards are server enforced on the appropriate tab', () => {
 test('no Android role can enable financial writes by its permissions alone', () => {
   assert.match(source('mobile/src/api/config.ts'), /PAYMENT_WRITES_ENABLED\s*=\s*false/);
   const http = source('mobile/src/api/http.ts');
-  assert.match(http, /recordPayment: \(s, p\) => PAYMENT_WRITES_ENABLED/);
-  assert.match(http, /verifyRemittance: \(s, id, p\) => PAYMENT_WRITES_ENABLED/);
-  assert.match(http, /invalidateRemittance: \(s, id\) => PAYMENT_WRITES_ENABLED/);
+  assert.match(http, /recordPayment: \(s, p\) => \{\s*if \(!PAYMENT_WRITES_ENABLED\)/);
+  assert.match(http, /verifyRemittance: \(s, id, p\) => REMITTANCE_WRITES_ENABLED/);
+  assert.match(http, /invalidateRemittance: \(s, id\) => REMITTANCE_WRITES_ENABLED/);
 });
 
 test('JIECEP officer path explicitly offers the separate global OTP sign-in', () => {

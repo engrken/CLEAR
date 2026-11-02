@@ -46,3 +46,22 @@ export function openDepartmentModule(slug: string, route: string) {
 export function openGlobalAdministrationPortal() {
   return openWebPage(`${CLEAR_WEB_APP}/dashboard/provisions`);
 }
+/** The existing audited global maintenance scheduling/recovery console. */
+export function openGlobalMaintenancePortal() {
+  return openWebPage(`${CLEAR_WEB_APP}/dashboard/provisions/maintenance`);
+}
+
+/** First-party browser portal fallback while single-use SSO remains disabled. */
+export async function switchToDepartmentWebPortal(slug: string) {
+  return openDepartmentWebPortal(slug);
+}
+
+export async function switchToGlobalWebPortal() {
+  return openGlobalAdministrationPortal();
+}
+
+/** Authenticated handoff: only server-issued URLs validated against fixed origin. */
+export async function openVerifiedWebHandoff(url: unknown) {
+  const { validateWebHandoffUrl } = await import('./web-handoff');
+  return openWebPage(validateWebHandoffUrl(url));
+}

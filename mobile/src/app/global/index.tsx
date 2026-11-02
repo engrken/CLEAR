@@ -3,9 +3,8 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import { api } from '@/api';
-import { TENANT_OPERATIONS_ENABLED } from '@/api/config';
 import { Banner, Button, Card, Screen, SectionHeader, Text } from '@/components/ui';
-import { openGlobalAdministrationPortal } from '@/lib/links';
+import { switchToGlobalWebPortal, openVerifiedWebHandoff } from '@/lib/links';
 import { useGlobalSession, useSession } from '@/lib/session';
 import { useAsync } from '@/lib/use-async';
 import { spacing, useTheme } from '@/theme';
@@ -16,6 +15,7 @@ export default function GlobalDashboard() {
   const { signOut } = useSession();
   const { c } = useTheme();
   const overview = useAsync(() => api.getGlobalOverview(global), global.token);
+  const operations = useAsync(() => api.getGlobalManagementCapabilities(global), global.token + ':management-capabilities');
   const { reload } = overview;
   useFocusEffect(useCallback(() => { reload(); }, [reload]));
 
@@ -29,22 +29,27 @@ export default function GlobalDashboard() {
         <Text variant="bodySm" color="inkMuted">{global.admin.fullName} · {global.admin.email}</Text>
       </View>
 
-      <Banner tone="info" title="Global Superadmin · authorized operations">
+      <Banner tone="info" title="Global Administrator · authorized operations">
         Review every tenant in the mobile workspace. Approved tenant-management operations can be enabled separately; all other management modules remain available through your secure web sign-in.
       </Banner>
 
       <View style={{ gap: spacing[2] }}>
+        <Button block variant="secondary" onPress={() => router.push("/global/account")}>My Account & Security</Button>
         <Button block icon="shield" onPress={() => router.push('/global/provisions')}>
           Tenant management portal
         </Button>
-        {TENANT_OPERATIONS_ENABLED ? (
+        <Button block variant="secondary" icon="shield" onPress={() => router.push('/global/maintenance')}>
+          Maintenance & announcements
+        </Button>
+        {operations.data?.tenantOperationsEnabled ? (
           <Button block variant="secondary" icon="plus" onPress={() => router.push('/global/provisions/new')}>
             Provision new tenant
           </Button>
         ) : null}
-        <Button block variant="secondary" icon="shield" onPress={() => void openGlobalAdministrationPortal()}>
-          Open operational Global Admin portal (web)
+        <Button block variant="secondary" icon="shield" onPress={() => void api.requestGlobalWebHandoff(global).then(({ url }) => openVerifiedWebHandoff(url)).catch(() => switchToGlobalWebPortal())}>
+          Switch to Web Portal
         </Button>
+        <Text variant="caption" color="inkMuted">Secure automatic sign-in is attempted when enabled; otherwise the browser opens the standard web sign-in.</Text>
       </View>
 
       {overview.error ? (

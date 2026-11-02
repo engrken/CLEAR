@@ -10,6 +10,7 @@ on:
       - 'lib/**'
       - 'prisma/**'
       - 'tests/ci-financial-*'
+      - 'tests/ci-mobile-payment-*'
       - '.github/workflows/financial-actions-integration.yml'
 
 permissions:

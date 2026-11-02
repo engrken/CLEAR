@@ -41,7 +41,10 @@ test('financial review backend has a live role-specific authorization gate befor
   assert.match(route, /hasOwnProperty\.call\(PERMISSION, kind\)/);
   assert.match(route, /PAGE_LIMIT = 40/);
   assert.match(route, /take = limit \+ 1/);
-  assert.match(route, /hasMore: rows\.length > limit/g);
+  assert.match(route, /hasMore: paged\.hasMore/g);
+  assert.match(route, /nextCursor: paged\.nextCursor/g);
+  assert.match(route, /parseCursor\(query\.get\('cursor'\), org\.id, org\.activeAy, org\.activeTerm, mode\)/);
+  assert.match(route, /where: pageWhere\('timestamp'\)/);
   assert.match(route, /toCentavos\(/);
   assert.match(route, /NOT one row per official receipt/);
   assert.match(route, /Original approved advance \(not current outstanding\)/);
@@ -65,16 +68,17 @@ test('native financial records screen blocks ungranted modes and never submits f
     assert.ok(layout.includes("can('" + tab + "')"), tab);
   }
   assert.match(screen, /const allowed = MODES\.filter\(m => can\(m\.tab\)\)/);
-  assert.match(screen, /authorized && mode \? api\.getFinanceReview\(/);
-  assert.match(screen, /review\.loading \|\| dataBelongsElsewhere\(/);
-  assert.match(screen, /This is a bounded recent list, not complete financial history/);
+  assert.match(screen, /const review = useFinanceReviewPages\(/);
+  assert.match(screen, /review\.loading \|\| \(review\.data && review\.data\.kind !== mode\?\.kind\)/);
+  assert.match(screen, /loadMore\(\)/);
+  assert.match(screen, /Older records on web/);
   assert.match(screen, /Multiple rows can belong to one official receipt/);
   assert.match(screen, /no mobile token is passed/);
   assert.match(menu, /router\.push\(\{ pathname: '\/finance-review'/);
   assert.match(layout, /name="finance-review"/);
-  assert.match(http, /getFinanceReview: \(s, kind, limit = 20\) => request/);
+  assert.match(http, /getFinanceReview: \(s, kind, limit = 20, cursor\) => request/);
   assert.match(http, /finance-review/);
-  assert.match(type, /getFinanceReview\(s: Session, kind: FinanceReviewKind, limit\?: number\)/);
+  assert.match(type, /getFinanceReview\(s: Session, kind: FinanceReviewKind, limit\?: number, cursor\?: string\)/);
   assert.doesNotMatch(screen, /recordPayment\(|submitProof\(|verifyRemittance\(|invalidateRemittance\(|executeVoidTransaction\(/);
   assert.doesNotMatch(screen, /method:\s*'POST'/);
 });

@@ -3,6 +3,7 @@ import { AppState } from 'react-native';
 
 import { api, ApiError, setUnauthorizedHandler, type GlobalSession, type Session } from '@/api';
 import { deleteItem, getItem, setItem } from './secure-storage';
+import { disableBiometrics } from './biometrics';
 
 const OFFICER_KEY = 'clear.session.v1';
 const GLOBAL_KEY = 'clear.global-session.v1';
@@ -151,6 +152,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setGlobalSession(adminSession);
     },
     signOut: async () => {
+      await disableBiometrics();
       const officer = session;
       const admin = globalSession;
       await clear();

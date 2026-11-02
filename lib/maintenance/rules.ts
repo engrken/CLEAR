@@ -52,6 +52,7 @@ export function isRecoveryPath(path: string): boolean {
     path === '/api/maintenance/status' ||
     path === '/api/maintenance/notices' ||
     path === '/dashboard/provisions/maintenance' ||
+    path === '/api/mobile/global/maintenance' ||
     path.startsWith('/api/auth/') ||
     path.startsWith('/api/mobile/global/auth/');
 }

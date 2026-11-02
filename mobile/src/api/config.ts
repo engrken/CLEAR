@@ -4,6 +4,13 @@ const PROD_URL = 'https://clearsys.vercel.app/api/mobile';
 // Integration branch safety gate: payment writes must not be enabled until
 // the canonical web transaction service has been ported and verified.
 export const PAYMENT_WRITES_ENABLED = false;
+// Remittance decisions are separately authorized; enabling collection payments
+// must never unlock verification, invalidation or handwritten receipt controls.
+export const REMITTANCE_WRITES_ENABLED = false;
+// Student Roster editing is independent of any financial write feature.
+// UAT builds must explicitly opt in; the backend decides whether the actor is authorized.
+export const STUDENT_ROSTER_WRITES_ENABLED = process.env.EXPO_PUBLIC_CLEAR_STUDENT_ROSTER_WRITES === 'true' &&
+  process.env.EXPO_PUBLIC_CLEAR_RELEASE_KIND !== 'live-readonly-internal';
 // The read-only legacy build has no student proof or generic business writes.
 // Keep this fail-closed independently of role, APK environment and UI navigation.
 export const MOBILE_BUSINESS_WRITES_ENABLED = false;
@@ -26,11 +33,23 @@ if (releaseKind === 'live-readonly-internal') {
   if (__DEV__ || configuredMode === 'mock' || apiUrl !== PROD_URL) {
     throw new Error('CLEAR live viewer release must use the pinned Production HTTPS API.');
   }
-  if (PAYMENT_WRITES_ENABLED !== false || MOBILE_BUSINESS_WRITES_ENABLED !== false || TENANT_OPERATIONS_ENABLED !== false) {
+  if (PAYMENT_WRITES_ENABLED !== false || REMITTANCE_WRITES_ENABLED !== false || STUDENT_ROSTER_WRITES_ENABLED !== false || MOBILE_BUSINESS_WRITES_ENABLED !== false || TENANT_OPERATIONS_ENABLED !== false) {
     throw new Error('CLEAR live viewer may not enable business transactions.');
   }
 }
 
+
+// v1.5 APK and Play AAB use the same real Production API and role rules. The
+// Android flag only exposes roster controls; the web backend separately checks
+// the signed-in officer's Student permission and a server-side write rollout.
+if (releaseKind === 'v15-production-uat' || releaseKind === 'v15-production') {
+  if (__DEV__ || configuredMode === 'mock' || apiUrl !== PROD_URL ||
+      PAYMENT_WRITES_ENABLED !== false || REMITTANCE_WRITES_ENABLED !== false ||
+      MOBILE_BUSINESS_WRITES_ENABLED !== false || TENANT_OPERATIONS_ENABLED !== false ||
+      STUDENT_ROSTER_WRITES_ENABLED !== true) {
+    throw new Error('CLEAR v1.5 live build requires Production HTTPS, server-gated roster edits, and read-only finance.');
+  }
+}
 
 if (!__DEV__) {
   if (configuredMode === 'mock') {

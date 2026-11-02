@@ -26,6 +26,7 @@ concurrency:
 
 jobs:
   preview-api:
+    if: ${{ vars.CLEAR_ANDROID_PREVIEW_ORIGIN != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 6
     steps:
@@ -34,4 +35,6 @@ jobs:
         with:
           node-version: '22'
       - name: Check Preview reachability and anonymous auth boundaries
+        env:
+          CLEAR_ANDROID_PREVIEW_ORIGIN: ${{ vars.CLEAR_ANDROID_PREVIEW_ORIGIN }}
         run: node scripts/ci/mobile-preview-smoke.mjs

@@ -90,6 +90,31 @@ export default function OfficerTabs() {
       <Tabs.Protected guard={can('tab-penalties') || can('tab-advances') || can('tab-audit') || can('tab-payment')}>
         <Tabs.Screen name="finance-review" options={{ title: 'Finance review' }} />
       </Tabs.Protected>
+      <Tabs.Protected guard={can('tab-void')}>
+        <Tabs.Screen name="void-audit" options={{ title: 'Void audit' }} />
+      </Tabs.Protected>
+      <Tabs.Protected guard={can('tab-reports') || can('tab-report')}>
+        <Tabs.Screen name="reports" options={{ title: 'Reports' }} />
+      </Tabs.Protected>
+      <Tabs.Protected guard={can('tab-report')}>
+        <Tabs.Screen name="report-presentation" options={{ title: 'Report presentation' }} />
+      </Tabs.Protected>
+      <Tabs.Protected guard={can('tab-transfer')}>
+        <Tabs.Screen name="realign-review" options={{ title: 'Fund transfer history' }} />
+      </Tabs.Protected>
+      <Tabs.Protected guard={can('tab-clearance')}>
+        <Tabs.Screen name="clearance-admin" options={{ title: 'Clearance' }} />
+      </Tabs.Protected>
+      <Tabs.Protected guard={can('tab-collectibles')}>
+        <Tabs.Screen name="collectibles" options={{ title: 'Collectibles' }} />
+      </Tabs.Protected>
+      <Tabs.Protected guard={can('tab-users')}>
+        <Tabs.Screen name="users" options={{ title: 'Officers' }} />
+      </Tabs.Protected>
+      <Tabs.Protected guard={can('tab-setup')}>
+        <Tabs.Screen name="academic-calendar" options={{ title: 'Calendar' }} />
+        <Tabs.Screen name="setup-review" options={{ title: 'Setup' }} />
+      </Tabs.Protected>
       <Tabs.Screen name="more" options={{ title: 'Modules' }} />
     </Tabs>
   );

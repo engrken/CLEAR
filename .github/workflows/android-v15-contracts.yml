@@ -1,0 +1,70 @@
+name: Android v1.5 security contract checks
+
+on:
+  pull_request:
+    paths:
+      - 'lib/mobile/web-handoff-ticket.mjs'
+      - 'lib/mobile/session.ts'
+      - 'mobile/src/lib/web-handoff.ts'
+      - 'mobile/src/lib/write-permissions.ts'
+      - 'mobile/src/api/types.ts'
+      - 'mobile/src/api/http.ts'
+      - 'mobile/src/api/config.ts'
+      - 'mobile/src/app/global/account.tsx'
+      - 'mobile/src/app/global/index.tsx'
+      - 'mobile/src/app/officer/profile.tsx'
+      - 'mobile/src/app/_layout.tsx'
+      - 'mobile/src/app/(officer)/students.tsx'
+      - 'lib/mobile/student-roster-write.ts'
+      - 'app/api/mobile/orgs/**/students/**'
+      - 'tests/mobile-roster-write-contract.test.mjs'
+      - 'app/api/mobile/orgs/**/write-capabilities/route.ts'
+      - 'app/api/mobile/**/auth/web-handoff/route.ts'
+      - 'tests/mobile-v1.5-*.test.mjs'
+      - 'tests/financial-integrity-*.test.mjs'
+      - 'scripts/ci/run-clear-acceptance.mjs'
+      - 'scripts/ci/android-v15-release-gate.mjs'
+      - '.github/workflows/android-v15-contracts.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-v15-contracts-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify write permission and release safety contracts
+        run: node --experimental-strip-types --test tests/mobile-v1.5-write-permissions.test.mjs tests/mobile-v1.5-release-guards.test.mjs tests/mobile-v1.5-web-handoff.test.mjs tests/mobile-v1.5-release-gate.test.mjs
+
+      - name: Install regression test dependencies (isolated; no production secrets)
+        run: npm ci --no-audit --no-fund
+      - name: Lint new v1.5 API routes without allowing new web lint debt
+        run: |
+          npx eslint --max-warnings=0 \
+            'app/api/mobile/orgs/[org]/reports/route.ts' \
+            'app/api/mobile/orgs/[org]/realign-review/route.ts' \
+            'app/api/mobile/orgs/[org]/academic-calendar/route.ts' \
+            'app/api/mobile/orgs/[org]/report-signatories/route.ts' \
+            'app/api/mobile/orgs/[org]/users/manage/route.ts' \
+            'app/api/mobile/orgs/[org]/collectibles/route.ts' \
+            'app/api/mobile/global/maintenance/route.ts' \
+            'app/api/mobile/global/write-capabilities/route.ts'
+      - name: Check consolidated source regressions (no database access)
+        run: node scripts/ci/run-clear-acceptance.mjs
+      - name: Verify Expo TypeScript and lint (actionable failure logs)
+        run: |
+          cd mobile
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          npm ci --no-audit --no-fund
+          npm run typecheck
+          npm run lint

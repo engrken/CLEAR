@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import { api, type ApiError, type RemittanceDetail } from '@/api';
-import { PAYMENT_WRITES_ENABLED } from '@/api/config';
+import { REMITTANCE_WRITES_ENABLED } from '@/api/config';
 import {
   Avatar, BackHeader, Banner, Button, Icon, Money, Screen, StatusPill, SuccessScreen, Text, TextField, toneFor,
 } from '@/components/ui';
@@ -61,7 +61,7 @@ function Review({ id }: { id: string }) {
     setFormError(undefined);
     try {
       const r = await api.verifyRemittance(session, id, { orNumber });
-      setOutcome({ tone: 'success', title: 'Verified', body: `${r.orNumber} was emailed to the student.`, orNumber: r.orNumber });
+      setOutcome({ tone: 'success', title: 'Verified', body: `${r.orNumber} was queued for receipt delivery.`, orNumber: r.orNumber });
       findNext();
     } catch (err) {
       const e = err as ApiError;
@@ -108,7 +108,7 @@ function Review({ id }: { id: string }) {
         <SuccessScreen
           tone="cobalt"
           title={outcome.title}
-          body={`${l.title}’s ${formatPeso(amount)} for ${l.itemDescription} is recorded, and the official receipt was emailed to the student.`}
+          body={`${l.title}’s ${formatPeso(amount)} for ${l.itemDescription} is recorded, and the official receipt was queued for delivery.`}
           refLabel="OR issued"
           refValue={outcome.orNumber}
           actions={
@@ -149,7 +149,7 @@ function Review({ id }: { id: string }) {
       header={<BackHeader title={TITLE} />}
       contentStyle={{ gap: 12 }}
       footer={
-        reviewed || !PAYMENT_WRITES_ENABLED ? null : confirmInvalidate ? (
+        reviewed || !REMITTANCE_WRITES_ENABLED ? null : confirmInvalidate ? (
           <View style={{ gap: spacing[2] }}>
             <Text variant="bodySm" color="dangerInk">
               Invalidate {l.reference} for {l.title}? The student must resubmit.
@@ -170,7 +170,7 @@ function Review({ id }: { id: string }) {
           </View>
         )
       }>
-      {!PAYMENT_WRITES_ENABLED && !reviewed ? (
+      {!REMITTANCE_WRITES_ENABLED && !reviewed ? (
         <Banner tone="info" title="Review-only access">
           You can inspect this proof, but issuing an official receipt or invalidating a remittance is disabled until Android financial integrity has been verified.
         </Banner>
@@ -214,7 +214,7 @@ function Review({ id }: { id: string }) {
         </View>
       )}
 
-      {reviewed || !PAYMENT_WRITES_ENABLED ? null : (
+      {reviewed || !REMITTANCE_WRITES_ENABLED ? null : (
         <TextField
           label="OR number you’re issuing"
           value={orNumber}

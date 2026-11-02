@@ -40,10 +40,11 @@ async function createSession(org, allowedTabs, role = 'Officer') {
   });
   return { token, sessionId: session.id };
 }
-async function get(slug, kind, token, limit = 20) {
+async function get(slug, kind, token, limit = 20, cursor) {
   const url = new URL(base + '/api/mobile/orgs/' + slug + '/finance-review');
   url.searchParams.set('kind', kind);
   url.searchParams.set('limit', String(limit));
+  if (cursor) url.searchParams.set('cursor', cursor);
   const res = await fetch(url, {
     headers: token ? { authorization: 'Bearer ' + token } : {},
     signal: AbortSignal.timeout(15_000),
@@ -163,6 +164,23 @@ test('financial review GETs enforce tenant, module, sessions, period, integrity 
         assert.equal((await get(slug, otherKind, tokenInfo.token)).status, 403);
       }
     }
+    // Collections are paginated as individual allocations, not as OR totals.
+    const first = await get(slug, 'collections', tokens.collections.token, 1);
+    assert.equal(first.status, 200, JSON.stringify(first.body));
+    assert.equal(first.body.hasMore, true);
+    assert.equal(first.body.entries.length, 1);
+    assert.ok(typeof first.body.nextCursor === 'string');
+    const second = await get(slug, 'collections', tokens.collections.token, 1, first.body.nextCursor);
+    assert.equal(second.status, 200, JSON.stringify(second.body));
+    assert.equal(second.body.hasMore, false);
+    assert.equal(second.body.entries.length, 1);
+    assert.notEqual(first.body.entries[0].id, second.body.entries[0].id);
+    assert.deepEqual(
+      [first.body.entries[0].amountCentavos, second.body.entries[0].amountCentavos].sort((a,b) => a-b),
+      [2510, 10025],
+    );
+    assert.equal((await get(slug, 'penalties', tokens.penalties.token, 1, first.body.nextCursor)).status, 400);
+    assert.equal((await get(slug, 'collections', tokens.collections.token, 1, 'not-a-real-cursor')).status, 400);
     assert.deepEqual(await counts(), before, 'GET requests must not mutate finance records');
   } finally {
     await prisma.organization.delete({ where: { id: org.id } });

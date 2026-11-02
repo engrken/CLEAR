@@ -16,8 +16,8 @@ test('next Android release tracks distinct launcher and adaptive foreground with
     assert.equal(png.readUInt32BE(16), png.readUInt32BE(20));
     assert.ok(png.readUInt32BE(16) >= 128);
   }
-  assert.equal(config.version, '1.3.0');
-  assert.equal(config.android.versionCode, 15, 'candidate only: verify all Play tracks below 15');
+  assert.equal(config.version, '1.5.0');
+  assert.equal(config.android.versionCode, 16, 'candidate only: verify all Play tracks below 16');
 });
 
 test('Play release gates require approved full-resolution original artwork', () => {

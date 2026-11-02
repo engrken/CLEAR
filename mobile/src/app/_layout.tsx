@@ -7,9 +7,12 @@ import {
 import { DefaultTheme, Stack, ThemeProvider as NavThemeProvider, usePathname } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
+import { AppState, View, ActivityIndicator } from 'react-native';
+import { biometricEnabled, unlockWithBiometrics } from '@/lib/biometrics';
+import { Button, Text } from '@/components/ui';
 
-import { MOBILE_BUSINESS_WRITES_ENABLED, TENANT_OPERATIONS_ENABLED } from '@/api/config';
+import { MOBILE_BUSINESS_WRITES_ENABLED } from '@/api/config';
 import { DataPrivacyNotice } from '@/components/privacy/DataPrivacyNotice';
 import { ServiceAdvisory } from '@/components/maintenance/ServiceAdvisory';
 import { getItem, setItem } from '@/lib/secure-storage';
@@ -37,7 +40,54 @@ export default function RootLayout() {
 
 function Navigator() {
   const { c } = useTheme();
-  const { session, globalSession, restoring } = useSession();
+  const { session, globalSession, restoring, signOut } = useSession();
+  const [lock, setLock] = useState<{ key: string; status: 'checking' | 'locked' | 'open' }>({ key: '', status: 'checking' });
+  const identity = globalSession ? { kind: 'global' as const, id: globalSession.admin.id, token: globalSession.token } :
+    session ? { kind: 'officer' as const, id: session.officer.id, token: session.token } : null;
+  const key = identity ? identity.kind + ':' + identity.id + ':' + identity.token : '';
+  const foreground = useRef(AppState.currentState);
+  const lockEpoch = useRef(0);
+  // An OS biometric prompt may temporarily background the Activity. The screen
+  // is already hidden behind 'checking' while that prompt is in progress.
+  const biometricPromptActive = useRef(false);
+  useEffect(() => {
+    let live = true;
+    const epoch = ++lockEpoch.current;
+    if (restoring) return () => { live = false; };
+    if (!identity) return () => { live = false; };
+    void biometricEnabled(identity).then(e => { if (live && epoch === lockEpoch.current) setLock({ key, status: e ? 'locked' : 'open' }); })
+      .catch(() => { if (live && epoch === lockEpoch.current) setLock({ key, status: 'locked' }); });
+    return () => { live = false; };
+  }, [restoring, key]);
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', next => {
+      if (next !== 'active' && foreground.current === 'active' && identity && !biometricPromptActive.current) {
+        const epoch = ++lockEpoch.current;
+        // Deny access immediately; asynchronous preference reads must not leave a visible unlocked frame.
+        setLock({ key, status: 'locked' });
+        void biometricEnabled(identity).then(e => {
+          if (epoch === lockEpoch.current) setLock({ key, status: e ? 'locked' : 'open' });
+        }).catch(() => { if (epoch === lockEpoch.current) setLock({ key, status: 'locked' }); });
+      }
+      foreground.current = next;
+    });
+    return () => sub.remove();
+  }, [key]);
+  const unlock = async () => {
+    if (!identity || biometricPromptActive.current) return;
+    const epoch = ++lockEpoch.current;
+    biometricPromptActive.current = true;
+    setLock({ key, status: 'checking' });
+    try {
+      const verified = await unlockWithBiometrics(identity).catch(() => false);
+      if (epoch === lockEpoch.current) {
+        // Do not display session data unless the app is actually in foreground.
+        setLock({ key, status: verified && AppState.currentState === 'active' ? 'open' : 'locked' });
+      }
+    } finally {
+      biometricPromptActive.current = false;
+    }
+  };
   const pathname = usePathname();
   const routeTenant = /^\/(?:d|global\/tenant)\/([a-z0-9-]+)/.exec(pathname)?.[1] || null;
   const advisoryTenant = routeTenant || session?.org.subdomain || null;
@@ -70,6 +120,13 @@ function Navigator() {
     colors: { ...DefaultTheme.colors, background: c.canvas, card: c.canvas, text: c.ink, border: c.border, primary: c.accent },
   };
   if (restoring || !privacyReady) return null;
+  const effectiveLock = lock.key === key ? lock.status : 'checking';
+  if (identity && effectiveLock !== 'open') return <View style={{ flex: 1, justifyContent: 'center', padding: 28, gap: 20 }}>
+    <Text variant="headline">CLEAR security lock</Text>
+    <Text variant="bodySm">Use your enrolled fingerprint or face to unlock; follow the OS prompt if it offers a device passcode. Otherwise sign out and use OTP. Server permissions remain enforced.</Text>
+    {effectiveLock === 'checking' ? <ActivityIndicator /> : <Button block onPress={() => void unlock()}>Unlock with biometrics</Button>}
+    <Button block variant="secondary" onPress={() => void signOut()}>Sign out and use OTP</Button>
+  </View>;
 
   return (
     <NavThemeProvider value={navTheme}>
@@ -110,11 +167,11 @@ function Navigator() {
 
         <Stack.Protected guard={!!globalSession && !session} redirectTo="/">
           <Stack.Screen name="global/index" />
+          <Stack.Screen name="global/account" />
+          <Stack.Screen name="global/maintenance" />
           <Stack.Screen name="global/tenant/[org]" />
           <Stack.Screen name="global/provisions/index" />
-          <Stack.Protected guard={TENANT_OPERATIONS_ENABLED} redirectTo="/global/provisions">
-            <Stack.Screen name="global/provisions/new" />
-          </Stack.Protected>
+          <Stack.Screen name="global/provisions/new" />
           <Stack.Screen name="global/provisions/[id]" />
         </Stack.Protected>
       </Stack>

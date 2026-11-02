@@ -3,9 +3,20 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const read = (path) => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
+const cashierCore = () => read('lib/financial/authorized-payment.ts');
+
+
+test('web cashier retains authorization before delegating to shared posting core', () => {
+  const webAction = read('app/department/[department]/(protected)/collections/actions.ts');
+  assert.match(webAction, /await requireTabAccess\("tab-payment", cleanDepartment\)/);
+  assert.match(webAction, /return postAuthorizedPayment\(cleanDepartment, data, officer\)/);
+  const mobileRoute = read('app/api/mobile/orgs/[org]/payments/route.ts');
+  assert.match(mobileRoute, /requireMobileOfficer\(req, slug, 'tab-payment'\)/);
+  assert.match(mobileRoute, /postAuthorizedPayment\(org\.subdomain/);
+});
 
 test('both posting paths allocate receipts on the server', () => {
-  for (const path of ['app/department/[department]/(protected)/collections/actions.ts', 'app/department/[department]/(protected)/remittances/actions.ts']) {
+  for (const path of ['lib/financial/authorized-payment.ts', 'app/department/[department]/(protected)/remittances/actions.ts']) {
     const source = read(path);
     assert.ok(source.includes('await allocateOfficialReceiptNumber(tx, org.id)'), path);
   }
@@ -46,14 +57,14 @@ test('online remittance approval is atomic and rejects a second reviewer', () =>
 });
 
 test('collection posting keeps ledger and receipt writes in the same transaction', () => {
-  const source = read('app/department/[department]/(protected)/collections/actions.ts');
+  const source = cashierCore();
   assert.ok(source.includes('withFinancialTransaction(async (tx) => {'));
   assert.ok(source.includes('await tx.collection.create('));
   assert.ok(source.includes('await enqueuePaymentReceipt(tx,'));
 });
 
 test('cashier payment requests are durable and safe to retry', () => {
-  const action = read('app/department/[department]/(protected)/collections/actions.ts');
+  const action = cashierCore();
   const form = read('app/department/[department]/(protected)/collections/CollectionsForm.tsx');
   const schema = read('prisma/schema.prisma');
   assert.ok(schema.includes('model PaymentRequest {'));
@@ -66,13 +77,13 @@ test('cashier payment requests are durable and safe to retry', () => {
   assert.ok(form.includes('crypto.randomUUID()'));
 });
 test('fee names cannot be ambiguous across categories in cashier history', () => {
-  const action = read('app/department/[department]/(protected)/collections/actions.ts');
+  const action = cashierCore();
   assert.ok(action.includes('const categoriesByName = new Map<string, Set<string>>()'));
   assert.ok(action.includes('Reconcile the historical receipt before posting'));
 });
 
 test('cashier refuses forged fees without a unique configured assessment', () => {
-  const action = read('app/department/[department]/(protected)/collections/actions.ts');
+  const action = cashierCore();
   assert.ok(action.includes('const matchingSetups = await tx.collectionSetup.findMany('));
   assert.ok(action.includes('matchingSetups.length !== 1'));
   assert.ok(action.includes('const rateCents = toCents(setup.amount)'));
@@ -80,7 +91,7 @@ test('cashier refuses forged fees without a unique configured assessment', () =>
 });
 
 test('server payments validate real configured funds', () => {
-  const cashier = read('app/department/[department]/(protected)/collections/actions.ts');
+  const cashier = cashierCore();
   const remittances = read('app/department/[department]/(protected)/remittances/actions.ts');
   assert.ok(cashier.includes('configuredFunds = await tx.fund.findMany('));
   assert.ok(remittances.includes('configuredFunds = await tx.fund.findMany('));

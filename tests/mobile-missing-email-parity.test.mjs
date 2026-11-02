@@ -7,24 +7,28 @@ test('missing-email search is scoped to Students tab, separate from payment-only
   const data=read('lib/mobile/data.ts');
   assert.match(route,/emailMode !== null && emailMode !== 'missing'/);
   assert.match(route,/missingEmailOnly \? 'tab-students' : \['tab-students', 'tab-payment'\]/);
-  assert.match(route,/listStudents\(org, search.get\('q'\), missingEmailOnly\)/);
+  assert.match(route,/listStudents\(org, search.get\('q'\), missingEmailOnly,/);
+  assert.match(route,/hasTabAccess\(officer.role, officer.allowedTabs, 'tab-students'\)/);
   assert.match(data,/organizationId: org.id/);
   assert.match(data,/missingEmailOnly \? \{ AND: \[\{ OR: \[\{ email: null \}, \{ email: '' \}\]/);
   assert.match(data,/take: missingEmailOnly \? 501 : 500/);
   assert.match(data,/if \(missingEmailOnly && students.length > 500\)/);
   assert.match(data,/select: \{\s*id: true, studentId: true, fullName: true/);
 });
-test('Android missing-email filter and read-only repair instructions retain native permission parity',()=>{
+test('Android missing-email filter and gated roster editor retain native permission parity',()=>{
   const s=read('mobile/src/app/(officer)/students.tsx');
   const api=read('mobile/src/api/http.ts');
   const types=read('mobile/src/api/types.ts');
-  assert.match(s,/can\('tab-students'\) && missingEmailOnly/);
+  assert.match(s,/canView \? api\.listStudents\(session, serverSearch \|\| undefined, missingEmailOnly\) : Promise\.resolve<Student\[\]>\(\[\]\)/);
+  assert.match(s,/canView = can\('tab-students'\)/);
   assert.match(s,/students.loading \? undefined : students.data/);
   assert.match(s,/setMissingEmailOnly\(v => !v\)/);
   assert.match(s,/Students needing verified email/);
-  assert.match(s,/read-only list/);
-  assert.match(s,/secure web Students Roster/);
+  assert.match(s,/school-policy identity review/);
+  assert.match(s,/canOfferMobileWrite\(capability.data, 'students.create'/);
+  assert.match(s,/canOfferMobileWrite\(capability.data, 'students.update'/);
+  assert.match(s,/api.updateStudentRoster\(session, change\)/);
   assert.match(api,/email: 'missing'/);
   assert.match(types,/listStudents\(s: Session, q\?: string, missingEmailOnly\?: boolean\)/);
-  assert.doesNotMatch(s,/updateStudent\(|saveStudent\(|requestStudentClearanceCode\(/);
+  assert.doesNotMatch(s,/requestStudentClearanceCode\(/);
 });

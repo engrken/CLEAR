@@ -3,7 +3,6 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { api, type ManagedTenant } from '@/api';
-import { TENANT_OPERATIONS_ENABLED } from '@/api/config';
 import { BackHeader, Banner, Button, Card, Screen, Text, TextField } from '@/components/ui';
 import { openGlobalAdministrationPortal } from '@/lib/links';
 import { useGlobalSession } from '@/lib/session';
@@ -16,6 +15,7 @@ export default function TenantManagement() {
   const { c } = useTheme();
   const [search, setSearch] = useState('');
   const tenants = useAsync(() => api.listManagedTenants(global), global.token);
+  const operations = useAsync(() => api.getGlobalManagementCapabilities(global), global.token + ':tenant-management-grant');
   const { reload } = tenants;
   useFocusEffect(useCallback(() => { reload(); }, [reload]));
   const q = search.trim().toLowerCase();
@@ -42,7 +42,7 @@ export default function TenantManagement() {
           <Text variant="headline">{totals.inactive}</Text>
         </Card>
       </View>
-      {TENANT_OPERATIONS_ENABLED ? (
+      {operations.data?.tenantOperationsEnabled ? (
         <Button block icon="plus" onPress={() => router.push('/global/provisions/new')}>Provision new tenant</Button>
       ) : (
         <Button block variant="secondary" onPress={() => void openGlobalAdministrationPortal()}>Manage tenants on web (sign in required)</Button>

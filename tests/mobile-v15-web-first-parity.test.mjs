@@ -1,0 +1,41 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+const source = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
+
+test('historical Activity requires existing web reports grant on the API and is never a blanket officer grant', () => {
+  const route = source('app/api/mobile/orgs/[org]/ledger/page/route.ts');
+  const client = source('mobile/src/api/http.ts');
+  const home = source('mobile/src/app/(officer)/home.tsx');
+  assert.match(route, /requireMobileOfficer\(req, slug, 'tab-overview'\)/);
+  assert.match(route, /scope === 'all' && !hasTabAccess\(officer.role, officer.allowedTabs, 'tab-reports'\)/);
+  assert.match(client, /listLedgerPage: \(s, cursor, scope = 'active'\)/);
+  assert.match(home, /const canReports = can\('tab-reports'\)/);
+  assert.match(home, /const ledgerScope = canReports && selectedLedgerScope === 'all' \? 'all' : 'active'/);
+  assert.match(home, /session.org.subdomain.*session.token.*ledgerScope/);
+  assert.match(home, /l.academicYear/);
+  assert.doesNotMatch(home, /api\.recordPayment\(/);
+});
+test('Void audit is a read-only web-first tenant-scoped projection with fail-closed cursors', () => {
+  const route = source('app/api/mobile/orgs/[org]/void-audit/route.ts');
+  const list = source('mobile/src/app/(officer)/void-audit.tsx');
+  const tabs = source('mobile/src/app/(officer)/_layout.tsx');
+  const more = source('mobile/src/app/(officer)/more.tsx');
+  const catalog = source('mobile/src/lib/module-access.ts');
+  const api = source('mobile/src/api/http.ts');
+  assert.match(route, /requireMobileOfficer\(req, slug, 'tab-void'\)/);
+  assert.match(route, /organizationId: org.id/);
+  assert.match(route, /value.org !== org/);
+  assert.match(route, /new Date\(cursor.at\)/);
+  assert.match(route, /orderBy: \[\{ date: 'desc' \}, \{ id: 'desc' \}\]/);
+  assert.match(route, /take: limit \+ 1/);
+  assert.match(route, /toCentavos\(r.amount\)/);
+  assert.doesNotMatch(route, /export const (?:POST|PATCH|PUT|DELETE)|prisma\.\w+\.(?:create|update|delete|upsert)\(/);
+  assert.match(api, /listVoidAudit: \(s, cursor\)/);
+  assert.match(list, /useVoidAuditPages/);
+  assert.match(list, /!allowed/);
+  assert.match(tabs, /Tabs.Protected guard=\{can\('tab-void'\)\}/);
+  assert.match(more, /tab === 'tab-void'/);
+  assert.match(catalog, /tab: 'tab-void'.*availability: 'review-only'/);
+  assert.doesNotMatch(list, /executeVoidTransaction\(|api\.recordPayment\(/);
+});
