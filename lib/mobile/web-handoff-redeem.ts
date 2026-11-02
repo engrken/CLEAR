@@ -1,7 +1,7 @@
 import 'server-only';
 import { prisma } from '@/lib/prisma';
 import { consumeWebHandoffTicket } from '@/lib/mobile/web-handoff-store';
-import { isWebHandoffEnabled } from '@/lib/mobile/web-handoff-issue';
+import { isAllowedOfficerHandoffDestination, isWebHandoffEnabled } from '@/lib/mobile/web-handoff-issue';
 import { effectiveTabs, isOrganizationActive } from '@/lib/roles';
 import { verifyGlobalAdminSession } from '@/lib/super-admin';
 import { maintenanceForTenant } from '@/lib/maintenance/service';
@@ -21,12 +21,13 @@ export async function redeemWebHandoff(ticket: string) {
     const user = await prisma.tenantUser.findUnique({ where: { id: record.principalId }, include: { organization: true } });
     if (!user || user.status !== 'Active' || user.organizationId !== record.organizationId ||
         !isOrganizationActive(user.organization) ||
-        record.destination !== `/department/${user.organization.subdomain}`) return null;
+        !isAllowedOfficerHandoffDestination(record.destination, user.organization.subdomain)) return null;
     const maintenance = await maintenanceForTenant(user.organization.subdomain);
     if (maintenance.mode === 'FULL') return null;
     return { id: user.id, name: user.fullName, email: user.email, role: user.role,
       organizationId: user.organizationId, department: user.organization.subdomain,
-      username: user.username, allowedTabs: effectiveTabs(user.role, user.allowedTabs) };
+      username: user.username, allowedTabs: effectiveTabs(user.role, user.allowedTabs),
+      handoffDestination: record.destination };
   }
   if (record.principalType === 'global' && !record.organizationId && record.destination === '/dashboard/provisions') {
     const session = await prisma.globalMobileSession.findUnique({ where: { id: record.mobileSessionId } });

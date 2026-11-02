@@ -142,3 +142,22 @@ test('handoff browser response denies referrer leakage and indexing', () => {
   assert.ok(config.includes("{ key: 'Referrer-Policy', value: 'no-referrer' }"));
   assert.ok(config.includes("{ key: 'Cache-Control', value: 'private, no-store, max-age=0' }"));
 });
+
+
+test('module-specific browser handoffs stay tenant-scoped and server allowlisted', () => {
+  const issuer = source('lib/mobile/web-handoff-issue.ts');
+  const officer = source('app/api/mobile/orgs/[org]/auth/web-handoff/route.ts');
+  const redeem = source('lib/mobile/web-handoff-redeem.ts');
+  const web = source('app/auth/mobile-handoff/page.tsx');
+  const auth = source('auth.ts');
+  const mobile = source('mobile/src/lib/links.ts');
+  assert.match(issuer, /isAllowedOfficerHandoffDestination/);
+  assert.match(officer, /OFFICER_WEB_PATHS.has\(webPath\)/);
+  assert.match(officer, /readJson/);
+  assert.match(redeem, /isAllowedOfficerHandoffDestination\(record.destination, user.organization.subdomain\)/);
+  assert.match(auth, /token.handoffDestination/);
+  assert.match(web, /ALLOWED_WEB_MODULE_PATHS.has\(path.slice\(base.length\)\)/);
+  assert.match(mobile, /requestOfficerModuleWebHandoff/);
+  assert.match(mobile, /openVerifiedWebHandoff\(url\)/);
+  assert.match(mobile, /openWebPage\(fallback\)/);
+});

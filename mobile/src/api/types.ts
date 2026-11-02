@@ -451,6 +451,7 @@ export type ClearApi = {
   getWriteCapabilities(s: Session): Promise<MobileWritePolicy>;
   /** Disabled server-side until one-time browser exchange is audited. */
   requestOfficerWebHandoff(s: Session): Promise<{ url: string }>;
+  requestOfficerModuleWebHandoff(s: Session, webPath: string): Promise<{ url: string }>;
   /** Session metadata only; all server requests independently check tenant and tab permissions. */
   getOfficerOnboarding(s: Session): Promise<{ exempt: boolean; completed: boolean; tabs: string[] }>;
   completeOfficerOnboarding(s: Session): Promise<{ exempt: boolean; completed: boolean }>;

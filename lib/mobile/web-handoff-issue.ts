@@ -3,6 +3,16 @@ import { prisma } from '@/lib/prisma';
 import { createWebHandoffTicket } from '@/lib/mobile/web-handoff-ticket.mjs';
 
 const WEB_ORIGIN = 'https://clearsys.vercel.app';
+export const OFFICER_WEB_PATHS = new Set(["/summary","/students","/clearance","/collections","/collections/history","/remittances","/penalties","/advances","/liquidations","/collectibles","/reports","/void","/realign","/users","/setup"]);
+
+/** Route destinations are fixed, tenant-scoped, and cannot contain query strings. */
+export function isAllowedOfficerHandoffDestination(destination: string, slug: string): boolean {
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) return false;
+  const base = `/department/${slug}`;
+  return destination === base || (destination.startsWith(base + '/') &&
+    OFFICER_WEB_PATHS.has(destination.slice(base.length)));
+}
+
 
 export function isWebHandoffEnabled() {
   return process.env.MOBILE_WEB_HANDOFF_ENABLED === 'true' &&
@@ -17,7 +27,9 @@ export async function issueWebHandoff(input: {
   const key = process.env.MOBILE_WEB_HANDOFF_SECRET;
   if (!key || key.length < 32) throw new Error('Web handoff signing key is not configured.');
   if ((input.principalType === 'officer') !== Boolean(input.organizationId)) throw new Error('Invalid handoff scope.');
-  if (input.principalType === 'officer' && !/^\/department\/[a-z0-9-]+$/.test(input.destination)) throw new Error('Invalid tenant destination.');
+  if (input.principalType === 'officer' && !isAllowedOfficerHandoffDestination(
+    input.destination, input.destination.match(/^\/department\/([a-z0-9]+(?:-[a-z0-9]+)*)(?:\/|$)/)?.[1] || ''
+  )) throw new Error('Invalid tenant destination.');
   if (input.principalType === 'global' && input.destination !== '/dashboard/provisions') throw new Error('Invalid global destination.');
   const { ticket, ticketHash, expiresAt } = createWebHandoffTicket(key);
   // Revoke outstanding tickets from this mobile session before issuing a new one.
