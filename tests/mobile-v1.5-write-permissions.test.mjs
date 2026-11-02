@@ -8,14 +8,31 @@ test('mobile write controls default deny without a server policy', () => {
   assert.equal(canOfferMobileWrite({ enabled: true, grants: [] }, 'collections.create', 'jiecep'), false);
 });
 
-test('mobile write policy requires exact organization and action grant', () => {
-  const policy = { enabled: true, grants: [{ action: 'collections.create', organization: 'jiecep' }] };
-  assert.equal(canOfferMobileWrite(policy, 'collections.create', 'jiecep'), true);
-  assert.equal(canOfferMobileWrite(policy, 'collections.create', 'other-tenant'), false);
-  assert.equal(canOfferMobileWrite(policy, 'receipts.void', 'jiecep'), false);
-  assert.equal(canOfferMobileWrite(policy, 'collections.create', ' jiecep'), false);
-  assert.equal(canOfferMobileWrite(policy, 'collections.create', 'JIECEP'), false);
-  assert.equal(canOfferMobileWrite(policy, 'collections.create', '../jiecep'), false);
+test('non-cash write policy requires exact organization and action grant', () => {
+  const policy = { enabled: true, grants: [{ action: 'students.update', organization: 'jiecep' }] };
+  assert.equal(canOfferMobileWrite(policy, 'students.update', 'jiecep'), true);
+  assert.equal(canOfferMobileWrite(policy, 'students.update', 'other-tenant'), false);
+  assert.equal(canOfferMobileWrite(policy, 'tenant.users.status', 'jiecep'), false);
+  assert.equal(canOfferMobileWrite(policy, 'students.update', ' jiecep'), false);
+  assert.equal(canOfferMobileWrite(policy, 'students.update', 'JIECEP'), false);
+  assert.equal(canOfferMobileWrite(policy, 'students.update', '../jiecep'), false);
+});
+
+test('cash-affecting actions are never enabled in Android v1.5, even on forged grants', () => {
+  const cashActions = [
+    'collections.create', 'penalties.assess', 'penalties.adjust',
+    'advances.create', 'advances.approve', 'advances.release',
+    'liquidations.submit', 'liquidations.approve', 'liquidations.reconcile',
+    'remittances.create', 'remittances.verify', 'remittances.invalidate', 'receipts.void',
+  ];
+  const policy = { enabled: true,
+    grants: cashActions.map(action => ({ action, organization: 'jiecep' })) };
+  for (const action of cashActions) {
+    assert.equal(canOfferMobileWrite(policy, action, 'jiecep'), false, action);
+  }
+  assert.equal(canOfferMobileWrite({ enabled: true,
+    grants: [{ action: 'tenant.users.status', organization: 'jiecep' }] },
+  'tenant.users.status', 'jiecep'), true, 'Non-cash officer writes remain available');
 });
 
 test('every Android write action has a unique explicit identifier', () => {
