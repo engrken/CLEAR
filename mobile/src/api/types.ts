@@ -114,6 +114,13 @@ export type TenantUserRecord = {
 };
 export type TenantUsersPage = { records: TenantUserRecord[]; hasMore: boolean; nextCursor: string | null;
   rolePresets?: Record<string, string[]> };
+export type CollectibleRecord = {
+  id: string; category: string; headcount: number;
+  status: string; balanceCentavos: number;
+};
+export type CollectiblePage = { scope: 'active_period'; ay: string; term: string;
+  records: CollectibleRecord[]; hasMore: boolean; nextCursor: string | null };
+
 export type TenantUserManagementChange = {
   action: 'create' | 'update'; id?: string; expectedUpdatedAt?: string;
   fullName: string; email: string; username: string; role: string;
@@ -405,6 +412,7 @@ export type ClearApi = {
   leaveOfficerPresence(s: Session, tabId: string): Promise<{ ok: true }>;
   getTenantPortal(s: Session): Promise<TenantPortalStatus>;
   listTenantUsers(s: Session, search?: string, cursor?: string): Promise<TenantUsersPage>;
+  listCollectibles(s: Session, cursor?: string): Promise<CollectiblePage>;
   updateTenantUserStatus(s: Session, input: TenantUserStatusChange): Promise<{ success: true }>;
   manageTenantUser(s: Session, input: TenantUserManagementChange): Promise<{ success: true; id: string }>;
   getDashboard(s: Session): Promise<DashboardSummary>;
