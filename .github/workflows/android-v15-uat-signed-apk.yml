@@ -1,0 +1,107 @@
+name: CLEAR Android v1.5 signed Production-API UAT APK
+
+# Manual only. This queues one EAS internal APK, never an AAB.
+on:
+  workflow_dispatch:
+    inputs:
+      production_sha:
+        description: 'Exact deployed Vercel Production Git SHA, matching main HEAD'
+        required: true
+        type: string
+      production_database_mapping_verified:
+        description: 'Production tenant database mapping has been independently verified'
+        required: true
+        type: boolean
+      confirmation:
+        description: 'Type BUILD_CLEAR_V15_APK'
+        required: true
+        type: string
+permissions:
+  contents: read
+  statuses: read
+concurrency:
+  group: clear-v15-production-uat-apk
+  cancel-in-progress: false
+jobs:
+  signed-v15-uat:
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      inputs.production_database_mapping_verified &&
+      inputs.confirmation == 'BUILD_CLEAR_V15_APK'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Verify exact deployed main SHA
+        env:
+          APPROVED: ${{ inputs.production_sha }}
+        run: |
+          set -euo pipefail
+          test "${#APPROVED}" -eq 40 || { echo "::error::A full Git SHA is required"; exit 1; }
+          if [ "$APPROVED" != "$GITHUB_SHA" ]; then
+            echo "::error::Deployed Production SHA does not match the checked-out Android/web source."
+            exit 1
+          fi
+      - name: Validate successful Vercel deployment for release SHA
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          node --input-type=module <<'CHECK'
+          const url='https://api.github.com/repos/'+process.env.REPO+'/commits/'+process.env.GITHUB_SHA+'/status';
+          const res=await fetch(url,{
+            headers:{Authorization:'Bearer '+process.env.GITHUB_TOKEN,Accept:'application/vnd.github+json'},
+            signal:AbortSignal.timeout(15000),
+          });
+          if(!res.ok)throw Error('GitHub commit status unavailable.');
+          if(!(await res.json()).statuses?.some(s=>s.context==='Vercel'&&s.state==='success'))
+            throw Error('Approved Production Vercel deployment is not confirmed for this SHA.');
+          CHECK
+      - name: Confirm release profile and app identity
+        run: |
+          set -euo pipefail
+          node ../scripts/ci/android-v15-release-gate.mjs
+          node -e "const a=require('./app.json').expo; const e=require('./eas.json').build['v15-uat'];if(a.version!=='1.5.0'||a.android.package!=='com.rupertbulquerin.clear'||a.android.versionCode<=15||e.android.buildType!=='apk'||e.distribution!=='internal'||e.env.EXPO_PUBLIC_API_URL!=='https://clearsys.vercel.app/api/mobile'){process.exit(1)}"
+      - name: Confirm public Production API responding
+        run: |
+          node --input-type=module <<'CHECK'
+          const res=await fetch('https://clearsys.vercel.app/api/mobile/orgs',{
+            headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(15000)});
+          if(!res.ok||!Array.isArray(await res.json()))
+            throw Error('Live CLEAR organization directory is unavailable.');
+          CHECK
+      - name: Verify Expo token exists before spending build credits
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::error::EXPO_TOKEN GitHub secret missing. No build attempted."
+            exit 1
+          fi
+      - name: Reconcile dependencies and verify Expo source
+        run: |
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          npm ci --no-audit --no-fund
+          npm run typecheck
+          npm run lint
+      - name: Install EAS CLI
+        run: npm install --global eas-cli
+      - name: Queue signed v1.5 UAT APK
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          eas whoami --non-interactive
+          eas build --platform android --profile v15-uat --non-interactive --no-wait
+      - name: Output warning
+        run: echo 'EAS build queued, not yet completed. Verify in Expo before device UAT.'

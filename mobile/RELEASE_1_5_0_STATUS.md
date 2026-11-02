@@ -1,5 +1,17 @@
 # CLEAR Android v1.5.0 — Web module parity: non-cash writes, cash-sensitive read-only
 
+## Pre-build consolidation — 2026-11-02
+
+- All 15 canonical web modules are included in the native role-scoped directory; native cash-sensitive operations remain read-only and financial posting redirects to secure web.
+- Added authenticated native **current-period fund/fee setup review** with exact centavos, count bounds, and no financial writes. Authorized administrators may edit the calendar with an independent backend grant.
+- Native report presentation now also edits institution school name/address beside signatories, preserving report logos and cash records, with SHA revision and serializable transaction.
+- Added disposable-Postgres HTTP regression tests for the new report and setup routes, including negative cross-tenant and financial non-mutation assertions.
+- The manually dispatched `android-v15-uat-signed-apk.yml` queues only a v1.5.0 internal signed APK after matching main/Production SHA, live API checks and explicit database mapping verification. It never uploads an AAB.
+- No signed APK has been queued. CI on latest commit, Production rollout of new mobile APIs and Production database mapping remain required before build; physical device biometric and role-based UAT remain required afterwards.
+
+---
+
+
 ## Native parity implementation increment — 2026-11-02
 
 - **Clearance:** Added dedicated role-gated officer clearance review with current-period status and outstanding obligation details, using existing authoritative read-only clearance computation. No ability to override a financial clearance result.
