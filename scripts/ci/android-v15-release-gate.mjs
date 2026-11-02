@@ -67,6 +67,18 @@ if (!/name="finance-review"/.test(read('mobile/src/app/(officer)/_layout.tsx')) 
     !/name="void-audit"/.test(read('mobile/src/app/(officer)/_layout.tsx'))) {
   blockers.push('Read-only financial review and Void audit screens missing');
 }
+if (!existsSync(resolve(root, 'app/api/mobile/orgs/[org]/users/manage/route.ts')) ||
+    !read('mobile/src/app/(officer)/users.tsx').includes('OfficerEditor') ||
+    !read('app/api/mobile/orgs/[org]/write-capabilities/route.ts').includes("'tenant.roles.manage'") ||
+    !read('lib/mobile/production-readonly.ts').includes('canRunMobileTenantUserManageWrites')) {
+  blockers.push('Native officer creation and role/permission editing require independent server authorization');
+}
+if (!existsSync(resolve(root, 'app/api/mobile/orgs/[org]/collectibles/route.ts')) ||
+    !existsSync(resolve(root, 'mobile/src/app/(officer)/collectibles.tsx')) ||
+    !read('mobile/src/app/(officer)/_layout.tsx').includes("can('tab-collectibles')")) {
+  blockers.push('Native Collectibles needs a protected read-only workspace and server route');
+}
+
 if (!existsSync(resolve(root, 'app/api/mobile/orgs/[org]/students/manage/route.ts')) ||
     !existsSync(resolve(root, 'app/api/mobile/orgs/[org]/write-capabilities/route.ts'))) {
   blockers.push('Roster server authorization routes missing');
