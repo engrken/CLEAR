@@ -23,7 +23,7 @@ export const MODULE_CATALOG: readonly {
   { tab: 'tab-penalties', name: 'Penalties', availability: 'review-only', detail: 'View recent assessments and remaining balances; settlements require secure web access', webPath: '/penalties' },
   { tab: 'tab-advances', name: 'Cash advances', availability: 'review-only', detail: 'Review approved advances; issuing or changing them remains on the audited web app', webPath: '/advances' },
   { tab: 'tab-audit', name: 'Liquidations and audit', availability: 'review-only', detail: 'Review recorded liquidation expenses and audit status; web remains authoritative', webPath: '/liquidations' },
-  { tab: 'tab-collectibles', name: 'Collectibles', availability: 'web-only', detail: 'Use the web system for collectibles', webPath: '/collectibles' },
+  { tab: 'tab-collectibles', name: 'Collectibles', availability: 'review-only', detail: 'Review current-term assessments in app; financial changes require secure web', webPath: '/collectibles' },
   { tab: 'tab-reports', name: 'Financial reports', availability: 'web-only', detail: 'Use the web system for official financial reports', webPath: '/reports' },
   { tab: 'tab-void', name: 'Void center', availability: 'review-only', detail: 'Browse read-only tenant Void history in Android; all reversals are handled on secure web', webPath: '/void' },
   { tab: 'tab-report', name: 'Report submission', availability: 'web-only', detail: 'Use the web system for report submission', webPath: '/reports' },
