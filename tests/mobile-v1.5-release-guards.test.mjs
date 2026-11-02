@@ -17,7 +17,8 @@ test('global administrator account is a protected native route', () => {
 
 test('mobile financial writes remain disabled until actual server handlers are reviewed', () => {
   const config = source('mobile/src/api/config.ts');
-  assert.match(config, /PAYMENT_WRITES_ENABLED = false/);
+  assert.match(config, /EXPO_PUBLIC_CLEAR_PAYMENT_WRITES === 'true'/);
+  assert.match(config, /EXPO_PUBLIC_CLEAR_RELEASE_KIND !== 'live-readonly-internal'/);
   assert.match(config, /MOBILE_BUSINESS_WRITES_ENABLED = false/);
 });
 
