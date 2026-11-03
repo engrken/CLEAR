@@ -88,7 +88,7 @@ export function validateManualInstaPayApproval(input: {
       input.reviewerId === input.payerId) {
     throw new Error('A separate authorized Global Administrator must verify the payment.');
   }
-  if (input.expectedCentavos <= 0n ||
+  if (input.expectedCentavos <= BigInt(0) ||
       input.receivedCentavos !== input.expectedCentavos) {
     throw new Error('Bank credit must match the exact invoice amount in centavos.');
   }
