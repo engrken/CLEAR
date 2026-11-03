@@ -1,7 +1,7 @@
 {
   "cli": {
     "version": ">= 25.0.0",
-    "appVersionSource": "remote"
+    "appVersionSource": "local"
   },
   "build": {
     "development": {
@@ -30,7 +30,7 @@
     },
     "production": {
       "environment": "production",
-      "autoIncrement": true,
+      "autoIncrement": false,
       "env": {
         "EXPO_PUBLIC_API_URL": "https://clearsys.vercel.app/api/mobile",
         "EXPO_PUBLIC_CLEAR_TENANT_OPERATIONS": "false",

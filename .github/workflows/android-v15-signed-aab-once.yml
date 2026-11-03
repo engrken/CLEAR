@@ -40,7 +40,7 @@ jobs:
           cache: npm
           cache-dependency-path: mobile/package-lock.json
 
-      - name: Require identical released application source and only two build metadata changes
+      - name: Require identical runtime source and narrowly-scoped local EAS version override
         run: |
           set -euo pipefail
           # checkout fetch-depth: 0 already fetched origin/main. No authenticated second fetch is needed.
@@ -48,9 +48,22 @@ jobs:
           test "$main_head" = "$APPROVED_MAIN_SHA" || { echo '::error::Main changed; no build'; exit 1; }
           git merge-base --is-ancestor "$APPROVED_MAIN_SHA" "$GITHUB_SHA"
           actual="$(git diff --name-only "$APPROVED_MAIN_SHA" "$GITHUB_SHA")"
-          expected="$(printf '%s\n' '.github/workflows/android-v15-signed-aab-once.yml' 'vercel.json')"
+          expected="$(printf '%s\n' '.github/workflows/android-v15-signed-aab-once.yml' 'mobile/eas.json' 'vercel.json')"
           test "$actual" = "$expected" || { echo '::error::App source deviated from deployed main'; exit 1; }
-          echo "The entire app source matches live production commit $APPROVED_MAIN_SHA."
+          node --input-type=module <<'CHECK'
+          import { readFileSync } from 'node:fs';
+          import { execFileSync } from 'node:child_process';
+          const release=JSON.parse(execFileSync('git',['show',process.env.APPROVED_MAIN_SHA+':mobile/eas.json'],{encoding:'utf8'}));
+          const build=JSON.parse(readFileSync('eas.json','utf8'));
+          if(release.cli.appVersionSource!=='local' || release.build.production.autoIncrement!==true ||
+             build.cli.appVersionSource!=='local' || build.build.production.autoIncrement!==false)
+            throw Error('Unexpected EAS versioning mode');
+          build.cli.appVersionSource='remote';
+          build.build.production.autoIncrement=true;
+          if(JSON.stringify(build)!==JSON.stringify(release))
+            throw Error('EAS build profile changed beyond the two controlled versioning fields');
+          CHECK
+          echo "Production runtime app source matches $APPROVED_MAIN_SHA; local Android versionCode 16 will be packaged."
 
       - name: Require release commit passed web, mobile, finance, auth and Vercel checks
         env:
@@ -86,7 +99,7 @@ jobs:
              a.android.package!=='com.rupertbulquerin.clear' ||
              a.extra?.eas?.projectId!=='cfbb6ff9-bf5b-4776-9ec6-0def41a11cb1' ||
              a.android.versionCode<16 || e.cli.appVersionSource!=='remote' ||
-             e.build.production?.autoIncrement!==true ||
+             e.build.production?.autoIncrement!==false ||
              e.build.production.android?.buildType!=='app-bundle' ||
              e.build.production.env?.EXPO_PUBLIC_API_URL!=='https://clearsys.vercel.app/api/mobile' ||
              e.build.production.env?.EXPO_PUBLIC_CLEAR_RELEASE_KIND!=='v15-production' ||
@@ -125,21 +138,21 @@ jobs:
       - name: Install EAS CLI
         run: npm install --global eas-cli@^25 --no-audit --no-fund
 
-      - name: Verify Expo account and the existing remote Android versionCode
+      - name: Verify Expo account and staged local Android versionCode 16
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
           set -euo pipefail
           eas whoami --non-interactive
-          remote_output="$(eas build:version:get --platform android --profile production --non-interactive 2>&1)" || {
-            echo "::error::Unable to read existing Expo remote versionCode"; exit 1;
-          }
-          remote_code="$(printf '%s\n' "$remote_output" | sed -nE 's/.*Android versionCode[[:space:]]*-[[:space:]]*([0-9]+).*/\1/p' | tail -1)"
-          if ! [[ "$remote_code" =~ ^[0-9]+$ ]] || [ "$remote_code" -lt 15 ]; then
-            echo "::error::Remote versionCode is below last-known v1.5 minimum; reconcile with all Play tracks before AAB build"
-            exit 1
-          fi
-          echo "Remote code verified as $remote_code; production AAB auto-increments it."
+          node --input-type=module <<'CHECK'
+          import { readFileSync } from 'node:fs';
+          const app=JSON.parse(readFileSync('app.json','utf8')).expo;
+          const config=JSON.parse(readFileSync('eas.json','utf8'));
+          if(app.android.versionCode!==16 || config.cli.appVersionSource!=='local' ||
+             config.build.production.autoIncrement!==false)
+             throw Error('Deterministic v1.5.0 AAB local versioning mismatch');
+          console.log('VersionCode 16 confirmed in repository. Build only; check Google Play highest versionCode before submission.');
+          CHECK
 
       - name: Queue once on EAS using existing frozen Android signing credentials
         env:
