@@ -72,6 +72,7 @@ export function validateManualInstaPayApproval(input: {
   receivedCentavos: bigint;
   bankCreditIndependentlyVerified: boolean;
   bankReference: string;
+  receivingAccountId: string;
   reviewerId: string;
   payerId: string;
 }): Readonly<{ uniqueApprovalKey: string; receivedCentavos: bigint }> {
@@ -82,6 +83,7 @@ export function validateManualInstaPayApproval(input: {
     throw new Error('A payment screenshot or payer reference is not bank-credit verification.');
   }
   if (!input.invoiceId || input.invoiceId.length > 128 ||
+      !/^[A-Za-z0-9_-]{2,80}$/.test(input.receivingAccountId) ||
       !input.reviewerId || !input.payerId ||
       input.reviewerId === input.payerId) {
     throw new Error('A separate authorized Global Administrator must verify the payment.');
@@ -94,8 +96,9 @@ export function validateManualInstaPayApproval(input: {
   if (!/^[A-Z0-9._-]{6,80}$/.test(reference)) {
     throw new Error('Invalid reconciled InstaPay transfer reference.');
   }
-  // A unique constraint on (invoiceId, bankReference), combined with a
-  // serializable transaction, MUST be enforced by the future persistence layer.
-  return { uniqueApprovalKey: input.invoiceId + ':' + reference,
+  // A GLOBAL unique constraint on (receivingAccountId, bankReference) across
+  // ALL invoices and tenants prevents one credited transfer paying two invoices.
+  // The receivingAccountId must come from trusted server configuration.
+  return { uniqueApprovalKey: input.receivingAccountId + ':' + reference,
     receivedCentavos: input.receivedCentavos };
 }

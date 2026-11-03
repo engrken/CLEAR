@@ -30,12 +30,15 @@ const payment={
  invoiceId:'invoice-1',invoiceStatus:'PENDING_VERIFICATION',
  expectedCentavos:12345n,receivedCentavos:12345n,
  bankCreditIndependentlyVerified:true,bankReference:'202611030001',
+ receivingAccountId:'bank-account-approved',
  reviewerId:'global-admin-1',payerId:'payer-1',
 };
 test('Only independently bank-reconciled exact amounts yield a deterministic approval key', () => {
   const approval=validateManualInstaPayApproval(payment);
   assert.equal(approval.receivedCentavos,12345n);
-  assert.equal(approval.uniqueApprovalKey,'invoice-1:202611030001');
+  assert.equal(approval.uniqueApprovalKey,'bank-account-approved:202611030001');
+  assert.equal(validateManualInstaPayApproval({...payment,invoiceId:'invoice-2'}).uniqueApprovalKey,
+    approval.uniqueApprovalKey,'same bank transfer must not pay two separate invoices');
   assert.deepEqual(validateManualInstaPayApproval(payment),approval);
 });
 test('Reject proof-only, overpayment, self-approval and duplicate invoice approval attempts', () => {
@@ -46,5 +49,6 @@ test('Reject proof-only, overpayment, self-approval and duplicate invoice approv
     {invoiceStatus:'VERIFIED'},
     {invoiceStatus:'REJECTED'},
     {bankReference:'invalid reference!'},
+    {receivingAccountId:''},
   ]) assert.throws(()=>validateManualInstaPayApproval({...payment,...patch}));
 });

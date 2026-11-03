@@ -13,7 +13,7 @@ billing or registration service. It is intentionally not deployed.
   unless the applicable Play policy permits it.
 - Manual Option B bank-credit verification is an action of an independently
   authenticated Global Administrator, not automatic QR or proof verification.
-  Future DB persistence must use transaction isolation + unique approval keys
+  Future DB persistence must use transaction isolation + unique (receivingAccountId, bankReference) approval keys across all invoices and tenants
   and issue subscriptions only after bank credit is confirmed.
 - No subscription database migration, tenant lock, merchant QR, bank account,
   payment receipt or license activation is created by this branch.
