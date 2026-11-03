@@ -98,7 +98,7 @@ jobs:
           if(a.version!=='1.5.0' || a.owner!=='rupert2133s-team' ||
              a.android.package!=='com.rupertbulquerin.clear' ||
              a.extra?.eas?.projectId!=='cfbb6ff9-bf5b-4776-9ec6-0def41a11cb1' ||
-             a.android.versionCode<16 || e.cli.appVersionSource!=='remote' ||
+             a.android.versionCode<16 || e.cli.appVersionSource!=='local' ||
              e.build.production?.autoIncrement!==false ||
              e.build.production.android?.buildType!=='app-bundle' ||
              e.build.production.env?.EXPO_PUBLIC_API_URL!=='https://clearsys.vercel.app/api/mobile' ||
