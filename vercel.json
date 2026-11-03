@@ -11,7 +11,8 @@
   ],
   "git": {
     "deploymentEnabled": {
-      "education-development-setup": false
+      "education-development-setup": false,
+      "release/v15-signed-aab-once-20261103": false
     }
   }
 }

@@ -1,0 +1,151 @@
+name: CLEAR v1.5.0 signed AAB one-shot build (no Play upload)
+
+# One-time branch-scoped authorized build; not a release or store submission.
+on:
+  push:
+    branches:
+      - release/v15-signed-aab-once-20261103
+    paths:
+      - '.github/workflows/android-v15-signed-aab-once.yml'
+
+permissions:
+  contents: read
+  statuses: read
+
+concurrency:
+  group: clear-v15-signed-aab-once-20261103
+  cancel-in-progress: false
+
+jobs:
+  signed-aab:
+    if: github.ref == 'refs/heads/release/v15-signed-aab-once-20261103'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      APPROVED_MAIN_SHA: cbbf36f99ca1adae7d6f3bf46cd37724ff99d1e9
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EAS_BUILD_NO_EXPO_GO_WARNING: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Require identical released application source and only two build metadata changes
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          main_head="$(git rev-parse origin/main)"
+          test "$main_head" = "$APPROVED_MAIN_SHA" || { echo '::error::Main changed; no build'; exit 1; }
+          git merge-base --is-ancestor "$APPROVED_MAIN_SHA" "$GITHUB_SHA"
+          actual="$(git diff --name-only "$APPROVED_MAIN_SHA" "$GITHUB_SHA")"
+          expected="$(printf '%s\n' '.github/workflows/android-v15-signed-aab-once.yml' 'vercel.json')"
+          test "$actual" = "$expected" || { echo '::error::App source deviated from deployed main'; exit 1; }
+          echo "The entire app source matches live production commit $APPROVED_MAIN_SHA."
+
+      - name: Require release commit passed web, mobile, finance, auth and Vercel checks
+        env:
+          GH_READ_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          node --input-type=module <<'CHECK'
+          const url = 'https://api.github.com/repos/' + process.env.REPO +
+            '/commits/' + process.env.APPROVED_MAIN_SHA + '/status';
+          const r = await fetch(url, {
+            headers: { Authorization: 'Bearer ' + process.env.GH_READ_TOKEN,
+              Accept: 'application/vnd.github+json' },
+            signal: AbortSignal.timeout(15000)
+          });
+          if (!r.ok) throw Error('Cannot independently confirm CI statuses');
+          const data = await r.json();
+          for (const context of ['Vercel','ci/circleci: web','ci/circleci: mobile',
+            'ci/circleci: financial-security','ci/circleci: student-auth-security']) {
+            if (!data.statuses?.some(s => s.context === context && s.state === 'success'))
+              throw Error('Required release check missing: ' + context);
+          }
+          CHECK
+
+      - name: Validate official v1.5.0 AAB identity and read-only finance policy
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'CHECK'
+          import { readFileSync } from 'node:fs';
+          const a=JSON.parse(readFileSync('app.json','utf8')).expo;
+          const e=JSON.parse(readFileSync('eas.json','utf8'));
+          const c=readFileSync('src/api/config.ts','utf8');
+          if(a.version!=='1.5.0' || a.owner!=='rupert2133s-team' ||
+             a.android.package!=='com.rupertbulquerin.clear' ||
+             a.extra?.eas?.projectId!=='cfbb6ff9-bf5b-4776-9ec6-0def41a11cb1' ||
+             a.android.versionCode<16 || e.cli.appVersionSource!=='remote' ||
+             e.build.production?.autoIncrement!==true ||
+             e.build.production.android?.buildType!=='app-bundle' ||
+             e.build.production.env?.EXPO_PUBLIC_API_URL!=='https://clearsys.vercel.app/api/mobile' ||
+             e.build.production.env?.EXPO_PUBLIC_CLEAR_RELEASE_KIND!=='v15-production' ||
+             e.build.production.env?.EXPO_PUBLIC_CLEAR_TENANT_OPERATIONS!=='false' ||
+             e.build.production.env?.EXPO_PUBLIC_CLEAR_STUDENT_ROSTER_WRITES!=='true' ||
+             !['PAYMENT_WRITES_ENABLED','REMITTANCE_WRITES_ENABLED','MOBILE_BUSINESS_WRITES_ENABLED']
+               .every(f=>c.includes('export const '+f+' = false;')))
+             throw Error('AAB identity, profile or cash-read-only safety gate failed');
+          CHECK
+          node ../scripts/ci/android-v15-release-gate.mjs
+
+      - name: Confirm public production mobile API
+        run: |
+          node --input-type=module <<'CHECK'
+          const r=await fetch('https://clearsys.vercel.app/api/mobile/orgs',{signal:AbortSignal.timeout(15000)});
+          if(!r.ok || !Array.isArray(await r.json())) throw Error('Production mobile API unavailable');
+          CHECK
+
+      - name: Confirm existing Expo secret before using build credits
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::error::Missing EXPO_TOKEN; no AAB build attempted."
+            exit 1
+          fi
+
+      - name: Install and validate locked dependencies
+        run: |
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          npm ci --no-audit --no-fund
+          npm run typecheck
+          npm run lint
+          node --test ../tests/mobile-v1.5-web-handoff.test.mjs
+
+      - name: Install EAS CLI
+        run: npm install --global eas-cli@^25 --no-audit --no-fund
+
+      - name: Verify Expo account and the existing remote Android versionCode
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          eas whoami --non-interactive
+          remote_output="$(eas build:version:get --platform android --profile production --non-interactive 2>&1)" || {
+            echo "::error::Unable to read existing Expo remote versionCode"; exit 1;
+          }
+          remote_code="$(printf '%s\n' "$remote_output" | sed -nE 's/.*Android versionCode[[:space:]]*-[[:space:]]*([0-9]+).*/\1/p' | tail -1)"
+          if ! [[ "$remote_code" =~ ^[0-9]+$ ]] || [ "$remote_code" -lt 15 ]; then
+            echo "::error::Remote versionCode is below last-known v1.5 minimum; reconcile with all Play tracks before AAB build"
+            exit 1
+          fi
+          echo "Remote code verified as $remote_code; production AAB auto-increments it."
+
+      - name: Queue once on EAS using existing frozen Android signing credentials
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          eas build --platform android --profile production --non-interactive --no-wait --freeze-credentials --message "CLEAR v1.5.0 signed AAB, production source cbbf36f99ca1adae7d6f3bf46cd37724ff99d1e9"
+          echo 'AAB QUEUED on EAS. It is not yet built and has NOT been submitted to Google Play.'
+          echo 'Review https://expo.dev/accounts/rupert2133s-team/projects/clear-mobile/builds'
