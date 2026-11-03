@@ -43,7 +43,7 @@ jobs:
       - name: Require identical released application source and only two build metadata changes
         run: |
           set -euo pipefail
-          git fetch --no-tags origin main
+          # checkout fetch-depth: 0 already fetched origin/main. No authenticated second fetch is needed.
           main_head="$(git rev-parse origin/main)"
           test "$main_head" = "$APPROVED_MAIN_SHA" || { echo '::error::Main changed; no build'; exit 1; }
           git merge-base --is-ancestor "$APPROVED_MAIN_SHA" "$GITHUB_SHA"
