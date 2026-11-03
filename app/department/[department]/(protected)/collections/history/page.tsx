@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { requireTabAccess } from "@/lib/permissions";
 import ReceiptHistoryClient from "./ReceiptHistoryClient";
 import { baseOfficialReceiptNumber, buildIssuedReceipts, filterIssuedReceipts } from "./receipt-grouping";
+import { canPageDefaultReceiptHistory } from '@/lib/receipts/receipt-history-paging';
+import { loadDefaultReceiptGroups } from './paged-group-query';
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Issued Receipt History | CLEAR System" };
@@ -61,97 +63,101 @@ export default async function ReceiptHistoryPage({
   const pageSize = [10, 25, 50, 100].includes(Number(query.size)) ? Number(query.size) : 25;
   const requestedPage = number(query.page, 1, 100000);
 
-  // Query only THIS organization's allocation lines, optionally within the
-  // requested academic period. Counting raw Collection rows as ORs is wrong:
-  // legacy packages repeat the base OR on every line, while newer packages
-  // use OR-P02 etc. Group first, filter and paginate issued ORs second.
-  //
-  // This read-only reconciliation view intentionally never changes balances
-  // or emits payment/receipt writes.
-  // #70: query candidate ORs for narrow text search, then load all
-  // allocation lines for those receipt groups before applying filters/paging.
-  // A broad search deliberately falls back to the original full tenant read.
-  // Opt-in privacy-safe instrumentation: no student identifiers, OR numbers,
-  // tenant slugs, search terms, tokens or amounts may enter timing logs.
+  // P3: keep the exact, filtered and cross-period audit code below unchanged.
+  // Optional SQL paging is limited to an unfiltered single-period view, and
+  // is disabled until parity fixtures and representative benchmarks pass.
   const profile = process.env.CLEAR_PROFILE_RECEIPT_HISTORY === '1';
   const queryStartedAt = profile ? performance.now() : 0;
-  let receiptCandidates: string[] | null = null;
-  if (q.length >= 3 && !exactOr) {
-    const matching = await prisma.collection.findMany({
+  const eligible = canPageDefaultReceiptHistory({
+    ay, term, q, exactOr, status, category, description, paymentType,
+    from, to, inconsistentOnly,
+  });
+  const paged = process.env.CLEAR_RECEIPT_HISTORY_GROUP_PAGING === 'true' &&
+    eligible ? await loadDefaultReceiptGroups({
+      organizationId: org.id, ay, term, requestedPage, pageSize,
+    }) : null;
+
+  const data = paged ?? await (async () => {
+    let receiptCandidates: string[] | null = null;
+    if (q.length >= 3 && !exactOr) {
+      const matching = await prisma.collection.findMany({
+        where: {
+          organizationId: org.id,
+          ...(ay ? { academicYear: ay } : {}),
+          ...(term ? { term } : {}),
+          OR: [
+            { studentName: { contains: q, mode: 'insensitive' } },
+            { orNumber: { contains: q, mode: 'insensitive' } },
+            { student: { is: { organizationId: org.id, studentId: {
+              contains: q, mode: 'insensitive',
+            } } } },
+          ],
+        },
+        select: { orNumber: true },
+        take: 151,
+      });
+      if (matching.length <= 150) {
+        const bases = new Set(matching.map(row =>
+          row.orNumber.trim().toUpperCase().replace(/-P\d+$/i, '')));
+        if (bases.size <= 60) receiptCandidates = [...bases];
+      }
+    }
+    const allocationLines = await prisma.collection.findMany({
       where: {
         organizationId: org.id,
         ...(ay ? { academicYear: ay } : {}),
         ...(term ? { term } : {}),
-        OR: [
-          { studentName: { contains: q, mode: 'insensitive' } },
-          { orNumber: { contains: q, mode: 'insensitive' } },
-          { student: { is: { organizationId: org.id, studentId: {
-            contains: q, mode: 'insensitive',
-          } } } },
-        ],
+        // An exact OR lookup needs only its original allocation lines, including
+        // legacy repeated ORs and current -P02/-P03 package suffixes. Keep the
+        // full-group behavior so anomalies and period collisions stay visible.
+        ...(exactOr ? { OR: [
+          { orNumber: { equals: exactOr, mode: "insensitive" as const } },
+          { orNumber: { startsWith: `${exactOr}-P`, mode: "insensitive" as const } },
+        ] } : {}),
+        ...(receiptCandidates !== null ? { OR: receiptCandidates.flatMap(base => [
+          { orNumber: { equals: base, mode: "insensitive" as const } },
+          { orNumber: { startsWith: `${base}-P`, mode: "insensitive" as const } },
+        ]) } : {}),
       },
-      select: { orNumber: true },
-      take: 151,
+      orderBy: [{ timestamp: "desc" }, { id: "desc" }],
+      select: {
+        id: true, orNumber: true, studentId: true, studentName: true,
+        student: { select: { studentId: true } },
+        academicYear: true, term: true, date: true, timestamp: true,
+        encodedBy: true, category: true, itemDescription: true,
+        paymentType: true, status: true, amountPaid: true,
+      },
     });
-    if (matching.length <= 150) {
-      const bases = new Set(matching.map(row =>
-        row.orNumber.trim().toUpperCase().replace(/-P\d+$/i, '')));
-      if (bases.size <= 60) receiptCandidates = [...bases];
-    }
-  }
-  const allocationLines = await prisma.collection.findMany({
-    where: {
-      organizationId: org.id,
-      ...(ay ? { academicYear: ay } : {}),
-      ...(term ? { term } : {}),
-      // An exact OR lookup needs only its original allocation lines, including
-      // legacy repeated ORs and current -P02/-P03 package suffixes. Keep the
-      // full-group behavior so anomalies and period collisions stay visible.
-      ...(exactOr ? { OR: [
-        { orNumber: { equals: exactOr, mode: "insensitive" as const } },
-        { orNumber: { startsWith: `${exactOr}-P`, mode: "insensitive" as const } },
-      ] } : {}),
-      ...(receiptCandidates !== null ? { OR: receiptCandidates.flatMap(base => [
-        { orNumber: { equals: base, mode: "insensitive" as const } },
-        { orNumber: { startsWith: `${base}-P`, mode: "insensitive" as const } },
-      ]) } : {}),
-    },
-    orderBy: [{ timestamp: "desc" }, { id: "desc" }],
-    select: {
-      id: true, orNumber: true, studentId: true, studentName: true,
-      student: { select: { studentId: true } },
-      academicYear: true, term: true, date: true, timestamp: true,
-      encodedBy: true, category: true, itemDescription: true,
-      paymentType: true, status: true, amountPaid: true,
-    },
-  });
+  
+    const groupingStartedAt = profile ? performance.now() : 0;
+  
+    // Review historical money AS RECORDED. A legacy sub-cent/unsafe Float must
+    // appear as an inconsistent receipt, not throw in strict moneyNumber() and
+    // make the entire authorized audit page unavailable. Never repair on read.
+    const grouped = buildIssuedReceipts(allocationLines);
+    const categories = [...new Set(grouped.flatMap(r => r.categories))].sort();
+    const paymentTypes = [...new Set(grouped.flatMap(r => r.paymentTypes))].sort();
+    const matched = filterIssuedReceipts(grouped, {
+      q, exactOr, status, category, description, paymentType,
+      from, to, inconsistentOnly,
+    });
+    const total = matched.length;
+    const maxPage = Math.max(1, Math.ceil(total / pageSize));
+    const page = Math.min(requestedPage, maxPage);
+    const receipts = matched.slice((page - 1) * pageSize, page * pageSize);
+    return { receipts, categories, paymentTypes, page, maxPage, total,
+      allocationCount: allocationLines.length, receiptGroupCount: grouped.length };
+  })();
 
-  const queryDurationMs = profile ? performance.now() - queryStartedAt : 0;
-  const groupingStartedAt = profile ? performance.now() : 0;
-
-  // Review historical money AS RECORDED. A legacy sub-cent/unsafe Float must
-  // appear as an inconsistent receipt, not throw in strict moneyNumber() and
-  // make the entire authorized audit page unavailable. Never repair on read.
-  const grouped = buildIssuedReceipts(allocationLines);
-  const categories = [...new Set(grouped.flatMap(r => r.categories))].sort();
-  const paymentTypes = [...new Set(grouped.flatMap(r => r.paymentTypes))].sort();
-  const matched = filterIssuedReceipts(grouped, {
-    q, exactOr, status, category, description, paymentType,
-    from, to, inconsistentOnly,
-  });
-  const total = matched.length;
-  const maxPage = Math.max(1, Math.ceil(total / pageSize));
-  const page = Math.min(requestedPage, maxPage);
-  const receipts = matched.slice((page - 1) * pageSize, page * pageSize);
+  const { receipts, categories, paymentTypes, total, page, maxPage } = data;
   if (profile) {
     console.info('[clear/perf/receipt-history]', {
-      dbMs: Math.round(queryDurationMs),
-      groupingMs: Math.round(performance.now() - groupingStartedAt),
-      allocationLines: allocationLines.length,
-      receiptGroups: grouped.length,
+      dbAndGroupingMs: Math.round(performance.now() - queryStartedAt),
+      allocationLines: data.allocationCount,
+      receiptGroups: data.receiptGroupCount,
       resultGroups: total,
       pageSize,
-      narrowed: Boolean(exactOr || receiptCandidates !== null),
+      pagedGroupQuery: paged !== null,
     });
   }
 

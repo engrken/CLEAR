@@ -11,7 +11,8 @@
   ],
   "git": {
     "deploymentEnabled": {
-      "education-development-setup": false
+      "education-development-setup": false,
+      "perf/receipt-group-paging-20261103": false
     }
   }
 }
