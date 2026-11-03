@@ -132,6 +132,8 @@ export default async function ReceiptHistoryPage({
     // Review historical money AS RECORDED. A legacy sub-cent/unsafe Float must
     // appear as an inconsistent receipt, not throw in strict moneyNumber() and
     // make the entire authorized audit page unavailable. Never repair on read.
+    const dbDurationMs = profile ? performance.now() - queryStartedAt : 0;
+    const groupingStartedAt = profile ? performance.now() : 0;
     const grouped = buildIssuedReceipts(allocationLines);
     const categories = [...new Set(grouped.flatMap(r => r.categories))].sort();
     const paymentTypes = [...new Set(grouped.flatMap(r => r.paymentTypes))].sort();
@@ -144,13 +146,17 @@ export default async function ReceiptHistoryPage({
     const page = Math.min(requestedPage, maxPage);
     const receipts = matched.slice((page - 1) * pageSize, page * pageSize);
     return { receipts, categories, paymentTypes, page, maxPage, total,
-      allocationCount: allocationLines.length, receiptGroupCount: grouped.length };
+      allocationCount: allocationLines.length, receiptGroupCount: grouped.length,
+      dbDurationMs, groupingDurationMs: profile ? performance.now() - groupingStartedAt : 0 };
   })();
 
   const { receipts, categories, paymentTypes, total, page, maxPage } = data;
+  const queryDurationMs = data.dbDurationMs;
+  const groupingDurationMs = data.groupingDurationMs;
   if (profile) {
     console.info('[clear/perf/receipt-history]', {
-      dbAndGroupingMs: Math.round(performance.now() - queryStartedAt),
+      dbMs: Math.round(queryDurationMs),
+      groupingMs: Math.round(groupingDurationMs),
       allocationLines: data.allocationCount,
       receiptGroups: data.receiptGroupCount,
       resultGroups: total,

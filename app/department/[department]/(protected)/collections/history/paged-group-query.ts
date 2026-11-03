@@ -18,6 +18,8 @@ export type PagedReceiptGroups = {
   total: number;
   allocationCount: number;
   receiptGroupCount: number;
+  dbDurationMs: number;
+  groupingDurationMs: number;
 };
 
 export async function loadDefaultReceiptGroups(input: {
@@ -28,6 +30,8 @@ export async function loadDefaultReceiptGroups(input: {
   pageSize: number;
 }): Promise<PagedReceiptGroups | null> {
   const { organizationId, ay, term, requestedPage, pageSize } = input;
+  const profile = process.env.CLEAR_PROFILE_RECEIPT_HISTORY === '1';
+  const startedAt = profile ? performance.now() : 0;
   if (!organizationId || !ay || !term || !Number.isSafeInteger(pageSize) ||
       pageSize < 1 || pageSize > 100 || !Number.isSafeInteger(requestedPage) ||
       requestedPage < 1) return null;
@@ -81,7 +85,9 @@ export async function loadDefaultReceiptGroups(input: {
     // such allocations contaminate an issued receipt group.
     const exactLines = lines.filter(line =>
       wanted.has(baseOfficialReceiptNumber(line.orNumber)));
+    const groupStartedAt = profile ? performance.now() : 0;
     const receipts = buildIssuedReceipts(exactLines);
+    const groupingDurationMs = profile ? performance.now() - groupStartedAt : 0;
     if (receipts.length !== bases.length ||
         receipts.some(receipt => !wanted.has(receipt.orNumber))) return null;
 
@@ -101,6 +107,8 @@ export async function loadDefaultReceiptGroups(input: {
     return {
       receipts, categories, paymentTypes, page, maxPage, total,
       allocationCount: exactLines.length, receiptGroupCount: receipts.length,
+      dbDurationMs: profile ? Math.max(0, performance.now() - startedAt - groupingDurationMs) : 0,
+      groupingDurationMs,
     };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
     maxWait: 5000, timeout: 15000 });
