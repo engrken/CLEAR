@@ -129,8 +129,6 @@ export default async function ReceiptHistoryPage({
       },
     });
   
-    const groupingStartedAt = profile ? performance.now() : 0;
-  
     // Review historical money AS RECORDED. A legacy sub-cent/unsafe Float must
     // appear as an inconsistent receipt, not throw in strict moneyNumber() and
     // make the entire authorized audit page unavailable. Never repair on read.
