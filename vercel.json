@@ -11,7 +11,8 @@
   ],
   "git": {
     "deploymentEnabled": {
-      "education-development-setup": false
+      "education-development-setup": false,
+      "feature/saas-option-b-policy-20261103": false
     }
   }
 }
