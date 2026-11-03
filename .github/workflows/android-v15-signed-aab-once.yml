@@ -55,7 +55,7 @@ jobs:
           import { execFileSync } from 'node:child_process';
           const release=JSON.parse(execFileSync('git',['show',process.env.APPROVED_MAIN_SHA+':mobile/eas.json'],{encoding:'utf8'}));
           const build=JSON.parse(readFileSync('eas.json','utf8'));
-          if(release.cli.appVersionSource!=='local' || release.build.production.autoIncrement!==true ||
+          if(release.cli.appVersionSource!=='remote' || release.build.production.autoIncrement!==true ||
              build.cli.appVersionSource!=='local' || build.build.production.autoIncrement!==false)
             throw Error('Unexpected EAS versioning mode');
           build.cli.appVersionSource='remote';
