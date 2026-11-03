@@ -1,4 +1,4 @@
-name: CLEAR v1.5.0 signed AAB one-shot build (no Play upload)
+name: CLEAR v1.5.0 corrected signed AAB versionCode 17 (no Play upload)
 
 # One-time branch-scoped authorized build; not a release or store submission.
 on:
@@ -48,7 +48,7 @@ jobs:
           test "$main_head" = "$APPROVED_MAIN_SHA" || { echo '::error::Main changed; no build'; exit 1; }
           git merge-base --is-ancestor "$APPROVED_MAIN_SHA" "$GITHUB_SHA"
           actual="$(git diff --name-only "$APPROVED_MAIN_SHA" "$GITHUB_SHA")"
-          expected="$(printf '%s\n' '.github/workflows/android-v15-signed-aab-once.yml' 'mobile/eas.json' 'vercel.json')"
+          expected="$(printf '%s\n' '.github/workflows/android-v15-signed-aab-once.yml' 'mobile/app.json' 'mobile/eas.json' 'vercel.json')"
           test "$actual" = "$expected" || { echo '::error::App source deviated from deployed main'; exit 1; }
           node --input-type=module <<'CHECK'
           import { readFileSync } from 'node:fs';
@@ -62,8 +62,15 @@ jobs:
           build.build.production.autoIncrement=true;
           if(JSON.stringify(build)!==JSON.stringify(release))
             throw Error('EAS build profile changed beyond the two controlled versioning fields');
+          const canonicalApp=JSON.parse(execFileSync('git',['show',process.env.APPROVED_MAIN_SHA+':mobile/app.json'],{encoding:'utf8'}));
+          const buildApp=JSON.parse(readFileSync('app.json','utf8'));
+          if (canonicalApp.expo.android.versionCode!==16 || buildApp.expo.android.versionCode!==17)
+            throw Error('Unexpected Android versionCode change');
+          buildApp.expo.android.versionCode=16;
+          if (JSON.stringify(buildApp)!==JSON.stringify(canonicalApp))
+            throw Error('Mobile app.json changed beyond Android versionCode');
           CHECK
-          echo "Production runtime app source matches $APPROVED_MAIN_SHA; local Android versionCode 16 will be packaged."
+          echo "Production runtime source matches $APPROVED_MAIN_SHA; local Android versionCode 17 will be packaged."
 
       - name: Require release commit passed web, mobile, finance, auth and Vercel checks
         env:
@@ -98,7 +105,7 @@ jobs:
           if(a.version!=='1.5.0' || a.owner!=='rupert2133s-team' ||
              a.android.package!=='com.rupertbulquerin.clear' ||
              a.extra?.eas?.projectId!=='cfbb6ff9-bf5b-4776-9ec6-0def41a11cb1' ||
-             a.android.versionCode<16 || e.cli.appVersionSource!=='local' ||
+             a.android.versionCode!==17 || e.cli.appVersionSource!=='local' ||
              e.build.production?.autoIncrement!==false ||
              e.build.production.android?.buildType!=='app-bundle' ||
              e.build.production.env?.EXPO_PUBLIC_API_URL!=='https://clearsys.vercel.app/api/mobile' ||
@@ -138,7 +145,7 @@ jobs:
       - name: Install EAS CLI
         run: npm install --global eas-cli@^25 --no-audit --no-fund
 
-      - name: Verify Expo account and staged local Android versionCode 16
+      - name: Verify Expo account and staged local Android versionCode 17
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
@@ -148,10 +155,10 @@ jobs:
           import { readFileSync } from 'node:fs';
           const app=JSON.parse(readFileSync('app.json','utf8')).expo;
           const config=JSON.parse(readFileSync('eas.json','utf8'));
-          if(app.android.versionCode!==16 || config.cli.appVersionSource!=='local' ||
+          if(app.android.versionCode!==17 || config.cli.appVersionSource!=='local' ||
              config.build.production.autoIncrement!==false)
              throw Error('Deterministic v1.5.0 AAB local versioning mismatch');
-          console.log('VersionCode 16 confirmed in repository. Build only; check Google Play highest versionCode before submission.');
+          console.log('VersionCode 17 staged. Build only; verify Google Play has not used code 17 or higher before submission.');
           CHECK
 
       - name: Queue once on EAS using existing frozen Android signing credentials
@@ -159,6 +166,6 @@ jobs:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
           set -euo pipefail
-          eas build --platform android --profile production --non-interactive --no-wait --freeze-credentials --message "CLEAR v1.5.0 signed AAB, production source cbbf36f99ca1adae7d6f3bf46cd37724ff99d1e9"
+          eas build --platform android --profile production --non-interactive --no-wait --freeze-credentials --message "CLEAR v1.5.0 signed AAB vCode17, replaces duplicate vCode16, production source cbbf36f99ca1adae7d6f3bf46cd37724ff99d1e9"
           echo 'AAB QUEUED on EAS. It is not yet built and has NOT been submitted to Google Play.'
           echo 'Review https://expo.dev/accounts/rupert2133s-team/projects/clear-mobile/builds'
