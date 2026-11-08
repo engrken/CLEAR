@@ -77,9 +77,9 @@ export default function OrganizationRegistrationPage() {
         <select id="org-type" className="form-select mb-3" value={details.type} onChange={e=>update('type',e.target.value)}>
          <option value="Organization">Student organization / association</option><option value="Department">School / department</option>
         </select>
-        <label htmlFor="admin-name" className="form-label">Administrator's full name</label>
+        <label htmlFor="admin-name" className="form-label">Administrator&apos;s full name</label>
         <input id="admin-name" className="form-control mb-3" required maxLength={150} value={details.adminName} onChange={e=>update('adminName',e.target.value)} />
-        <label htmlFor="admin-email" className="form-label">Administrator's email</label>
+        <label htmlFor="admin-email" className="form-label">Administrator&apos;s email</label>
         <input id="admin-email" type="email" className="form-control mb-3" required maxLength={254} autoComplete="email" value={details.adminEmail} onChange={e=>update('adminEmail',e.target.value)} />
         <label htmlFor="academic-year" className="form-label">Initial academic year</label>
         <input id="academic-year" className="form-control mb-3" required value={details.academicYear} onChange={e=>update('academicYear',e.target.value)} />
