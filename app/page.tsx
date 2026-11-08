@@ -119,6 +119,7 @@ export default async function RootPage() {
                 >
                   Explore Capabilities
                 </a>
+                <Link href="/register/organization" className="btn btn-outline-info px-4 py-2">Organization / School not listed? Register here</Link>
               </div>
 
               {/* Security & Architecture Highlights */}
