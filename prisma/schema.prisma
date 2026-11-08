@@ -642,3 +642,24 @@ model MobileWebHandoff {
   @@index([mobileSessionId, consumedAt])
   @@index([expiresAt])
 }
+
+
+model PublicOrganizationRegistration {
+  id             String    @id @default(uuid())
+  organizationName String  @db.VarChar(150)
+  subdomain      String    @db.VarChar(63)
+  type           String    @db.VarChar(32)
+  adminName      String    @db.VarChar(150)
+  adminEmail     String    @unique @db.VarChar(254)
+  academicYear   String    @db.VarChar(32)
+  calendarMode   String    @db.VarChar(16)
+  verificationHash String  @db.VarChar(64)
+  expiresAt      DateTime  @db.Timestamptz(3)
+  verifiedAt     DateTime? @db.Timestamptz(3)
+  lastSentAt     DateTime  @default(now()) @db.Timestamptz(3)
+  attempts       Int       @default(0)
+  sendCount      Int       @default(1)
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
+  @@index([subdomain])
+  @@index([createdAt])
+}

@@ -112,6 +112,7 @@ export default async function DashboardPage() {
               <i className="bi bi-building-fill-gear me-2"></i>
               Entity Admin Portal
             </Link>
+            <Link href="/register/organization" className="btn btn-outline-info fw-bold px-4 py-2 shadow"><i className="bi bi-building-add me-2"></i>Organization / School not listed? Register here</Link>
           </div>
         </div>
       </div>
@@ -140,7 +141,7 @@ export default async function DashboardPage() {
               </div>
               <h4 className="fw-bold text-white mb-2">No Active Entities Provisioned Yet</h4>
               <p className="text-secondary mb-0 mx-auto" style={{ maxWidth: '500px' }}>
-                Use <strong>System SuperAdmin Access</strong> above to authenticate and provision your first Department or Organization.
+                Your school or organization can <Link href="/register/organization" className="text-info">register for a Freemium workspace</Link> without requesting manual provisioning.
               </p>
             </div>
           ) : (
