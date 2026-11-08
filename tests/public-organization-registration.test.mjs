@@ -23,3 +23,10 @@ test('directory and home show registration entry links',()=>{
  assert.match(read('app/page.tsx'),/href="\/register\/organization"/);
  assert.match(read('app/dashboard/page.tsx'),/href="\/register\/organization"/);
 });
+
+test('Android Play download only appears on web landing page',()=>{
+ const home=read('app/page.tsx');
+ assert.match(home,/play\.google\.com\/store\/apps\/details\?id=com\.rupertbulquerin\.clear/);
+ assert.match(home,/Android only/);
+ assert.match(home,/Registration is available on the web only|registration is available on the web only/);
+});
