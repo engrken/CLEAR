@@ -82,7 +82,7 @@ export default function OrganizationRegistrationPage() {
         <label htmlFor="admin-email" className="form-label">Administrator's email</label>
         <input id="admin-email" type="email" className="form-control mb-3" required maxLength={254} autoComplete="email" value={details.adminEmail} onChange={e=>update('adminEmail',e.target.value)} />
         <label htmlFor="academic-year" className="form-label">Initial academic year</label>
-        <input id="academic-year" className="form-control mb-3" required pattern="(A\\.Y\\. )?[0-9]{4} - [0-9]{4}" value={details.academicYear} onChange={e=>update('academicYear',e.target.value)} />
+        <input id="academic-year" className="form-control mb-3" required value={details.academicYear} onChange={e=>update('academicYear',e.target.value)} />
         <label htmlFor="calendar-mode" className="form-label">Academic calendar</label>
         <select id="calendar-mode" className="form-select mb-3" value={details.calendarMode} onChange={e=>update('calendarMode',e.target.value)}>
          <option value="Semester">Semester</option><option value="Trimester">Trimester</option><option value="FullYear">Full Year</option>
