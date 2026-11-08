@@ -122,6 +122,17 @@ export default async function RootPage() {
                 <Link href="/register/organization" className="btn btn-outline-info px-4 py-2">Organization / School not listed? Register here</Link>
               </div>
 
+              {/* Android-only native app notice: registration remains web-exclusive. */}
+              <div className="p-3 mb-4 rounded-3 border border-info border-opacity-25 bg-info bg-opacity-10 d-flex flex-wrap align-items-center justify-content-between gap-3">
+                <div>
+                  <div className="fw-bold"><i className="bi bi-phone me-2 text-info" />CLEAR Mobile App — Android only</div>
+                  <div className="text-secondary small">Access your CLEAR workspace on Android. New organization registration is available on the web only.</div>
+                </div>
+                <a className="btn btn-info fw-bold" href="https://play.google.com/store/apps/details?id=com.rupertbulquerin.clear&amp;pcampaignid=web_share" target="_blank" rel="noopener noreferrer" aria-label="Download CLEAR for Android on Google Play">
+                  <i className="bi bi-google-play me-2" />Download on Google Play
+                </a>
+              </div>
+
               {/* Security & Architecture Highlights */}
               <div className="row g-3 pt-3 border-top border-secondary border-opacity-50">
                 <div className="col-4">
