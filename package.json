@@ -20,7 +20,7 @@
     "chart.js": "^4.5.1",
     "date-fns": "^4.4.0",
     "date-fns-tz": "^3.2.0",
-    "next": "16.3.8",
+    "next": "16.4.6",
     "next-auth": "^5.0.0-beta.32",
     "nodemailer": "10.1.7",
     "react": "19.2.8",
@@ -41,5 +41,9 @@
     "prisma": "^5.22.0",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "overrides": {
+    "zod": "4.6.7",
+    "undici": "6.29.1"
   }
 }
