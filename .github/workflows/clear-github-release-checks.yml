@@ -125,7 +125,8 @@ jobs:
     # A GitHub tag identifies a verified main-branch build. PRs never tag or
     # publish a release, and the Android app's independent version is untouched.
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [web, mobile]
+    # Web tags should not be held up by unrelated Android validation failures.
+    needs: [web]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
