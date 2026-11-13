@@ -119,3 +119,44 @@ jobs:
         run: npm run typecheck
       - name: Lint Expo application
         run: npm run lint
+
+  version-tag:
+    name: tag-verified-web-version
+    # A GitHub tag identifies a verified main-branch build. PRs never tag or
+    # publish a release, and the Android app's independent version is untouched.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [web, mobile]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag the verified web revision
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUILD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Invalid CLEAR web release version: $version"
+            exit 1
+          fi
+
+          tag="v${version}+${BUILD_SHA:0:7}"
+          existing="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}" --jq '.object.sha' 2>/dev/null || true)"
+          if [ -n "$existing" ]; then
+            if [ "$existing" != "$BUILD_SHA" ]; then
+              echo "::error::Tag ${tag} already points to a different commit"
+              exit 1
+            fi
+            echo "GitHub web version ${tag} is already tagged."
+          else
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+              -f "ref=refs/tags/${tag}" -f "sha=${BUILD_SHA}"
+            echo "Created GitHub web version tag ${tag}."
+          fi
+
+          echo "Footer version: ${tag}" >> "$GITHUB_STEP_SUMMARY"
