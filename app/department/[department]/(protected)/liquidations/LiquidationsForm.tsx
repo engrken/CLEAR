@@ -83,7 +83,10 @@ export default function LiquidationsForm({
       if (match) {
         setRequestor(match.requestor);
         setFundSource(match.fundSource);
-        setBudgetRequested(match.amountApproved);
+        // Defensive normalization for legacy/serialized Decimal values.
+        // Calling toFixed() on a string after a dropdown change crashes the page.
+        const approved = Number(match.amountApproved);
+        setBudgetRequested(Number.isFinite(approved) ? approved : 0);
       } else {
         setRequestor("");
         setBudgetRequested(0);

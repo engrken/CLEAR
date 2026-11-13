@@ -1,0 +1,121 @@
+# GitHub Actions replacement for the CircleCI web/mobile release checks.
+# This workflow runs on every PR so required checks are never missing because of path filters.
+# Financial integration is a separate existing GitHub Actions job, always run on PRs.
+name: CLEAR GitHub release checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: clear-release-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: clear-web
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: clear_ci
+          POSTGRES_PASSWORD: clear_ci
+          POSTGRES_DB: clear_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U clear_ci -d clear_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      CI: 'true'
+      NEXT_TELEMETRY_DISABLED: '1'
+      DATABASE_URL: postgresql://clear_ci:clear_ci@127.0.0.1:5432/clear_ci?schema=public
+      AUTH_SECRET: ci-only-github-web-release-not-production
+      NEXTAUTH_SECRET: ci-only-github-web-release-not-production
+      SUPER_ADMIN_EMAIL: ci-superadmin@example.invalid
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install web dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Rehearse committed migrations and reject schema drift
+        run: |
+          npx prisma migrate deploy
+          npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code
+      - name: Build production Next.js application against disposable PostgreSQL
+        run: npm run build
+      - name: Run source regression acceptance tests
+        run: node scripts/ci/run-clear-acceptance.mjs
+      - name: Verify UTC and Manila time contracts
+        run: |
+          TZ=UTC npm run test:time
+          TZ=Asia/Manila npm run test:time
+      - name: Check web lint against the existing CircleCI debt baseline
+        run: |
+          set +e
+          npm run lint > /tmp/clear-web-eslint.log 2>&1
+          lint_exit=$?
+          set -e
+          tail -n 60 /tmp/clear-web-eslint.log
+          if [ "$lint_exit" -eq 0 ]; then
+            echo "Web ESLint passed without errors."
+            exit 0
+          fi
+          summary="$(grep -E '[0-9]+ problems? \([0-9]+ errors?, [0-9]+ warnings?\)' /tmp/clear-web-eslint.log | tail -n 1 || true)"
+          if [ -z "$summary" ]; then
+            echo "ESLint failed without a recognizable results summary."
+            exit "$lint_exit"
+          fi
+          errors="$(printf '%s\n' "$summary" | sed -nE 's/.*\(([0-9]+) errors?, [0-9]+ warnings?\).*/\1/p')"
+          warnings="$(printf '%s\n' "$summary" | sed -nE 's/.*\([0-9]+ errors?, ([0-9]+) warnings?\).*/\1/p')"
+          test -n "$errors" && test -n "$warnings"
+          echo "Current web lint: $errors errors, $warnings warnings; existing baseline limits: 474 errors, 2345 warnings."
+          test "$errors" -le 474 && test "$warnings" -le 2345
+          echo "Existing lint debt has not increased; this is not a clean lint pass."
+      - name: Upload web lint log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: clear-web-eslint
+          path: /tmp/clear-web-eslint.log
+          if-no-files-found: ignore
+          retention-days: 3
+
+  mobile:
+    name: clear-mobile
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Install mobile dependencies (match CircleCI lock reconciliation)
+        run: |
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          npm ci --no-audit --no-fund
+          git restore -- package-lock.json
+      - name: Type-check Expo application
+        run: npm run typecheck
+      - name: Lint Expo application
+        run: npm run lint

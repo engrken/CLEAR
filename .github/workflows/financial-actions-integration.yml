@@ -1,20 +1,19 @@
 name: Authenticated financial concurrency integration
 
+# Always report this gate on pull requests so a required check cannot be skipped by path filters.
+# Uses an isolated local PostgreSQL service; never connects to production.
 on:
   pull_request:
-    paths:
-      - 'app/department/**'
-      - 'auth.ts'
-      - 'proxy.ts'
-      - 'app/maintenance/**'
-      - 'lib/**'
-      - 'prisma/**'
-      - 'tests/ci-financial-*'
-      - 'tests/ci-mobile-payment-*'
-      - '.github/workflows/financial-actions-integration.yml'
+  push:
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: clear-financial-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   authenticated-actions:
