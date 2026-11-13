@@ -1,6 +1,13 @@
 import type { NextConfig } from 'next';
+import packageJson from './package.json';
 
 const nextConfig: NextConfig = {
+  env: {
+    // Keep the footer synchronized with the shipped package version and Git revision.
+    NEXT_PUBLIC_CLEAR_APP_VERSION: packageJson.version,
+    NEXT_PUBLIC_CLEAR_BUILD_SHA:
+      process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.GITHUB_SHA ?? 'local',
+  },
   async headers() {
     return [{
       source: '/auth/mobile-handoff',
