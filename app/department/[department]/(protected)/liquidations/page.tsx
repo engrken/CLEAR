@@ -108,11 +108,19 @@ export default async function LiquidationsPage({
     getPeriodLedger(prisma, organization.id, ay, term),
   ]);
 
+  // Prisma Decimal fields must be normalized before crossing the server/client boundary.
+  // In particular, the form uses toFixed() after selecting an advance.
   const pendingAdvances = allAdvances.filter(advance => {
     const status = String(advance.status || '').toUpperCase();
     return !/VOID|CANCEL/.test(status) && !status.includes('LIQUIDATED') &&
       (status.includes('PENDING') || status.includes('UNLIQUIDATED') || status === 'ACTIVE');
-  });
+  }).map(advance => ({
+    id: advance.id,
+    advanceId: advance.advanceId,
+    requestor: advance.requestor,
+    fundSource: advance.fundSource,
+    amountApproved: Number(advance.amountApproved),
+  }));
 
   // LiquidationHistory expects each audit's line items in `items`.
   const pastAudits = rawPastAudits.map((audit: any) => ({
