@@ -8,6 +8,12 @@ case "$job" in
   *) echo "CI impact: unknown job '$job'; running by default"; exit 0 ;;
 esac
 
+# Always run the full CLEAR matrix on the production branch, including
+# isolated financial and student-auth checks. Only feature branches can skip.
+if [[ "${CIRCLE_BRANCH:-}" == "main" && "${2:-}" != "--paths" ]]; then
+  echo 'CI impact: production main requires the entire security matrix.'
+  exit 0
+fi
 if [[ "${2:-}" == "--paths" ]]; then
   # Deterministic local policy tests; CircleCI never supplies --paths.
   shift 2
