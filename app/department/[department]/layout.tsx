@@ -230,7 +230,7 @@ export default async function ProtectedDepartmentLayout({
           )}
         </main>
 
-        <Footer />
+        <Footer buildId={(process.env.VERCEL_GIT_COMMIT_SHA || process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || '').trim().slice(0, 7)} />
       </div>
     </div>
   );
