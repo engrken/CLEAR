@@ -204,22 +204,23 @@ export default async function RootPage() {
             <div className="col-12 col-lg-4">
               <span className="badge bg-info bg-opacity-10 text-info mb-3">INTERACTIVE PREVIEW</span>
               <h2 className="fw-bold">Test the Software</h2>
-              <p className="text-secondary">Explore CLEAR from four organization roles using fictional records. No account or password is needed.</p>
-              <p className="small text-secondary">The public preview is read-only, independent of live organizations, and does not process payments.</p>
+              <p className="text-secondary">Explore the actual CLEAR workspace structure using fictional records and role-based module permissions. No account or password is needed.</p>
+              <p className="small text-secondary">Browse every available demonstration module as an Administrator, then switch to other roles to compare access. This preview is read-only and independent of live organizations.</p>
             </div>
             <div className="col-12 col-lg-8">
               <div className="row g-3">
                 {[
-                  { name: 'Administrator', icon: 'bi-gear', description: 'Organization setup and oversight.' },
-                  { name: 'President', icon: 'bi-people', description: 'Reporting and organization analytics.' },
-                  { name: 'Treasurer', icon: 'bi-wallet2', description: 'Collections and treasury monitoring.' },
-                  { name: 'Officer', icon: 'bi-clipboard-check', description: 'Roster and clearance operations.' },
+                  { name: 'Administrator', icon: 'bi-gear', description: 'Tenant-wide modules, setup, users and activity logs.' },
+                  { name: 'Treasurer', icon: 'bi-wallet2', description: 'Collections, cashier safekeeping, advances and reports.' },
+                  { name: 'Auditor', icon: 'bi-clipboard-check', description: 'Liquidations, financial reviews and reporting.' },
+                  { name: 'Viewer', icon: 'bi-eye', description: 'Overview, clearance and read-focused reports.' },
+                  { name: 'Officer', icon: 'bi-people', description: 'Default access; individual permissions may be customized.' },
                 ].map((role) => (
                   <div className="col-12 col-sm-6" key={role.name}>
                     <div className="card border-secondary p-3 h-100">
                       <h3 className="h6 fw-bold"><i className={`bi ${role.icon} me-2 text-info`} aria-hidden="true" />{role.name}</h3>
                       <p className="small text-secondary flex-grow-1">{role.description}</p>
-                      <Link href="/demo" className="btn btn-outline-info fw-semibold">Explore Demo</Link>
+                      <Link href="/demo" className="btn btn-outline-info fw-semibold">Open Demo Workspace</Link>
                     </div>
                   </div>
                 ))}
