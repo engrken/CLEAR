@@ -197,6 +197,38 @@ export default async function RootPage() {
         </div>
       </section>
 
+      {/* Isolated public demonstration: no live accounts or credentials are exposed. */}
+      <section id="try-demo" className="py-5 border-top border-secondary position-relative" style={{ zIndex: 10 }}>
+        <div className="container py-4">
+          <div className="row g-4 align-items-center">
+            <div className="col-12 col-lg-4">
+              <span className="badge bg-info bg-opacity-10 text-info mb-3">INTERACTIVE PREVIEW</span>
+              <h2 className="fw-bold">Test the Software</h2>
+              <p className="text-secondary">Explore CLEAR from four organization roles using fictional records. No account or password is needed.</p>
+              <p className="small text-secondary">The public preview is read-only, independent of live organizations, and does not process payments.</p>
+            </div>
+            <div className="col-12 col-lg-8">
+              <div className="row g-3">
+                {[
+                  { name: 'Administrator', icon: 'bi-gear', description: 'Organization setup and oversight.' },
+                  { name: 'President', icon: 'bi-people', description: 'Reporting and organization analytics.' },
+                  { name: 'Treasurer', icon: 'bi-wallet2', description: 'Collections and treasury monitoring.' },
+                  { name: 'Officer', icon: 'bi-clipboard-check', description: 'Roster and clearance operations.' },
+                ].map((role) => (
+                  <div className="col-12 col-sm-6" key={role.name}>
+                    <div className="card border-secondary p-3 h-100">
+                      <h3 className="h6 fw-bold"><i className={`bi ${role.icon} me-2 text-info`} aria-hidden="true" />{role.name}</h3>
+                      <p className="small text-secondary flex-grow-1">{role.description}</p>
+                      <Link href="/demo" className="btn btn-outline-info fw-semibold">Explore Demo</Link>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Feature Capabilities Grid */}
       <section id="features" className="py-5 border-top border-secondary bg-surface position-relative" style={{ zIndex: 10 }}>
         <div className="container py-4">
