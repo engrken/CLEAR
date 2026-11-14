@@ -1,0 +1,21 @@
+[
+  {
+    "version": "1.1.0-beta.1",
+    "date": "2026-11-14",
+    "kind": "feature",
+    "changes": [
+      "Unified CLEAR web release versions with the committed package and lockfile, following SAGA's release approach.",
+      "Added a What's New page and a footer link to version history.",
+      "Added controlled fix, feature, and major version commands that record Manila-dated release notes.",
+      "Added automated release consistency checks during web builds; production builds retain their commit-specific build identifier."
+    ]
+  },
+  {
+    "version": "1.0.1-beta.5",
+    "date": "2026-11-14",
+    "kind": "fix",
+    "changes": [
+      "Historical CLEAR beta footer version immediately before centralized SAGA-style release tracking; earlier individual release notes were not imported."
+    ]
+  }
+]
