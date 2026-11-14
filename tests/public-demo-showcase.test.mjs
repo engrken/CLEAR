@@ -46,7 +46,7 @@ test('the demo is a self-contained fictional read-only walkthrough', () => {
   assert.match(fixtures, /DEMO-CA-001/);
   assert.match(fixtures, /DEMO-LOG-001/);
   assert.match(demo, /"Pending Advances"/);
-  assert.match(demo, /"Fund Balances"/);
+  assert.match(demo, />Fund Balances<\/button>/);
   const source = demo + fixtures;
   assert.doesNotMatch(source, /\bfetch\s*\(|\bprisma\s*\.|\bsignIn\s*\(|\brequestOtp\s*\(|\bserver action\b|["']use server["']/i);
   assert.doesNotMatch(source, /RESEND_API_KEY|SMTP_PASSWORD|DATABASE_URL/);
