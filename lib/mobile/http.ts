@@ -8,6 +8,7 @@ import { NextResponse } from 'next/server';
 import { DomainError } from '@/lib/errors';
 import { isMobileRequestAllowed, mobileRosterWriteEnvironment, mobileTenantUserWriteEnvironment } from '@/lib/mobile/production-readonly';
 import { clearanceLinkOrigin } from '@/lib/clearance-link-origin';
+import { readUtf8BodyLimited, RequestBodyTooLargeError, InvalidRequestUtf8Error } from '@/lib/mobile/request-body-limit';
 
 export class ApiFailure extends Error {
   constructor(public status: number, public code: string, message: string) {
@@ -100,8 +101,18 @@ export function preflight(req: Request) {
 const MAX_JSON_BYTES = 64 * 1024;
 
 export async function readJson<T extends Record<string, unknown>>(req: Request): Promise<Partial<T>> {
-  const text = await req.text();
-  if (text.length > MAX_JSON_BYTES) throw new ApiFailure(413, 'payload_too_large', 'Request body is too large.');
+  let text: string;
+  try {
+    text = await readUtf8BodyLimited(req, MAX_JSON_BYTES);
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      throw new ApiFailure(413, 'payload_too_large', 'Request body is too large.');
+    }
+    if (error instanceof InvalidRequestUtf8Error) {
+      throw new ApiFailure(400, 'invalid', 'Request body must be valid UTF-8.');
+    }
+    throw error;
+  }
   if (!text.trim()) return {};
   try {
     const parsed = JSON.parse(text);
