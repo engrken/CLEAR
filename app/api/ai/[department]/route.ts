@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { reserveAiRequest } from '@/lib/ai/quota';
 import { authorizedAiSnapshot, requireAiAccess } from '@/lib/ai/officer-assistant';
 
 export const runtime = 'nodejs';
@@ -9,6 +9,8 @@ const errorResponse = (message: string, status: number) =>
   NextResponse.json({ error: message }, { status, headers: { 'Cache-Control': 'no-store' } });
 
 export async function POST(request: NextRequest, context: { params: Promise<{ department: string }> }) {
+  // Fail closed in every environment until explicitly enabled by the administrator.
+  if (process.env.CLEAR_AI_ENABLED !== 'true') return errorResponse('CLEAR AI is not enabled.', 503);
   const { department } = await context.params;
   let access: Awaited<ReturnType<typeof requireAiAccess>>;
   try {
@@ -21,13 +23,32 @@ export async function POST(request: NextRequest, context: { params: Promise<{ de
   // A same-origin check supplements NextAuth cookie, tenant and subscription validation.
   const origin = request.headers.get('origin');
   if (!origin || origin !== new URL(request.url).origin) return errorResponse('Invalid request origin.', 403);
-  if (Number(request.headers.get('content-length') || 0) > 12000) return errorResponse('Request too large.', 413);
+  if (!request.headers.get('content-type')?.startsWith('application/json')) return errorResponse('Expected JSON.', 415);
+  if (Number(request.headers.get('content-length') || 0) > 4096) return errorResponse('Request too large.', 413);
 
   let question = '';
   try {
-    const data = await request.json();
-    if (!data || typeof data.question !== 'string') return errorResponse('Please enter a question.', 400);
-    question = data.question.trim();
+    // Enforce a hard byte limit even for requests without Content-Length.
+    const reader = request.body?.getReader();
+    if (!reader) return errorResponse('Empty request.', 400);
+    const chunks: Uint8Array[] = [];
+    let bytes = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytes += value.byteLength;
+      if (bytes > 4096) {
+        await reader.cancel();
+        return errorResponse('Request too large.', 413);
+      }
+      chunks.push(value);
+    }
+    const raw = Buffer.concat(chunks).toString('utf8');
+    const data: unknown = JSON.parse(raw);
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return errorResponse('Invalid question.', 400);
+    const payload = data as { question?: unknown };
+    if (typeof payload.question !== 'string') return errorResponse('Please enter a question.', 400);
+    question = payload.question.trim();
   } catch { return errorResponse('Invalid JSON request.', 400); }
   if (!question || question.length > 1200) return errorResponse('Question must be 1–1200 characters.', 400);
 
@@ -37,21 +58,13 @@ export async function POST(request: NextRequest, context: { params: Promise<{ de
     return errorResponse('AI is not configured by the administrator.', 503);
   }
 
-  // Initial soft quota. A future paid launch needs an atomic DB-backed quota reservation
-  // before parallel calls and billing are enabled.
-  const quota = access.organization.tier === 'Corporate' ? 100 : 30;
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const used = await prisma.systemLog.count({
-    where: {
-      organizationId: access.organization.id,
-      action: 'AI_ASSISTANT_REQUEST',
-      user: access.officer.email,
-      timestamp: { gte: since },
-    },
-  });
-  if (used >= quota) return errorResponse('Your daily AI request allowance has been reached.', 429);
-
   try {
+    const admitted = await reserveAiRequest({
+      organizationId: access.organization.id,
+      officerEmail: access.officer.email,
+      tier: access.organization.tier,
+    });
+    if (!admitted) return errorResponse('Your daily AI request allowance has been reached.', 429);
     const snapshot = await authorizedAiSnapshot(access);
     // Neither the session nor other tenants' records are forwarded to Gemini.
     // The model cannot fetch more data, run SQL, or perform business mutations.
@@ -84,14 +97,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ de
     const answer = body?.candidates?.[0]?.content?.parts
       ?.map((part: { text?: string }) => part.text || '').join('').trim();
     if (!answer) return errorResponse('Gemini did not produce an answer.', 502);
-    await prisma.systemLog.create({
-      data: {
-        organizationId: access.organization.id,
-        user: access.officer.email,
-        action: 'AI_ASSISTANT_REQUEST',
-        details: 'Read-only Gemini response; prompt and response not stored.',
-      },
-    });
     return NextResponse.json({ answer, scope: 'Read-only · active period · authorized modules' }, {
       headers: { 'Cache-Control': 'no-store' },
     });

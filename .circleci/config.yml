@@ -30,6 +30,9 @@ jobs:
           name: Run standalone source regression tests
           command: node scripts/ci/run-clear-acceptance.mjs
       - run:
+          name: CLEAR AI policy and release-guard tests
+          command: node --experimental-strip-types --test tests/ai-officer-access.test.mjs
+      - run:
           name: Verify timezone contracts in UTC and Asia/Manila
           command: |
             set -euo pipefail

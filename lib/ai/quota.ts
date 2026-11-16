@@ -17,8 +17,8 @@ export async function reserveAiRequest(input: {
   if (limit <= 0) return false;
   const key = `CLEAR_AI_QUOTA:${input.organizationId}:${input.officerEmail.toLowerCase()}`;
   return prisma.$transaction(async tx => {
-    // Advisory lock is released on commit/rollback. Cast void to text for Prisma.
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${key}::text, 0))::text`;
+    // Advisory lock is released on commit/rollback. Return an int column for Prisma.
+    await tx.$queryRaw`SELECT 1::int AS acquired FROM pg_advisory_xact_lock(hashtextextended(${key}::text, 0))`;
     const used = await tx.systemLog.count({
       where: {
         organizationId: input.organizationId,

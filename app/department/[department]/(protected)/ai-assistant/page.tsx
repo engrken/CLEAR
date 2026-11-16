@@ -2,22 +2,28 @@ import Link from 'next/link';
 import { requireTenantMember } from '@/lib/permissions';
 import { prisma } from '@/lib/prisma';
 import OfficerAiChat from './OfficerAiChat';
+import { isAiPaidTier } from '@/lib/ai/policy';
 
 export default async function OfficerAiPage({ params }: { params: Promise<{ department: string }> }) {
   const { department } = await params;
   const officer = await requireTenantMember(department);
+  if (officer.isSuper) {
+    return <div className="alert alert-warning">CLEAR AI is limited to authenticated tenant officers.</div>;
+  }
   const organization = await prisma.organization.findUnique({
     where: { id: officer.organizationId },
     select: { tier: true, name: true },
   });
-  const premium = organization?.tier === 'Pro' || organization?.tier === 'Corporate';
+  const premium = isAiPaidTier(organization?.tier);
   return (
     <div className="container-fluid" style={{ maxWidth: 980 }}>
       <header className="mb-4">
         <h1 className="h3 fw-bold"><i className="bi bi-stars me-2 text-primary" />CLEAR AI Assistant</h1>
         <p className="text-secondary mb-0">Ask about authorized records and prepare explanations in English or Filipino.</p>
       </header>
-      {!premium ? (
+      {process.env.CLEAR_AI_ENABLED !== 'true' ? (
+        <div className="alert alert-secondary">CLEAR AI is not yet enabled for this environment.</div>
+      ) : !premium ? (
         <div className="card border rounded-4 shadow-sm p-4">
           <span className="badge text-bg-primary align-self-start mb-3">Pro &amp; Corporate feature</span>
           <h2 className="h5 fw-bold">Unlock CLEAR AI</h2>
