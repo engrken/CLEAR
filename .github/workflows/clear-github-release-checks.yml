@@ -65,6 +65,8 @@ jobs:
         run: node --test tests/ci-ai-quota-postgres.test.mjs
       - name: Check mobile request-body byte limits and UTF-8 handling
         run: node --experimental-strip-types --test tests/mobile-body-limits.test.mjs
+      - name: Verify GitHub main ruleset policy transformation (no admin token required)
+        run: node --test tests/ci-main-ruleset-policy.test.mjs
       - name: Verify UTC and Manila time contracts
         run: |
           TZ=UTC npm run test:time
