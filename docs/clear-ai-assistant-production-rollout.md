@@ -13,8 +13,8 @@ Configure in Vercel Production only, server-side (never NEXT_PUBLIC):
 - `CLEAR_AI_ALLOWED_OFFICERS`: comma-separated exact `tenant-slug:officer@example.edu` pairs; applies only when rollout mode is `officers`. No wildcards. Do not publish officer emails in GitHub.
 
 Recommended sequence:
-1. Do not merge or turn on CLEAR AI until current PR's GitHub checks and the security and privacy release gates below pass.
-2. Merge reviewed PR to `main` only after verifying the intended production commit and GitHub branch protections. Vercel production deploys with AI **disabled** (no flag), so existing features remain available.
+1. Merge and deploy the **disabled** code only after GitHub checks and Vercel build pass. All privacy, Google API billing, and live-data release gates apply to **activation**, not to the disabled code deployment.
+2. Before merging, force Production `CLEAR_AI_ENABLED=false` and leave `CLEAR_AI_DATA_PROCESSING_APPROVED` absent; verify the exact GitHub commit. Vercel then deploys disabled AI without external Gemini calls or visible AI navigation.
 3. Verify production health, tenant isolation, and auth behavior with no Gemini requests.
 4. Confirm Google's paid-tier data treatment and the institution's privacy/legal review. Set `CLEAR_AI_DATA_PROCESSING_APPROVED=true` only after this evidence is reviewed. Configure the allowlist for one authorized Pro/Corporate officer, set rollout mode `officers` and then set `CLEAR_AI_ENABLED=true`. Redeploy as needed so variables are applied to the deployment.
 5. Officer conducts a narrowly scoped UAT using **non-personal questions**, checks aggregates against official reports, and confirms all other officers cannot call AI.
