@@ -11,7 +11,9 @@ const errorResponse = (message: string, status: number) =>
 
 export async function POST(request: NextRequest, context: { params: Promise<{ department: string }> }) {
   // Fail closed in every environment until explicitly enabled by the administrator.
-  if (process.env.CLEAR_AI_ENABLED !== 'true') return errorResponse('CLEAR AI is not enabled.', 503);
+  if (process.env.CLEAR_AI_ENABLED !== 'true' || process.env.CLEAR_AI_DATA_PROCESSING_APPROVED !== 'true') {
+    return errorResponse('CLEAR AI is not enabled.', 503);
+  }
   const { department } = await context.params;
   let access: Awaited<ReturnType<typeof requireAiAccess>>;
   try {

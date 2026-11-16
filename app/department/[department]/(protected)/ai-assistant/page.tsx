@@ -26,7 +26,7 @@ export default async function OfficerAiPage({ params }: { params: Promise<{ depa
         <h1 className="h3 fw-bold"><i className="bi bi-stars me-2 text-primary" />CLEAR AI Assistant</h1>
         <p className="text-secondary mb-0">Ask about authorized records and prepare explanations in English or Filipino.</p>
       </header>
-      {process.env.CLEAR_AI_ENABLED !== 'true' ? (
+      {(process.env.CLEAR_AI_ENABLED !== 'true' || process.env.CLEAR_AI_DATA_PROCESSING_APPROVED !== 'true') ? (
         <div className="alert alert-secondary">CLEAR AI is not yet enabled for this environment.</div>
       ) : !premium ? (
         <div className="card border rounded-4 shadow-sm p-4">

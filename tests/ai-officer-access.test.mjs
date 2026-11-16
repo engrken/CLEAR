@@ -82,3 +82,14 @@ test('server requires explicit acknowledgment before sending to Gemini', () => {
   assert.match(route, /hasSensitiveAiIdentifiers\(question\)/);
   assert.match(chat, /acknowledgeDataTransfer: acknowledged/);
 });
+
+test('AI stays invisible and unavailable until production data processing is approved', () => {
+  const route = readFileSync('app/api/ai/[department]/route.ts', 'utf8');
+  const page = readFileSync('app/department/[department]/(protected)/ai-assistant/page.tsx', 'utf8');
+  const sidebar = readFileSync('app/department/[department]/Sidebar.tsx', 'utf8');
+  const layout = readFileSync('app/department/[department]/layout.tsx', 'utf8');
+  assert.match(route, /CLEAR_AI_DATA_PROCESSING_APPROVED !== 'true'/);
+  assert.match(page, /CLEAR_AI_DATA_PROCESSING_APPROVED !== 'true'/);
+  assert.match(sidebar, /aiVisible &&/);
+  assert.match(layout, /CLEAR_AI_DATA_PROCESSING_APPROVED === 'true'/);
+});

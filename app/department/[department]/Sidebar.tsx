@@ -13,6 +13,7 @@ export default function DepartmentSidebar({
   orgName,
   logoUrl,
   currentUser,
+  aiVisible = false,
   defaultAy = 'A.Y. 2026 - 2027',
   defaultTerm = '1st Sem'
 }: {
@@ -20,6 +21,7 @@ export default function DepartmentSidebar({
   orgName?: string; 
   logoUrl?: string | null;
   currentUser?: any;
+  aiVisible?: boolean;
   defaultAy?: string;
   defaultTerm?: string;
 }) {
@@ -158,7 +160,7 @@ export default function DepartmentSidebar({
         <div className="list-group list-group-flush gap-1 flex-grow-1" style={{ fontSize: '0.9rem' }}>
           <div className="text-uppercase text-secondary fw-bold px-2 py-1" style={{ fontSize: '0.65rem', letterSpacing: '0.05em' }}>Core</div>
           {canAccess('tab-overview') && <Link href={`${basePath}${queryString}`} onClick={handleNavClick} className={navItemClass('')}><i className="bi bi-speedometer2 me-3 fs-6"></i>Overview</Link>}
-          <Link href={`${basePath}/ai-assistant`} onClick={handleNavClick} className={navItemClass('/ai-assistant')}><i className="bi bi-stars me-3 fs-6"></i>CLEAR AI <span className="badge bg-primary ms-auto" style={{fontSize:'0.6rem'}}>PRO</span></Link>
+          {aiVisible && <Link href={`${basePath}/ai-assistant`} onClick={handleNavClick} className={navItemClass('/ai-assistant')}><i className="bi bi-stars me-3 fs-6"></i>CLEAR AI <span className="badge bg-primary ms-auto" style={{fontSize:'0.6rem'}}>PRO</span></Link>}
           {canAccess('tab-clearance') && <Link href={`${basePath}/clearance${queryString}`} onClick={handleNavClick} className={navItemClass('/clearance')}><i className="bi bi-person-check me-3 fs-6"></i>Clearance</Link>}
           {canAccess('tab-students') && <Link href={`${basePath}/students${queryString}`} onClick={handleNavClick} className={navItemClass('/students')}><i className="bi bi-people me-3 fs-6"></i>Students Roster</Link>}
 
