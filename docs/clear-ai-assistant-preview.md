@@ -18,6 +18,14 @@ Set the following as **server-only** Vercel environment variables, not NEXT_PUBL
 
 No secret is needed during code review. The endpoint returns 503 until both values are configured.
 
+## CI provider and low-cost verification
+- **Authoritative CI: GitHub Actions**, not CircleCI. The existing `.github/workflows/clear-github-release-checks.yml` runs web build, database migration rehearsal, source regression, lint baseline, mobile checks, and now `tests/ai-officer-access.test.mjs`. This reuses a single existing PR job instead of launching a second heavyweight workflow.
+- Existing `.github/workflows/financial-actions-integration.yml`, `.github/workflows/student-clearance-runtime.yml`, and the Prisma/receipt/dependency workflows remain in place for relevant regression coverage.
+- Vercel Git integration builds the web Preview. A successful Vercel build and GitHub tests are separate signals; neither confirms a live Gemini API request or isolated preview database.
+- **CircleCI is not disconnected by code changes.** After the GitHub equivalent passes, disable the CircleCI project integration in CircleCI settings to stop duplicate runs. Leave `.circleci/config.yml` as a historical fallback until the external integration is retired, then remove it in a separate audited change.
+- The repository currently has an active ruleset *named* `CircleCI`, but its `required_status_checks` list was empty during inspection. Review Settings → Rules → Rulesets and replace any CircleCI required checks with the verified GitHub checks (without removing pull-request or non-fast-forward protections).
+- No production credentials are used by the GitHub AI test; it is intentionally a policy/source regression test. Run the separate isolated DB concurrency and authenticated HTTP tests before enabling preview AI traffic.
+
 ## Release gates — DO NOT DEPLOY WITHOUT THESE
 1. Run TypeScript, ESLint, and module/unit tests on a preview build.
 2. Exercise the **transactional PostgreSQL advisory-lock quota reservation** with concurrent synthetic requests on isolated PostgreSQL. Failed provider requests count against daily quota. Validate lock behavior with the deployed pooler. Do not sell metered AI subscriptions until load tests pass.
