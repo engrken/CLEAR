@@ -63,6 +63,8 @@ jobs:
         run: node --experimental-strip-types --test tests/ai-officer-access.test.mjs
       - name: Verify PostgreSQL quota concurrency with synthetic records
         run: node --test tests/ci-ai-quota-postgres.test.mjs
+      - name: Check mobile request-body byte limits and UTF-8 handling
+        run: node --experimental-strip-types --test tests/mobile-body-limits.test.mjs
       - name: Verify UTC and Manila time contracts
         run: |
           TZ=UTC npm run test:time
