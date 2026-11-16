@@ -2,6 +2,7 @@ import 'server-only';
 import { prisma } from '@/lib/prisma';
 import { requireTenantMember } from '@/lib/permissions';
 import { PRESET_ROLE_TABS } from '@/lib/role-permissions';
+import { canUseAiAsTenantOfficer, isAiPaidTier } from '@/lib/ai/policy';
 
 const ADMIN = new Set(['admin', 'administrator', 'master']);
 const REPORT_TABS = ['tab-payment', 'tab-reports', 'tab-report'];
@@ -9,6 +10,9 @@ export type AiAccess = Awaited<ReturnType<typeof requireAiAccess>>;
 
 export async function requireAiAccess(department: string) {
   const officer = await requireTenantMember(department);
+  if (!canUseAiAsTenantOfficer(officer.isSuper)) {
+    throw new Error('403: Only tenant officer accounts may access CLEAR AI.');
+  }
   const organization = await prisma.organization.findUnique({
     where: { id: officer.organizationId },
     select: { id: true, name: true, tier: true, status: true, activeAy: true, activeTerm: true },
@@ -17,11 +21,11 @@ export async function requireAiAccess(department: string) {
     throw new Error('403: The organization is not active.');
   }
   // Both checks are server-side: a forged client flag cannot unlock Gemini.
-  if (organization.tier !== 'Pro' && organization.tier !== 'Corporate') {
+  if (!isAiPaidTier(organization.tier)) {
     throw new Error('402: CLEAR AI is available on Pro and Corporate plans.');
   }
   const role = String(officer.role || '').trim().toLowerCase();
-  const admin = officer.isSuper || ADMIN.has(role);
+  const admin = ADMIN.has(role);
   const permissions = admin
     ? PRESET_ROLE_TABS.admin
     : (officer.allowedTabs.length ? officer.allowedTabs : (PRESET_ROLE_TABS[role] || PRESET_ROLE_TABS.viewer));
