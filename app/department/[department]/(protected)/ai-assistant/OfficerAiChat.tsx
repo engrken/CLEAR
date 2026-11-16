@@ -8,11 +8,12 @@ export default function OfficerAiChat({ department, organizationName }: { depart
   const [question, setQuestion] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [acknowledged, setAcknowledged] = useState(false);
 
   async function send(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const prompt = question.trim();
-    if (!prompt || busy) return;
+    if (!prompt || busy || !acknowledged) return;
     setError('');
     setQuestion('');
     setMessages(old => [...old, { who: 'officer', text: prompt }]);
@@ -22,7 +23,7 @@ export default function OfficerAiChat({ department, organizationName }: { depart
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ question: prompt }),
+        body: JSON.stringify({ question: prompt, acknowledgeDataTransfer: acknowledged }),
         cache: 'no-store',
       });
       const json = await response.json();
@@ -55,12 +56,19 @@ export default function OfficerAiChat({ department, organizationName }: { depart
     </div>
     <div className="card-footer bg-transparent p-3">
       {error && <div className="alert alert-warning small" role="alert">{error}</div>}
+      <label className="small d-flex align-items-start gap-2 mb-3">
+        <input type="checkbox" className="form-check-input mt-1" checked={acknowledged}
+          onChange={e => setAcknowledged(e.target.checked)} />
+        <span>I understand that my question and a limited, authorized aggregate summary may be transmitted to Google Gemini.
+        I will not submit student names, identifiers, passwords, receipts, or banking details. AI responses must be verified
+        against CLEAR records.</span>
+      </label>
       <form onSubmit={send} className="d-flex gap-2">
         <input className="form-control" type="text" aria-label="Ask CLEAR AI" placeholder="Ask CLEAR AI…" value={question}
           maxLength={1200} disabled={busy} onChange={e => setQuestion(e.target.value)} />
-        <button className="btn btn-primary" type="submit" disabled={!question.trim() || busy}>Send</button>
+        <button className="btn btn-primary" type="submit" disabled={!question.trim() || busy || !acknowledged}>Send</button>
       </form>
-      <small className="text-secondary">Questions are sent securely to Gemini. Avoid entering personal or confidential details.</small>
+      <small className="text-secondary">Questions are processed by Google Gemini. The assistant cannot change CLEAR financial records.</small>
     </div>
   </section>;
 }

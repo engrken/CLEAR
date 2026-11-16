@@ -9,6 +9,13 @@ export function aiDailyQuota(tier: string): number {
   return 0;
 }
 
+/** Rolling 24h tenant budgets cap total external requests across officer accounts. */
+export function aiTenantDailyQuota(tier: string): number {
+  if (tier === 'Corporate') return 500;
+  if (tier === 'Pro') return 120;
+  return 0;
+}
+
 /** Global administrators are not tenant officers for AI access purposes. */
 export function canUseAiAsTenantOfficer(isSuper: boolean): boolean {
   return !isSuper;

@@ -45,7 +45,7 @@ export async function authorizedAiSnapshot(access: AiAccess) {
   const { organization: org, permissions } = access;
   const where = { organizationId: org.id, academicYear: org.activeAy, term: org.activeTerm };
   const snapshot: Record<string, unknown> = {
-    organization: org.name,
+    organization: 'Current organization',
     academicYear: org.activeAy,
     term: org.activeTerm,
   };
@@ -55,8 +55,9 @@ export async function authorizedAiSnapshot(access: AiAccess) {
       _sum: { amountPaid: true },
       _count: { id: true },
     });
-    snapshot.validCollectionEntries = result._count.id;
-    snapshot.validCollectionsPhp = result._sum.amountPaid?.toFixed(2) || '0.00';
+    snapshot.validCollectionAllocationRows = result._count.id;
+    snapshot.sumOfValidCollectionRowsPhp = result._sum.amountPaid?.toFixed(2) || '0.00';
+    snapshot.collectionMeaning = 'Sum of valid Collection.amountPaid allocation rows, not a bank or fund balance; verify with the official collections report.';
   }
   if (permissions.includes('tab-audit')) {
     const result = await prisma.audit.aggregate({
@@ -66,6 +67,7 @@ export async function authorizedAiSnapshot(access: AiAccess) {
     });
     snapshot.liquidationRecords = result._count.id;
     snapshot.liquidationExpensesPhp = result._sum.totalExpense?.toFixed(2) || '0.00';
+    snapshot.auditMeaning = 'Sum of Audit.totalExpense across recorded audits; does not certify or approve an audit.';
   }
   if (permissions.includes('tab-advances')) {
     const result = await prisma.cashAdvance.aggregate({
@@ -75,6 +77,7 @@ export async function authorizedAiSnapshot(access: AiAccess) {
     });
     snapshot.cashAdvanceRecords = result._count.id;
     snapshot.cashAdvanceApprovedPhp = result._sum.amountApproved?.toFixed(2) || '0.00';
+    snapshot.cashAdvanceMeaning = 'Sum of CashAdvance.amountApproved over records of all statuses; not an outstanding balance.';
   }
   return snapshot;
 }

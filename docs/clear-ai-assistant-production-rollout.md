@@ -25,7 +25,9 @@ The existing GitHub Actions `clear-web` job runs schema migration rehearsal, Nex
 ## Must pass before live AI activation
 - All required GitHub Actions and Vercel Production build checks for the intended commit.
 - Real authenticated route tests in an isolated *CI* PostgreSQL service: no session; expired/revoked officer; cross-tenant; inactive tenant; Freemium; unauthorized module and invalid user; excluded Global Administrator.
-- Concurrent limit tests with synthetic data to verify PostgreSQL advisory transaction lock behavior, including the production pooler configuration.
+- GitHub CI runs isolated PostgreSQL advisory-lock concurrency tests with synthetic records; test the production pooler configuration as a separate controlled acceptance gate.
+- Enforce both officer and tenant rolling quotas (Pro 30/officer and 120/tenant daily; Corporate 100/officer and 500/tenant daily).
+- The interface requires explicit acknowledgment that the prompt and authorized aggregate summary are transmitted to Google; server rejects common personal identifiers. Filtering cannot guarantee all identifiers are detected, so officer training and privacy approval remain required.
 - Privacy review and institution notice/consent. This code transmits the officer's free-form question and a permitted organization-level aggregate to Google Gemini; never submit student identifiers, emails, passwords, receipt images, or personal financial details.
 - Financial reconciliation for receipt/collection totals; no AI answer should be treated as a certified or authoritative ledger value.
 - Gemini model permission, spend alerts, quotas, and error handling must be checked without exposing the API key.

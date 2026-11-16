@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { isAiPaidTier, aiDailyQuota, canUseAiAsTenantOfficer, canUseAiRollout } from '../lib/ai/policy.ts';
+import { isAiPaidTier, aiDailyQuota, aiTenantDailyQuota, canUseAiAsTenantOfficer, canUseAiRollout } from '../lib/ai/policy.ts';
+import { hasSensitiveAiIdentifiers } from '../lib/ai/privacy.ts';
 
 test('only paid tiers unlock the assistant', () => {
   assert.equal(isAiPaidTier('Freemium'), false);
@@ -57,4 +58,27 @@ test('production-only officer rollout is checked by the server and page', () => 
   assert.match(page, /canUseAiRollout/);
   assert.match(server, /CLEAR_AI_ALLOWED_OFFICERS/);
   assert.match(server, /CLEAR_AI_ROLLOUT_MODE/);
+});
+
+test('daily tenant request caps are independent of officer caps', () => {
+  assert.equal(aiTenantDailyQuota('Freemium'), 0);
+  assert.equal(aiTenantDailyQuota('Pro'), 120);
+  assert.equal(aiTenantDailyQuota('Corporate'), 500);
+  assert.equal(aiTenantDailyQuota('Unknown'), 0);
+});
+test('privacy filter rejects obvious identifiers but allows aggregate questions', () => {
+  assert.equal(hasSensitiveAiIdentifiers('What are our current-semester collections?'), false);
+  assert.equal(hasSensitiveAiIdentifiers('Summarize 2026 Q4 paid collections.'), false);
+  assert.equal(hasSensitiveAiIdentifiers('Find student user@example.edu'), true);
+  assert.equal(hasSensitiveAiIdentifiers('Contact 09171234567'), true);
+  assert.equal(hasSensitiveAiIdentifiers('student ID: 2026123456'), true);
+  assert.equal(hasSensitiveAiIdentifiers('my password: abcd1234'), true);
+  assert.equal(hasSensitiveAiIdentifiers('bank account 12345678901'), true);
+});
+test('server requires explicit acknowledgment before sending to Gemini', () => {
+  const route = readFileSync('app/api/ai/[department]/route.ts', 'utf8');
+  const chat = readFileSync('app/department/[department]/(protected)/ai-assistant/OfficerAiChat.tsx', 'utf8');
+  assert.match(route, /acknowledgeDataTransfer/);
+  assert.match(route, /hasSensitiveAiIdentifiers\(question\)/);
+  assert.match(chat, /acknowledgeDataTransfer: acknowledged/);
 });
