@@ -192,6 +192,7 @@ export default async function ProtectedDepartmentLayout({
         orgName={organization.name}
         logoUrl={organization.logo}
         currentUser={currentUser}
+        aiVisible={process.env.CLEAR_AI_ENABLED === 'true' && process.env.CLEAR_AI_DATA_PROCESSING_APPROVED === 'true'}
         defaultAy={organization.activeAy || undefined}
         defaultTerm={organization.activeTerm || undefined}
       />
