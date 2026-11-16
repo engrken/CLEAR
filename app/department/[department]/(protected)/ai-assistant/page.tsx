@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { requireTenantMember } from '@/lib/permissions';
 import { prisma } from '@/lib/prisma';
 import OfficerAiChat from './OfficerAiChat';
-import { isAiPaidTier } from '@/lib/ai/policy';
+import { canUseAiRollout, isAiPaidTier } from '@/lib/ai/policy';
 
 export default async function OfficerAiPage({ params }: { params: Promise<{ department: string }> }) {
   const { department } = await params;
@@ -12,9 +12,14 @@ export default async function OfficerAiPage({ params }: { params: Promise<{ depa
   }
   const organization = await prisma.organization.findUnique({
     where: { id: officer.organizationId },
-    select: { tier: true, name: true },
+    select: { subdomain: true, tier: true, name: true },
   });
   const premium = isAiPaidTier(organization?.tier);
+  const rolloutAllowed = organization ? canUseAiRollout(
+    organization.subdomain, officer.email,
+    process.env.CLEAR_AI_ALLOWED_OFFICERS,
+    process.env.CLEAR_AI_ROLLOUT_MODE,
+  ) : false;
   return (
     <div className="container-fluid" style={{ maxWidth: 980 }}>
       <header className="mb-4">
@@ -38,6 +43,10 @@ export default async function OfficerAiPage({ params }: { params: Promise<{ depa
           <Link href={`/department/${encodeURIComponent(department)}`} className="btn btn-outline-primary align-self-start">
             Return to dashboard
           </Link>
+        </div>
+      ) : !rolloutAllowed ? (
+        <div className="alert alert-secondary">
+          CLEAR AI is rolling out gradually to authorized officers. Your account is not yet enabled.
         </div>
       ) : <OfficerAiChat department={department} organizationName={organization?.name || department} />}
       <p className="small text-secondary mt-3">
