@@ -42,6 +42,19 @@ test("reports failure latency and only allow-listed Prisma metadata", async () =
   assert.equal(JSON.stringify(result).includes("sensitive"), false);
 });
 
+test("replaces unknown error names even when they contain only safe-looking characters", async () => {
+  const result = await runDatabaseHealthProbe(async () => {
+    throw Object.assign(new Error("sensitive details"), {
+      name: "DatabaseCredentialLeak",
+      code: "ETIMEDOUT",
+    });
+  });
+
+  assert.equal(result.errorName, "UnknownError");
+  assert.equal(result.errorCode, "ETIMEDOUT");
+  assert.equal(JSON.stringify(result).includes("Credential"), false);
+});
+
 test("drops unrecognized error codes and never exposes raw error messages", async () => {
   const result = await runDatabaseHealthProbe(async () => {
     throw Object.assign(new Error("password=do-not-log"), {
@@ -56,8 +69,24 @@ test("drops unrecognized error codes and never exposes raw error messages", asyn
   assert.equal(JSON.stringify(result).includes("PRIVATE_HOST"), false);
 });
 
-test("clamps clock skew to a non-negative integer duration", async () => {
-  const times = [500, 490];
-  const result = await runDatabaseHealthProbe(async () => undefined, () => times.shift() ?? 490);
-  assert.equal(result.latencyMs, 0);
+test("clamps clock skew and caps non-finite or excessive latency values", async (t) => {
+  await t.test("clock skew", async () => {
+    const times = [500, 490];
+    const result = await runDatabaseHealthProbe(async () => undefined, () => times.shift() ?? 490);
+    assert.equal(result.latencyMs, 0);
+  });
+
+  await t.test("excessive duration", async () => {
+    let clock = 0;
+    const result = await runDatabaseHealthProbe(async () => {
+      clock = 999_999;
+    }, () => clock);
+    assert.equal(result.latencyMs, 120_000);
+  });
+
+  await t.test("non-finite duration", async () => {
+    const times = [Number.NaN, Number.POSITIVE_INFINITY];
+    const result = await runDatabaseHealthProbe(async () => undefined, () => times.shift() ?? 0);
+    assert.equal(result.latencyMs, 0);
+  });
 });
