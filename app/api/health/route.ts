@@ -5,6 +5,8 @@ import { runDatabaseHealthProbe } from "@/lib/health-probe";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+// Allow the read-only probe to finish within Cognix's 15-second health window.
+export const maxDuration = 30;
 
 const headers = {
   "Cache-Control": "no-store, max-age=0",
