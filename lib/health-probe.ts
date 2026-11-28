@@ -5,7 +5,7 @@ export type DatabaseHealthProbeResult = {
   errorCode: string | null;
 };
 
-const SAFE_ERROR_CODE = /^(?:P\\d{4}|ECONNRESET|ETIMEDOUT|ENOTFOUND|ECONNREFUSED|EHOSTUNREACH|EAI_AGAIN)$/;
+const SAFE_ERROR_CODE = /^(?:P\d{4}|ECONNRESET|ETIMEDOUT|ENOTFOUND|ECONNREFUSED|EHOSTUNREACH|EAI_AGAIN)$/;
 const SAFE_ERROR_NAME = /^[A-Za-z][A-Za-z0-9_]{0,59}$/;
 
 function safeErrorMetadata(error: unknown) {
