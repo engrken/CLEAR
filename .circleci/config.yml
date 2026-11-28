@@ -30,6 +30,9 @@ jobs:
           name: Run standalone source regression tests
           command: node scripts/ci/run-clear-acceptance.mjs
       - run:
+          name: Test sanitized database health probe diagnostics
+          command: node --experimental-strip-types --test tests/clear-health-probe.test.mjs
+      - run:
           name: CLEAR AI policy and release-guard tests
           command: node --experimental-strip-types --test tests/ai-officer-access.test.mjs
       - run:
