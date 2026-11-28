@@ -11,7 +11,10 @@
   ],
   "git": {
     "deploymentEnabled": {
-      "education-development-setup": false
+      "education-development-setup": false,
+      "**": false,
+      "main": true,
+      "preview": true
     }
   }
 }
