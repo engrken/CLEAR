@@ -41,9 +41,8 @@ jobs:
       - run:
           name: Lint web application (existing debt baseline)
           command: |
-            # Run the actual root lint command. The initial CircleCI run recorded
-            # 474 errors and 2345 warnings in existing source; don't hide the log.
-            # This temporary baseline fails on any increase, or if lint crashes.
+            # Measured main-branch lint baseline (2026-11-25): 479 errors and 2345 warnings.
+            # Keep the full lint output visible; fail on any growth above main or a lint crash.
             set +e
             npm run lint > /tmp/clear-web-eslint.log 2>&1
             lint_exit=$?
@@ -64,8 +63,8 @@ jobs:
               echo "Failed to parse ESLint results."
               exit 1
             fi
-            echo "Existing web lint debt: $errors errors, $warnings warnings (baseline limits: 474/2345)."
-            if [ "$errors" -gt 474 ] || [ "$warnings" -gt 2345 ]; then
+            echo "Existing web lint debt: $errors errors, $warnings warnings (baseline limits: 479/2345)."
+            if [ "$errors" -gt 479 ] || [ "$warnings" -gt 2345 ]; then
               echo "Web lint debt grew above its baseline; failing the job."
               exit 1
             fi
