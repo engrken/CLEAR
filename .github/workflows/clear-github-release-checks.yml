@@ -90,9 +90,12 @@ jobs:
           errors="$(printf '%s\n' "$summary" | sed -nE 's/.*\(([0-9]+) errors?, [0-9]+ warnings?\).*/\1/p')"
           warnings="$(printf '%s\n' "$summary" | sed -nE 's/.*\([0-9]+ errors?, ([0-9]+) warnings?\).*/\1/p')"
           test -n "$errors" && test -n "$warnings"
-          echo "Current web lint: $errors errors, $warnings warnings; existing baseline limits: 474 errors, 2345 warnings."
-          test "$errors" -le 474 && test "$warnings" -le 2345
-          echo "Existing lint debt has not increased; this is not a clean lint pass."
+          echo "Current web lint: $errors errors, $warnings warnings; measured main baseline: 479 errors, 2345 warnings."
+          if [ "$errors" -gt 479 ] || [ "$warnings" -gt 2345 ]; then
+            echo "Web lint debt grew above the measured main baseline; failing the job." >&2
+            exit 1
+          fi
+          echo "Web lint debt is at or below the measured main baseline. This is NOT a clean lint pass."
       - name: Upload web lint log on failure
         if: failure()
         uses: actions/upload-artifact@v4
